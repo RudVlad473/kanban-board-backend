@@ -9,4 +9,7 @@ public final class ApiPaths {
   public static final String TASKS = "/tasks";
 
   public static final String SUB_TASKS = "/subtasks";
+
+  public static final String LOGIN = "/login";
+  public static final String LOGOUT = "/login";
 }
