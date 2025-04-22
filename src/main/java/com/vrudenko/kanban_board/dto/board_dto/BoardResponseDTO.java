@@ -1,4 +1,4 @@
-package com.vrudenko.kanban_board.dto;
+package com.vrudenko.kanban_board.dto.board_dto;
 
 import com.vrudenko.kanban_board.base.BaseBoard;
 import com.vrudenko.kanban_board.base.BaseId;
