@@ -32,13 +32,23 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.postgresql:postgresql'
 
+    // https://mvnrepository.com/artifact/org.springframework.boot/spring-boot-starter-security
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+
     // https://mvnrepository.com/artifact/com.google.guava/guava
-    implementation 'com.google.guava:guava:11.0.2'
+    implementation 'com.google.guava:guava:32.0.1-android'
 
     implementation 'org.mapstruct:mapstruct:1.5.3.Final'
     annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.3.Final'
 
     testImplementation 'com.h2database:h2'
+
+    // https://mvnrepository.com/artifact/org.apache.commons/commons-lang3
+    testImplementation 'org.apache.commons:commons-lang3:3.0'
+
+    // https://mvnrepository.com/artifact/org.fluttercode.datafactory/datafactory
+    testImplementation 'org.fluttercode.datafactory:datafactory:0.8'
+
 }
 
 tasks.named('test') {
