@@ -49,6 +49,7 @@ dependencies {
     // https://mvnrepository.com/artifact/org.fluttercode.datafactory/datafactory
     testImplementation 'org.fluttercode.datafactory:datafactory:0.8'
 
+    implementation 'io.vavr:vavr:0.10.4'
 }
 
 tasks.named('test') {
