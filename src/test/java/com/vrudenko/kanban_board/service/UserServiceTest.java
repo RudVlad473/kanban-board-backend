@@ -15,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 @SpringBootTest
 public class UserServiceTest {
@@ -22,6 +23,7 @@ public class UserServiceTest {
 
   DataFactory dataFactory = new DataFactory();
 
+  @Autowired PasswordEncoder passwordEncoder;
   @Autowired UserService userService;
   @Autowired UserMapper userMapper;
 
@@ -41,17 +43,21 @@ public class UserServiceTest {
       ImmutableList.copyOf(
           IntStream.range(0, AMOUNT_OF_FAKE_USERS)
               .mapToObj(
-                  i ->
-                      UserEntity.builder()
-                          .email(mockEmails.get(i))
-                          .displayName(mockDisplayNames.get(i))
-                          .build())
+                  i -> {
+                    var currentMockDisplayName = mockDisplayNames.get(i);
+
+                    return UserEntity.builder()
+                        .email(mockEmails.get(i))
+                        .displayName(currentMockDisplayName)
+                        .passwordHash(passwordEncoder.encode(currentMockDisplayName))
+                        .build();
+                  })
               .collect(Collectors.toList()));
 
   @BeforeEach
   void setup() {
     // Arrange
-    mockUsers.forEach((user) -> userService.save(userMapper.toSaveBoardRequestDTO(user)));
+    mockUsers.forEach((user) -> userService.save(userMapper.toSigninRequestDTO(user)));
   }
 
   @AfterEach
