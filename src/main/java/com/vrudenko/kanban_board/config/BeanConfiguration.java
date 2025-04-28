@@ -13,7 +13,6 @@ import org.springframework.security.web.session.HttpSessionEventPublisher;
 @Configuration
 @RequiredArgsConstructor
 public class BeanConfiguration {
-
   @Bean
   public PasswordEncoder passwordEncoder() {
     return new BCryptPasswordEncoder();
@@ -27,10 +26,5 @@ public class BeanConfiguration {
   @Bean
   public HttpSessionEventPublisher httpSessionEventPublisher() {
     return new HttpSessionEventPublisher();
-  }
-
-  @Bean
-  public DataFactory dataFactory() {
-    return new DataFactory();
   }
 }

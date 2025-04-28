@@ -1,8 +1,10 @@
-package com.vrudenko.kanban_board.exception;
+package com.vrudenko.kanban_board.handler;
 
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 
@@ -21,5 +23,17 @@ public class GlobalExceptionHandler {
   @ExceptionHandler(Exception.class)
   public ResponseEntity<String> handleGeneralException(Exception ex) {
     return new ResponseEntity<>(ex.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+
+  @ExceptionHandler(AccessDeniedException.class)
+  public ResponseEntity<String> handleAccessDeniedException(AccessDeniedException ex) {
+    return new ResponseEntity<>(ex.getMessage(), HttpStatus.UNAUTHORIZED);
+  }
+
+  // handles errors from db
+  @ExceptionHandler(OptimisticLockingFailureException.class)
+  public ResponseEntity<String> handleOptimisticLockingFailure(
+      OptimisticLockingFailureException ex) {
+    return new ResponseEntity<>(ex.getMessage(), HttpStatus.LOCKED);
   }
 }

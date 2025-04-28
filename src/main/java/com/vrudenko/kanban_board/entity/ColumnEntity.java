@@ -1,5 +1,6 @@
 package com.vrudenko.kanban_board.entity;
 
+import com.vrudenko.kanban_board.base.BaseBoard;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -22,7 +23,7 @@ import java.util.List;
 @AllArgsConstructor
 @EqualsAndHashCode(callSuper = false)
 @Table(name = "columns")
-public class ColumnEntity {
+public class ColumnEntity extends BaseEntity implements BaseBoard {
   @Id
   @GeneratedValue(strategy = GenerationType.UUID)
   private String columnId;

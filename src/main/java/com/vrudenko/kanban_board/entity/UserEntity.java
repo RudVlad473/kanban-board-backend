@@ -1,8 +1,10 @@
 package com.vrudenko.kanban_board.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.vrudenko.kanban_board.base.BaseUser;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -10,12 +12,12 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import net.minidev.json.annotate.JsonIgnore;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
 @Entity
@@ -32,6 +34,9 @@ public class UserEntity extends BaseEntity implements BaseUser, UserDetails {
   private String email;
 
   @Column private String displayName;
+
+  @OneToMany(mappedBy = "user")
+  private List<BoardEntity> boards;
 
   // since we may have other kinds of authentication that may not require password, it can be null
   @Column(nullable = true)

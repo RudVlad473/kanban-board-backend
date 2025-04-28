@@ -4,6 +4,7 @@ import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.dto.board_dto.BoardResponseDTO;
 import com.vrudenko.kanban_board.dto.board_dto.DeleteBoardByIdRequestDTO;
 import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
+import com.vrudenko.kanban_board.security.CurrentUserId;
 import com.vrudenko.kanban_board.service.BoardService;
 import java.util.List;
 import java.util.Optional;
@@ -12,6 +13,7 @@ import org.hibernate.validator.constraints.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -32,28 +34,33 @@ public class BoardController {
   @Autowired private BoardService boardService;
 
   @GetMapping
-  public List<BoardResponseDTO> findAll() {
-    return this.boardService.findAll();
+  public List<BoardResponseDTO> findAllByUserId(@CurrentUserId String userId) {
+    return this.boardService.findAllByUserId(userId);
   }
 
   @PostMapping
-  public BoardResponseDTO save(@RequestBody SaveBoardRequestDTO dto) {
-    return this.boardService.save(dto);
+  public BoardResponseDTO save(@CurrentUserId String userId, @RequestBody SaveBoardRequestDTO dto) {
+    return this.boardService.save(userId, dto);
   }
 
   @DeleteMapping(ApiPaths.BOARD_ID)
-  public ResponseEntity<Void> deleteById(@PathVariable @UUID String id) {
-    var wasEntityDeleted = this.boardService.deleteById(id);
+  public ResponseEntity<Void> deleteById(
+      @PathVariable @UUID String boardId, @CurrentUserId String userId) {
+    var wasBoardDeleted = boardService.deleteById(userId, boardId);
 
-    var header = wasEntityDeleted ? ResponseEntity.noContent() : ResponseEntity.notFound();
+    if (!wasBoardDeleted) {
+      return ResponseEntity.notFound().build();
+    }
 
-    return header.build();
+    return ResponseEntity.ok().build();
   }
 
   @PutMapping(ApiPaths.BOARD_ID)
   public ResponseEntity<Optional<BoardResponseDTO>> updateById(
-      @PathVariable @UUID String id, @RequestBody SaveBoardRequestDTO dto) {
-    var updatedBoard = boardService.updateById(id, dto);
+      @CurrentUserId String userId,
+      @PathVariable @UUID String boardId,
+      @RequestBody SaveBoardRequestDTO dto) {
+    var updatedBoard = boardService.updateById(userId, boardId, dto);
 
     if (updatedBoard.isEmpty()) {
       return ResponseEntity.notFound().build();

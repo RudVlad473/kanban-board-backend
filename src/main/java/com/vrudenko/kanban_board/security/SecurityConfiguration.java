@@ -3,6 +3,7 @@ package com.vrudenko.kanban_board.security;
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.constant.SecurityConstants;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationProvider;
@@ -27,6 +28,9 @@ public class SecurityConfiguration {
   private final AuthenticationProvider authenticationProvider;
   private final LogoutHandler handlerLogout;
 
+  @Value("${server.servlet.contextPath}")
+  private String CONTEXT_PATH;
+
   @Bean
   public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
     var securityContextRepository = new HttpSessionSecurityContextRepository();
@@ -37,10 +41,17 @@ public class SecurityConfiguration {
     // storing the session
     http.securityContext((context) -> context.securityContextRepository(securityContextRepository));
 
+    http.authorizeHttpRequests(
+        auth -> {
+          auth.requestMatchers(ApiPaths.SIGNIN, ApiPaths.SIGNUP).permitAll();
+ 
+          auth.anyRequest().authenticated();
+        });
+
     // session management
     http.sessionManagement(
         (session) -> {
-          session.maximumSessions(1).maxSessionsPreventsLogin(true);
+          session.maximumSessions(2).maxSessionsPreventsLogin(true);
           session.sessionFixation(
               SessionManagementConfigurer.SessionFixationConfigurer::newSession);
           session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED);

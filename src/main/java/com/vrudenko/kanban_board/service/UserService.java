@@ -1,16 +1,11 @@
 package com.vrudenko.kanban_board.service;
 
-import com.vrudenko.kanban_board.dto.board_dto.BoardResponseDTO;
-import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
-import com.vrudenko.kanban_board.dto.user_dto.SaveUserRequestDTO;
+import com.vrudenko.kanban_board.dto.user_dto.SigninRequestDTO;
 import com.vrudenko.kanban_board.dto.user_dto.UserResponseDTO;
-import com.vrudenko.kanban_board.mapper.BoardMapper;
 import com.vrudenko.kanban_board.mapper.UserMapper;
-import com.vrudenko.kanban_board.repository.BoardRepository;
+import com.vrudenko.kanban_board.repository.UserRepository;
 import java.util.List;
 import java.util.Optional;
-
-import com.vrudenko.kanban_board.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -26,8 +21,8 @@ public class UserService implements UserDetailsService {
     return userRepository.findById(id).map(userEntity -> userMapper.toResponseDTO(userEntity));
   }
 
-  public UserResponseDTO save(SaveUserRequestDTO userDTO) {
-    var savedUser = userRepository.save(userMapper.fromSaveBoardRequestDTO(userDTO));
+  public UserResponseDTO save(SigninRequestDTO userDTO) {
+    var savedUser = userRepository.save(userMapper.fromSigninRequestDTO(userDTO));
 
     return userMapper.toResponseDTO(savedUser);
   }
@@ -49,7 +44,14 @@ public class UserService implements UserDetailsService {
   }
 
   @Override
+  // username is mapped to userid inside LoginController
   public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-    return userRepository.findByEmail(username);
+    var user = userRepository.findById(username);
+
+    if (user.isEmpty()) {
+      throw new UsernameNotFoundException(username + " was not found");
+    }
+
+    return user.get();
   }
 }
