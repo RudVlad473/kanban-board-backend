@@ -1,74 +1,49 @@
 package com.vrudenko.kanban_board.service;
 
-import com.google.common.collect.ImmutableList;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
-import com.vrudenko.kanban_board.dto.user_dto.UserResponseDTO;
+import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
 import com.vrudenko.kanban_board.entity.BoardEntity;
-import com.vrudenko.kanban_board.entity.UserEntity;
+import com.vrudenko.kanban_board.exception.AppAccessDeniedException;
+import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
 import com.vrudenko.kanban_board.mapper.BoardMapper;
 import java.util.UUID;
-import java.util.stream.Stream;
 
-import com.vrudenko.kanban_board.mapper.UserMapper;
+import jakarta.persistence.EntityNotFoundException;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.assertj.core.api.Assertions;
-import org.fluttercode.datafactory.impl.DataFactory;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.access.AccessDeniedException;
 
 @SpringBootTest
-public class BoardServiceTest {
-
+public class BoardServiceTest extends AbstractAppServiceTest {
+  @Autowired UserService userService;
   @Autowired BoardService boardService;
   @Autowired BoardMapper boardMapper;
-  @Autowired UserService userService;
-  @Autowired UserMapper userMapper;
+  @Autowired ColumnService columnService;
 
-  final DataFactory dataFactory = new DataFactory();
+  // addColumnByBoardId
+  @Test
+  void testAddColumnByBoardId_shouldReturnColumn_whenBoardExists() {
+    // Arrange
+    var userId = getOwningUser().getId();
+    var boardId = mockPopulatedBoard.getId();
+    var columnAmountBeforeAddition = columnService.getColumnCountByBoardId(boardId);
+    var columnName = dataFactory.getRandomWord(ValidationConstants.MIN_COLUMN_NAME_LENGTH);
 
-  private UserResponseDTO owningUser;
-  private UserResponseDTO noBoardsUser;
-  final ImmutableList<BoardEntity> mockBoards =
-      ImmutableList.copyOf(
-          Stream.of("Todo", "In progress", "Done")
-              .map((name) -> BoardEntity.builder().name(name).build())
-              .toList());
+    // Act
+    var column =
+        boardService.addColumnByBoardId(
+            userId, boardId, SaveColumnRequestDTO.builder().name(columnName).build());
 
-  @BeforeEach
-  void setup() {
-    owningUser = setupUser();
-    noBoardsUser = setupUser();
+    // Assert
+    var columnAmountAfterAddition = columnService.getColumnCountByBoardId(boardId);
 
-    mockBoards.forEach(
-        (board) -> boardService.save(owningUser.getId(), boardMapper.toSaveBoardRequestDTO(board)));
-  }
-
-  UserResponseDTO setupUser() {
-    return userService.save(
-        userMapper.toSigninRequestDTO(
-            UserEntity.builder()
-                .email(dataFactory.getEmailAddress())
-                .displayName(
-                    dataFactory.getRandomWord(ValidationConstants.MIN_USER_DISPLAY_NAME_LENGTH))
-                .passwordHash(dataFactory.getRandomWord(ValidationConstants.MIN_PASSWORD_LENGTH))
-                .build()));
-  }
-
-  @AfterEach
-  void cleanup() {
-    deleteAllBoards();
-    userService.deleteById(owningUser.getId());
-    userService.deleteById(noBoardsUser.getId());
-  }
-
-  void deleteAllBoards() {
-    boardService
-        .findAll()
-        .forEach((board) -> boardService.deleteById(owningUser.getId(), board.getId()));
+    Assertions.assertThat(columnAmountAfterAddition).isEqualTo(columnAmountBeforeAddition + 1);
+    Assertions.assertThat(columnService.findById(column.getId())).isNotEmpty();
+    Assertions.assertThat(columnService.findById(column.getId()).get().getName())
+        .isEqualTo(columnName);
   }
 
   // findAll
@@ -78,76 +53,88 @@ public class BoardServiceTest {
     var boards = boardService.findAll();
 
     // Assert
-    Assertions.assertThat(boards).hasSize(mockBoards.size());
+    Assertions.assertThat(boards).isNotEmpty();
   }
 
   // deleteById
   @Test
   void testDeleteById_shouldDeleteBoard_whenBoardExists() {
     // Arrange
+    var userId = getOwningUser().getId();
+    var boardId = mockPopulatedBoard.getId();
+    var boardsAmountBeforeDeletion = boardService.findAllByUserId(userId).size();
 
     // Act
-    var firstBoard = boardService.findAll().getFirst();
-    boardService.deleteById(owningUser.getId(), firstBoard.getId());
+    boardService.deleteById(userId, boardId);
 
     // Assert
-    var boards = boardService.findAll();
-    Assertions.assertThat(boards.size()).isEqualTo(mockBoards.size() - 1);
-    Assertions.assertThat(boards).doesNotContain(firstBoard);
+    var boardsAmountAfterDeletion = boardService.findAllByUserId(userId).size();
+    Assertions.assertThat(boardsAmountAfterDeletion).isEqualTo(boardsAmountBeforeDeletion - 1);
+    Assertions.assertThat(Assertions.catchException(() -> boardService.findById(userId, boardId)))
+        .isInstanceOf(EntityNotFoundException.class);
   }
 
   @Test
   void testDeleteById_shouldDeleteAllBoards_whenBoardsExists() {
     // Arrange
+    var userId = getOwningUser().getId();
 
     // Act
     boardService
-        .findAll()
-        .forEach(board -> boardService.deleteById(owningUser.getId(), board.getId()));
+        .findAllByUserId(userId)
+        .forEach(board -> boardService.deleteById(userId, board.getId()));
 
     // Assert
-    var boards = boardService.findAll();
-    Assertions.assertThat(boards.size()).isZero();
+    var boards = boardService.findAllByUserId(userId);
+    Assertions.assertThat(boards).isEmpty();
   }
 
   @Test
   void testDeleteById_shouldReturnFalse_whenBoardNotFound() {
     // Arrange
-    var firstBoard = boardService.findAll().getFirst();
-    deleteAllBoards();
+    var userId = getOwningUser().getId();
+    var boardsBeforeDeletion = boardService.findAllByUserId(userId);
+    var firstBoardBeforeDeletion = boardsBeforeDeletion.getFirst();
+
+    boardsBeforeDeletion.forEach(board -> boardService.deleteById(userId, board.getId()));
 
     // Act
-    var wasBoardDeleted = boardService.deleteById(owningUser.getId(), firstBoard.getId());
+    var exception =
+        Assertions.catchException(
+            () -> boardService.deleteById(userId, firstBoardBeforeDeletion.getId()));
 
     // Assert
-    Assertions.assertThat(wasBoardDeleted).isFalse();
+    Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
   }
 
   @Test
   void testDeleteById_shouldReturnTrue_whenBoardFoundAndDeleted() {
     // Arrange
-    var firstBoard = boardService.findAll().getFirst();
+    var userId = getOwningUser().getId();
+    var boardId = mockPopulatedBoard.getId();
 
     // Act
-    var wasBoardDeleted = boardService.deleteById(owningUser.getId(), firstBoard.getId());
+    boardService.deleteById(userId, boardId);
 
     // Assert
-    Assertions.assertThat(wasBoardDeleted).isTrue();
+    Assertions.assertThat(Assertions.catchException(() -> boardService.findById(userId, boardId)))
+        .isInstanceOf(AppEntityNotFoundException.class);
   }
 
   @Test
   void testDeleteById_shouldNotDelete_whenBoardDoesntBelongToUser() {
     // Arrange
-    var firstBoard = boardService.findAll().getFirst();
+    var userId = getNoBoardsUser().getId();
+    var boardId = mockPopulatedBoard.getId();
+    var boardAmountBeforeAttempt = boardService.findAll().size();
 
     // Act
-    var thrown =
-        Assertions.catchThrowable(
-            () -> boardService.deleteById(noBoardsUser.getId(), firstBoard.getId()));
+    var exception = Assertions.catchException(() -> boardService.deleteById(userId, boardId));
 
     // Assert
-    Assertions.assertThat(thrown).isInstanceOf(AccessDeniedException.class);
-    Assertions.assertThat(boardService.findAll()).hasSameSizeAs(mockBoards);
+    var boardAmountAfterAttempt = boardService.findAll().size();
+    Assertions.assertThat(exception).isInstanceOf(AppAccessDeniedException.class);
+    Assertions.assertThat(boardAmountBeforeAttempt).isSameAs(boardAmountAfterAttempt);
   }
 
   // update by id
@@ -161,7 +148,7 @@ public class BoardServiceTest {
 
     // Act
     boardService.updateById(
-        owningUser.getId(),
+        getOwningUser().getId(),
         boardBeforeUpdate.getId(),
         boardMapper.toSaveBoardRequestDTO(BoardEntity.builder().name(newBoardName).build()));
 
@@ -186,14 +173,17 @@ public class BoardServiceTest {
             ValidationConstants.MAX_BOARD_NAME_LENGTH - ValidationConstants.MIN_BOARD_NAME_LENGTH);
 
     // Act
-    var emptyBoard =
-        boardService.updateById(
-            owningUser.getId(),
-            randomUUID,
-            boardMapper.toSaveBoardRequestDTO(BoardEntity.builder().name(newBoardName).build()));
+    var exception =
+        Assertions.catchException(
+            () ->
+                boardService.updateById(
+                    getOwningUser().getId(),
+                    randomUUID,
+                    boardMapper.toSaveBoardRequestDTO(
+                        BoardEntity.builder().name(newBoardName).build())));
 
     // Assert
-    Assertions.assertThat(emptyBoard.isEmpty()).isTrue();
+    Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
     Assertions.assertThat(
             boardService.findAll().stream()
                 .noneMatch(board -> board.getName().equals(newBoardName)))
@@ -213,7 +203,7 @@ public class BoardServiceTest {
         Assertions.catchThrowable(
             () ->
                 boardService.updateById(
-                    noBoardsUser.getId(),
+                    getNoBoardsUser().getId(),
                     existingBoard.getId(),
                     boardMapper.toSaveBoardRequestDTO(
                         BoardEntity.builder().name(newBoardName).build())));
@@ -232,19 +222,19 @@ public class BoardServiceTest {
   @Test
   void testFindAllByUserId_shouldReturnBoard_whenBoardExists() {
     // arrange
-    var user = userService.findAll().getFirst();
+    var userId = getOwningUser().getId();
 
     // act
-    var boards = boardService.findAllByUserId(user.getId());
+    var boards = boardService.findAllByUserId(userId);
 
     // assert
-    Assertions.assertThat(boards).hasSameSizeAs(mockBoards);
+    Assertions.assertThat(boards).isNotEmpty();
   }
 
   @Test
   void testFindAllByUserId_shouldReturnEmptyList_whenBoardDoesntExist() {
     // arrange
-    deleteAllBoards();
+    boardService.deleteAll();
     var user = userService.findAll().getFirst();
 
     // act

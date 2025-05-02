@@ -1,17 +1,16 @@
 package com.vrudenko.kanban_board.dto;
 
 import com.vrudenko.kanban_board.constant.ValidationConstants;
-import com.vrudenko.kanban_board.dto.user_dto.SigninRequestDTO;
+import com.vrudenko.kanban_board.dto.user_dto.SignupRequestDTO;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
-import org.fluttercode.datafactory.impl.DataFactory;
+import java.util.Map;
 import org.assertj.core.api.Assertions;
+import org.fluttercode.datafactory.impl.DataFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Map;
-
-public class SigninRequestDTOTest {
+public class SignupRequestDTOTest {
   private Validator validator;
   DataFactory dataFactory = new DataFactory();
 
@@ -24,31 +23,36 @@ public class SigninRequestDTOTest {
           .concat(String.valueOf(dataFactory.getRandomWord(1)).toUpperCase())
           .concat(String.valueOf(dataFactory.getNumberBetween(0, 9)))
           .concat("$");
+  private SignupRequestDTO validDTO;
 
   @BeforeEach
   public void setup() {
     var factory = Validation.buildDefaultValidatorFactory();
     validator = factory.getValidator();
+
+    validDTO =
+        SignupRequestDTO.builder()
+            .email(validEmail)
+            .displayName(validDisplayName)
+            .password(validPassword)
+            .build();
   }
 
   @Test
   public void whenAllFieldsAreValid_thenNoViolations() {
     // arrange
-    var dto = new SigninRequestDTO();
-    dto.setEmail(validEmail);
-    dto.setPassword(validPassword);
 
     // act
 
     // assert
-    Assertions.assertThat(validator.validate(dto)).isEmpty();
+    Assertions.assertThat(validator.validate(validDTO)).isEmpty();
   }
 
   @Test
   public void whenEmailIsMissing_thenOneViolation() {
     // arrange
-    var dto = new SigninRequestDTO();
-    dto.setEmail("");
+    var dto =
+        SignupRequestDTO.builder().password(validPassword).displayName(validDisplayName).build();
 
     // act
 
@@ -62,8 +66,7 @@ public class SigninRequestDTOTest {
   @Test
   public void whenDisplayNameIsMissing_thenNoViolation() {
     // arrange
-    var dto = new SigninRequestDTO();
-    dto.setEmail(validEmail);
+    var dto = SignupRequestDTO.builder().email(validEmail).password(validPassword).build();
 
     // act
 
@@ -75,13 +78,13 @@ public class SigninRequestDTOTest {
   @Test
   public void whenDisplayNameIsTooShort_thenOneViolation() {
     // arrange
-    var dto = new SigninRequestDTO();
-    dto.setEmail(validEmail);
+    validDTO.setDisplayName(
+        dataFactory.getRandomWord(ValidationConstants.MIN_USER_DISPLAY_NAME_LENGTH - 1));
 
     // act
 
     // assert
-    var violations = validator.validate(dto);
+    var violations = validator.validate(validDTO);
     Assertions.assertThat(violations.size()).isEqualTo(1);
     Assertions.assertThat(violations.stream().findFirst().get().getPropertyPath().toString())
         .isEqualTo("displayName");
@@ -90,13 +93,13 @@ public class SigninRequestDTOTest {
   @Test
   public void whenDisplayNameIsTooLong_thenOneViolation() {
     // arrange
-    var dto = new SigninRequestDTO();
-    dto.setEmail(validEmail);
+    validDTO.setDisplayName(
+        dataFactory.getRandomWord(ValidationConstants.MAX_USER_DISPLAY_NAME_LENGTH + 1));
 
     // act
 
     // assert
-    var violations = validator.validate(dto);
+    var violations = validator.validate(validDTO);
     Assertions.assertThat(violations.size()).isEqualTo(1);
     Assertions.assertThat(violations.stream().findFirst().get().getPropertyPath().toString())
         .isEqualTo("displayName");
@@ -105,13 +108,13 @@ public class SigninRequestDTOTest {
   @Test
   public void whenDisplayNameContainsDigits_thenOneViolation() {
     // arrange
-    var dto = new SigninRequestDTO();
-    dto.setEmail(validEmail);
+    validDTO.setDisplayName(
+        validDTO.getDisplayName().concat(String.valueOf(dataFactory.getNumberBetween(0, 9))));
 
     // act
 
     // assert
-    var violations = validator.validate(dto);
+    var violations = validator.validate(validDTO);
     Assertions.assertThat(violations.size()).isEqualTo(1);
     Assertions.assertThat(violations.stream().findFirst().get().getPropertyPath().toString())
         .isEqualTo("displayName");
@@ -120,13 +123,12 @@ public class SigninRequestDTOTest {
   @Test
   public void whenDisplayNameContainsSpecialCharacters_thenOneViolation() {
     // arrange
-    var dto = new SigninRequestDTO();
-    dto.setEmail(validEmail);
+    validDTO.setDisplayName(validDTO.getDisplayName().concat("$"));
 
     // act
 
     // assert
-    var violations = validator.validate(dto);
+    var violations = validator.validate(validDTO);
     Assertions.assertThat(violations.size()).isEqualTo(1);
     Assertions.assertThat(violations.stream().findFirst().get().getPropertyPath().toString())
         .isEqualTo("displayName");
@@ -162,14 +164,12 @@ public class SigninRequestDTOTest {
 
     for (var invalidPassword : invalidPasswords.entrySet()) {
       // arrange
-      var dto = new SigninRequestDTO();
-      dto.setEmail(validEmail);
-      dto.setPassword(invalidPassword.getValue());
+      validDTO.setPassword(invalidPassword.getValue());
 
       // act
 
       // assert
-      var violations = validator.validate(dto);
+      var violations = validator.validate(validDTO);
       System.out.println(invalidPassword.getKey() + " : " + invalidPassword.getValue());
       Assertions.assertThat(violations).hasSize(1);
       Assertions.assertThat(violations.stream().findFirst().get().getPropertyPath().toString())

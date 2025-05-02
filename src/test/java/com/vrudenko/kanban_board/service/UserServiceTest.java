@@ -1,72 +1,29 @@
 package com.vrudenko.kanban_board.service;
 
-import com.google.common.collect.ImmutableList;
-import com.vrudenko.kanban_board.entity.UserEntity;
-
+import com.vrudenko.kanban_board.dto.user_dto.UserResponseDTO;
+import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
-import com.vrudenko.kanban_board.mapper.UserMapper;
 import org.assertj.core.api.Assertions;
-import org.fluttercode.datafactory.impl.DataFactory;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.security.crypto.password.PasswordEncoder;
 
 @SpringBootTest
-public class UserServiceTest {
+public class UserServiceTest extends AbstractAppServiceTest {
   final int AMOUNT_OF_FAKE_USERS = 5;
 
-  DataFactory dataFactory = new DataFactory();
-
-  @Autowired PasswordEncoder passwordEncoder;
   @Autowired UserService userService;
-  @Autowired UserMapper userMapper;
 
-  final ImmutableList<String> mockEmails =
-      ImmutableList.copyOf(
-          IntStream.range(0, AMOUNT_OF_FAKE_USERS)
-              .mapToObj(i -> dataFactory.getEmailAddress())
-              .collect(Collectors.toList()));
-
-  final ImmutableList<String> mockDisplayNames =
-      ImmutableList.copyOf(
-          IntStream.range(0, AMOUNT_OF_FAKE_USERS)
-              .mapToObj(i -> dataFactory.getName())
-              .collect(Collectors.toList()));
-
-  final ImmutableList<UserEntity> mockUsers =
-      ImmutableList.copyOf(
-          IntStream.range(0, AMOUNT_OF_FAKE_USERS)
-              .mapToObj(
-                  i -> {
-                    var currentMockDisplayName = mockDisplayNames.get(i);
-
-                    return UserEntity.builder()
-                        .email(mockEmails.get(i))
-                        .displayName(currentMockDisplayName)
-                        .passwordHash(passwordEncoder.encode(currentMockDisplayName))
-                        .build();
-                  })
-              .collect(Collectors.toList()));
+  List<UserResponseDTO> mockUsers = new ArrayList<>();
 
   @BeforeEach
   void setup() {
-    // Arrange
-    mockUsers.forEach((user) -> userService.save(userMapper.toSigninRequestDTO(user)));
-  }
-
-  @AfterEach
-  void cleanup() {
-    deleteAllUsers();
-  }
-
-  void deleteAllUsers() {
-    userService.findAll().forEach((user) -> userService.deleteById(user.getId()));
+    for (var i = 0; i < AMOUNT_OF_FAKE_USERS; i++) {
+      mockUsers.add(setupUser());
+    }
   }
 
   @Test
@@ -78,10 +35,9 @@ public class UserServiceTest {
     var foundUser = userService.findById(firstUser.getId());
 
     // Assert
-    Assertions.assertThat(foundUser).isNotEmpty();
-    Assertions.assertThat(foundUser.get().getId()).isEqualTo(firstUser.getId());
-    Assertions.assertThat(foundUser.get().getDisplayName()).isEqualTo(firstUser.getDisplayName());
-    Assertions.assertThat(foundUser.get().getEmail()).isEqualTo(firstUser.getEmail());
+    Assertions.assertThat(foundUser.getId()).isEqualTo(firstUser.getId());
+    Assertions.assertThat(foundUser.getDisplayName()).isEqualTo(firstUser.getDisplayName());
+    Assertions.assertThat(foundUser.getEmail()).isEqualTo(firstUser.getEmail());
   }
 
   @Test
@@ -90,10 +46,10 @@ public class UserServiceTest {
     var randomUUID = UUID.randomUUID().toString();
 
     // Act
-    var emptyUser = userService.findById(randomUUID);
+    var exception = Assertions.catchException(() -> userService.findById(randomUUID));
 
     // Assert
-    Assertions.assertThat(emptyUser).isEmpty();
+    Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
     Assertions.assertThat(
             userService.findAll().stream().noneMatch(user -> user.getId().equals(randomUUID)))
         .isTrue();
@@ -126,10 +82,10 @@ public class UserServiceTest {
   }
 
   @Test
-  void testDeleteById_shouldReturnFalse_whenBoardNotFound() {
+  void testDeleteById_shouldReturnFalse_whenUserNotFound() {
     // Arrange
     var firstUser = userService.findAll().getFirst();
-    deleteAllUsers();
+    userService.deleteAll();
 
     // Act
     var wasUserDeleted = userService.deleteById(firstUser.getId());
@@ -139,7 +95,7 @@ public class UserServiceTest {
   }
 
   @Test
-  void testDeleteById_shouldReturnTrue_whenBoardFoundAndDeleted() {
+  void testDeleteById_shouldReturnTrue_whenUserFoundAndDeleted() {
     // Arrange
     var firstUser = userService.findAll().getFirst();
 
