@@ -1,5 +1,6 @@
 package com.vrudenko.kanban_board.mapper;
 
+import com.vrudenko.kanban_board.dto.column_dto.ColumnResponseDTO;
 import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
 import com.vrudenko.kanban_board.entity.ColumnEntity;
 import org.mapstruct.Mapper;
@@ -17,4 +18,8 @@ public interface ColumnMapper {
   SaveColumnRequestDTO toSaveColumnRequestDTO(ColumnEntity entity);
 
   List<SaveColumnRequestDTO> toSaveColumnRequestDTOList(List<ColumnEntity> entities);
+
+  ColumnResponseDTO toColumnResponseDTO(ColumnEntity entity);
+
+  List<ColumnResponseDTO> toColumnResponseDTOList(List<ColumnEntity> entities);
 }

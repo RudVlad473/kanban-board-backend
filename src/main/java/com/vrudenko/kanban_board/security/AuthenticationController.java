@@ -10,11 +10,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.net.URI;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -60,14 +58,14 @@ public class AuthenticationController {
 
   // only these authentication routes yield session cookie
   @PostMapping(ApiPaths.SIGNUP)
-  public ResponseEntity signup(
+  public ResponseEntity<String> signup(
       @RequestBody SignupRequestDTO signupDTO,
       HttpServletRequest request,
       HttpServletResponse response) {
     var userAlreadyExists = userRepository.findByEmail(signupDTO.getEmail()).isPresent();
 
     if (userAlreadyExists) {
-      return new ResponseEntity("User with this email already exists", HttpStatus.CONFLICT);
+      return new ResponseEntity<>("User with this email already exists", HttpStatus.CONFLICT);
     }
 
     var createdUser = userRepository.save(userMapper.fromSignupRequestDTO(signupDTO));

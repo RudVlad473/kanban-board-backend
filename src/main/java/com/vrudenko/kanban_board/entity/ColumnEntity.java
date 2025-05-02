@@ -24,10 +24,6 @@ import java.util.List;
 @EqualsAndHashCode(callSuper = false)
 @Table(name = "columns")
 public class ColumnEntity extends BaseEntity implements BaseBoard {
-  @Id
-  @GeneratedValue(strategy = GenerationType.UUID)
-  private String columnId;
-
   @Column(nullable = false)
   private String name;
 

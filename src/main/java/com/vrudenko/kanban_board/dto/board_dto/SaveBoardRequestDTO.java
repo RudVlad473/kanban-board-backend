@@ -5,12 +5,14 @@ import com.vrudenko.kanban_board.constant.ValidationConstants;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
 
 @Getter
 @Setter
+@Builder
 @EqualsAndHashCode
 public class SaveBoardRequestDTO implements BaseBoard {
   @NotBlank(message = "Board name cannot be empty")

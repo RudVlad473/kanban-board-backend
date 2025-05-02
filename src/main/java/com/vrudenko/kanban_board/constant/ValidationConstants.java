@@ -28,7 +28,7 @@ public final class ValidationConstants {
           + ValidationConstants.MAX_PASSWORD_LENGTH
           + " characters";
 
-  public static final int MIN_COLUMN_NAME_LENGTH = 1;
+  public static final int MIN_COLUMN_NAME_LENGTH = 3;
   public static final int MAX_COLUMN_NAME_LENGTH = 32;
   public static final String COLUMN_NAME_LENGTH_VALIDATION_MESSAGE =
       "Column name cannot be less than "

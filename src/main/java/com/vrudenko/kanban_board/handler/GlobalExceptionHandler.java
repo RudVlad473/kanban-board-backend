@@ -1,5 +1,7 @@
 package com.vrudenko.kanban_board.handler;
 
+import com.vrudenko.kanban_board.exception.AppAccessDeniedException;
+import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
@@ -15,6 +17,11 @@ public class GlobalExceptionHandler {
     return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
   }
 
+  @ExceptionHandler(AppEntityNotFoundException.class)
+  public ResponseEntity<String> handleAppEntityNotFound(AppEntityNotFoundException ex) {
+    return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
+  }
+
   @ExceptionHandler(IllegalArgumentException.class)
   public ResponseEntity<String> handleIllegalArgument(IllegalArgumentException ex) {
     return new ResponseEntity<>(ex.getMessage(), HttpStatus.BAD_REQUEST);
@@ -27,6 +34,11 @@ public class GlobalExceptionHandler {
 
   @ExceptionHandler(AccessDeniedException.class)
   public ResponseEntity<String> handleAccessDeniedException(AccessDeniedException ex) {
+    return new ResponseEntity<>(ex.getMessage(), HttpStatus.UNAUTHORIZED);
+  }
+
+  @ExceptionHandler(AppAccessDeniedException.class)
+  public ResponseEntity<String> handleAppAccessDeniedException(AppAccessDeniedException ex) {
     return new ResponseEntity<>(ex.getMessage(), HttpStatus.UNAUTHORIZED);
   }
 

@@ -46,11 +46,7 @@ public class BoardController {
   @DeleteMapping(ApiPaths.BOARD_ID)
   public ResponseEntity<Void> deleteById(
       @PathVariable @UUID String boardId, @CurrentUserId String userId) {
-    var wasBoardDeleted = boardService.deleteById(userId, boardId);
-
-    if (!wasBoardDeleted) {
-      return ResponseEntity.notFound().build();
-    }
+    boardService.deleteById(userId, boardId);
 
     return ResponseEntity.ok().build();
   }

@@ -1,6 +1,6 @@
-package com.vrudenko.kanban_board.dto.board_dto;
+package com.vrudenko.kanban_board.dto.column_dto;
 
-import com.vrudenko.kanban_board.base.BaseBoard;
+import com.vrudenko.kanban_board.base.BaseColumn;
 import com.vrudenko.kanban_board.base.BaseId;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -9,9 +9,9 @@ import lombok.Setter;
 
 @Getter
 @Setter
-@EqualsAndHashCode
 @Builder
-public class BoardResponseDTO implements BaseId, BaseBoard {
+@EqualsAndHashCode
+public class ColumnResponseDTO implements BaseId, BaseColumn {
   private String id;
   private String name;
 }

@@ -19,11 +19,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @EqualsAndHashCode(callSuper = false)
 @Table(name = "subtasks")
-public class SubtaskEntity {
-  @Id
-  @GeneratedValue(strategy = GenerationType.UUID)
-  private String subtaskId;
-
+public class SubtaskEntity extends BaseEntity {
   @ManyToOne
   @JoinColumn(name = "task_id")
   private TaskEntity task;

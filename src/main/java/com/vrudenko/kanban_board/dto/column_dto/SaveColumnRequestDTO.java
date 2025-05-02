@@ -5,6 +5,7 @@ import com.vrudenko.kanban_board.constant.ValidationConstants;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
@@ -12,6 +13,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @EqualsAndHashCode
+@Builder
 public class SaveColumnRequestDTO implements BaseColumn {
   @NotBlank(message = "Column name cannot be empty")
   @Size(
