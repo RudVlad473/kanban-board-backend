@@ -1,7 +1,7 @@
 package com.vrudenko.kanban_board.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.vrudenko.kanban_board.base.BaseUser;
+import com.vrudenko.kanban_board.base.entity.BaseUser;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.OneToMany;
@@ -16,9 +16,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 
 @Entity
 @Getter
