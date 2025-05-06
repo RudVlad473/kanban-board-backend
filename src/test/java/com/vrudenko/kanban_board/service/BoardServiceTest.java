@@ -41,8 +41,9 @@ public class BoardServiceTest extends AbstractAppServiceTest {
     var columnAmountAfterAddition = columnService.getColumnCountByBoardId(boardId);
 
     Assertions.assertThat(columnAmountAfterAddition).isEqualTo(columnAmountBeforeAddition + 1);
-    Assertions.assertThat(columnService.findById(column.getId())).isNotEmpty();
-    Assertions.assertThat(columnService.findById(column.getId()).get().getName())
+    Assertions.assertThat(columnService.findById(getOwningUser().getId(), column.getId()))
+        .isNotInstanceOf(AppEntityNotFoundException.class);
+    Assertions.assertThat(columnService.findById(getOwningUser().getId(), column.getId()).getName())
         .isEqualTo(columnName);
   }
 

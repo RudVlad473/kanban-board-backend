@@ -7,6 +7,8 @@ import com.vrudenko.kanban_board.dto.board_dto.BoardResponseDTO;
 import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.column_dto.ColumnResponseDTO;
 import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
+import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
+import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
 import com.vrudenko.kanban_board.dto.user_dto.UserResponseDTO;
 import com.vrudenko.kanban_board.entity.UserEntity;
 import com.vrudenko.kanban_board.mapper.BoardMapper;
@@ -27,16 +29,27 @@ public abstract class AbstractAppServiceTest {
   private @Autowired BoardService boardService;
   private @Autowired BoardMapper boardMapper;
   private @Autowired ColumnService columnService;
+  private @Autowired TaskService taskService;
 
   final DataFactory dataFactory = new DataFactory();
 
-  public final int MOCK_COLUMNS_AMOUNT = 7;
+  protected final int MOCK_COLUMNS_AMOUNT = 7;
+  protected final int MOCK_TASKS_AMOUNT = 7;
 
+  // users
   @Getter private UserResponseDTO owningUser;
   @Getter private UserResponseDTO noBoardsUser;
-  public ImmutableList<BoardResponseDTO> mockEmptyBoards = ImmutableList.of();
-  public BoardResponseDTO mockPopulatedBoard = BoardResponseDTO.builder().build();
-  public ImmutableList<ColumnResponseDTO> mockColumns = ImmutableList.of();
+
+  // boards
+  protected ImmutableList<BoardResponseDTO> mockEmptyBoards = ImmutableList.of();
+  protected BoardResponseDTO mockPopulatedBoard = BoardResponseDTO.builder().build();
+
+  // columns
+  protected ImmutableList<ColumnResponseDTO> mockColumns = ImmutableList.of();
+  protected ColumnResponseDTO mockPopulatedColumn = ColumnResponseDTO.builder().build();
+
+  // tasks
+  protected ImmutableList<TaskResponseDTO> mockTasks = ImmutableList.of();
 
   @BeforeEach
   void setup() {
@@ -71,13 +84,24 @@ public abstract class AbstractAppServiceTest {
                             mockPopulatedBoard.getId(),
                             SaveColumnRequestDTO.builder().name(columnName).build()))
                 .toList());
+    mockPopulatedColumn =
+        columnService.save(
+            SaveColumnRequestDTO.builder()
+                .name(dataFactory.getRandomWord(ValidationConstants.MIN_BOARD_NAME_LENGTH + 4))
+                .build(),
+            boardService.findById(getOwningUser().getId(), mockPopulatedBoard.getId()));
+
+    // task
+    mockTasks =
+        ImmutableList.copyOf(
+            Stream.generate(() -> null)
+                .limit(MOCK_TASKS_AMOUNT)
+                .map((ignore) -> setupTask())
+                .toList());
   }
 
   @AfterEach
   void cleanup() {
-    // column
-    columnService.deleteAll();
-
     // board
     boardService.deleteAll();
 
@@ -94,5 +118,18 @@ public abstract class AbstractAppServiceTest {
                     dataFactory.getRandomWord(ValidationConstants.MIN_USER_DISPLAY_NAME_LENGTH))
                 .passwordHash(dataFactory.getRandomWord(ValidationConstants.MIN_PASSWORD_LENGTH))
                 .build()));
+  }
+
+  TaskResponseDTO setupTask() {
+    return columnService.addTaskByColumnId(
+        getOwningUser().getId(),
+        mockPopulatedColumn.getId(),
+        SaveTaskRequestDTO.builder()
+            .title(dataFactory.getRandomWord(ValidationConstants.MIN_TASK_TITLE_LENGTH + 2))
+            .description(
+                dataFactory.getRandomText(
+                    ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH,
+                    ValidationConstants.MAX_TASK_DESCRIPTION_LENGTH))
+            .build());
   }
 }
