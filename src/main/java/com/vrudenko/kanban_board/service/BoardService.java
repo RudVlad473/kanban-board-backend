@@ -28,16 +28,13 @@ public class BoardService {
   @Autowired private BoardMapper boardMapper;
   @Autowired private UserService userService;
   @Autowired private ColumnService columnService;
+  @Autowired private OwnershipVerifierService ownershipVerifierService;
 
   public List<BoardResponseDTO> findAllByUserId(String userId) {
     return boardMapper.toResponseDTOList(boardRepository.findAllByUserId(userId));
   }
 
-  @VisibleForTesting
-  public List<BoardResponseDTO> findAll() {
-    return boardMapper.toResponseDTOList(boardRepository.findAll());
-  }
-
+  // TODO: move this method to UserService as 'addBoardByUserId'
   @Transactional
   public BoardResponseDTO save(String userId, SaveBoardRequestDTO boardDTO) {
     var user = userService.findById(userId);
@@ -59,48 +56,24 @@ public class BoardService {
   }
 
   @Transactional
-  public void deleteById(String userId, String boardId) throws AccessDeniedException {
+  public void deleteById(String userId, String boardId) {
     var board = findById(userId, boardId);
 
-    var userOwnsBoard = board.getUser().getId().equals(userId);
-    if (!userOwnsBoard) {
-      throw new AppAccessDeniedException("Board");
-    }
+    columnService.deleteAllByBoardId(userId, board.getId());
 
-    columnService.deleteAllByBoardId(userId, boardId);
-
-    boardRepository.deleteById(boardId);
+    boardRepository.deleteById(board.getId());
   }
 
-  public BoardEntity findById(String userId, String boardId)
-      throws AppEntityNotFoundException, AppAccessDeniedException {
-    var user = userService.findById(userId);
+  public BoardEntity findById(String userId, String boardId) {
+    var pair = ownershipVerifierService.verifyOwnershipOfBoard(userId, boardId);
 
-    var board = boardRepository.findById(boardId);
-
-    if (board.isEmpty()) {
-      throw new AppEntityNotFoundException("Board");
-    }
-
-    var userOwnsBoard = board.get().getUser().getId().equals(user.getId());
-
-    if (!userOwnsBoard) {
-      throw new AppAccessDeniedException("Board");
-    }
-
-    return board.get();
+    return pair.getSecond();
   }
 
   @Transactional
   public Optional<BoardResponseDTO> updateById(
-      String userId, String boardId, SaveBoardRequestDTO boardDTO)
-      throws AppAccessDeniedException, AppEntityNotFoundException {
+      String userId, String boardId, SaveBoardRequestDTO boardDTO) {
     var boardToUpdate = findById(userId, boardId);
-
-    var userOwnsBoard = boardToUpdate.getUser().getId().equals(userId);
-    if (!userOwnsBoard) {
-      throw new AppAccessDeniedException("Board");
-    }
 
     // TODO: Disallow duplicating board names for a single user
 
@@ -116,5 +89,10 @@ public class BoardService {
     for (var boardEntity : boardRepository.findAll()) {
       deleteById(boardEntity.getUser().getId(), boardEntity.getId());
     }
+  }
+
+  @VisibleForTesting
+  public List<BoardResponseDTO> findAll() {
+    return boardMapper.toResponseDTOList(boardRepository.findAll());
   }
 }

@@ -3,6 +3,7 @@ package com.vrudenko.kanban_board.service;
 import com.google.common.annotations.VisibleForTesting;
 import com.vrudenko.kanban_board.dto.user_dto.SigninRequestDTO;
 import com.vrudenko.kanban_board.dto.user_dto.UserResponseDTO;
+import com.vrudenko.kanban_board.entity.BoardEntity;
 import com.vrudenko.kanban_board.entity.UserEntity;
 import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
 import com.vrudenko.kanban_board.mapper.UserMapper;
@@ -50,10 +51,6 @@ public class UserService implements UserDetailsService {
     return true;
   }
 
-  public List<UserResponseDTO> findAll() {
-    return userMapper.toResponseDTOList(userRepository.findAll());
-  }
-
   @Override
   // username is mapped to userid inside LoginController
   public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
@@ -64,6 +61,11 @@ public class UserService implements UserDetailsService {
     }
 
     return user.get();
+  }
+
+  @VisibleForTesting
+  public List<UserResponseDTO> findAll() {
+    return userMapper.toResponseDTOList(userRepository.findAll());
   }
 
   @VisibleForTesting
