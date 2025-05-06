@@ -36,4 +36,22 @@ public final class ValidationConstants {
           + " character and more than "
           + ValidationConstants.MAX_COLUMN_NAME_LENGTH
           + " characters";
+
+  public static final int MIN_TASK_TITLE_LENGTH = 3;
+  public static final int MAX_TASK_TITLE_LENGTH = 64;
+  public static final String TASK_TITLE_LENGTH_VALIDATION_MESSAGE =
+      "Task title cannot be less than "
+          + ValidationConstants.MIN_TASK_TITLE_LENGTH
+          + " character and more than "
+          + ValidationConstants.MAX_TASK_TITLE_LENGTH
+          + " characters";
+
+  public static final int MIN_TASK_DESCRIPTION_LENGTH = 1;
+  public static final int MAX_TASK_DESCRIPTION_LENGTH = 512;
+  public static final String TASK_DESCRIPTION_LENGTH_VALIDATION_MESSAGE =
+      "Task description cannot be less than "
+          + ValidationConstants.MIN_TASK_TITLE_LENGTH
+          + " character and more than "
+          + ValidationConstants.MAX_TASK_TITLE_LENGTH
+          + " characters";
 }
