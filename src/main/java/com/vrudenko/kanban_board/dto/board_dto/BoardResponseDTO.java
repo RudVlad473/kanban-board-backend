@@ -1,7 +1,7 @@
 package com.vrudenko.kanban_board.dto.board_dto;
 
-import com.vrudenko.kanban_board.base.BaseBoard;
-import com.vrudenko.kanban_board.base.BaseId;
+import com.vrudenko.kanban_board.base.entity.BaseBoard;
+import com.vrudenko.kanban_board.base.entity.BaseId;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;

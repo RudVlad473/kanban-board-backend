@@ -1,6 +1,6 @@
 package com.vrudenko.kanban_board.dto.board_dto;
 
-import com.vrudenko.kanban_board.base.BaseBoard;
+import com.vrudenko.kanban_board.base.entity.BaseBoard;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;

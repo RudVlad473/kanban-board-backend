@@ -1,7 +1,7 @@
-package com.vrudenko.kanban_board.dto.column_dto;
+package com.vrudenko.kanban_board.dto.task_dto;
 
-import com.vrudenko.kanban_board.base.entity.BaseColumn;
 import com.vrudenko.kanban_board.base.entity.BaseId;
+import com.vrudenko.kanban_board.base.entity.BaseTask;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -11,7 +11,8 @@ import lombok.Setter;
 @Setter
 @Builder
 @EqualsAndHashCode
-public class ColumnResponseDTO implements BaseId, BaseColumn {
+public class TaskResponseDTO implements BaseId, BaseTask {
   private String id;
-  private String name;
+  private String title;
+  private String description;
 }
