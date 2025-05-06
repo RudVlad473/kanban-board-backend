@@ -1,4 +1,4 @@
-package com.vrudenko.kanban_board.base;
+package com.vrudenko.kanban_board.base.entity;
 
 /**
  * Interfaces are used for base entities instead of classes because you can't override fields in
