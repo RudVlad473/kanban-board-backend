@@ -8,5 +8,5 @@ import java.util.List;
 public interface TaskRepository extends JpaRepository<TaskEntity, String> {
   List<TaskEntity> findAllByColumnId(String columnId);
 
-  void deleteAllByColumnId(String columnId);
+  long countByColumnId(String columnId);
 }

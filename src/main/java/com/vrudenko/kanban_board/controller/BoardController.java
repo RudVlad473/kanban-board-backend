@@ -38,11 +38,6 @@ public class BoardController {
     return this.boardService.findAllByUserId(userId);
   }
 
-  @PostMapping
-  public BoardResponseDTO save(@CurrentUserId String userId, @RequestBody SaveBoardRequestDTO dto) {
-    return this.boardService.save(userId, dto);
-  }
-
   @DeleteMapping(ApiPaths.BOARD_ID)
   public ResponseEntity<Void> deleteById(
       @PathVariable @UUID String boardId, @CurrentUserId String userId) {

@@ -38,7 +38,7 @@ public final class ValidationConstants {
           + " characters";
 
   public static final int MIN_TASK_TITLE_LENGTH = 3;
-  public static final int MAX_TASK_TITLE_LENGTH = 64;
+  public static final int MAX_TASK_TITLE_LENGTH = 32;
   public static final String TASK_TITLE_LENGTH_VALIDATION_MESSAGE =
       "Task title cannot be less than "
           + ValidationConstants.MIN_TASK_TITLE_LENGTH
@@ -53,5 +53,14 @@ public final class ValidationConstants {
           + ValidationConstants.MIN_TASK_TITLE_LENGTH
           + " character and more than "
           + ValidationConstants.MAX_TASK_TITLE_LENGTH
+          + " characters";
+
+  public static final int MIN_SUBTASK_TITLE_LENGTH = 3;
+  public static final int MAX_SUBTASK_TITLE_LENGTH = 32;
+  public static final String SUBTASK_TITLE_LENGTH_VALIDATION_MESSAGE =
+      "Subtask title cannot be less than "
+          + ValidationConstants.MIN_SUBTASK_TITLE_LENGTH
+          + " character and more than "
+          + ValidationConstants.MAX_SUBTASK_TITLE_LENGTH
           + " characters";
 }

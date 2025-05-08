@@ -1,5 +1,9 @@
 package com.vrudenko.kanban_board.service;
 
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.primitives.Ints;
+import com.vrudenko.kanban_board.dto.subtask_dto.SaveSubtaskRequestDTO;
+import com.vrudenko.kanban_board.dto.subtask_dto.SubtaskResponseDTO;
 import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
 import com.vrudenko.kanban_board.entity.ColumnEntity;
@@ -16,6 +20,7 @@ public class TaskService {
   @Autowired private TaskRepository taskRepository;
   @Autowired private TaskMapper taskMapper;
   @Autowired private OwnershipVerifierService ownershipVerifierService;
+  @Autowired private SubtaskService subtaskService;
 
   TaskResponseDTO save(SaveTaskRequestDTO dto, ColumnEntity column) {
     var task = taskMapper.fromSaveTaskRequestDTO(dto);
@@ -31,6 +36,12 @@ public class TaskService {
 
     return taskMapper.toTaskResponseDTOList(
         taskRepository.findAllByColumnId(pair.getSecond().getId()));
+  }
+
+  int getTaskCountByColumnId(String userId, String columnId) {
+    var pair = ownershipVerifierService.verifyOwnershipOfColumn(userId, columnId);
+
+    return Ints.checkedCast(taskRepository.countByColumnId(pair.getSecond().getId()));
   }
 
   // TODO: make a service interface
@@ -62,7 +73,23 @@ public class TaskService {
     var pair = ownershipVerifierService.verifyOwnershipOfColumn(userId, columnId);
 
     // TODO: delete all subtasks in batch using list of task ids
+    for (var task : findAllByColumnId(userId, pair.getSecond().getId())) {
+      subtaskService.deleteAllByTaskId(userId, task.getId());
 
-    taskRepository.deleteAllByColumnId(pair.getSecond().getId());
+      deleteById(userId, task.getId());
+    }
+  }
+
+  SubtaskResponseDTO addSubtaskByTaskId(String userId, String taskId, SaveSubtaskRequestDTO dto) {
+    var pair = ownershipVerifierService.verifyOwnershipOfTask(userId, taskId);
+
+    var task = pair.getSecond();
+
+    return subtaskService.save(task, dto);
+  }
+
+  @VisibleForTesting
+  void deleteAll() {
+    taskRepository.deleteAll();
   }
 }

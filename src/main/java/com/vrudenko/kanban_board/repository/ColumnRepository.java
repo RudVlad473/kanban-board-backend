@@ -8,4 +8,6 @@ public interface ColumnRepository extends JpaRepository<ColumnEntity, String> {
   List<ColumnEntity> findAllByBoardId(String boardId);
 
   void deleteAllByBoardId(String boardId);
+
+  long countByBoardId(String boardId);
 }

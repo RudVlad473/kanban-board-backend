@@ -26,25 +26,11 @@ import org.springframework.stereotype.Service;
 public class BoardService {
   @Autowired private BoardRepository boardRepository;
   @Autowired private BoardMapper boardMapper;
-  @Autowired private UserService userService;
   @Autowired private ColumnService columnService;
   @Autowired private OwnershipVerifierService ownershipVerifierService;
 
   public List<BoardResponseDTO> findAllByUserId(String userId) {
     return boardMapper.toResponseDTOList(boardRepository.findAllByUserId(userId));
-  }
-
-  // TODO: move this method to UserService as 'addBoardByUserId'
-  @Transactional
-  public BoardResponseDTO save(String userId, SaveBoardRequestDTO boardDTO) {
-    var user = userService.findById(userId);
-
-    var board = boardMapper.fromSaveBoardRequestDTO(boardDTO);
-    board.setUser(user);
-    // TODO: Disallow duplicating board names for a single user
-    var savedBoard = boardRepository.save(board);
-
-    return boardMapper.toResponseDTO(savedBoard);
   }
 
   @Transactional
@@ -62,6 +48,15 @@ public class BoardService {
     columnService.deleteAllByBoardId(userId, board.getId());
 
     boardRepository.deleteById(board.getId());
+  }
+
+  @Transactional
+  public void deleteAllByUserId(String userId) {
+    var boardsOwnedByUser = findAllByUserId(userId);
+
+    for (var board : boardsOwnedByUser) {
+      deleteById(userId, board.getId());
+    }
   }
 
   public BoardEntity findById(String userId, String boardId) {

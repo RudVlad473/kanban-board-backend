@@ -1,6 +1,7 @@
 package com.vrudenko.kanban_board.service;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.primitives.Ints;
 import com.vrudenko.kanban_board.dto.column_dto.ColumnResponseDTO;
 import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
@@ -60,7 +61,7 @@ public class ColumnService {
 
   @VisibleForTesting
   public int getColumnCountByBoardId(String boardId) {
-    return findAllByBoardId(boardId).size();
+    return Ints.checkedCast(columnRepository.countByBoardId(boardId));
   }
 
   @VisibleForTesting
