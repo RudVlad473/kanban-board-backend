@@ -1,12 +1,13 @@
 package com.vrudenko.kanban_board.service;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.board_dto.BoardResponseDTO;
 import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.column_dto.ColumnResponseDTO;
 import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
+import com.vrudenko.kanban_board.dto.subtask_dto.SaveSubtaskRequestDTO;
+import com.vrudenko.kanban_board.dto.subtask_dto.SubtaskResponseDTO;
 import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
 import com.vrudenko.kanban_board.dto.user_dto.UserResponseDTO;
@@ -19,8 +20,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.stream.Stream;
 
 public abstract class AbstractAppServiceTest {
@@ -31,10 +30,11 @@ public abstract class AbstractAppServiceTest {
   private @Autowired ColumnService columnService;
   private @Autowired TaskService taskService;
 
-  final DataFactory dataFactory = new DataFactory();
+  protected final DataFactory dataFactory = new DataFactory();
 
   protected final int MOCK_COLUMNS_AMOUNT = 7;
   protected final int MOCK_TASKS_AMOUNT = 7;
+  protected final int MOCK_SUBTASKS_AMOUNT = 7;
 
   // users
   @Getter private UserResponseDTO owningUser;
@@ -50,6 +50,10 @@ public abstract class AbstractAppServiceTest {
 
   // tasks
   protected ImmutableList<TaskResponseDTO> mockTasks = ImmutableList.of();
+  protected TaskResponseDTO mockPopulatedTask = TaskResponseDTO.builder().build();
+
+  // subtasks
+  protected ImmutableList<SubtaskResponseDTO> mockSubtasks = ImmutableList.of();
 
   @BeforeEach
   void setup() {
@@ -63,12 +67,12 @@ public abstract class AbstractAppServiceTest {
             Stream.of("Todo", "Done")
                 .map(
                     (boardName) ->
-                        boardService.save(
+                        userService.addBoardByUserId(
                             getOwningUser().getId(),
                             SaveBoardRequestDTO.builder().name(boardName).build()))
                 .toList());
     mockPopulatedBoard =
-        boardService.save(
+        userService.addBoardByUserId(
             getOwningUser().getId(), SaveBoardRequestDTO.builder().name("In progress").build());
 
     // column
@@ -98,14 +102,19 @@ public abstract class AbstractAppServiceTest {
                 .limit(MOCK_TASKS_AMOUNT)
                 .map((ignore) -> setupTask())
                 .toList());
+    mockPopulatedTask = setupTask();
+
+    // subtask
+    mockSubtasks =
+        ImmutableList.copyOf(
+            Stream.generate(() -> null)
+                .limit(MOCK_SUBTASKS_AMOUNT)
+                .map((ignore) -> setupSubtask())
+                .toList());
   }
 
   @AfterEach
   void cleanup() {
-    // board
-    boardService.deleteAll();
-
-    // user
     userService.deleteAll();
   }
 
@@ -130,6 +139,15 @@ public abstract class AbstractAppServiceTest {
                 dataFactory.getRandomText(
                     ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH,
                     ValidationConstants.MAX_TASK_DESCRIPTION_LENGTH))
+            .build());
+  }
+
+  SubtaskResponseDTO setupSubtask() {
+    return taskService.addSubtaskByTaskId(
+        getOwningUser().getId(),
+        mockPopulatedTask.getId(),
+        SaveSubtaskRequestDTO.builder()
+            .title(dataFactory.getRandomText(ValidationConstants.MIN_SUBTASK_TITLE_LENGTH + 1))
             .build());
   }
 }
