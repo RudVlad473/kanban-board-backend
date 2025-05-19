@@ -34,8 +34,10 @@ public class BoardController {
   @Autowired private BoardService boardService;
 
   @GetMapping
-  public List<BoardResponseDTO> findAllByUserId(@CurrentUserId String userId) {
-    return this.boardService.findAllByUserId(userId);
+  public ResponseEntity<List<BoardResponseDTO>> findAllByUserId(@CurrentUserId String userId) {
+    var boards = this.boardService.findAllByUserId(userId);
+
+    return ResponseEntity.ok(boards);
   }
 
   @DeleteMapping(ApiPaths.BOARD_ID)
