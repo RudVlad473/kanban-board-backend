@@ -24,11 +24,10 @@ import org.springframework.security.web.header.writers.ClearSiteDataHeaderWriter
 @RequiredArgsConstructor
 @EnableMethodSecurity
 public class SecurityConfiguration {
-
   private final AuthenticationProvider authenticationProvider;
   private final LogoutHandler handlerLogout;
 
-  @Value("${server.servlet.contextPath}")
+  @Value("${server.servlet.context-path}")
   private String CONTEXT_PATH;
 
   @Bean
@@ -43,8 +42,9 @@ public class SecurityConfiguration {
 
     http.authorizeHttpRequests(
         auth -> {
-          auth.requestMatchers(ApiPaths.SIGNIN, ApiPaths.SIGNUP).permitAll();
- 
+          auth.requestMatchers(ApiPaths.SIGNIN, ApiPaths.SIGNUP)
+              .permitAll();
+
           auth.anyRequest().authenticated();
         });
 
@@ -60,7 +60,7 @@ public class SecurityConfiguration {
     // clear cookie when logout
     http.logout(
         (logout) -> {
-          logout.logoutUrl(ApiPaths.LOGOUT);
+          logout.logoutUrl(CONTEXT_PATH + ApiPaths.LOGOUT);
           logout.addLogoutHandler(
               new HeaderWriterLogoutHandler(
                   new ClearSiteDataHeaderWriter(ClearSiteDataHeaderWriter.Directive.COOKIES)));

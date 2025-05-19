@@ -17,6 +17,8 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.context.SecurityContextHolderStrategy;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -34,6 +36,7 @@ public class AuthenticationController {
       SecurityContextHolder.getContextHolderStrategy();
   private final UserRepository userRepository;
   private final UserMapper userMapper;
+  private final SecurityContextRepository securityContextRepository;
 
   // only these authentication routes yield session cookie
   @GetMapping(ApiPaths.SIGNIN)
@@ -47,7 +50,8 @@ public class AuthenticationController {
       return ResponseEntity.notFound().build();
     }
 
-    var successfullyAuthenticated = authenticate(user.get().getId(), signinDTO.getPassword());
+    var successfullyAuthenticated =
+        authenticate(user.get().getId(), signinDTO.getPassword(), request, response);
 
     if (!successfullyAuthenticated) {
       throw new AccessDeniedException("Was not able to sign in");
@@ -70,7 +74,8 @@ public class AuthenticationController {
 
     var createdUser = userRepository.save(userMapper.fromSignupRequestDTO(signupDTO));
 
-    var successfullyAuthenticated = authenticate(createdUser.getId(), signupDTO.getPassword());
+    var successfullyAuthenticated =
+        authenticate(createdUser.getId(), signupDTO.getPassword(), request, response);
 
     if (!successfullyAuthenticated) {
       throw new AccessDeniedException("Was not able to sign up");
@@ -79,7 +84,8 @@ public class AuthenticationController {
     return ResponseEntity.created(URI.create(request.getRequestURI())).build();
   }
 
-  public Boolean authenticate(String userId, String password) {
+  public Boolean authenticate(
+      String userId, String password, HttpServletRequest request, HttpServletResponse response) {
     var token = UsernamePasswordAuthenticationToken.unauthenticated(userId, password);
 
     return Try.of(() -> authenticationManager.authenticate(token))
@@ -91,6 +97,7 @@ public class AuthenticationController {
               // set context application from authentication
               context.setAuthentication(authentication);
               securityContextHolderStrategy.setContext(context);
+              securityContextRepository.saveContext(context, request, response);
 
               return true;
             })
