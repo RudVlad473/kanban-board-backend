@@ -4,6 +4,6 @@ import org.springframework.security.access.AccessDeniedException;
 
 public class AppAccessDeniedException extends AccessDeniedException {
   public AppAccessDeniedException(String entityName) {
-    super("You do not have access to that board" + entityName.toLowerCase());
+    super("You do not have access to that " + entityName.toLowerCase());
   }
 }
