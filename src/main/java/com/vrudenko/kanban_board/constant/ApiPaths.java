@@ -1,9 +1,9 @@
 package com.vrudenko.kanban_board.constant;
 
-import org.springframework.beans.factory.annotation.Value;
-
+/**
+ * Be aware that you may need to concat these paths with 'context-path' from application.properties
+ */
 public final class ApiPaths {
-
   public static final String BOARDS = "/boards";
   public static final String BOARD_ID = "/{boardId}";
 
