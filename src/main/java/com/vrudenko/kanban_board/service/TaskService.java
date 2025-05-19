@@ -80,7 +80,7 @@ public class TaskService {
     }
   }
 
-  SubtaskResponseDTO addSubtaskByTaskId(String userId, String taskId, SaveSubtaskRequestDTO dto) {
+  public SubtaskResponseDTO addSubtaskByTaskId(String userId, String taskId, SaveSubtaskRequestDTO dto) {
     var pair = ownershipVerifierService.verifyOwnershipOfTask(userId, taskId);
 
     var task = pair.getSecond();

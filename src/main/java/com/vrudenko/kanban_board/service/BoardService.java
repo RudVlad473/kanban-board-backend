@@ -6,6 +6,7 @@ import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.column_dto.ColumnResponseDTO;
 import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
 import com.vrudenko.kanban_board.entity.BoardEntity;
+import com.vrudenko.kanban_board.entity.UserEntity;
 import com.vrudenko.kanban_board.exception.AppAccessDeniedException;
 import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
 import com.vrudenko.kanban_board.mapper.BoardMapper;
@@ -77,6 +78,15 @@ public class BoardService {
     var savedBoard = boardRepository.save(boardToUpdate);
 
     return Optional.of(boardMapper.toResponseDTO(savedBoard));
+  }
+
+  public BoardResponseDTO save(SaveBoardRequestDTO dto, UserEntity user) {
+    var board = boardMapper.fromSaveBoardRequestDTO(dto);
+    board.setUser(user);
+
+    boardRepository.save(board);
+
+    return boardMapper.toResponseDTO(board);
   }
 
   @VisibleForTesting

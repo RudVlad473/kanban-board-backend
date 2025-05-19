@@ -67,11 +67,8 @@ public class UserService implements UserDetailsService {
   public BoardResponseDTO addBoardByUserId(String userId, SaveBoardRequestDTO boardDTO) {
     var user = findById(userId);
 
-    var board = boardMapper.fromSaveBoardRequestDTO(boardDTO);
-    board.setUser(user);
-
     // TODO: Disallow duplicating board names for a single user
-    return boardMapper.toResponseDTO(boardRepository.save(board));
+    return boardService.save(boardDTO, user);
   }
 
   @Override
