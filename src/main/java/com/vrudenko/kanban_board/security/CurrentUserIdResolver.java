@@ -1,12 +1,9 @@
 package com.vrudenko.kanban_board.security;
 
-import java.util.Optional;
-
-import com.vrudenko.kanban_board.exception.AppAccessDeniedException;
 import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
 import org.springframework.core.MethodParameter;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.User;
 import org.springframework.stereotype.Component;
 import org.springframework.web.bind.support.WebDataBinderFactory;
 import org.springframework.web.context.request.NativeWebRequest;
@@ -29,13 +26,18 @@ public class CurrentUserIdResolver implements HandlerMethodArgumentResolver {
       WebDataBinderFactory binderFactory)
       throws AppEntityNotFoundException {
     var authentication = SecurityContextHolder.getContext().getAuthentication();
+    var principal = authentication.getPrincipal();
 
-    var userId = Optional.ofNullable(authentication).map(auth -> auth.getPrincipal().toString());
+    if (principal instanceof User user) {
+      var userId = user.getUsername();
 
-    if (userId.isEmpty()) {
-      throw new AppEntityNotFoundException("User");
+      if (userId == null || userId.isBlank()) {
+        throw new AppEntityNotFoundException("User id");
+      }
+
+      return userId;
+    } else {
+      throw new AppEntityNotFoundException("User principal");
     }
-
-    return userId.get();
   }
 }
