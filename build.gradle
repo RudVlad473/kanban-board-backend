@@ -50,6 +50,13 @@ dependencies {
     testImplementation 'org.fluttercode.datafactory:datafactory:0.8'
 
     implementation 'io.vavr:vavr:0.10.4'
+
+    testImplementation 'org.springframework.security:spring-security-test'
+
+    // https://mvnrepository.com/artifact/org.apache.commons/commons-collections4
+    implementation("org.apache.commons:commons-collections4:4.5.0")
+
+    implementation 'com.github.f4b6a3:ulid-creator:5.2.0'
 }
 
 tasks.named('test') {
