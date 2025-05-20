@@ -1,8 +1,7 @@
 package com.vrudenko.kanban_board.entity;
 
 import com.vrudenko.kanban_board.base.entity.BaseId;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
+import com.vrudenko.kanban_board.config.RandFlakeId;
 import jakarta.persistence.Id;
 import jakarta.persistence.MappedSuperclass;
 import lombok.Getter;
@@ -12,7 +11,5 @@ import lombok.Setter;
 @Getter
 @Setter
 public abstract class BaseEntity implements BaseId {
-  @Id
-  @GeneratedValue(strategy = GenerationType.UUID)
-  protected String id;
+  @Id @RandFlakeId protected String id;
 }
