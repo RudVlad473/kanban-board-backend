@@ -7,20 +7,12 @@ import com.vrudenko.kanban_board.dto.column_dto.ColumnResponseDTO;
 import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
 import com.vrudenko.kanban_board.entity.BoardEntity;
 import com.vrudenko.kanban_board.entity.UserEntity;
-import com.vrudenko.kanban_board.exception.AppAccessDeniedException;
-import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
 import com.vrudenko.kanban_board.mapper.BoardMapper;
-import com.vrudenko.kanban_board.mapper.ColumnMapper;
 import com.vrudenko.kanban_board.repository.BoardRepository;
-import com.vrudenko.kanban_board.repository.ColumnRepository;
-import com.vrudenko.kanban_board.repository.UserRepository;
+import jakarta.transaction.Transactional;
 import java.util.List;
 import java.util.Optional;
-
-import jakarta.persistence.EntityNotFoundException;
-import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 @Service

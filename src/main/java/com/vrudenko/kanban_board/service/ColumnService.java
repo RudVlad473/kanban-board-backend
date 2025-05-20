@@ -28,9 +28,10 @@ public class ColumnService {
 
   @Transactional
   public void deleteAllByBoardId(String userId, String boardId) {
+    // TODO: figure out how to optimize ownership verification calls
     var pair = ownershipVerifierService.verifyOwnershipOfBoard(userId, boardId);
 
-    for (var column : findAllByBoardId(boardId)) {
+    for (var column : findAllByBoardId(userId, boardId)) {
       taskService.deleteAllByColumnId(userId, column.getId());
     }
 
@@ -64,9 +65,11 @@ public class ColumnService {
     return Ints.checkedCast(columnRepository.countByBoardId(boardId));
   }
 
-  @VisibleForTesting
-  public List<ColumnResponseDTO> findAllByBoardId(String boardId) {
-    return columnMapper.toColumnResponseDTOList(columnRepository.findAllByBoardId(boardId));
+  public List<ColumnResponseDTO> findAllByBoardId(String userId, String boardId) {
+    var pair = ownershipVerifierService.verifyOwnershipOfBoard(userId, boardId);
+
+    return columnMapper.toColumnResponseDTOList(
+        columnRepository.findAllByBoardId(pair.getSecond().getId()));
   }
 
   // TODO: implement delete logic
