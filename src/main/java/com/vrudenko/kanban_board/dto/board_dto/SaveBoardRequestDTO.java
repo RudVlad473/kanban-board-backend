@@ -15,7 +15,7 @@ import lombok.Setter;
 @Builder
 @EqualsAndHashCode
 public class SaveBoardRequestDTO implements BaseBoard {
-  @NotBlank(message = "Board name cannot be empty")
+  @NotBlank(message = "Board name must not be blank")
   @Size(
       min = ValidationConstants.MIN_BOARD_NAME_LENGTH,
       max = ValidationConstants.MAX_BOARD_NAME_LENGTH,
