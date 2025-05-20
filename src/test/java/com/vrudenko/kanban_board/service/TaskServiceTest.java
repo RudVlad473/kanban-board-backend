@@ -1,5 +1,6 @@
 package com.vrudenko.kanban_board.service;
 
+import com.vrudenko.kanban_board.AbstractAppTest;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.subtask_dto.SaveSubtaskRequestDTO;
 import com.vrudenko.kanban_board.dto.subtask_dto.SubtaskResponseDTO;
@@ -17,7 +18,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import java.util.UUID;
 
 @SpringBootTest
-public class TaskServiceTest extends AbstractAppServiceTest {
+public class TaskServiceTest extends AbstractAppTest {
   @Autowired TaskService taskService;
   @Autowired SubtaskService subtaskService;
 

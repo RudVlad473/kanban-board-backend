@@ -1,4 +1,4 @@
-package com.vrudenko.kanban_board.service;
+package com.vrudenko.kanban_board;
 
 import com.google.common.collect.ImmutableList;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
@@ -14,7 +14,12 @@ import com.vrudenko.kanban_board.dto.user_dto.UserResponseDTO;
 import com.vrudenko.kanban_board.entity.UserEntity;
 import com.vrudenko.kanban_board.mapper.BoardMapper;
 import com.vrudenko.kanban_board.mapper.UserMapper;
+import com.vrudenko.kanban_board.service.BoardService;
+import com.vrudenko.kanban_board.service.ColumnService;
+import com.vrudenko.kanban_board.service.TaskService;
+import com.vrudenko.kanban_board.service.UserService;
 import lombok.Getter;
+import org.apache.commons.collections4.ListUtils;
 import org.fluttercode.datafactory.impl.DataFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,7 +27,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.stream.Stream;
 
-public abstract class AbstractAppServiceTest {
+public abstract class AbstractAppTest {
   private @Autowired UserService userService;
   private @Autowired UserMapper userMapper;
   private @Autowired BoardService boardService;
@@ -58,8 +63,8 @@ public abstract class AbstractAppServiceTest {
   @BeforeEach
   void setup() {
     // user
-    owningUser = setupUser();
-    noBoardsUser = setupUser();
+    owningUser = createUser();
+    noBoardsUser = createUser();
 
     // board
     mockEmptyBoards =
@@ -100,16 +105,16 @@ public abstract class AbstractAppServiceTest {
         ImmutableList.copyOf(
             Stream.generate(() -> null)
                 .limit(MOCK_TASKS_AMOUNT)
-                .map((ignore) -> setupTask())
+                .map((ignore) -> createTask())
                 .toList());
-    mockPopulatedTask = setupTask();
+    mockPopulatedTask = createTask();
 
     // subtask
     mockSubtasks =
         ImmutableList.copyOf(
             Stream.generate(() -> null)
                 .limit(MOCK_SUBTASKS_AMOUNT)
-                .map((ignore) -> setupSubtask())
+                .map((ignore) -> createSubtask())
                 .toList());
   }
 
@@ -118,7 +123,7 @@ public abstract class AbstractAppServiceTest {
     userService.deleteAll();
   }
 
-  UserResponseDTO setupUser() {
+  protected UserResponseDTO createUser() {
     return userService.save(
         userMapper.toSigninRequestDTO(
             UserEntity.builder()
@@ -129,7 +134,7 @@ public abstract class AbstractAppServiceTest {
                 .build()));
   }
 
-  TaskResponseDTO setupTask() {
+  protected TaskResponseDTO createTask() {
     return columnService.addTaskByColumnId(
         getOwningUser().getId(),
         mockPopulatedColumn.getId(),
@@ -142,7 +147,7 @@ public abstract class AbstractAppServiceTest {
             .build());
   }
 
-  SubtaskResponseDTO setupSubtask() {
+  protected SubtaskResponseDTO createSubtask() {
     return taskService.addSubtaskByTaskId(
         getOwningUser().getId(),
         mockPopulatedTask.getId(),

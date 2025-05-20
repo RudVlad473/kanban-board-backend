@@ -1,5 +1,6 @@
 package com.vrudenko.kanban_board.service;
 
+import com.vrudenko.kanban_board.AbstractAppTest;
 import com.vrudenko.kanban_board.entity.BoardEntity;
 import com.vrudenko.kanban_board.entity.UserEntity;
 import com.vrudenko.kanban_board.exception.AppAccessDeniedException;
@@ -12,7 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
-public class OwnershipVerifierServiceTest extends AbstractAppServiceTest {
+public class OwnershipVerifierServiceTest extends AbstractAppTest {
   @Autowired OwnershipVerifierService ownershipVerifierService;
 
   @Nested

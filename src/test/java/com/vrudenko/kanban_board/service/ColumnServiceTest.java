@@ -1,7 +1,7 @@
 package com.vrudenko.kanban_board.service;
 
+import com.vrudenko.kanban_board.AbstractAppTest;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
-import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
 import com.vrudenko.kanban_board.entity.ColumnEntity;
 import com.vrudenko.kanban_board.entity.TaskEntity;
@@ -16,7 +16,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import java.util.UUID;
 
 @SpringBootTest
-public class ColumnServiceTest extends AbstractAppServiceTest {
+public class ColumnServiceTest extends AbstractAppTest {
   @Autowired ColumnService columnService;
   @Autowired TaskService taskService;
 
@@ -141,7 +141,7 @@ public class ColumnServiceTest extends AbstractAppServiceTest {
       var boardId = mockPopulatedBoard.getId();
 
       // act
-      var columns = columnService.findAllByBoardId(boardId);
+      var columns = columnService.findAllByBoardId(userId, boardId);
 
       // assert
       Assertions.assertThat(columns).isNotEmpty();
@@ -160,7 +160,7 @@ public class ColumnServiceTest extends AbstractAppServiceTest {
       var boardId = mockEmptyBoards.getFirst().getId();
 
       // act
-      var columns = columnService.findAllByBoardId(boardId);
+      var columns = columnService.findAllByBoardId(userId, boardId);
 
       // assert
       Assertions.assertThat(columns).isEmpty();
@@ -171,15 +171,15 @@ public class ColumnServiceTest extends AbstractAppServiceTest {
     @Test
     void shouldThrow_whenBoardDoesntExist() {
       // arrange
+      var userId = getOwningUser().getId();
       var boardId = UUID.randomUUID().toString();
 
       // act
-      var columns = columnService.findAllByBoardId(boardId);
+      var exception =
+          Assertions.catchException(() -> columnService.findAllByBoardId(userId, boardId));
 
       // assert
-      Assertions.assertThat(columns).isEmpty();
-      Assertions.assertThat(columns.size())
-          .isSameAs(columnService.getColumnCountByBoardId(boardId));
+      Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
     }
   }
 

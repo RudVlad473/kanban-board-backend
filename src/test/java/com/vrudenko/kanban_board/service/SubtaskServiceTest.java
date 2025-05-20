@@ -1,3 +1,5 @@
 package com.vrudenko.kanban_board.service;
 
-public class SubtaskServiceTest extends AbstractAppServiceTest {}
+import com.vrudenko.kanban_board.AbstractAppTest;
+
+public class SubtaskServiceTest extends AbstractAppTest {}

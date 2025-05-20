@@ -1,5 +1,6 @@
 package com.vrudenko.kanban_board.service;
 
+import com.vrudenko.kanban_board.AbstractAppTest;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
 import com.vrudenko.kanban_board.entity.BoardEntity;
@@ -17,7 +18,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.access.AccessDeniedException;
 
 @SpringBootTest
-public class BoardServiceTest extends AbstractAppServiceTest {
+public class BoardServiceTest extends AbstractAppTest {
   @Autowired UserService userService;
   @Autowired BoardService boardService;
   @Autowired BoardMapper boardMapper;
