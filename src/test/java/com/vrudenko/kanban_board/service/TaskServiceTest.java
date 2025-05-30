@@ -6,6 +6,7 @@ import com.vrudenko.kanban_board.dto.subtask_dto.SaveSubtaskRequestDTO;
 import com.vrudenko.kanban_board.dto.subtask_dto.SubtaskResponseDTO;
 import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
+import com.vrudenko.kanban_board.dto.task_dto.UpdateTaskRequestDTO;
 import com.vrudenko.kanban_board.entity.TaskEntity;
 import com.vrudenko.kanban_board.exception.AppAccessDeniedException;
 import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
@@ -242,7 +243,7 @@ public class TaskServiceTest extends AbstractAppTest {
           taskService.updateById(
               userId,
               taskId,
-              SaveTaskRequestDTO.builder().title(newTitle).description(newDescription).build());
+              UpdateTaskRequestDTO.builder().title(newTitle).description(newDescription).build());
 
       // assert
       Assertions.assertThat(task).isInstanceOf(TaskResponseDTO.class);
@@ -270,7 +271,7 @@ public class TaskServiceTest extends AbstractAppTest {
                   taskService.updateById(
                       userId,
                       taskId,
-                      SaveTaskRequestDTO.builder()
+                      UpdateTaskRequestDTO.builder()
                           .title(newTitle)
                           .description(newDescription)
                           .build()));
@@ -298,7 +299,7 @@ public class TaskServiceTest extends AbstractAppTest {
                   taskService.updateById(
                       userId,
                       taskId,
-                      SaveTaskRequestDTO.builder()
+                      UpdateTaskRequestDTO.builder()
                           .title(newTitle)
                           .description(newDescription)
                           .build()));

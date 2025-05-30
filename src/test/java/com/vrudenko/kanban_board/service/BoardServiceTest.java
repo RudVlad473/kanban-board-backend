@@ -152,7 +152,7 @@ public class BoardServiceTest extends AbstractAppTest {
     boardService.updateById(
         getOwningUser().getId(),
         boardBeforeUpdate.getId(),
-        boardMapper.toSaveBoardRequestDTO(BoardEntity.builder().name(newBoardName).build()));
+        boardMapper.toUpdateBoardRequestDTO(BoardEntity.builder().name(newBoardName).build()));
 
     // Assert
     var boardAfterUpdate =
@@ -181,7 +181,7 @@ public class BoardServiceTest extends AbstractAppTest {
                 boardService.updateById(
                     getOwningUser().getId(),
                     randomUUID,
-                    boardMapper.toSaveBoardRequestDTO(
+                    boardMapper.toUpdateBoardRequestDTO(
                         BoardEntity.builder().name(newBoardName).build())));
 
     // Assert
@@ -207,7 +207,7 @@ public class BoardServiceTest extends AbstractAppTest {
                 boardService.updateById(
                     getNoBoardsUser().getId(),
                     existingBoard.getId(),
-                    boardMapper.toSaveBoardRequestDTO(
+                    boardMapper.toUpdateBoardRequestDTO(
                         BoardEntity.builder().name(newBoardName).build())));
     var boardAfterFailedUpdate = boardService.findAll().getFirst();
 
