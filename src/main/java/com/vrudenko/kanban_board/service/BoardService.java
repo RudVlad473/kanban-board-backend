@@ -3,6 +3,7 @@ package com.vrudenko.kanban_board.service;
 import com.google.common.annotations.VisibleForTesting;
 import com.vrudenko.kanban_board.dto.board_dto.BoardResponseDTO;
 import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
+import com.vrudenko.kanban_board.dto.board_dto.UpdateBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.column_dto.ColumnResponseDTO;
 import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
 import com.vrudenko.kanban_board.entity.BoardEntity;
@@ -59,8 +60,8 @@ public class BoardService {
   }
 
   @Transactional
-  public Optional<BoardResponseDTO> updateById(
-      String userId, String boardId, SaveBoardRequestDTO boardDTO) {
+  public BoardResponseDTO updateById(
+      String userId, String boardId, UpdateBoardRequestDTO boardDTO) {
     var boardToUpdate = findById(userId, boardId);
 
     // TODO: Disallow duplicating board names for a single user
@@ -69,7 +70,7 @@ public class BoardService {
 
     var savedBoard = boardRepository.save(boardToUpdate);
 
-    return Optional.of(boardMapper.toResponseDTO(savedBoard));
+    return boardMapper.toResponseDTO(savedBoard);
   }
 
   public BoardResponseDTO save(SaveBoardRequestDTO dto, UserEntity user) {
