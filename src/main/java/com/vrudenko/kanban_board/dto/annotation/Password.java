@@ -19,7 +19,7 @@ import java.lang.annotation.Target;
  * uppercase letter; At least 1 lowercase letter; At least 1 digit; At least 1 special character
  */
 @Documented
-@Target({ElementType.FIELD, ElementType.METHOD, ElementType.PARAMETER})
+@Target({ElementType.FIELD})
 @Retention(RetentionPolicy.RUNTIME)
 @ReportAsSingleViolation
 @Constraint(validatedBy = {})
