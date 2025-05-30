@@ -3,6 +3,7 @@ package com.vrudenko.kanban_board.controller;
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.dto.board_dto.BoardResponseDTO;
 import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
+import com.vrudenko.kanban_board.dto.board_dto.UpdateBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.column_dto.ColumnResponseDTO;
 import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
 import com.vrudenko.kanban_board.security.CurrentUserId;
@@ -34,8 +35,7 @@ public class BoardController {
   @Autowired private BoardService boardService;
 
   @GetMapping
-  public ResponseEntity<List<BoardResponseDTO>> findAllByUserId(
-      @Valid @CurrentUserId String userId) {
+  public ResponseEntity<List<BoardResponseDTO>> findAllByUserId(@CurrentUserId String userId) {
     var boards = this.boardService.findAllByUserId(userId);
 
     return ResponseEntity.ok(boards);
@@ -50,17 +50,11 @@ public class BoardController {
   }
 
   @PutMapping(ApiPaths.BOARD_ID)
-  public ResponseEntity<Optional<BoardResponseDTO>> updateById(
+  public ResponseEntity<BoardResponseDTO> updateById(
       @CurrentUserId String userId,
       @PathVariable @NotBlank String boardId,
-      @Valid @RequestBody SaveBoardRequestDTO dto) {
-    var updatedBoard = boardService.updateById(userId, boardId, dto);
-
-    if (updatedBoard.isEmpty()) {
-      return ResponseEntity.notFound().build();
-    }
-
-    return ResponseEntity.ok(updatedBoard);
+      @Valid @RequestBody UpdateBoardRequestDTO dto) {
+    return ResponseEntity.ok(boardService.updateById(userId, boardId, dto));
   }
 
   @PostMapping(ApiPaths.BOARD_ID + ApiPaths.COLUMNS)
