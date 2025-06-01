@@ -2,6 +2,7 @@ package com.vrudenko.kanban_board.dto.annotation;
 
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import jakarta.validation.Constraint;
+import jakarta.validation.Payload;
 import jakarta.validation.ReportAsSingleViolation;
 import jakarta.validation.constraints.Size;
 
@@ -17,4 +18,10 @@ import java.lang.annotation.*;
     min = ValidationConstants.MIN_TASK_TITLE_LENGTH,
     max = ValidationConstants.MAX_TASK_TITLE_LENGTH,
     message = ValidationConstants.TASK_TITLE_LENGTH_VALIDATION_MESSAGE)
-public @interface TaskTitle {}
+public @interface TaskTitle {
+    String message() default "Task title cannot be empty";
+
+    Class<?>[] groups() default {};
+
+    Class<? extends Payload>[] payload() default {};
+}
