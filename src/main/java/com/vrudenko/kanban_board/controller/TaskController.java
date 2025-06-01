@@ -50,9 +50,7 @@ class TaskController {
       @CurrentUserId String userId,
       @PathVariable @NotBlank String taskId,
       @Valid @RequestBody UpdateTaskRequestDTO dto) {
-    var updatedTask = taskService.updateById(userId, taskId, dto);
-
-    return ResponseEntity.ok(updatedTask);
+    return ResponseEntity.ok(taskService.updateById(userId, taskId, dto));
   }
 
   @PostMapping(ApiPaths.TASK_ID + ApiPaths.SUB_TASKS)

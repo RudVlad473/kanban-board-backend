@@ -7,6 +7,7 @@ import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
 import com.vrudenko.kanban_board.security.CurrentUserId;
 import com.vrudenko.kanban_board.service.ColumnService;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.net.URI;
 import java.util.List;
@@ -36,7 +37,7 @@ public class ColumnController {
   public ResponseEntity<TaskResponseDTO> addTaskByColumnId(
       @CurrentUserId String userId,
       @PathVariable @NotBlank String columnId,
-      @RequestBody SaveTaskRequestDTO dto,
+      @Valid @RequestBody SaveTaskRequestDTO dto,
       HttpServletRequest request) {
     return ResponseEntity.created(URI.create(request.getRequestURI()))
         .body(columnService.addTaskByColumnId(userId, columnId, dto));
