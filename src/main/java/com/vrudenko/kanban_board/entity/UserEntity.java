@@ -23,7 +23,7 @@ import java.util.List;
 @Setter
 @Builder
 @NoArgsConstructor
-@EqualsAndHashCode(callSuper = false)
+//@EqualsAndHashCode(callSuper = false)
 @AllArgsConstructor
 @Table(name = "users")
 public class UserEntity extends BaseEntity implements BaseUser, UserDetails {
