@@ -180,7 +180,7 @@ public class BoardControllerTest extends AbstractAppTest {
       // Arrange
       var userId = getOwningUser().getId();
       var boardId = mockPopulatedBoard.getId();
-      var url = getBoardPrefix() + "/" + boardId;
+      var url = getBoardPrefix() + "/" + boardId + ApiPaths.COLUMNS;
       var saveDTO =
           SaveColumnRequestDTO.builder()
               .name(dataFactory.getRandomText(ValidationConstants.MIN_COLUMN_NAME_LENGTH + 3))
@@ -214,7 +214,7 @@ public class BoardControllerTest extends AbstractAppTest {
       // Arrange
       var userId = getOwningUser().getId();
       var boardId = UUID.randomUUID().toString();
-      var url = getBoardPrefix() + "/" + boardId;
+      var url = getBoardPrefix() + "/" + boardId + ApiPaths.COLUMNS;
       var saveDTO =
           SaveColumnRequestDTO.builder()
               .name(dataFactory.getRandomText(ValidationConstants.MIN_COLUMN_NAME_LENGTH + 3))

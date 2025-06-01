@@ -68,15 +68,18 @@ public class UserServiceTest extends AbstractAppTest {
     @Test
     void shouldDeleteUser_whenUserExists() {
       // Arrange
+      var usersCountBeforeDeletion = userService.findAll().size();
 
       // Act
       var firstUser = userService.findAll().getFirst();
       userService.deleteById(firstUser.getId());
 
       // Assert
-      var users = userService.findAll();
-      Assertions.assertThat(users.size()).isEqualTo(mockUsers.size() - 1);
-      Assertions.assertThat(users).doesNotContain(firstUser);
+      var usersCountAfterDeletion = userService.findAll().size();
+      Assertions.assertThat(usersCountAfterDeletion).isEqualTo(usersCountBeforeDeletion - 1);
+      Assertions.assertThat(
+              Assertions.catchException(() -> userService.findById(firstUser.getId())))
+          .isInstanceOf(AppEntityNotFoundException.class);
     }
 
     @Test

@@ -307,7 +307,7 @@ public class TaskServiceTest extends AbstractAppTest {
       // assert
       Assertions.assertThat(exception).isInstanceOf(AppAccessDeniedException.class);
       Assertions.assertThat(Assertions.catchException(() -> taskService.findById(userId, taskId)))
-          .isInstanceOf(AppEntityNotFoundException.class);
+          .isInstanceOf(AppAccessDeniedException.class);
     }
   }
 

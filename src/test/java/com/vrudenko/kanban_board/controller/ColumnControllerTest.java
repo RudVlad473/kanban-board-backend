@@ -1,7 +1,9 @@
 package com.vrudenko.kanban_board.controller;
 
+import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -9,12 +11,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vrudenko.kanban_board.AbstractAppTest;
 import com.vrudenko.kanban_board.constant.ApiPaths;
-import com.vrudenko.kanban_board.dto.column_dto.ColumnResponseDTO;
+import com.vrudenko.kanban_board.constant.ValidationConstants;
+import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
+import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
+import com.vrudenko.kanban_board.service.TaskService;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
-
 import org.apache.commons.collections4.ListUtils;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +32,7 @@ import org.springframework.test.web.servlet.MockMvc;
 public class ColumnControllerTest extends AbstractAppTest {
   @Autowired private MockMvc mockMvc;
   @Autowired private ObjectMapper objectMapper;
+  @Autowired private TaskService taskService;
 
   private String getColumnsPrefix(String boardId) {
     return ApiPaths.BOARDS + "/" + boardId + ApiPaths.COLUMNS;
@@ -59,7 +65,7 @@ public class ColumnControllerTest extends AbstractAppTest {
       // Arrange
       var userId = getOwningUser().getId();
       // Use one of the boards from mockEmptyBoards, which are set up without columns
-      var boardId = mockPopulatedBoard.getId();
+      var boardId = mockEmptyBoards.getFirst().getId();
       var url = getColumnsPrefix(boardId);
       var expectedEmptyList = objectMapper.writeValueAsString(Collections.emptyList());
 
@@ -87,6 +93,72 @@ public class ColumnControllerTest extends AbstractAppTest {
           .perform(get(url).with(user(userId)))
           .andDo(print())
           .andExpect(status().isNotFound()); // Or handle as per actual service behavior
+    }
+  }
+
+  @Nested
+  class AddTaskByColumnId {
+    @Test
+    void testWithAuthenticatedUser_shouldAddTask_whenColumnExists() throws Exception {
+      // Arrange
+      var userId = getOwningUser().getId();
+      var boardId = mockPopulatedBoard.getId();
+      var columnId = mockPopulatedColumn.getId();
+      var url = getColumnsPrefix(boardId) + "/" + columnId;
+      var saveDTO =
+          SaveTaskRequestDTO.builder()
+              .title(dataFactory.getRandomText(ValidationConstants.MIN_TASK_TITLE_LENGTH + 3))
+              .description(
+                  dataFactory.getRandomText(ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH + 3))
+              .build();
+
+      // Act
+      var response =
+          mockMvc
+              .perform(
+                  post(url)
+                      .with(user(userId))
+                      .contentType(APPLICATION_JSON)
+                      .content(objectMapper.writeValueAsString(saveDTO)))
+              .andDo(print())
+              .andExpect(status().isCreated())
+              .andReturn();
+      var responseBody =
+          objectMapper.readValue(
+              response.getResponse().getContentAsString(), TaskResponseDTO.class);
+      var createdTaskId = responseBody.getId();
+
+      // Assert
+      // this is an assertion since if no entity was found, it'll throw an error
+      taskService.findById(userId, createdTaskId);
+      Assertions.assertThat(responseBody.getTitle()).isEqualTo(saveDTO.getTitle());
+      Assertions.assertThat(responseBody.getDescription()).isEqualTo(saveDTO.getDescription());
+    }
+
+    @Test
+    void testWithAuthenticatedUser_shouldThrow_whenColumnDoesntExist() throws Exception {
+      // Arrange
+      var userId = getOwningUser().getId();
+      var boardId = mockPopulatedBoard.getId();
+      var columnId = UUID.randomUUID().toString();
+      var url = getColumnsPrefix(boardId) + "/" + columnId;
+      var saveDTO =
+          SaveTaskRequestDTO.builder()
+              .title(dataFactory.getRandomText(ValidationConstants.MIN_TASK_TITLE_LENGTH + 3))
+              .description(
+                  dataFactory.getRandomText(ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH + 3))
+              .build();
+
+      // Act
+      mockMvc
+          .perform(
+              post(url)
+                  .with(user(userId))
+                  .contentType(APPLICATION_JSON)
+                  .content(objectMapper.writeValueAsString(saveDTO)))
+          .andDo(print())
+          // Assert
+          .andExpect(status().isNotFound());
     }
   }
 }
