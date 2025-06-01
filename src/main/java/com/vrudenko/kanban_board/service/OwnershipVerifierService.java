@@ -11,6 +11,7 @@ import com.vrudenko.kanban_board.repository.BoardRepository;
 import com.vrudenko.kanban_board.repository.ColumnRepository;
 import com.vrudenko.kanban_board.repository.TaskRepository;
 import com.vrudenko.kanban_board.repository.UserRepository;
+import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.util.Pair;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,7 @@ public class OwnershipVerifierService {
   @Autowired private TaskRepository taskRepository;
   @Autowired private ColumnRepository columnRepository;
 
+  @Transactional
   public Pair<UserEntity, BoardEntity> verifyOwnershipOfBoard(String userId, String boardId)
       throws AppEntityNotFoundException, AppAccessDeniedException {
     if (userId == null || boardId == null) {
@@ -51,6 +53,7 @@ public class OwnershipVerifierService {
     return Pair.of(user.get(), board.get());
   }
 
+  @Transactional
   public Pair<UserEntity, ColumnEntity> verifyOwnershipOfColumn(String userId, String columnId)
       throws AppEntityNotFoundException, AppAccessDeniedException {
     var column = columnRepository.findById(columnId);
@@ -64,6 +67,7 @@ public class OwnershipVerifierService {
     return Pair.of(pair.getFirst(), column.get());
   }
 
+  @Transactional
   public Pair<UserEntity, TaskEntity> verifyOwnershipOfTask(String userId, String taskId)
       throws AppEntityNotFoundException, AppAccessDeniedException {
     var task = taskRepository.findById(taskId);
@@ -72,6 +76,7 @@ public class OwnershipVerifierService {
       throw new AppEntityNotFoundException("Task");
     }
 
+    // TODO: optimize verification logic, by passing already fetched entities
     var pair = verifyOwnershipOfColumn(userId, task.get().getColumn().getId());
 
     return Pair.of(pair.getFirst(), task.get());

@@ -53,6 +53,7 @@ public class BoardService {
     }
   }
 
+  @Transactional
   public BoardEntity findById(String userId, String boardId) {
     var pair = ownershipVerifierService.verifyOwnershipOfBoard(userId, boardId);
 
@@ -83,6 +84,7 @@ public class BoardService {
   }
 
   @VisibleForTesting
+  @Transactional
   void deleteAll() {
     for (var boardEntity : boardRepository.findAll()) {
       deleteById(boardEntity.getUser().getId(), boardEntity.getId());

@@ -28,6 +28,7 @@ public class UserService implements UserDetailsService {
   @Autowired private BoardMapper boardMapper;
   @Autowired private BoardRepository boardRepository;
 
+  @Transactional
   public UserEntity findById(String id) throws AppEntityNotFoundException {
     var user = userRepository.findById(id);
 

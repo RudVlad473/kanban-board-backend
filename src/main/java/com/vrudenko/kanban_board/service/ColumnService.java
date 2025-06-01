@@ -47,6 +47,7 @@ public class ColumnService {
     return columnMapper.toColumnResponseDTO(column);
   }
 
+  @Transactional
   public TaskResponseDTO addTaskByColumnId(
       String userId, String columnId, SaveTaskRequestDTO taskDTO) {
     var column = findById(userId, columnId);
@@ -54,6 +55,7 @@ public class ColumnService {
     return taskService.save(taskDTO, column);
   }
 
+  @Transactional
   public ColumnEntity findById(String userId, String columnId) {
     var pair = ownershipVerifierService.verifyOwnershipOfColumn(userId, columnId);
 
@@ -65,6 +67,7 @@ public class ColumnService {
     return Ints.checkedCast(columnRepository.countByBoardId(boardId));
   }
 
+  @Transactional
   public List<ColumnResponseDTO> findAllByBoardId(String userId, String boardId) {
     var pair = ownershipVerifierService.verifyOwnershipOfBoard(userId, boardId);
 
