@@ -13,33 +13,38 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class SubtaskService {
-  @Autowired private SubtaskRepository subtaskRepository;
-  @Autowired private SubtaskMapper subtaskMapper;
-  @Autowired private OwnershipVerifierService ownershipVerifierService;
+    @Autowired
+    private SubtaskRepository subtaskRepository;
 
-  @Transactional
-  SubtaskResponseDTO save(TaskEntity task, SaveSubtaskRequestDTO dto) {
-    var subtask = subtaskMapper.fromSaveSubtaskRequestDTO(dto);
+    @Autowired
+    private SubtaskMapper subtaskMapper;
 
-    subtask.setIsCompleted(false);
-    subtask.setTask(task);
+    @Autowired
+    private OwnershipVerifierService ownershipVerifierService;
 
-    return subtaskMapper.toTaskResponseDTO(subtaskRepository.save(subtask));
-  }
+    @Transactional
+    SubtaskResponseDTO save(TaskEntity task, SaveSubtaskRequestDTO dto) {
+        var subtask = subtaskMapper.fromSaveSubtaskRequestDTO(dto);
 
-  SubtaskEntity findById(String id) {
-    var subtask = subtaskRepository.findById(id);
+        subtask.setIsCompleted(false);
+        subtask.setTask(task);
 
-    if (subtask.isEmpty()) {
-      throw new AppEntityNotFoundException("Subtask");
+        return subtaskMapper.toTaskResponseDTO(subtaskRepository.save(subtask));
     }
 
-    return subtask.get();
-  }
+    SubtaskEntity findById(String id) {
+        var subtask = subtaskRepository.findById(id);
 
-  void deleteAllByTaskId(String userId, String taskId) {
-    var pair = ownershipVerifierService.verifyOwnershipOfTask(userId, taskId);
+        if (subtask.isEmpty()) {
+            throw new AppEntityNotFoundException("Subtask");
+        }
 
-    subtaskRepository.deleteAllByTaskId(pair.getSecond().getId());
-  }
+        return subtask.get();
+    }
+
+    void deleteAllByTaskId(String userId, String taskId) {
+        var pair = ownershipVerifierService.verifyOwnershipOfTask(userId, taskId);
+
+        subtaskRepository.deleteAllByTaskId(pair.getSecond().getId());
+    }
 }

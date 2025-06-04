@@ -7,7 +7,6 @@ import jakarta.validation.ReportAsSingleViolation;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
-
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -23,20 +22,19 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 @ReportAsSingleViolation
 @Constraint(validatedBy = {})
-@NotBlank(message = "Password cannot be empty")
-@Size(
-    min = ValidationConstants.MIN_PASSWORD_LENGTH,
-    max = ValidationConstants.MAX_PASSWORD_LENGTH,
-    message = ValidationConstants.PASSWORD_LENGTH_VALIDATION_MESSAGE)
+@NotBlank(message = "Password cannot be empty") @Size(
+        min = ValidationConstants.MIN_PASSWORD_LENGTH,
+        max = ValidationConstants.MAX_PASSWORD_LENGTH,
+        message = ValidationConstants.PASSWORD_LENGTH_VALIDATION_MESSAGE)
 @Pattern(
-    regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?]).+$",
-    message =
-        "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character")
+        regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?]).+$",
+        message =
+                "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character")
 public @interface Password {
-  String message() default
-      "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character";
+    String message() default
+            "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character";
 
-  Class<?>[] groups() default {};
+    Class<?>[] groups() default {};
 
-  Class<? extends Payload>[] payload() default {};
+    Class<? extends Payload>[] payload() default {};
 }

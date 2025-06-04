@@ -5,9 +5,9 @@ import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ColumnRepository extends JpaRepository<ColumnEntity, String> {
-  List<ColumnEntity> findAllByBoardId(String boardId);
+    List<ColumnEntity> findAllByBoardId(String boardId);
 
-  void deleteAllByBoardId(String boardId);
+    void deleteAllByBoardId(String boardId);
 
-  long countByBoardId(String boardId);
+    long countByBoardId(String boardId);
 }

@@ -15,12 +15,12 @@ import lombok.Setter;
 @Builder
 @EqualsAndHashCode
 public class SaveTaskRequestDTO implements BaseTask {
-  @NotBlank(message = "Task title cannot be empty")
-  @Size(
-      min = ValidationConstants.MIN_TASK_TITLE_LENGTH,
-      max = ValidationConstants.MAX_TASK_TITLE_LENGTH,
-      message = ValidationConstants.TASK_TITLE_LENGTH_VALIDATION_MESSAGE)
-  String title;
+    @NotBlank(message = "Task title cannot be empty") @Size(
+            min = ValidationConstants.MIN_TASK_TITLE_LENGTH,
+            max = ValidationConstants.MAX_TASK_TITLE_LENGTH,
+            message = ValidationConstants.TASK_TITLE_LENGTH_VALIDATION_MESSAGE)
+    String title;
 
-  @Description String description;
+    @Description
+    String description;
 }

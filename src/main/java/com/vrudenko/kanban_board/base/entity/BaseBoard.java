@@ -6,5 +6,5 @@ package com.vrudenko.kanban_board.base.entity;
  * used instead
  */
 public interface BaseBoard {
-  String getName();
+    String getName();
 }

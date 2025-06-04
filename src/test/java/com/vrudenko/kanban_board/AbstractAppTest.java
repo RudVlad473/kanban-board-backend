@@ -18,141 +18,126 @@ import com.vrudenko.kanban_board.service.BoardService;
 import com.vrudenko.kanban_board.service.ColumnService;
 import com.vrudenko.kanban_board.service.TaskService;
 import com.vrudenko.kanban_board.service.UserService;
+import java.util.stream.Stream;
 import lombok.Getter;
-import org.apache.commons.collections4.ListUtils;
 import org.fluttercode.datafactory.impl.DataFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import java.util.stream.Stream;
-
 public abstract class AbstractAppTest {
-  private @Autowired UserService userService;
-  private @Autowired UserMapper userMapper;
-  private @Autowired BoardService boardService;
-  private @Autowired BoardMapper boardMapper;
-  private @Autowired ColumnService columnService;
-  private @Autowired TaskService taskService;
+    private @Autowired UserService userService;
+    private @Autowired UserMapper userMapper;
+    private @Autowired BoardService boardService;
+    private @Autowired BoardMapper boardMapper;
+    private @Autowired ColumnService columnService;
+    private @Autowired TaskService taskService;
 
-  protected final DataFactory dataFactory = new DataFactory();
+    protected final DataFactory dataFactory = new DataFactory();
 
-  protected final int MOCK_COLUMNS_AMOUNT = 7;
-  protected final int MOCK_TASKS_AMOUNT = 7;
-  protected final int MOCK_SUBTASKS_AMOUNT = 7;
+    protected final int MOCK_COLUMNS_AMOUNT = 7;
+    protected final int MOCK_TASKS_AMOUNT = 7;
+    protected final int MOCK_SUBTASKS_AMOUNT = 7;
 
-  // users
-  @Getter private UserResponseDTO owningUser;
-  @Getter private UserResponseDTO noBoardsUser;
+    // users
+    @Getter
+    private UserResponseDTO owningUser;
 
-  // boards
-  protected ImmutableList<BoardResponseDTO> mockEmptyBoards = ImmutableList.of();
-  protected BoardResponseDTO mockPopulatedBoard = BoardResponseDTO.builder().build();
+    @Getter
+    private UserResponseDTO noBoardsUser;
 
-  // columns
-  protected ImmutableList<ColumnResponseDTO> mockColumns = ImmutableList.of();
-  protected ColumnResponseDTO mockPopulatedColumn = ColumnResponseDTO.builder().build();
+    // boards
+    protected ImmutableList<BoardResponseDTO> mockEmptyBoards = ImmutableList.of();
+    protected BoardResponseDTO mockPopulatedBoard = BoardResponseDTO.builder().build();
 
-  // tasks
-  protected ImmutableList<TaskResponseDTO> mockTasks = ImmutableList.of();
-  protected TaskResponseDTO mockPopulatedTask = TaskResponseDTO.builder().build();
+    // columns
+    protected ImmutableList<ColumnResponseDTO> mockColumns = ImmutableList.of();
+    protected ColumnResponseDTO mockPopulatedColumn =
+            ColumnResponseDTO.builder().build();
 
-  // subtasks
-  protected ImmutableList<SubtaskResponseDTO> mockSubtasks = ImmutableList.of();
+    // tasks
+    protected ImmutableList<TaskResponseDTO> mockTasks = ImmutableList.of();
+    protected TaskResponseDTO mockPopulatedTask = TaskResponseDTO.builder().build();
 
-  @BeforeEach
-  void setup() {
-    // user
-    owningUser = createUser();
-    noBoardsUser = createUser();
+    // subtasks
+    protected ImmutableList<SubtaskResponseDTO> mockSubtasks = ImmutableList.of();
 
-    // board
-    mockEmptyBoards =
-        ImmutableList.copyOf(
-            Stream.of("Todo", "Done")
-                .map(
-                    (boardName) ->
-                        userService.addBoardByUserId(
-                            getOwningUser().getId(),
-                            SaveBoardRequestDTO.builder().name(boardName).build()))
+    @BeforeEach
+    void setup() {
+        // user
+        owningUser = createUser();
+        noBoardsUser = createUser();
+
+        // board
+        mockEmptyBoards = ImmutableList.copyOf(Stream.of("Todo", "Done")
+                .map((boardName) -> userService.addBoardByUserId(
+                        getOwningUser().getId(),
+                        SaveBoardRequestDTO.builder().name(boardName).build()))
                 .toList());
-    mockPopulatedBoard =
-        userService.addBoardByUserId(
-            getOwningUser().getId(), SaveBoardRequestDTO.builder().name("In progress").build());
+        mockPopulatedBoard = userService.addBoardByUserId(
+                getOwningUser().getId(),
+                SaveBoardRequestDTO.builder().name("In progress").build());
 
-    // column
-    mockColumns =
-        ImmutableList.copyOf(
-            Stream.generate(
-                    () -> dataFactory.getRandomWord(ValidationConstants.MIN_COLUMN_NAME_LENGTH))
-                .limit(MOCK_COLUMNS_AMOUNT)
-                .map(
-                    columnName ->
-                        boardService.addColumnByBoardId(
-                            getOwningUser().getId(),
-                            mockPopulatedBoard.getId(),
-                            SaveColumnRequestDTO.builder().name(columnName).build()))
-                .toList());
-    mockPopulatedColumn =
-        columnService.save(
-            SaveColumnRequestDTO.builder()
-                .name(dataFactory.getRandomWord(ValidationConstants.MIN_BOARD_NAME_LENGTH + 4))
-                .build(),
-            boardService.findById(getOwningUser().getId(), mockPopulatedBoard.getId()));
+        // column
+        mockColumns = ImmutableList.copyOf(
+                Stream.generate(() -> dataFactory.getRandomWord(ValidationConstants.MIN_COLUMN_NAME_LENGTH))
+                        .limit(MOCK_COLUMNS_AMOUNT)
+                        .map(columnName -> boardService.addColumnByBoardId(
+                                getOwningUser().getId(),
+                                mockPopulatedBoard.getId(),
+                                SaveColumnRequestDTO.builder().name(columnName).build()))
+                        .toList());
+        mockPopulatedColumn = columnService.save(
+                SaveColumnRequestDTO.builder()
+                        .name(dataFactory.getRandomWord(ValidationConstants.MIN_BOARD_NAME_LENGTH + 4))
+                        .build(),
+                boardService.findById(getOwningUser().getId(), mockPopulatedBoard.getId()));
 
-    // task
-    mockTasks =
-        ImmutableList.copyOf(
-            Stream.generate(() -> null)
+        // task
+        mockTasks = ImmutableList.copyOf(Stream.generate(() -> null)
                 .limit(MOCK_TASKS_AMOUNT)
                 .map((ignore) -> createTask())
                 .toList());
-    mockPopulatedTask = createTask();
+        mockPopulatedTask = createTask();
 
-    // subtask
-    mockSubtasks =
-        ImmutableList.copyOf(
-            Stream.generate(() -> null)
+        // subtask
+        mockSubtasks = ImmutableList.copyOf(Stream.generate(() -> null)
                 .limit(MOCK_SUBTASKS_AMOUNT)
                 .map((ignore) -> createSubtask())
                 .toList());
-  }
+    }
 
-  @AfterEach
-  void cleanup() {
-    userService.deleteAll();
-  }
+    @AfterEach
+    void cleanup() {
+        userService.deleteAll();
+    }
 
-  protected UserResponseDTO createUser() {
-    return userService.save(
-        userMapper.toSigninRequestDTO(
-            UserEntity.builder()
+    protected UserResponseDTO createUser() {
+        return userService.save(userMapper.toSigninRequestDTO(UserEntity.builder()
                 .email(dataFactory.getEmailAddress())
-                .displayName(
-                    dataFactory.getRandomWord(ValidationConstants.MIN_USER_DISPLAY_NAME_LENGTH))
+                .displayName(dataFactory.getRandomWord(ValidationConstants.MIN_USER_DISPLAY_NAME_LENGTH))
                 .passwordHash(dataFactory.getRandomWord(ValidationConstants.MIN_PASSWORD_LENGTH))
                 .build()));
-  }
+    }
 
-  protected TaskResponseDTO createTask() {
-    return columnService.addTaskByColumnId(
-        getOwningUser().getId(),
-        mockPopulatedColumn.getId(),
-        SaveTaskRequestDTO.builder()
-            .title(dataFactory.getRandomWord(ValidationConstants.MIN_TASK_TITLE_LENGTH + 2))
-            .description(
-                dataFactory.getRandomText(
-                    ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH,
-                    ValidationConstants.MAX_TASK_DESCRIPTION_LENGTH))
-            .build());
-  }
+    protected TaskResponseDTO createTask() {
+        return columnService.addTaskByColumnId(
+                getOwningUser().getId(),
+                mockPopulatedColumn.getId(),
+                SaveTaskRequestDTO.builder()
+                        .title(dataFactory.getRandomWord(ValidationConstants.MIN_TASK_TITLE_LENGTH + 2))
+                        .description(dataFactory.getRandomText(
+                                ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH,
+                                ValidationConstants.MAX_TASK_DESCRIPTION_LENGTH))
+                        .build());
+    }
 
-  protected SubtaskResponseDTO createSubtask() {
-    return taskService.addSubtaskByTaskId(
-        getOwningUser().getId(),
-        mockPopulatedTask.getId(),
-        SaveSubtaskRequestDTO.builder()
-            .title(dataFactory.getRandomText(ValidationConstants.MIN_SUBTASK_TITLE_LENGTH + 1))
-            .build());
-  }
+    protected SubtaskResponseDTO createSubtask() {
+        return taskService.addSubtaskByTaskId(
+                getOwningUser().getId(),
+                mockPopulatedTask.getId(),
+                SaveSubtaskRequestDTO.builder()
+                        .title(dataFactory.getRandomText(ValidationConstants.MIN_SUBTASK_TITLE_LENGTH + 1))
+                        .build());
+    }
 }

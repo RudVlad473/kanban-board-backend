@@ -30,76 +30,69 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping
 @Validated
 public class AuthenticationController {
-  private final AuthenticationManager authenticationManager;
-  private final SecurityContextHolderStrategy securityContextHolderStrategy =
-      SecurityContextHolder.getContextHolderStrategy();
-  private final UserRepository userRepository;
-  private final UserMapper userMapper;
-  private final SecurityContextRepository securityContextRepository;
+    private final AuthenticationManager authenticationManager;
+    private final SecurityContextHolderStrategy securityContextHolderStrategy =
+            SecurityContextHolder.getContextHolderStrategy();
+    private final UserRepository userRepository;
+    private final UserMapper userMapper;
+    private final SecurityContextRepository securityContextRepository;
 
-  // only these authentication routes yield session cookie
-  @GetMapping(ApiPaths.SIGNIN)
-  public ResponseEntity signin(
-      @RequestBody SigninRequestDTO signinDTO,
-      HttpServletRequest request,
-      HttpServletResponse response) {
-    var user = userRepository.findByEmail(signinDTO.getEmail());
+    // only these authentication routes yield session cookie
+    @GetMapping(ApiPaths.SIGNIN)
+    public ResponseEntity signin(
+            @RequestBody SigninRequestDTO signinDTO, HttpServletRequest request, HttpServletResponse response) {
+        var user = userRepository.findByEmail(signinDTO.getEmail());
 
-    if (user.isEmpty()) {
-      return ResponseEntity.notFound().build();
+        if (user.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        var successfullyAuthenticated = authenticate(user.get().getId(), signinDTO.getPassword(), request, response);
+
+        if (!successfullyAuthenticated) {
+            throw new AccessDeniedException("Was not able to sign in");
+        }
+
+        return ResponseEntity.ok().build();
     }
 
-    var successfullyAuthenticated =
-        authenticate(user.get().getId(), signinDTO.getPassword(), request, response);
+    // only these authentication routes yield session cookie
+    @PostMapping(ApiPaths.SIGNUP)
+    public ResponseEntity<String> signup(
+            @RequestBody SignupRequestDTO signupDTO, HttpServletRequest request, HttpServletResponse response) {
+        var userAlreadyExists = userRepository.findByEmail(signupDTO.getEmail()).isPresent();
 
-    if (!successfullyAuthenticated) {
-      throw new AccessDeniedException("Was not able to sign in");
+        if (userAlreadyExists) {
+            return new ResponseEntity<>("User with this email already exists", HttpStatus.CONFLICT);
+        }
+
+        var createdUser = userRepository.save(userMapper.fromSignupRequestDTO(signupDTO));
+
+        var successfullyAuthenticated = authenticate(createdUser.getId(), signupDTO.getPassword(), request, response);
+
+        if (!successfullyAuthenticated) {
+            throw new AccessDeniedException("Was not able to sign up");
+        }
+
+        return ResponseEntity.created(URI.create(request.getRequestURI())).build();
     }
 
-    return ResponseEntity.ok().build();
-  }
+    public Boolean authenticate(
+            String userId, String password, HttpServletRequest request, HttpServletResponse response) {
+        var token = UsernamePasswordAuthenticationToken.unauthenticated(userId, password);
 
-  // only these authentication routes yield session cookie
-  @PostMapping(ApiPaths.SIGNUP)
-  public ResponseEntity<String> signup(
-      @RequestBody SignupRequestDTO signupDTO,
-      HttpServletRequest request,
-      HttpServletResponse response) {
-    var userAlreadyExists = userRepository.findByEmail(signupDTO.getEmail()).isPresent();
+        return Try.of(() -> authenticationManager.authenticate(token))
+                .mapTry(authentication -> {
+                    // get user credential for wrapped to token
+                    var context = securityContextHolderStrategy.createEmptyContext();
 
-    if (userAlreadyExists) {
-      return new ResponseEntity<>("User with this email already exists", HttpStatus.CONFLICT);
+                    // set context application from authentication
+                    context.setAuthentication(authentication);
+                    securityContextHolderStrategy.setContext(context);
+                    securityContextRepository.saveContext(context, request, response);
+
+                    return true;
+                })
+                .getOrElse(false);
     }
-
-    var createdUser = userRepository.save(userMapper.fromSignupRequestDTO(signupDTO));
-
-    var successfullyAuthenticated =
-        authenticate(createdUser.getId(), signupDTO.getPassword(), request, response);
-
-    if (!successfullyAuthenticated) {
-      throw new AccessDeniedException("Was not able to sign up");
-    }
-
-    return ResponseEntity.created(URI.create(request.getRequestURI())).build();
-  }
-
-  public Boolean authenticate(
-      String userId, String password, HttpServletRequest request, HttpServletResponse response) {
-    var token = UsernamePasswordAuthenticationToken.unauthenticated(userId, password);
-
-    return Try.of(() -> authenticationManager.authenticate(token))
-        .mapTry(
-            authentication -> {
-              // get user credential for wrapped to token
-              var context = securityContextHolderStrategy.createEmptyContext();
-
-              // set context application from authentication
-              context.setAuthentication(authentication);
-              securityContextHolderStrategy.setContext(context);
-              securityContextRepository.saveContext(context, request, response);
-
-              return true;
-            })
-        .getOrElse(false);
-  }
 }

@@ -25,21 +25,22 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping(ApiPaths.BOARDS + ApiPaths.BOARD_ID + ApiPaths.COLUMNS)
 @PreAuthorize("isAuthenticated()")
 public class ColumnController {
-  @Autowired private ColumnService columnService;
+    @Autowired
+    private ColumnService columnService;
 
-  @GetMapping
-  public ResponseEntity<List<ColumnResponseDTO>> findAllByBoardId(
-      @CurrentUserId String userId, @PathVariable @NotBlank String boardId) {
-    return ResponseEntity.ok(columnService.findAllByBoardId(userId, boardId));
-  }
+    @GetMapping
+    public ResponseEntity<List<ColumnResponseDTO>> findAllByBoardId(
+            @CurrentUserId String userId, @PathVariable @NotBlank String boardId) {
+        return ResponseEntity.ok(columnService.findAllByBoardId(userId, boardId));
+    }
 
-  @PostMapping(ApiPaths.COLUMN_ID)
-  public ResponseEntity<TaskResponseDTO> addTaskByColumnId(
-      @CurrentUserId String userId,
-      @PathVariable @NotBlank String columnId,
-      @Valid @RequestBody SaveTaskRequestDTO dto,
-      HttpServletRequest request) {
-    return ResponseEntity.created(URI.create(request.getRequestURI()))
-        .body(columnService.addTaskByColumnId(userId, columnId, dto));
-  }
+    @PostMapping(ApiPaths.COLUMN_ID)
+    public ResponseEntity<TaskResponseDTO> addTaskByColumnId(
+            @CurrentUserId String userId,
+            @PathVariable @NotBlank String columnId,
+            @Valid @RequestBody SaveTaskRequestDTO dto,
+            HttpServletRequest request) {
+        return ResponseEntity.created(URI.create(request.getRequestURI()))
+                .body(columnService.addTaskByColumnId(userId, columnId, dto));
+    }
 }

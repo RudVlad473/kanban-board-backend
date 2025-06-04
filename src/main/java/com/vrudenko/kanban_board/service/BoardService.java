@@ -12,87 +12,91 @@ import com.vrudenko.kanban_board.mapper.BoardMapper;
 import com.vrudenko.kanban_board.repository.BoardRepository;
 import jakarta.transaction.Transactional;
 import java.util.List;
-import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
 public class BoardService {
-  @Autowired private BoardRepository boardRepository;
-  @Autowired private BoardMapper boardMapper;
-  @Autowired private ColumnService columnService;
-  @Autowired private OwnershipVerifierService ownershipVerifierService;
+    @Autowired
+    private BoardRepository boardRepository;
 
-  public List<BoardResponseDTO> findAllByUserId(String userId) {
-    return boardMapper.toResponseDTOList(boardRepository.findAllByUserId(userId));
-  }
+    @Autowired
+    private BoardMapper boardMapper;
 
-  @Transactional
-  public ColumnResponseDTO addColumnByBoardId(
-      String userId, String boardId, SaveColumnRequestDTO columnDTO) {
-    var board = findById(userId, boardId);
+    @Autowired
+    private ColumnService columnService;
 
-    return columnService.save(columnDTO, board);
-  }
+    @Autowired
+    private OwnershipVerifierService ownershipVerifierService;
 
-  @Transactional
-  public void deleteById(String userId, String boardId) {
-    var board = findById(userId, boardId);
-
-    columnService.deleteAllByBoardId(userId, board.getId());
-
-    boardRepository.deleteById(board.getId());
-  }
-
-  @Transactional
-  public void deleteAllByUserId(String userId) {
-    var boardsOwnedByUser = findAllByUserId(userId);
-
-    for (var board : boardsOwnedByUser) {
-      deleteById(userId, board.getId());
+    public List<BoardResponseDTO> findAllByUserId(String userId) {
+        return boardMapper.toResponseDTOList(boardRepository.findAllByUserId(userId));
     }
-  }
 
-  @Transactional
-  public BoardEntity findById(String userId, String boardId) {
-    var pair = ownershipVerifierService.verifyOwnershipOfBoard(userId, boardId);
+    @Transactional
+    public ColumnResponseDTO addColumnByBoardId(String userId, String boardId, SaveColumnRequestDTO columnDTO) {
+        var board = findById(userId, boardId);
 
-    return pair.getSecond();
-  }
-
-  @Transactional
-  public BoardResponseDTO updateById(
-      String userId, String boardId, UpdateBoardRequestDTO boardDTO) {
-    var boardToUpdate = findById(userId, boardId);
-
-    // TODO: Disallow duplicating board names for a single user
-
-    boardToUpdate.setName(boardDTO.getName());
-
-    var savedBoard = boardRepository.save(boardToUpdate);
-
-    return boardMapper.toResponseDTO(savedBoard);
-  }
-
-  public BoardResponseDTO save(SaveBoardRequestDTO dto, UserEntity user) {
-    var board = boardMapper.fromSaveBoardRequestDTO(dto);
-    board.setUser(user);
-
-    boardRepository.save(board);
-
-    return boardMapper.toResponseDTO(board);
-  }
-
-  @VisibleForTesting
-  @Transactional
-  void deleteAll() {
-    for (var boardEntity : boardRepository.findAll()) {
-      deleteById(boardEntity.getUser().getId(), boardEntity.getId());
+        return columnService.save(columnDTO, board);
     }
-  }
 
-  @VisibleForTesting
-  public List<BoardResponseDTO> findAll() {
-    return boardMapper.toResponseDTOList(boardRepository.findAll());
-  }
+    @Transactional
+    public void deleteById(String userId, String boardId) {
+        var board = findById(userId, boardId);
+
+        columnService.deleteAllByBoardId(userId, board.getId());
+
+        boardRepository.deleteById(board.getId());
+    }
+
+    @Transactional
+    public void deleteAllByUserId(String userId) {
+        var boardsOwnedByUser = findAllByUserId(userId);
+
+        for (var board : boardsOwnedByUser) {
+            deleteById(userId, board.getId());
+        }
+    }
+
+    @Transactional
+    public BoardEntity findById(String userId, String boardId) {
+        var pair = ownershipVerifierService.verifyOwnershipOfBoard(userId, boardId);
+
+        return pair.getSecond();
+    }
+
+    @Transactional
+    public BoardResponseDTO updateById(String userId, String boardId, UpdateBoardRequestDTO boardDTO) {
+        var boardToUpdate = findById(userId, boardId);
+
+        // TODO: Disallow duplicating board names for a single user
+
+        boardToUpdate.setName(boardDTO.getName());
+
+        var savedBoard = boardRepository.save(boardToUpdate);
+
+        return boardMapper.toResponseDTO(savedBoard);
+    }
+
+    public BoardResponseDTO save(SaveBoardRequestDTO dto, UserEntity user) {
+        var board = boardMapper.fromSaveBoardRequestDTO(dto);
+        board.setUser(user);
+
+        boardRepository.save(board);
+
+        return boardMapper.toResponseDTO(board);
+    }
+
+    @VisibleForTesting
+    @Transactional
+    void deleteAll() {
+        for (var boardEntity : boardRepository.findAll()) {
+            deleteById(boardEntity.getUser().getId(), boardEntity.getId());
+        }
+    }
+
+    @VisibleForTesting
+    public List<BoardResponseDTO> findAll() {
+        return boardMapper.toResponseDTOList(boardRepository.findAll());
+    }
 }

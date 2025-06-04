@@ -13,17 +13,15 @@ import org.mapstruct.ReportingPolicy;
  * If interface or an abstract class is used here, it should provide an implementation, otherwise it
  * won't work
  */
-@Mapper(
-    componentModel = MappingConstants.ComponentModel.SPRING,
-    unmappedTargetPolicy = ReportingPolicy.IGNORE)
+@Mapper(componentModel = MappingConstants.ComponentModel.SPRING, unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface BoardMapper {
-  BoardResponseDTO toResponseDTO(BoardEntity dto);
+    BoardResponseDTO toResponseDTO(BoardEntity dto);
 
-  List<BoardResponseDTO> toResponseDTOList(List<BoardEntity> dto);
+    List<BoardResponseDTO> toResponseDTOList(List<BoardEntity> dto);
 
-  BoardEntity fromSaveBoardRequestDTO(SaveBoardRequestDTO dto);
+    BoardEntity fromSaveBoardRequestDTO(SaveBoardRequestDTO dto);
 
-  SaveBoardRequestDTO toSaveBoardRequestDTO(BoardEntity dto);
+    SaveBoardRequestDTO toSaveBoardRequestDTO(BoardEntity dto);
 
-  UpdateBoardRequestDTO toUpdateBoardRequestDTO(BoardEntity dto);
+    UpdateBoardRequestDTO toUpdateBoardRequestDTO(BoardEntity dto);
 }

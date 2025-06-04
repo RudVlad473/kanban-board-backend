@@ -12,7 +12,7 @@ import lombok.Setter;
 @Builder
 @EqualsAndHashCode
 public class TaskResponseDTO implements BaseId, BaseTask {
-  private String id;
-  private String title;
-  private String description;
+    private String id;
+    private String title;
+    private String description;
 }

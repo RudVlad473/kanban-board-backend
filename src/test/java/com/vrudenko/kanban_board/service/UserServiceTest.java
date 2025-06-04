@@ -17,150 +17,151 @@ import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
 public class UserServiceTest extends AbstractAppTest {
-  final int AMOUNT_OF_FAKE_USERS = 5;
+    final int AMOUNT_OF_FAKE_USERS = 5;
 
-  @Autowired UserService userService;
-  @Autowired BoardService boardService;
+    @Autowired
+    UserService userService;
 
-  List<UserResponseDTO> mockUsers = new ArrayList<>();
+    @Autowired
+    BoardService boardService;
 
-  @BeforeEach
-  void setup() {
-    for (var i = 0; i < AMOUNT_OF_FAKE_USERS; i++) {
-      mockUsers.add(createUser());
-    }
-  }
+    List<UserResponseDTO> mockUsers = new ArrayList<>();
 
-  @Nested
-  class FindAll {
-    @Test
-    void shouldReturnUser_whenUserExists() {
-      // Arrange
-      var firstUser = userService.findAll().getFirst();
-
-      // Act
-      var foundUser = userService.findById(firstUser.getId());
-
-      // Assert
-      Assertions.assertThat(foundUser.getId()).isEqualTo(firstUser.getId());
-      Assertions.assertThat(foundUser.getDisplayName()).isEqualTo(firstUser.getDisplayName());
-      Assertions.assertThat(foundUser.getEmail()).isEqualTo(firstUser.getEmail());
+    @BeforeEach
+    void setup() {
+        for (var i = 0; i < AMOUNT_OF_FAKE_USERS; i++) {
+            mockUsers.add(createUser());
+        }
     }
 
-    @Test
-    void shouldReturnEmpty_whenUserDoesntExists() {
-      // Arrange
-      var randomUUID = UUID.randomUUID().toString();
+    @Nested
+    class FindAll {
+        @Test
+        void shouldReturnUser_whenUserExists() {
+            // Arrange
+            var firstUser = userService.findAll().getFirst();
 
-      // Act
-      var exception = Assertions.catchException(() -> userService.findById(randomUUID));
+            // Act
+            var foundUser = userService.findById(firstUser.getId());
 
-      // Assert
-      Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
-      Assertions.assertThat(
-              userService.findAll().stream().noneMatch(user -> user.getId().equals(randomUUID)))
-          .isTrue();
-    }
-  }
+            // Assert
+            Assertions.assertThat(foundUser.getId()).isEqualTo(firstUser.getId());
+            Assertions.assertThat(foundUser.getDisplayName()).isEqualTo(firstUser.getDisplayName());
+            Assertions.assertThat(foundUser.getEmail()).isEqualTo(firstUser.getEmail());
+        }
 
-  @Nested
-  class DeleteById {
-    @Test
-    void shouldDeleteUser_whenUserExists() {
-      // Arrange
-      var usersCountBeforeDeletion = userService.findAll().size();
+        @Test
+        void shouldReturnEmpty_whenUserDoesntExists() {
+            // Arrange
+            var randomUUID = UUID.randomUUID().toString();
 
-      // Act
-      var firstUser = userService.findAll().getFirst();
-      userService.deleteById(firstUser.getId());
+            // Act
+            var exception = Assertions.catchException(() -> userService.findById(randomUUID));
 
-      // Assert
-      var usersCountAfterDeletion = userService.findAll().size();
-      Assertions.assertThat(usersCountAfterDeletion).isEqualTo(usersCountBeforeDeletion - 1);
-      Assertions.assertThat(
-              Assertions.catchException(() -> userService.findById(firstUser.getId())))
-          .isInstanceOf(AppEntityNotFoundException.class);
+            // Assert
+            Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
+            Assertions.assertThat(userService.findAll().stream()
+                            .noneMatch(user -> user.getId().equals(randomUUID)))
+                    .isTrue();
+        }
     }
 
-    @Test
-    void shouldDeleteAllUsers_whenUsersExists() {
-      // Arrange
+    @Nested
+    class DeleteById {
+        @Test
+        void shouldDeleteUser_whenUserExists() {
+            // Arrange
+            var usersCountBeforeDeletion = userService.findAll().size();
 
-      // Act
-      userService.findAll().forEach(user -> userService.deleteById(user.getId()));
+            // Act
+            var firstUser = userService.findAll().getFirst();
+            userService.deleteById(firstUser.getId());
 
-      // Assert
-      var users = userService.findAll();
-      Assertions.assertThat(users.size()).isZero();
+            // Assert
+            var usersCountAfterDeletion = userService.findAll().size();
+            Assertions.assertThat(usersCountAfterDeletion).isEqualTo(usersCountBeforeDeletion - 1);
+            Assertions.assertThat(Assertions.catchException(() -> userService.findById(firstUser.getId())))
+                    .isInstanceOf(AppEntityNotFoundException.class);
+        }
+
+        @Test
+        void shouldDeleteAllUsers_whenUsersExists() {
+            // Arrange
+
+            // Act
+            userService.findAll().forEach(user -> userService.deleteById(user.getId()));
+
+            // Assert
+            var users = userService.findAll();
+            Assertions.assertThat(users.size()).isZero();
+        }
+
+        @Test
+        void shouldReturnFalse_whenUserNotFound() {
+            // Arrange
+            var firstUser = userService.findAll().getFirst();
+            userService.deleteAll();
+
+            // Act
+            var wasUserDeleted = userService.deleteById(firstUser.getId());
+
+            // Assert
+            Assertions.assertThat(wasUserDeleted).isFalse();
+        }
+
+        @Test
+        void shouldReturnTrue_whenUserFoundAndDeleted() {
+            // Arrange
+            var firstUser = userService.findAll().getFirst();
+
+            // Act
+            var wasUserDeleted = userService.deleteById(firstUser.getId());
+
+            // Assert
+            Assertions.assertThat(wasUserDeleted).isTrue();
+        }
     }
 
-    @Test
-    void shouldReturnFalse_whenUserNotFound() {
-      // Arrange
-      var firstUser = userService.findAll().getFirst();
-      userService.deleteAll();
+    @Nested
+    class AddBoardByUserId {
+        @Test
+        void shouldAddBoard_whenUserExists() {
+            // Arrange
+            var userId = getOwningUser().getId();
+            var boardCountForUserBeforeAddition =
+                    boardService.findAllByUserId(userId).size();
+            var name = dataFactory.getRandomWord(ValidationConstants.MIN_BOARD_NAME_LENGTH + 2);
 
-      // Act
-      var wasUserDeleted = userService.deleteById(firstUser.getId());
+            // Act
+            var board = userService.addBoardByUserId(
+                    userId, SaveBoardRequestDTO.builder().name(name).build());
 
-      // Assert
-      Assertions.assertThat(wasUserDeleted).isFalse();
+            // Assert
+            var boardCountForUserAfterAddition =
+                    boardService.findAllByUserId(userId).size();
+
+            Assertions.assertThat(boardCountForUserAfterAddition).isEqualTo(boardCountForUserBeforeAddition + 1);
+            Assertions.assertThat(board.getName()).isEqualTo(name);
+        }
+
+        @Test
+        void shouldThrow_whenUserDoesntExist() {
+            // Arrange
+            var userId = UUID.randomUUID().toString();
+            var boardCountForUserBeforeAddition =
+                    boardService.findAllByUserId(userId).size();
+            var name = dataFactory.getRandomWord(ValidationConstants.MIN_BOARD_NAME_LENGTH + 2);
+
+            // Act
+            var exception = Assertions.catchException(() -> userService.addBoardByUserId(
+                    userId, SaveBoardRequestDTO.builder().name(name).build()));
+
+            // Assert
+            var boardCountForUserAfterAddition =
+                    boardService.findAllByUserId(userId).size();
+
+            Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
+            Assertions.assertThat(boardCountForUserAfterAddition).isEqualTo(boardCountForUserBeforeAddition);
+        }
     }
-
-    @Test
-    void shouldReturnTrue_whenUserFoundAndDeleted() {
-      // Arrange
-      var firstUser = userService.findAll().getFirst();
-
-      // Act
-      var wasUserDeleted = userService.deleteById(firstUser.getId());
-
-      // Assert
-      Assertions.assertThat(wasUserDeleted).isTrue();
-    }
-  }
-
-  @Nested
-  class AddBoardByUserId {
-    @Test
-    void shouldAddBoard_whenUserExists() {
-      // Arrange
-      var userId = getOwningUser().getId();
-      var boardCountForUserBeforeAddition = boardService.findAllByUserId(userId).size();
-      var name = dataFactory.getRandomWord(ValidationConstants.MIN_BOARD_NAME_LENGTH + 2);
-
-      // Act
-      var board =
-          userService.addBoardByUserId(userId, SaveBoardRequestDTO.builder().name(name).build());
-
-      // Assert
-      var boardCountForUserAfterAddition = boardService.findAllByUserId(userId).size();
-
-      Assertions.assertThat(boardCountForUserAfterAddition)
-          .isEqualTo(boardCountForUserBeforeAddition + 1);
-      Assertions.assertThat(board.getName()).isEqualTo(name);
-    }
-
-    @Test
-    void shouldThrow_whenUserDoesntExist() {
-      // Arrange
-      var userId = UUID.randomUUID().toString();
-      var boardCountForUserBeforeAddition = boardService.findAllByUserId(userId).size();
-      var name = dataFactory.getRandomWord(ValidationConstants.MIN_BOARD_NAME_LENGTH + 2);
-
-      // Act
-      var exception =
-          Assertions.catchException(
-              () ->
-                  userService.addBoardByUserId(
-                      userId, SaveBoardRequestDTO.builder().name(name).build()));
-
-      // Assert
-      var boardCountForUserAfterAddition = boardService.findAllByUserId(userId).size();
-
-      Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
-      Assertions.assertThat(boardCountForUserAfterAddition)
-          .isEqualTo(boardCountForUserBeforeAddition);
-    }
-  }
 }

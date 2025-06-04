@@ -10,7 +10,7 @@ import lombok.Setter;
 @Setter
 @EqualsAndHashCode
 public class UserResponseDTO implements BaseId, BaseUser {
-  private String id;
-  private String email;
-  private String displayName;
+    private String id;
+    private String email;
+    private String displayName;
 }

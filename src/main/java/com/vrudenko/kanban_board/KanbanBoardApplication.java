@@ -6,7 +6,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class KanbanBoardApplication {
 
-  public static void main(String[] args) {
-    SpringApplication.run(KanbanBoardApplication.class, args);
-  }
+    public static void main(String[] args) {
+        SpringApplication.run(KanbanBoardApplication.class, args);
+    }
 }

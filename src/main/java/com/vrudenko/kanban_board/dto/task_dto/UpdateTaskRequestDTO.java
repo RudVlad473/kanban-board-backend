@@ -13,7 +13,9 @@ import lombok.Setter;
 @Builder
 @EqualsAndHashCode
 public class UpdateTaskRequestDTO implements BaseTask {
-  @TaskTitle String title;
+    @TaskTitle
+    String title;
 
-  @Description String description;
+    @Description
+    String description;
 }

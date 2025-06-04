@@ -11,94 +11,99 @@ import com.vrudenko.kanban_board.entity.ColumnEntity;
 import com.vrudenko.kanban_board.entity.TaskEntity;
 import com.vrudenko.kanban_board.mapper.TaskMapper;
 import com.vrudenko.kanban_board.repository.TaskRepository;
-import java.util.List;
-
 import jakarta.transaction.Transactional;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
 public class TaskService {
-  @Autowired private TaskRepository taskRepository;
-  @Autowired private TaskMapper taskMapper;
-  @Autowired private OwnershipVerifierService ownershipVerifierService;
-  @Autowired private SubtaskService subtaskService;
+    @Autowired
+    private TaskRepository taskRepository;
 
-  public TaskResponseDTO save(SaveTaskRequestDTO dto, ColumnEntity column) {
-    var task = taskMapper.fromSaveTaskRequestDTO(dto);
-    task.setColumn(column);
+    @Autowired
+    private TaskMapper taskMapper;
 
-    taskRepository.save(task);
+    @Autowired
+    private OwnershipVerifierService ownershipVerifierService;
 
-    return taskMapper.toTaskResponseDTO(task);
-  }
+    @Autowired
+    private SubtaskService subtaskService;
 
-  @Transactional
-  public List<TaskResponseDTO> findAllByColumnId(String userId, String columnId) {
-    var pair = ownershipVerifierService.verifyOwnershipOfColumn(userId, columnId);
+    public TaskResponseDTO save(SaveTaskRequestDTO dto, ColumnEntity column) {
+        var task = taskMapper.fromSaveTaskRequestDTO(dto);
+        task.setColumn(column);
 
-    return taskMapper.toTaskResponseDTOList(
-        taskRepository.findAllByColumnId(pair.getSecond().getId()));
-  }
+        taskRepository.save(task);
 
-  @Transactional
-  public int getTaskCountByColumnId(String userId, String columnId) {
-    var pair = ownershipVerifierService.verifyOwnershipOfColumn(userId, columnId);
-
-    return Ints.checkedCast(taskRepository.countByColumnId(pair.getSecond().getId()));
-  }
-
-  // TODO: make a service interface
-  public TaskEntity findById(String userId, String taskId) {
-    var pair = ownershipVerifierService.verifyOwnershipOfTask(userId, taskId);
-
-    return pair.getSecond();
-  }
-
-  @Transactional
-  public TaskResponseDTO updateById(String userId, String taskId, UpdateTaskRequestDTO dto) {
-    var task = findById(userId, taskId);
-    task.setTitle(dto.getTitle());
-    task.setDescription(dto.getDescription());
-
-    taskRepository.save(task);
-
-    return taskMapper.toTaskResponseDTO(task);
-  }
-
-  @Transactional
-  public void deleteById(String userId, String taskId) {
-    var task = findById(userId, taskId);
-
-    // TODO: delete all subtasks
-
-    taskRepository.deleteById(task.getId());
-  }
-
-  @Transactional
-  public void deleteAllByColumnId(String userId, String columnId) {
-    var pair = ownershipVerifierService.verifyOwnershipOfColumn(userId, columnId);
-
-    // TODO: delete all subtasks in batch using list of task ids
-    for (var task : findAllByColumnId(userId, pair.getSecond().getId())) {
-      subtaskService.deleteAllByTaskId(userId, task.getId());
-
-      deleteById(userId, task.getId());
+        return taskMapper.toTaskResponseDTO(task);
     }
-  }
 
-  @Transactional
-  public SubtaskResponseDTO addSubtaskByTaskId(
-      String userId, String taskId, SaveSubtaskRequestDTO dto) {
-    var pair = ownershipVerifierService.verifyOwnershipOfTask(userId, taskId);
+    @Transactional
+    public List<TaskResponseDTO> findAllByColumnId(String userId, String columnId) {
+        var pair = ownershipVerifierService.verifyOwnershipOfColumn(userId, columnId);
 
-    var task = pair.getSecond();
+        return taskMapper.toTaskResponseDTOList(
+                taskRepository.findAllByColumnId(pair.getSecond().getId()));
+    }
 
-    return subtaskService.save(task, dto);
-  }
+    @Transactional
+    public int getTaskCountByColumnId(String userId, String columnId) {
+        var pair = ownershipVerifierService.verifyOwnershipOfColumn(userId, columnId);
 
-  @VisibleForTesting
-  void deleteAll() {
-    taskRepository.deleteAll();
-  }
+        return Ints.checkedCast(taskRepository.countByColumnId(pair.getSecond().getId()));
+    }
+
+    // TODO: make a service interface
+    public TaskEntity findById(String userId, String taskId) {
+        var pair = ownershipVerifierService.verifyOwnershipOfTask(userId, taskId);
+
+        return pair.getSecond();
+    }
+
+    @Transactional
+    public TaskResponseDTO updateById(String userId, String taskId, UpdateTaskRequestDTO dto) {
+        var task = findById(userId, taskId);
+        task.setTitle(dto.getTitle());
+        task.setDescription(dto.getDescription());
+
+        taskRepository.save(task);
+
+        return taskMapper.toTaskResponseDTO(task);
+    }
+
+    @Transactional
+    public void deleteById(String userId, String taskId) {
+        var task = findById(userId, taskId);
+
+        // TODO: delete all subtasks
+
+        taskRepository.deleteById(task.getId());
+    }
+
+    @Transactional
+    public void deleteAllByColumnId(String userId, String columnId) {
+        var pair = ownershipVerifierService.verifyOwnershipOfColumn(userId, columnId);
+
+        // TODO: delete all subtasks in batch using list of task ids
+        for (var task : findAllByColumnId(userId, pair.getSecond().getId())) {
+            subtaskService.deleteAllByTaskId(userId, task.getId());
+
+            deleteById(userId, task.getId());
+        }
+    }
+
+    @Transactional
+    public SubtaskResponseDTO addSubtaskByTaskId(String userId, String taskId, SaveSubtaskRequestDTO dto) {
+        var pair = ownershipVerifierService.verifyOwnershipOfTask(userId, taskId);
+
+        var task = pair.getSecond();
+
+        return subtaskService.save(task, dto);
+    }
+
+    @VisibleForTesting
+    void deleteAll() {
+        taskRepository.deleteAll();
+    }
 }

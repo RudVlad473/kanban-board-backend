@@ -24,53 +24,47 @@ import org.springframework.security.web.header.writers.ClearSiteDataHeaderWriter
 @RequiredArgsConstructor
 @EnableMethodSecurity
 public class SecurityConfiguration {
-  private final AuthenticationProvider authenticationProvider;
-  private final LogoutHandler handlerLogout;
+    private final AuthenticationProvider authenticationProvider;
+    private final LogoutHandler handlerLogout;
 
-  @Value("${server.servlet.context-path}")
-  private String CONTEXT_PATH;
+    @Value("${server.servlet.context-path}")
+    private String CONTEXT_PATH;
 
-  @Bean
-  public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-    var securityContextRepository = new HttpSessionSecurityContextRepository();
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        var securityContextRepository = new HttpSessionSecurityContextRepository();
 
-    // csrf & cors
-    http.csrf(AbstractHttpConfigurer::disable).cors(Customizer.withDefaults());
+        // csrf & cors
+        http.csrf(AbstractHttpConfigurer::disable).cors(Customizer.withDefaults());
 
-    // storing the session
-    http.securityContext((context) -> context.securityContextRepository(securityContextRepository));
+        // storing the session
+        http.securityContext((context) -> context.securityContextRepository(securityContextRepository));
 
-    http.authorizeHttpRequests(
-        auth -> {
-          auth.requestMatchers(ApiPaths.SIGNIN, ApiPaths.SIGNUP)
-              .permitAll();
+        http.authorizeHttpRequests(auth -> {
+            auth.requestMatchers(ApiPaths.SIGNIN, ApiPaths.SIGNUP).permitAll();
 
-          auth.anyRequest().authenticated();
+            auth.anyRequest().authenticated();
         });
 
-    // session management
-    http.sessionManagement(
-        (session) -> {
-          session.maximumSessions(2).maxSessionsPreventsLogin(true);
-          session.sessionFixation(
-              SessionManagementConfigurer.SessionFixationConfigurer::newSession);
-          session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED);
+        // session management
+        http.sessionManagement((session) -> {
+            session.maximumSessions(2).maxSessionsPreventsLogin(true);
+            session.sessionFixation(SessionManagementConfigurer.SessionFixationConfigurer::newSession);
+            session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED);
         });
 
-    // clear cookie when logout
-    http.logout(
-        (logout) -> {
-          logout.logoutUrl(CONTEXT_PATH + ApiPaths.LOGOUT);
-          logout.addLogoutHandler(
-              new HeaderWriterLogoutHandler(
-                  new ClearSiteDataHeaderWriter(ClearSiteDataHeaderWriter.Directive.COOKIES)));
-          logout.deleteCookies(SecurityConstants.SESSION_NAME);
-          logout.logoutSuccessHandler(handlerLogout);
+        // clear cookie when logout
+        http.logout((logout) -> {
+            logout.logoutUrl(CONTEXT_PATH + ApiPaths.LOGOUT);
+            logout.addLogoutHandler(new HeaderWriterLogoutHandler(
+                    new ClearSiteDataHeaderWriter(ClearSiteDataHeaderWriter.Directive.COOKIES)));
+            logout.deleteCookies(SecurityConstants.SESSION_NAME);
+            logout.logoutSuccessHandler(handlerLogout);
         });
 
-    // auth provider for connect DAO
-    http.authenticationProvider(authenticationProvider);
+        // auth provider for connect DAO
+        http.authenticationProvider(authenticationProvider);
 
-    return http.build();
-  }
+        return http.build();
+    }
 }

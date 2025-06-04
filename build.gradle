@@ -2,6 +2,7 @@ plugins {
     id 'java'
     id 'org.springframework.boot' version '3.4.0'
     id 'io.spring.dependency-management' version '1.1.6'
+    id 'com.diffplug.spotless' version '7.0.2'
 }
 
 group = 'com.vrudenko'
@@ -10,6 +11,16 @@ version = '0.0.1-SNAPSHOT'
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+spotless {
+    java {
+        palantirJavaFormat()
+        target 'src/**/*.java'
+        formatAnnotations()
+        importOrder()
+        removeUnusedImports()
     }
 }
 

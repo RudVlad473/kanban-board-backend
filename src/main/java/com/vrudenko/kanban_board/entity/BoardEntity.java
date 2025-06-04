@@ -24,13 +24,13 @@ import lombok.Setter;
 @AllArgsConstructor
 @Table(name = "boards")
 public class BoardEntity extends BaseEntity implements BaseBoard {
-  @Column(nullable = false)
-  private String name;
+    @Column(nullable = false)
+    private String name;
 
-  @OneToMany(mappedBy = "board")
-  private List<ColumnEntity> column;
+    @OneToMany(mappedBy = "board")
+    private List<ColumnEntity> column;
 
-  @ManyToOne
-  @JoinColumn(name = "user_id")
-  private UserEntity user;
+    @ManyToOne
+    @JoinColumn(name = "user_id")
+    private UserEntity user;
 }

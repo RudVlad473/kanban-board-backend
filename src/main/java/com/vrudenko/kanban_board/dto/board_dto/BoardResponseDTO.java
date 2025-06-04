@@ -12,6 +12,6 @@ import lombok.Setter;
 @EqualsAndHashCode
 @Builder
 public class BoardResponseDTO implements BaseId, BaseBoard {
-  private String id;
-  private String name;
+    private String id;
+    private String name;
 }

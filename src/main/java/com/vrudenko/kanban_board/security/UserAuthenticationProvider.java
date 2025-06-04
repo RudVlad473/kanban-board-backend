@@ -14,25 +14,25 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class UserAuthenticationProvider implements AuthenticationProvider {
-  private final UserDetailsService userDetailsService;
-  private final PasswordEncoder passwordEncoder;
+    private final UserDetailsService userDetailsService;
+    private final PasswordEncoder passwordEncoder;
 
-  @Override
-  public Authentication authenticate(Authentication authentication) throws AuthenticationException {
-    var userId = authentication.getPrincipal().toString();
-    var passwordHash = authentication.getCredentials().toString();
+    @Override
+    public Authentication authenticate(Authentication authentication) throws AuthenticationException {
+        var userId = authentication.getPrincipal().toString();
+        var passwordHash = authentication.getCredentials().toString();
 
-    var userDetails = userDetailsService.loadUserByUsername(userId);
+        var userDetails = userDetailsService.loadUserByUsername(userId);
 
-    if (!passwordEncoder.matches(passwordHash, userDetails.getPassword())) {
-      throw new BadCredentialsException("Invalid username or password");
+        if (!passwordEncoder.matches(passwordHash, userDetails.getPassword())) {
+            throw new BadCredentialsException("Invalid username or password");
+        }
+
+        return new UsernamePasswordAuthenticationToken(userId, passwordHash, new ArrayList<>());
     }
 
-    return new UsernamePasswordAuthenticationToken(userId, passwordHash, new ArrayList<>());
-  }
-
-  @Override
-  public boolean supports(Class<?> authentication) {
-    return authentication.equals(UsernamePasswordAuthenticationToken.class);
-  }
+    @Override
+    public boolean supports(Class<?> authentication) {
+        return authentication.equals(UsernamePasswordAuthenticationToken.class);
+    }
 }

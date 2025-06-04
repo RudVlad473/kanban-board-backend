@@ -15,23 +15,23 @@ import org.springframework.security.web.session.HttpSessionEventPublisher;
 @Configuration
 @RequiredArgsConstructor
 public class BeanConfiguration {
-  @Bean
-  public PasswordEncoder passwordEncoder() {
-    return new BCryptPasswordEncoder();
-  }
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
 
-  @Bean
-  public AuthenticationManager authenticationManager(HttpSecurity http) throws Exception {
-    return http.getSharedObject(AuthenticationManagerBuilder.class).build();
-  }
+    @Bean
+    public AuthenticationManager authenticationManager(HttpSecurity http) throws Exception {
+        return http.getSharedObject(AuthenticationManagerBuilder.class).build();
+    }
 
-  @Bean
-  public HttpSessionEventPublisher httpSessionEventPublisher() {
-    return new HttpSessionEventPublisher();
-  }
+    @Bean
+    public HttpSessionEventPublisher httpSessionEventPublisher() {
+        return new HttpSessionEventPublisher();
+    }
 
-  @Bean
-  public SecurityContextRepository securityContextRepository() {
-    return new HttpSessionSecurityContextRepository();
-  }
+    @Bean
+    public SecurityContextRepository securityContextRepository() {
+        return new HttpSessionSecurityContextRepository();
+    }
 }
