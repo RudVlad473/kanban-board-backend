@@ -16,11 +16,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
 public class ColumnServiceTest extends AbstractAppTest {
-    @Autowired
-    ColumnService columnService;
+    @Autowired ColumnService columnService;
 
-    @Autowired
-    TaskService taskService;
+    @Autowired TaskService taskService;
 
     @Nested
     class DeleteAllByBoardIdTest {
@@ -64,7 +62,9 @@ public class ColumnServiceTest extends AbstractAppTest {
             var columnCountBeforeDeletion = columnService.getColumnCountByBoardId(boardId);
 
             // act
-            var exception = Assertions.catchException(() -> columnService.deleteAllByBoardId(userId, boardId));
+            var exception =
+                    Assertions.catchException(
+                            () -> columnService.deleteAllByBoardId(userId, boardId));
 
             // assert
             var columnCountAfterDeletion = columnService.getColumnCountByBoardId(boardId);
@@ -81,7 +81,9 @@ public class ColumnServiceTest extends AbstractAppTest {
             var columnCountBeforeDeletion = columnService.getColumnCountByBoardId(boardId);
 
             // act
-            var exception = Assertions.catchException(() -> columnService.deleteAllByBoardId(userId, boardId));
+            var exception =
+                    Assertions.catchException(
+                            () -> columnService.deleteAllByBoardId(userId, boardId));
 
             // assert
             var columnCountAfterDeletion = columnService.getColumnCountByBoardId(boardId);
@@ -112,7 +114,8 @@ public class ColumnServiceTest extends AbstractAppTest {
             var columnId = UUID.randomUUID().toString();
 
             // act
-            var exception = Assertions.catchException(() -> columnService.findById(userId, columnId));
+            var exception =
+                    Assertions.catchException(() -> columnService.findById(userId, columnId));
 
             // assert
             Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
@@ -125,7 +128,8 @@ public class ColumnServiceTest extends AbstractAppTest {
             var columnId = mockPopulatedColumn.getId();
 
             // act
-            var exception = Assertions.catchException(() -> columnService.findById(userId, columnId));
+            var exception =
+                    Assertions.catchException(() -> columnService.findById(userId, columnId));
 
             // assert
             Assertions.assertThat(exception).isInstanceOf(AppAccessDeniedException.class);
@@ -145,7 +149,8 @@ public class ColumnServiceTest extends AbstractAppTest {
 
             // assert
             Assertions.assertThat(columns).isNotEmpty();
-            Assertions.assertThat(columns.size()).isSameAs(columnService.getColumnCountByBoardId(boardId));
+            Assertions.assertThat(columns.size())
+                    .isSameAs(columnService.getColumnCountByBoardId(boardId));
             for (var column : columns) {
                 Assertions.assertThat(columnService.findById(userId, column.getId()))
                         .isInstanceOf(ColumnEntity.class);
@@ -163,7 +168,8 @@ public class ColumnServiceTest extends AbstractAppTest {
 
             // assert
             Assertions.assertThat(columns).isEmpty();
-            Assertions.assertThat(columns.size()).isSameAs(columnService.getColumnCountByBoardId(boardId));
+            Assertions.assertThat(columns.size())
+                    .isSameAs(columnService.getColumnCountByBoardId(boardId));
         }
 
         @Test
@@ -173,7 +179,9 @@ public class ColumnServiceTest extends AbstractAppTest {
             var boardId = UUID.randomUUID().toString();
 
             // act
-            var exception = Assertions.catchException(() -> columnService.findAllByBoardId(userId, boardId));
+            var exception =
+                    Assertions.catchException(
+                            () -> columnService.findAllByBoardId(userId, boardId));
 
             // assert
             Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
@@ -188,24 +196,30 @@ public class ColumnServiceTest extends AbstractAppTest {
             var userId = getOwningUser().getId();
             var columnId = mockPopulatedColumn.getId();
 
-            var title = dataFactory.getRandomWord(
-                    ValidationConstants.MIN_TASK_TITLE_LENGTH, ValidationConstants.MAX_TASK_TITLE_LENGTH);
-            var description = dataFactory.getRandomText(
-                    ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH, ValidationConstants.MAX_TASK_DESCRIPTION_LENGTH);
+            var title =
+                    dataFactory.getRandomWord(
+                            ValidationConstants.MIN_TASK_TITLE_LENGTH,
+                            ValidationConstants.MAX_TASK_TITLE_LENGTH);
+            var description =
+                    dataFactory.getRandomText(
+                            ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH,
+                            ValidationConstants.MAX_TASK_DESCRIPTION_LENGTH);
 
             // act
-            var task = columnService.addTaskByColumnId(
-                    userId,
-                    columnId,
-                    SaveTaskRequestDTO.builder()
-                            .title(title)
-                            .description(description)
-                            .build());
+            var task =
+                    columnService.addTaskByColumnId(
+                            userId,
+                            columnId,
+                            SaveTaskRequestDTO.builder()
+                                    .title(title)
+                                    .description(description)
+                                    .build());
 
             // assert
             Assertions.assertThat(task.getTitle()).isEqualTo(title);
             Assertions.assertThat(task.getDescription()).isEqualTo(description);
-            Assertions.assertThat(taskService.findById(userId, task.getId())).isInstanceOf(TaskEntity.class);
+            Assertions.assertThat(taskService.findById(userId, task.getId()))
+                    .isInstanceOf(TaskEntity.class);
         }
 
         @Test
@@ -214,23 +228,32 @@ public class ColumnServiceTest extends AbstractAppTest {
             var userId = getOwningUser().getId();
             var columnId = UUID.randomUUID().toString();
 
-            var title = dataFactory.getRandomWord(
-                    ValidationConstants.MIN_TASK_TITLE_LENGTH, ValidationConstants.MAX_TASK_TITLE_LENGTH);
-            var description = dataFactory.getRandomText(
-                    ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH, ValidationConstants.MAX_TASK_DESCRIPTION_LENGTH);
+            var title =
+                    dataFactory.getRandomWord(
+                            ValidationConstants.MIN_TASK_TITLE_LENGTH,
+                            ValidationConstants.MAX_TASK_TITLE_LENGTH);
+            var description =
+                    dataFactory.getRandomText(
+                            ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH,
+                            ValidationConstants.MAX_TASK_DESCRIPTION_LENGTH);
 
             // act
-            var exception = Assertions.catchException(() -> columnService.addTaskByColumnId(
-                    userId,
-                    columnId,
-                    SaveTaskRequestDTO.builder()
-                            .title(title)
-                            .description(description)
-                            .build()));
+            var exception =
+                    Assertions.catchException(
+                            () ->
+                                    columnService.addTaskByColumnId(
+                                            userId,
+                                            columnId,
+                                            SaveTaskRequestDTO.builder()
+                                                    .title(title)
+                                                    .description(description)
+                                                    .build()));
 
             // assert
             Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
-            Assertions.assertThat(Assertions.catchException(() -> taskService.findAllByColumnId(userId, columnId)))
+            Assertions.assertThat(
+                            Assertions.catchException(
+                                    () -> taskService.findAllByColumnId(userId, columnId)))
                     .isInstanceOf(AppEntityNotFoundException.class);
         }
 
@@ -240,23 +263,32 @@ public class ColumnServiceTest extends AbstractAppTest {
             var userId = getNoBoardsUser().getId();
             var columnId = mockPopulatedColumn.getId();
 
-            var title = dataFactory.getRandomWord(
-                    ValidationConstants.MIN_TASK_TITLE_LENGTH, ValidationConstants.MAX_TASK_TITLE_LENGTH);
-            var description = dataFactory.getRandomText(
-                    ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH, ValidationConstants.MAX_TASK_DESCRIPTION_LENGTH);
+            var title =
+                    dataFactory.getRandomWord(
+                            ValidationConstants.MIN_TASK_TITLE_LENGTH,
+                            ValidationConstants.MAX_TASK_TITLE_LENGTH);
+            var description =
+                    dataFactory.getRandomText(
+                            ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH,
+                            ValidationConstants.MAX_TASK_DESCRIPTION_LENGTH);
 
             // act
-            var exception = Assertions.catchException(() -> columnService.addTaskByColumnId(
-                    userId,
-                    columnId,
-                    SaveTaskRequestDTO.builder()
-                            .title(title)
-                            .description(description)
-                            .build()));
+            var exception =
+                    Assertions.catchException(
+                            () ->
+                                    columnService.addTaskByColumnId(
+                                            userId,
+                                            columnId,
+                                            SaveTaskRequestDTO.builder()
+                                                    .title(title)
+                                                    .description(description)
+                                                    .build()));
 
             // assert
             Assertions.assertThat(exception).isInstanceOf(AppAccessDeniedException.class);
-            Assertions.assertThat(Assertions.catchException(() -> taskService.findAllByColumnId(userId, columnId)))
+            Assertions.assertThat(
+                            Assertions.catchException(
+                                    () -> taskService.findAllByColumnId(userId, columnId)))
                     .isInstanceOf(AppAccessDeniedException.class);
         }
     }

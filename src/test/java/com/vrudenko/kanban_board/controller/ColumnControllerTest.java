@@ -30,14 +30,11 @@ import org.springframework.test.web.servlet.MockMvc;
 @SpringBootTest
 @AutoConfigureMockMvc
 public class ColumnControllerTest extends AbstractAppTest {
-    @Autowired
-    private MockMvc mockMvc;
+    @Autowired private MockMvc mockMvc;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+    @Autowired private ObjectMapper objectMapper;
 
-    @Autowired
-    private TaskService taskService;
+    @Autowired private TaskService taskService;
 
     private String getColumnsPrefix(String boardId) {
         return ApiPaths.BOARDS + "/" + boardId + ApiPaths.COLUMNS;
@@ -53,7 +50,8 @@ public class ColumnControllerTest extends AbstractAppTest {
             var url = getColumnsPrefix(boardId);
             // Use the columns associated with mockPopulatedBoard from AbstractAppTest
             var expectedColumns =
-                    objectMapper.writeValueAsString(ListUtils.union(mockColumns, List.of(mockPopulatedColumn)));
+                    objectMapper.writeValueAsString(
+                            ListUtils.union(mockColumns, List.of(mockPopulatedColumn)));
 
             // Act & Assert
             mockMvc.perform(get(url).with(user(userId)))
@@ -63,7 +61,8 @@ public class ColumnControllerTest extends AbstractAppTest {
         }
 
         @Test
-        void testWithAuthenticatedUser_shouldReturnEmptyList_whenNoColumnsExistForBoard() throws Exception {
+        void testWithAuthenticatedUser_shouldReturnEmptyList_whenNoColumnsExistForBoard()
+                throws Exception {
             // Arrange
             var userId = getOwningUser().getId();
             // Use one of the boards from mockEmptyBoards, which are set up without columns
@@ -79,7 +78,8 @@ public class ColumnControllerTest extends AbstractAppTest {
         }
 
         @Test
-        void testWithAuthenticatedUser_shouldReturnNotFound_whenBoardDoesNotExist() throws Exception {
+        void testWithAuthenticatedUser_shouldReturnNotFound_whenBoardDoesNotExist()
+                throws Exception {
             // Arrange
             var userId = getOwningUser().getId();
             var nonExistentBoardId = UUID.randomUUID().toString();
@@ -105,28 +105,37 @@ public class ColumnControllerTest extends AbstractAppTest {
             var boardId = mockPopulatedBoard.getId();
             var columnId = mockPopulatedColumn.getId();
             var url = getColumnsPrefix(boardId) + "/" + columnId;
-            var saveDTO = SaveTaskRequestDTO.builder()
-                    .title(dataFactory.getRandomText(ValidationConstants.MIN_TASK_TITLE_LENGTH + 3))
-                    .description(dataFactory.getRandomText(ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH + 3))
-                    .build();
+            var saveDTO =
+                    SaveTaskRequestDTO.builder()
+                            .title(
+                                    dataFactory.getRandomText(
+                                            ValidationConstants.MIN_TASK_TITLE_LENGTH + 3))
+                            .description(
+                                    dataFactory.getRandomText(
+                                            ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH + 3))
+                            .build();
 
             // Act
-            var response = mockMvc.perform(post(url)
-                            .with(user(userId))
-                            .contentType(APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(saveDTO)))
-                    .andDo(print())
-                    .andExpect(status().isCreated())
-                    .andReturn();
+            var response =
+                    mockMvc.perform(
+                                    post(url)
+                                            .with(user(userId))
+                                            .contentType(APPLICATION_JSON)
+                                            .content(objectMapper.writeValueAsString(saveDTO)))
+                            .andDo(print())
+                            .andExpect(status().isCreated())
+                            .andReturn();
             var responseBody =
-                    objectMapper.readValue(response.getResponse().getContentAsString(), TaskResponseDTO.class);
+                    objectMapper.readValue(
+                            response.getResponse().getContentAsString(), TaskResponseDTO.class);
             var createdTaskId = responseBody.getId();
 
             // Assert
             // this is an assertion since if no entity was found, it'll throw an error
             taskService.findById(userId, createdTaskId);
             Assertions.assertThat(responseBody.getTitle()).isEqualTo(saveDTO.getTitle());
-            Assertions.assertThat(responseBody.getDescription()).isEqualTo(saveDTO.getDescription());
+            Assertions.assertThat(responseBody.getDescription())
+                    .isEqualTo(saveDTO.getDescription());
         }
 
         @Test
@@ -136,16 +145,22 @@ public class ColumnControllerTest extends AbstractAppTest {
             var boardId = mockPopulatedBoard.getId();
             var columnId = UUID.randomUUID().toString();
             var url = getColumnsPrefix(boardId) + "/" + columnId;
-            var saveDTO = SaveTaskRequestDTO.builder()
-                    .title(dataFactory.getRandomText(ValidationConstants.MIN_TASK_TITLE_LENGTH + 3))
-                    .description(dataFactory.getRandomText(ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH + 3))
-                    .build();
+            var saveDTO =
+                    SaveTaskRequestDTO.builder()
+                            .title(
+                                    dataFactory.getRandomText(
+                                            ValidationConstants.MIN_TASK_TITLE_LENGTH + 3))
+                            .description(
+                                    dataFactory.getRandomText(
+                                            ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH + 3))
+                            .build();
 
             // Act
-            mockMvc.perform(post(url)
-                            .with(user(userId))
-                            .contentType(APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(saveDTO)))
+            mockMvc.perform(
+                            post(url)
+                                    .with(user(userId))
+                                    .contentType(APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(saveDTO)))
                     .andDo(print())
                     // Assert
                     .andExpect(status().isNotFound());

@@ -27,7 +27,8 @@ import java.lang.annotation.Target;
         max = ValidationConstants.MAX_PASSWORD_LENGTH,
         message = ValidationConstants.PASSWORD_LENGTH_VALIDATION_MESSAGE)
 @Pattern(
-        regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?]).+$",
+        regexp =
+                "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?]).+$",
         message =
                 "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character")
 public @interface Password {

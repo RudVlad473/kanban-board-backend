@@ -13,7 +13,8 @@ public final class ApiPaths {
     public static final String TASKS = "/tasks";
     public static final String TASK_ID = "/{taskId}";
 
-    public static final String SUB_TASKS = "/subtasks";
+    public static final String SUBTASKS = "/subtasks";
+    public static final String SUBTASK_ID = "/{subtaskId}";
 
     public static final String SIGNIN = "/signin";
     public static final String SIGNUP = "/signup";

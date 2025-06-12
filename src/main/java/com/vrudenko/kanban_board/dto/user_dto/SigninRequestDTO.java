@@ -10,9 +10,7 @@ import lombok.Setter;
 @Setter
 @EqualsAndHashCode
 public class SigninRequestDTO {
-    @AppEmail
-    private String email;
+    @AppEmail private String email;
 
-    @Password
-    private String password;
+    @Password private String password;
 }

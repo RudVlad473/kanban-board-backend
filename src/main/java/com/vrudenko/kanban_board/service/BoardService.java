@@ -17,24 +17,21 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class BoardService {
-    @Autowired
-    private BoardRepository boardRepository;
+    @Autowired private BoardRepository boardRepository;
 
-    @Autowired
-    private BoardMapper boardMapper;
+    @Autowired private BoardMapper boardMapper;
 
-    @Autowired
-    private ColumnService columnService;
+    @Autowired private ColumnService columnService;
 
-    @Autowired
-    private OwnershipVerifierService ownershipVerifierService;
+    @Autowired private OwnershipVerifierService ownershipVerifierService;
 
     public List<BoardResponseDTO> findAllByUserId(String userId) {
         return boardMapper.toResponseDTOList(boardRepository.findAllByUserId(userId));
     }
 
     @Transactional
-    public ColumnResponseDTO addColumnByBoardId(String userId, String boardId, SaveColumnRequestDTO columnDTO) {
+    public ColumnResponseDTO addColumnByBoardId(
+            String userId, String boardId, SaveColumnRequestDTO columnDTO) {
         var board = findById(userId, boardId);
 
         return columnService.save(columnDTO, board);
@@ -66,7 +63,8 @@ public class BoardService {
     }
 
     @Transactional
-    public BoardResponseDTO updateById(String userId, String boardId, UpdateBoardRequestDTO boardDTO) {
+    public BoardResponseDTO updateById(
+            String userId, String boardId, UpdateBoardRequestDTO boardDTO) {
         var boardToUpdate = findById(userId, boardId);
 
         // TODO: Disallow duplicating board names for a single user

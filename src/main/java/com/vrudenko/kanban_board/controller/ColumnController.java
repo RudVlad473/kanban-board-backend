@@ -25,8 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping(ApiPaths.BOARDS + ApiPaths.BOARD_ID + ApiPaths.COLUMNS)
 @PreAuthorize("isAuthenticated()")
 public class ColumnController {
-    @Autowired
-    private ColumnService columnService;
+    @Autowired private ColumnService columnService;
 
     @GetMapping
     public ResponseEntity<List<ColumnResponseDTO>> findAllByBoardId(

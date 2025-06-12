@@ -9,9 +9,7 @@ import com.vrudenko.kanban_board.security.CurrentUserId;
 import com.vrudenko.kanban_board.service.BoardService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
-
 import java.util.List;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -30,8 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 @PreAuthorize("isAuthenticated()")
 public class BoardController {
-    @Autowired
-    private BoardService boardService;
+    @Autowired private BoardService boardService;
 
     @GetMapping
     public ResponseEntity<List<BoardResponseDTO>> findAllByUserId(@CurrentUserId String userId) {
@@ -41,7 +38,8 @@ public class BoardController {
     }
 
     @DeleteMapping(ApiPaths.BOARD_ID)
-    public ResponseEntity<Void> deleteById(@PathVariable @NotBlank String boardId, @CurrentUserId String userId) {
+    public ResponseEntity<Void> deleteById(
+            @PathVariable @NotBlank String boardId, @CurrentUserId String userId) {
         boardService.deleteById(userId, boardId);
 
         return ResponseEntity.ok().build();

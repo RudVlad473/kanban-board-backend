@@ -29,8 +29,7 @@ public class UserEntity extends BaseEntity implements BaseUser, UserDetails {
     @Column(nullable = false, unique = true)
     private String email;
 
-    @Column
-    private String displayName;
+    @Column private String displayName;
 
     @OneToMany(mappedBy = "user")
     private List<BoardEntity> boards;

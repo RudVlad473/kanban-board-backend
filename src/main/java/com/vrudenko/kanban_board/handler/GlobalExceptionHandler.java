@@ -48,7 +48,8 @@ public class GlobalExceptionHandler {
 
     // handles errors from db
     @ExceptionHandler(OptimisticLockingFailureException.class)
-    public ResponseEntity<String> handleOptimisticLockingFailure(OptimisticLockingFailureException ex) {
+    public ResponseEntity<String> handleOptimisticLockingFailure(
+            OptimisticLockingFailureException ex) {
         return new ResponseEntity<>(ex.getMessage(), HttpStatus.LOCKED);
     }
 
@@ -56,11 +57,14 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handleMethodArgumentNotValidException(
             MethodArgumentNotValidException ex) {
         Map<String, String> errors = new HashMap<>();
-        ex.getBindingResult().getAllErrors().forEach((error) -> {
-            String fieldName = ((FieldError) error).getField();
-            String errorMessage = error.getDefaultMessage();
-            errors.put(fieldName, errorMessage);
-        });
+        ex.getBindingResult()
+                .getAllErrors()
+                .forEach(
+                        (error) -> {
+                            String fieldName = ((FieldError) error).getField();
+                            String errorMessage = error.getDefaultMessage();
+                            errors.put(fieldName, errorMessage);
+                        });
         return ResponseEntity.badRequest().body(errors);
     }
 }

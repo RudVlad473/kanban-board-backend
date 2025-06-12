@@ -16,11 +16,15 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping(ApiPaths.BOARDS + ApiPaths.BOARD_ID + ApiPaths.COLUMNS + ApiPaths.COLUMN_ID + ApiPaths.TASKS)
+@RequestMapping(
+        ApiPaths.BOARDS
+                + ApiPaths.BOARD_ID
+                + ApiPaths.COLUMNS
+                + ApiPaths.COLUMN_ID
+                + ApiPaths.TASKS)
 @PreAuthorize("isAuthenticated()")
 class TaskController {
-    @Autowired
-    TaskService taskService;
+    @Autowired TaskService taskService;
 
     @GetMapping
     public ResponseEntity<List<TaskResponseDTO>> findAllByUserId(
@@ -31,7 +35,8 @@ class TaskController {
     }
 
     @DeleteMapping(ApiPaths.TASK_ID)
-    public ResponseEntity<Void> deleteById(@PathVariable @NotBlank String taskId, @CurrentUserId String userId) {
+    public ResponseEntity<Void> deleteById(
+            @PathVariable @NotBlank String taskId, @CurrentUserId String userId) {
         taskService.deleteById(userId, taskId);
 
         return ResponseEntity.ok().build();
@@ -45,9 +50,11 @@ class TaskController {
         return ResponseEntity.ok(taskService.updateById(userId, taskId, dto));
     }
 
-    @PostMapping(ApiPaths.TASK_ID + ApiPaths.SUB_TASKS)
+    @PostMapping(ApiPaths.TASK_ID + ApiPaths.SUBTASKS)
     public ResponseEntity<SubtaskResponseDTO> addSubtaskByTaskId(
-            @CurrentUserId String userId, @PathVariable @NotBlank String taskId, @Valid SaveSubtaskRequestDTO dto) {
+            @CurrentUserId String userId,
+            @PathVariable @NotBlank String taskId,
+            @Valid SaveSubtaskRequestDTO dto) {
         return ResponseEntity.ok(taskService.addSubtaskByTaskId(userId, taskId, dto));
     }
 }

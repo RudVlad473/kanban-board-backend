@@ -11,6 +11,5 @@ import org.hibernate.validator.constraints.UUID;
 @Setter
 @EqualsAndHashCode
 public class DeleteBoardByIdRequestDTO implements BaseId {
-    @NotNull @UUID
-    private String id;
+    @NotNull @UUID private String id;
 }

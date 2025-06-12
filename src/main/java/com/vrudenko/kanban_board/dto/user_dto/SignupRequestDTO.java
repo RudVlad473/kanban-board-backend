@@ -13,12 +13,9 @@ import lombok.Setter;
 @EqualsAndHashCode
 @Builder
 public class SignupRequestDTO {
-    @DisplayName
-    private String displayName;
+    @DisplayName private String displayName;
 
-    @AppEmail
-    private String email;
+    @AppEmail private String email;
 
-    @Password
-    private String password;
+    @Password private String password;
 }

@@ -35,14 +35,11 @@ public class BoardControllerTest extends AbstractAppTest {
         return ApiPaths.BOARDS;
     }
 
-    @Autowired
-    private MockMvc mockMvc;
+    @Autowired private MockMvc mockMvc;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+    @Autowired private ObjectMapper objectMapper;
 
-    @Autowired
-    private ColumnService columnService;
+    @Autowired private ColumnService columnService;
 
     @Nested
     class FindAllByUserId {
@@ -51,7 +48,8 @@ public class BoardControllerTest extends AbstractAppTest {
             // Arrange
             var userId = getOwningUser().getId();
             var allBoards =
-                    objectMapper.writeValueAsString(ListUtils.union(List.of(mockPopulatedBoard), mockEmptyBoards));
+                    objectMapper.writeValueAsString(
+                            ListUtils.union(List.of(mockPopulatedBoard), mockEmptyBoards));
 
             // Act
             // Assert
@@ -107,19 +105,21 @@ public class BoardControllerTest extends AbstractAppTest {
             var userId = getOwningUser().getId();
             var boardId = mockPopulatedBoard.getId();
             var url = getBoardPrefix() + "/" + boardId;
-            var updateDto =
-                    SaveBoardRequestDTO.builder().name("Updated Board Name").build();
-            var expectedResponse = BoardResponseDTO.builder()
-                    .id(boardId)
-                    .name(updateDto.getName())
-                    .build(); // Columns preservation would need to be checked differently or
+            var updateDto = SaveBoardRequestDTO.builder().name("Updated Board Name").build();
+            var expectedResponse =
+                    BoardResponseDTO.builder()
+                            .id(boardId)
+                            .name(updateDto.getName())
+                            .build(); // Columns preservation would need to be checked differently
+            // or
             // BoardResponseDTO updated to include them with accessible methods.
 
             // Act
             // Assert
-            mockMvc.perform(put(url).with(user(userId))
-                            .contentType(APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(updateDto)))
+            mockMvc.perform(
+                            put(url).with(user(userId))
+                                    .contentType(APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(updateDto)))
                     .andDo(print())
                     .andExpect(status().isOk())
                     .andExpect(content().json(objectMapper.writeValueAsString(expectedResponse)))
@@ -127,19 +127,20 @@ public class BoardControllerTest extends AbstractAppTest {
         }
 
         @Test
-        void testWithAuthenticatedUser_shouldReturnNotFound_whenBoardDoesNotExist() throws Exception {
+        void testWithAuthenticatedUser_shouldReturnNotFound_whenBoardDoesNotExist()
+                throws Exception {
             // Arrange
             var userId = getOwningUser().getId();
             var nonExistentBoardId = java.util.UUID.randomUUID().toString();
             var url = getBoardPrefix() + "/" + nonExistentBoardId;
-            var updateDto =
-                    SaveBoardRequestDTO.builder().name("Updated Board Name").build();
+            var updateDto = SaveBoardRequestDTO.builder().name("Updated Board Name").build();
 
             // Act
             // Assert
-            mockMvc.perform(put(url).with(user(userId))
-                            .contentType(APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(updateDto)))
+            mockMvc.perform(
+                            put(url).with(user(userId))
+                                    .contentType(APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(updateDto)))
                     .andDo(print())
                     .andExpect(status().isNotFound())
                     .andReturn();
@@ -156,9 +157,10 @@ public class BoardControllerTest extends AbstractAppTest {
 
             // Act
             // Assert
-            mockMvc.perform(put(url).with(user(userId))
-                            .contentType(APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(updateDto)))
+            mockMvc.perform(
+                            put(url).with(user(userId))
+                                    .contentType(APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(updateDto)))
                     .andDo(print())
                     .andExpect(status().isBadRequest())
                     .andReturn();
@@ -173,20 +175,26 @@ public class BoardControllerTest extends AbstractAppTest {
             var userId = getOwningUser().getId();
             var boardId = mockPopulatedBoard.getId();
             var url = getBoardPrefix() + "/" + boardId + ApiPaths.COLUMNS;
-            var saveDTO = SaveColumnRequestDTO.builder()
-                    .name(dataFactory.getRandomText(ValidationConstants.MIN_COLUMN_NAME_LENGTH + 3))
-                    .build();
+            var saveDTO =
+                    SaveColumnRequestDTO.builder()
+                            .name(
+                                    dataFactory.getRandomText(
+                                            ValidationConstants.MIN_COLUMN_NAME_LENGTH + 3))
+                            .build();
 
             // Act
-            var response = mockMvc.perform(post(url)
-                            .with(user(userId))
-                            .contentType(APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(saveDTO)))
-                    .andDo(print())
-                    .andExpect(status().isOk())
-                    .andReturn();
+            var response =
+                    mockMvc.perform(
+                                    post(url)
+                                            .with(user(userId))
+                                            .contentType(APPLICATION_JSON)
+                                            .content(objectMapper.writeValueAsString(saveDTO)))
+                            .andDo(print())
+                            .andExpect(status().isOk())
+                            .andReturn();
             var responseBody =
-                    objectMapper.readValue(response.getResponse().getContentAsString(), ColumnResponseDTO.class);
+                    objectMapper.readValue(
+                            response.getResponse().getContentAsString(), ColumnResponseDTO.class);
 
             var createdColumnId = responseBody.getId();
 
@@ -202,15 +210,19 @@ public class BoardControllerTest extends AbstractAppTest {
             var userId = getOwningUser().getId();
             var boardId = UUID.randomUUID().toString();
             var url = getBoardPrefix() + "/" + boardId + ApiPaths.COLUMNS;
-            var saveDTO = SaveColumnRequestDTO.builder()
-                    .name(dataFactory.getRandomText(ValidationConstants.MIN_COLUMN_NAME_LENGTH + 3))
-                    .build();
+            var saveDTO =
+                    SaveColumnRequestDTO.builder()
+                            .name(
+                                    dataFactory.getRandomText(
+                                            ValidationConstants.MIN_COLUMN_NAME_LENGTH + 3))
+                            .build();
 
             // Act
-            mockMvc.perform(post(url)
-                            .with(user(userId))
-                            .contentType(APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(saveDTO)))
+            mockMvc.perform(
+                            post(url)
+                                    .with(user(userId))
+                                    .contentType(APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(saveDTO)))
                     .andDo(print())
                     .andExpect(status().isNotFound());
         }

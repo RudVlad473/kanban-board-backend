@@ -21,6 +21,5 @@ public class SaveTaskRequestDTO implements BaseTask {
             message = ValidationConstants.TASK_TITLE_LENGTH_VALIDATION_MESSAGE)
     String title;
 
-    @Description
-    String description;
+    @Description String description;
 }

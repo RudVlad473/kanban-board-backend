@@ -16,12 +16,13 @@ public class SignupRequestDTOTest {
 
     private final String validEmail = dataFactory.getEmailAddress();
     private final String validDisplayName = dataFactory.getName();
-    private final String validPassword = dataFactory
-            .getRandomWord(ValidationConstants.MIN_PASSWORD_LENGTH)
-            .toLowerCase()
-            .concat(String.valueOf(dataFactory.getRandomWord(1)).toUpperCase())
-            .concat(String.valueOf(dataFactory.getNumberBetween(0, 9)))
-            .concat("$");
+    private final String validPassword =
+            dataFactory
+                    .getRandomWord(ValidationConstants.MIN_PASSWORD_LENGTH)
+                    .toLowerCase()
+                    .concat(String.valueOf(dataFactory.getRandomWord(1)).toUpperCase())
+                    .concat(String.valueOf(dataFactory.getNumberBetween(0, 9)))
+                    .concat("$");
     private SignupRequestDTO validDTO;
 
     @BeforeEach
@@ -29,11 +30,12 @@ public class SignupRequestDTOTest {
         var factory = Validation.buildDefaultValidatorFactory();
         validator = factory.getValidator();
 
-        validDTO = SignupRequestDTO.builder()
-                .email(validEmail)
-                .displayName(validDisplayName)
-                .password(validPassword)
-                .build();
+        validDTO =
+                SignupRequestDTO.builder()
+                        .email(validEmail)
+                        .displayName(validDisplayName)
+                        .password(validPassword)
+                        .build();
     }
 
     @Test
@@ -49,28 +51,25 @@ public class SignupRequestDTOTest {
     @Test
     public void whenEmailIsMissing_thenOneViolation() {
         // arrange
-        var dto = SignupRequestDTO.builder()
-                .password(validPassword)
-                .displayName(validDisplayName)
-                .build();
+        var dto =
+                SignupRequestDTO.builder()
+                        .password(validPassword)
+                        .displayName(validDisplayName)
+                        .build();
 
         // act
 
         // assert
         var violations = validator.validate(dto);
         Assertions.assertThat(violations.size()).isEqualTo(1);
-        Assertions.assertThat(
-                        violations.stream().findFirst().get().getPropertyPath().toString())
+        Assertions.assertThat(violations.stream().findFirst().get().getPropertyPath().toString())
                 .isEqualTo("email");
     }
 
     @Test
     public void whenDisplayNameIsMissing_thenNoViolation() {
         // arrange
-        var dto = SignupRequestDTO.builder()
-                .email(validEmail)
-                .password(validPassword)
-                .build();
+        var dto = SignupRequestDTO.builder().email(validEmail).password(validPassword).build();
 
         // act
 
@@ -82,45 +81,46 @@ public class SignupRequestDTOTest {
     @Test
     public void whenDisplayNameIsTooShort_thenOneViolation() {
         // arrange
-        validDTO.setDisplayName(dataFactory.getRandomWord(ValidationConstants.MIN_USER_DISPLAY_NAME_LENGTH - 1));
+        validDTO.setDisplayName(
+                dataFactory.getRandomWord(ValidationConstants.MIN_USER_DISPLAY_NAME_LENGTH - 1));
 
         // act
 
         // assert
         var violations = validator.validate(validDTO);
         Assertions.assertThat(violations.size()).isEqualTo(1);
-        Assertions.assertThat(
-                        violations.stream().findFirst().get().getPropertyPath().toString())
+        Assertions.assertThat(violations.stream().findFirst().get().getPropertyPath().toString())
                 .isEqualTo("displayName");
     }
 
     @Test
     public void whenDisplayNameIsTooLong_thenOneViolation() {
         // arrange
-        validDTO.setDisplayName(dataFactory.getRandomWord(ValidationConstants.MAX_USER_DISPLAY_NAME_LENGTH + 1));
+        validDTO.setDisplayName(
+                dataFactory.getRandomWord(ValidationConstants.MAX_USER_DISPLAY_NAME_LENGTH + 1));
 
         // act
 
         // assert
         var violations = validator.validate(validDTO);
         Assertions.assertThat(violations.size()).isEqualTo(1);
-        Assertions.assertThat(
-                        violations.stream().findFirst().get().getPropertyPath().toString())
+        Assertions.assertThat(violations.stream().findFirst().get().getPropertyPath().toString())
                 .isEqualTo("displayName");
     }
 
     @Test
     public void whenDisplayNameContainsDigits_thenOneViolation() {
         // arrange
-        validDTO.setDisplayName(validDTO.getDisplayName().concat(String.valueOf(dataFactory.getNumberBetween(0, 9))));
+        validDTO.setDisplayName(
+                validDTO.getDisplayName()
+                        .concat(String.valueOf(dataFactory.getNumberBetween(0, 9))));
 
         // act
 
         // assert
         var violations = validator.validate(validDTO);
         Assertions.assertThat(violations.size()).isEqualTo(1);
-        Assertions.assertThat(
-                        violations.stream().findFirst().get().getPropertyPath().toString())
+        Assertions.assertThat(violations.stream().findFirst().get().getPropertyPath().toString())
                 .isEqualTo("displayName");
     }
 
@@ -134,36 +134,43 @@ public class SignupRequestDTOTest {
         // assert
         var violations = validator.validate(validDTO);
         Assertions.assertThat(violations.size()).isEqualTo(1);
-        Assertions.assertThat(
-                        violations.stream().findFirst().get().getPropertyPath().toString())
+        Assertions.assertThat(violations.stream().findFirst().get().getPropertyPath().toString())
                 .isEqualTo("displayName");
     }
 
     @Test
     public void whenPasswordIsInvalid_thenOneViolations() {
-        Map<String, String> invalidPasswords = Map.ofEntries(
-                Map.entry(
-                        "noSpecialCharacterPassword",
-                        validPassword
-                                .replaceAll("[^a-zA-Z0-9]", "")
-                                .concat(dataFactory.getRandomWord(ValidationConstants.MIN_PASSWORD_LENGTH))),
-                Map.entry("noLowercaseCharPassword", validPassword.toUpperCase()),
-                Map.entry("noUppercaseCharPassword", validPassword.toLowerCase()),
-                Map.entry(
-                        "shortPassword",
-                        new StringBuilder(validPassword)
-                                .reverse()
-                                .substring(0, ValidationConstants.MIN_PASSWORD_LENGTH - 1)),
-                Map.entry(
-                        "longPassword",
-                        validPassword.concat(dataFactory.getRandomWord(
-                                ValidationConstants.MAX_PASSWORD_LENGTH - validPassword.length() + 1))),
-                Map.entry(
-                        "noDigitPassword",
-                        validPassword
-                                .replaceAll("\\d", "")
-                                .concat(dataFactory.getRandomWord(ValidationConstants.MIN_PASSWORD_LENGTH))),
-                Map.entry("emptyPassword", ""));
+        Map<String, String> invalidPasswords =
+                Map.ofEntries(
+                        Map.entry(
+                                "noSpecialCharacterPassword",
+                                validPassword
+                                        .replaceAll("[^a-zA-Z0-9]", "")
+                                        .concat(
+                                                dataFactory.getRandomWord(
+                                                        ValidationConstants.MIN_PASSWORD_LENGTH))),
+                        Map.entry("noLowercaseCharPassword", validPassword.toUpperCase()),
+                        Map.entry("noUppercaseCharPassword", validPassword.toLowerCase()),
+                        Map.entry(
+                                "shortPassword",
+                                new StringBuilder(validPassword)
+                                        .reverse()
+                                        .substring(0, ValidationConstants.MIN_PASSWORD_LENGTH - 1)),
+                        Map.entry(
+                                "longPassword",
+                                validPassword.concat(
+                                        dataFactory.getRandomWord(
+                                                ValidationConstants.MAX_PASSWORD_LENGTH
+                                                        - validPassword.length()
+                                                        + 1))),
+                        Map.entry(
+                                "noDigitPassword",
+                                validPassword
+                                        .replaceAll("\\d", "")
+                                        .concat(
+                                                dataFactory.getRandomWord(
+                                                        ValidationConstants.MIN_PASSWORD_LENGTH))),
+                        Map.entry("emptyPassword", ""));
 
         for (var invalidPassword : invalidPasswords.entrySet()) {
             // arrange
@@ -175,11 +182,8 @@ public class SignupRequestDTOTest {
             var violations = validator.validate(validDTO);
             System.out.println(invalidPassword.getKey() + " : " + invalidPassword.getValue());
             Assertions.assertThat(violations).hasSize(1);
-            Assertions.assertThat(violations.stream()
-                            .findFirst()
-                            .get()
-                            .getPropertyPath()
-                            .toString())
+            Assertions.assertThat(
+                            violations.stream().findFirst().get().getPropertyPath().toString())
                     .isEqualTo("password");
         }
     }

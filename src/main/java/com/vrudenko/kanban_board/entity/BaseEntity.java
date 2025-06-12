@@ -11,7 +11,5 @@ import lombok.Setter;
 @Getter
 @Setter
 public abstract class BaseEntity implements BaseId {
-    @Id
-    @RandFlakeId
-    protected String id;
+    @Id @RandFlakeId protected String id;
 }

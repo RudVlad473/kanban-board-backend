@@ -38,29 +38,36 @@ public class SecurityConfiguration {
         http.csrf(AbstractHttpConfigurer::disable).cors(Customizer.withDefaults());
 
         // storing the session
-        http.securityContext((context) -> context.securityContextRepository(securityContextRepository));
+        http.securityContext(
+                (context) -> context.securityContextRepository(securityContextRepository));
 
-        http.authorizeHttpRequests(auth -> {
-            auth.requestMatchers(ApiPaths.SIGNIN, ApiPaths.SIGNUP).permitAll();
+        http.authorizeHttpRequests(
+                auth -> {
+                    auth.requestMatchers(ApiPaths.SIGNIN, ApiPaths.SIGNUP).permitAll();
 
-            auth.anyRequest().authenticated();
-        });
+                    auth.anyRequest().authenticated();
+                });
 
         // session management
-        http.sessionManagement((session) -> {
-            session.maximumSessions(2).maxSessionsPreventsLogin(true);
-            session.sessionFixation(SessionManagementConfigurer.SessionFixationConfigurer::newSession);
-            session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED);
-        });
+        http.sessionManagement(
+                (session) -> {
+                    session.maximumSessions(2).maxSessionsPreventsLogin(true);
+                    session.sessionFixation(
+                            SessionManagementConfigurer.SessionFixationConfigurer::newSession);
+                    session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED);
+                });
 
         // clear cookie when logout
-        http.logout((logout) -> {
-            logout.logoutUrl(CONTEXT_PATH + ApiPaths.LOGOUT);
-            logout.addLogoutHandler(new HeaderWriterLogoutHandler(
-                    new ClearSiteDataHeaderWriter(ClearSiteDataHeaderWriter.Directive.COOKIES)));
-            logout.deleteCookies(SecurityConstants.SESSION_NAME);
-            logout.logoutSuccessHandler(handlerLogout);
-        });
+        http.logout(
+                (logout) -> {
+                    logout.logoutUrl(CONTEXT_PATH + ApiPaths.LOGOUT);
+                    logout.addLogoutHandler(
+                            new HeaderWriterLogoutHandler(
+                                    new ClearSiteDataHeaderWriter(
+                                            ClearSiteDataHeaderWriter.Directive.COOKIES)));
+                    logout.deleteCookies(SecurityConstants.SESSION_NAME);
+                    logout.logoutSuccessHandler(handlerLogout);
+                });
 
         // auth provider for connect DAO
         http.authenticationProvider(authenticationProvider);

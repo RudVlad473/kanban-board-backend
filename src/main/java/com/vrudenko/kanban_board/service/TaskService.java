@@ -18,17 +18,13 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class TaskService {
-    @Autowired
-    private TaskRepository taskRepository;
+    @Autowired private TaskRepository taskRepository;
 
-    @Autowired
-    private TaskMapper taskMapper;
+    @Autowired private TaskMapper taskMapper;
 
-    @Autowired
-    private OwnershipVerifierService ownershipVerifierService;
+    @Autowired private OwnershipVerifierService ownershipVerifierService;
 
-    @Autowired
-    private SubtaskService subtaskService;
+    @Autowired private SubtaskService subtaskService;
 
     public TaskResponseDTO save(SaveTaskRequestDTO dto, ColumnEntity column) {
         var task = taskMapper.fromSaveTaskRequestDTO(dto);
@@ -94,7 +90,8 @@ public class TaskService {
     }
 
     @Transactional
-    public SubtaskResponseDTO addSubtaskByTaskId(String userId, String taskId, SaveSubtaskRequestDTO dto) {
+    public SubtaskResponseDTO addSubtaskByTaskId(
+            String userId, String taskId, SaveSubtaskRequestDTO dto) {
         var pair = ownershipVerifierService.verifyOwnershipOfTask(userId, taskId);
 
         var task = pair.getSecond();

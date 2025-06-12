@@ -12,7 +12,8 @@ import org.springframework.stereotype.Component;
 public class LogoutHandler implements LogoutSuccessHandler {
 
     @Override
-    public void onLogoutSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication)
+    public void onLogoutSuccess(
+            HttpServletRequest request, HttpServletResponse response, Authentication authentication)
             throws IOException, ServletException {
 
         // Set response status and body (e.g., JSON)

@@ -18,17 +18,13 @@ import org.springframework.security.access.AccessDeniedException;
 
 @SpringBootTest
 public class BoardServiceTest extends AbstractAppTest {
-    @Autowired
-    UserService userService;
+    @Autowired UserService userService;
 
-    @Autowired
-    BoardService boardService;
+    @Autowired BoardService boardService;
 
-    @Autowired
-    BoardMapper boardMapper;
+    @Autowired BoardMapper boardMapper;
 
-    @Autowired
-    ColumnService columnService;
+    @Autowired ColumnService columnService;
 
     // addColumnByBoardId
     @Test
@@ -40,8 +36,9 @@ public class BoardServiceTest extends AbstractAppTest {
         var columnName = dataFactory.getRandomWord(ValidationConstants.MIN_COLUMN_NAME_LENGTH);
 
         // Act
-        var column = boardService.addColumnByBoardId(
-                userId, boardId, SaveColumnRequestDTO.builder().name(columnName).build());
+        var column =
+                boardService.addColumnByBoardId(
+                        userId, boardId, SaveColumnRequestDTO.builder().name(columnName).build());
 
         // Assert
         var columnAmountAfterAddition = columnService.getColumnCountByBoardId(boardId);
@@ -49,9 +46,8 @@ public class BoardServiceTest extends AbstractAppTest {
         Assertions.assertThat(columnAmountAfterAddition).isEqualTo(columnAmountBeforeAddition + 1);
         Assertions.assertThat(columnService.findById(getOwningUser().getId(), column.getId()))
                 .isNotInstanceOf(AppEntityNotFoundException.class);
-        Assertions.assertThat(columnService
-                        .findById(getOwningUser().getId(), column.getId())
-                        .getName())
+        Assertions.assertThat(
+                        columnService.findById(getOwningUser().getId(), column.getId()).getName())
                 .isEqualTo(columnName);
     }
 
@@ -79,7 +75,8 @@ public class BoardServiceTest extends AbstractAppTest {
         // Assert
         var boardsAmountAfterDeletion = boardService.findAllByUserId(userId).size();
         Assertions.assertThat(boardsAmountAfterDeletion).isEqualTo(boardsAmountBeforeDeletion - 1);
-        Assertions.assertThat(Assertions.catchException(() -> boardService.findById(userId, boardId)))
+        Assertions.assertThat(
+                        Assertions.catchException(() -> boardService.findById(userId, boardId)))
                 .isInstanceOf(EntityNotFoundException.class);
     }
 
@@ -89,7 +86,9 @@ public class BoardServiceTest extends AbstractAppTest {
         var userId = getOwningUser().getId();
 
         // Act
-        boardService.findAllByUserId(userId).forEach(board -> boardService.deleteById(userId, board.getId()));
+        boardService
+                .findAllByUserId(userId)
+                .forEach(board -> boardService.deleteById(userId, board.getId()));
 
         // Assert
         var boards = boardService.findAllByUserId(userId);
@@ -107,7 +106,8 @@ public class BoardServiceTest extends AbstractAppTest {
 
         // Act
         var exception =
-                Assertions.catchException(() -> boardService.deleteById(userId, firstBoardBeforeDeletion.getId()));
+                Assertions.catchException(
+                        () -> boardService.deleteById(userId, firstBoardBeforeDeletion.getId()));
 
         // Assert
         Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
@@ -123,7 +123,8 @@ public class BoardServiceTest extends AbstractAppTest {
         boardService.deleteById(userId, boardId);
 
         // Assert
-        Assertions.assertThat(Assertions.catchException(() -> boardService.findById(userId, boardId)))
+        Assertions.assertThat(
+                        Assertions.catchException(() -> boardService.findById(userId, boardId)))
                 .isInstanceOf(AppEntityNotFoundException.class);
     }
 
@@ -148,8 +149,10 @@ public class BoardServiceTest extends AbstractAppTest {
     void testUpdateById_shouldUpdateBoard_whenBoardExists() {
         // Arrange
         var boardBeforeUpdate = boardService.findAll().getFirst();
-        var newBoardName = RandomStringUtils.randomAlphabetic(
-                ValidationConstants.MAX_BOARD_NAME_LENGTH - ValidationConstants.MIN_BOARD_NAME_LENGTH);
+        var newBoardName =
+                RandomStringUtils.randomAlphabetic(
+                        ValidationConstants.MAX_BOARD_NAME_LENGTH
+                                - ValidationConstants.MIN_BOARD_NAME_LENGTH);
 
         // Act
         boardService.updateById(
@@ -159,10 +162,11 @@ public class BoardServiceTest extends AbstractAppTest {
                         BoardEntity.builder().name(newBoardName).build()));
 
         // Assert
-        var boardAfterUpdate = boardService.findAll().stream()
-                .filter(board -> board.getId().equals(boardBeforeUpdate.getId()))
-                .toList()
-                .getFirst();
+        var boardAfterUpdate =
+                boardService.findAll().stream()
+                        .filter(board -> board.getId().equals(boardBeforeUpdate.getId()))
+                        .toList()
+                        .getFirst();
 
         Assertions.assertThat(boardBeforeUpdate.getName()).isNotEqualTo(boardAfterUpdate.getName());
         Assertions.assertThat(boardAfterUpdate.getName()).isEqualTo(newBoardName);
@@ -173,20 +177,26 @@ public class BoardServiceTest extends AbstractAppTest {
     void testUpdateById_shouldNotUpdateBoard_whenBoardDoesntExist() {
         // Arrange
         var randomUUID = UUID.randomUUID().toString();
-        var newBoardName = RandomStringUtils.randomAlphabetic(
-                ValidationConstants.MAX_BOARD_NAME_LENGTH - ValidationConstants.MIN_BOARD_NAME_LENGTH);
+        var newBoardName =
+                RandomStringUtils.randomAlphabetic(
+                        ValidationConstants.MAX_BOARD_NAME_LENGTH
+                                - ValidationConstants.MIN_BOARD_NAME_LENGTH);
 
         // Act
-        var exception = Assertions.catchException(() -> boardService.updateById(
-                getOwningUser().getId(),
-                randomUUID,
-                boardMapper.toUpdateBoardRequestDTO(
-                        BoardEntity.builder().name(newBoardName).build())));
+        var exception =
+                Assertions.catchException(
+                        () ->
+                                boardService.updateById(
+                                        getOwningUser().getId(),
+                                        randomUUID,
+                                        boardMapper.toUpdateBoardRequestDTO(
+                                                BoardEntity.builder().name(newBoardName).build())));
 
         // Assert
         Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
-        Assertions.assertThat(boardService.findAll().stream()
-                        .noneMatch(board -> board.getName().equals(newBoardName)))
+        Assertions.assertThat(
+                        boardService.findAll().stream()
+                                .noneMatch(board -> board.getName().equals(newBoardName)))
                 .isTrue();
     }
 
@@ -194,21 +204,27 @@ public class BoardServiceTest extends AbstractAppTest {
     void testUpdateById_shouldNotUpdateBoard_whenBoardDoesntBelongToUser() {
         // Arrange
         var existingBoard = boardService.findAll().getFirst();
-        var newBoardName = RandomStringUtils.randomAlphabetic(
-                ValidationConstants.MAX_BOARD_NAME_LENGTH - ValidationConstants.MIN_BOARD_NAME_LENGTH);
+        var newBoardName =
+                RandomStringUtils.randomAlphabetic(
+                        ValidationConstants.MAX_BOARD_NAME_LENGTH
+                                - ValidationConstants.MIN_BOARD_NAME_LENGTH);
 
         // Act
-        var thrown = Assertions.catchThrowable(() -> boardService.updateById(
-                getNoBoardsUser().getId(),
-                existingBoard.getId(),
-                boardMapper.toUpdateBoardRequestDTO(
-                        BoardEntity.builder().name(newBoardName).build())));
+        var thrown =
+                Assertions.catchThrowable(
+                        () ->
+                                boardService.updateById(
+                                        getNoBoardsUser().getId(),
+                                        existingBoard.getId(),
+                                        boardMapper.toUpdateBoardRequestDTO(
+                                                BoardEntity.builder().name(newBoardName).build())));
         var boardAfterFailedUpdate = boardService.findAll().getFirst();
 
         // Assert
         Assertions.assertThat(thrown).isInstanceOf(AccessDeniedException.class);
-        Assertions.assertThat(boardService.findAll().stream()
-                        .noneMatch(board -> board.getName().equals(newBoardName)))
+        Assertions.assertThat(
+                        boardService.findAll().stream()
+                                .noneMatch(board -> board.getName().equals(newBoardName)))
                 .isTrue();
         Assertions.assertThat(existingBoard).isEqualTo(boardAfterFailedUpdate);
     }

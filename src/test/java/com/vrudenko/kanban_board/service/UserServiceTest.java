@@ -19,11 +19,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 public class UserServiceTest extends AbstractAppTest {
     final int AMOUNT_OF_FAKE_USERS = 5;
 
-    @Autowired
-    UserService userService;
+    @Autowired UserService userService;
 
-    @Autowired
-    BoardService boardService;
+    @Autowired BoardService boardService;
 
     List<UserResponseDTO> mockUsers = new ArrayList<>();
 
@@ -60,8 +58,9 @@ public class UserServiceTest extends AbstractAppTest {
 
             // Assert
             Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
-            Assertions.assertThat(userService.findAll().stream()
-                            .noneMatch(user -> user.getId().equals(randomUUID)))
+            Assertions.assertThat(
+                            userService.findAll().stream()
+                                    .noneMatch(user -> user.getId().equals(randomUUID)))
                     .isTrue();
         }
     }
@@ -80,7 +79,9 @@ public class UserServiceTest extends AbstractAppTest {
             // Assert
             var usersCountAfterDeletion = userService.findAll().size();
             Assertions.assertThat(usersCountAfterDeletion).isEqualTo(usersCountBeforeDeletion - 1);
-            Assertions.assertThat(Assertions.catchException(() -> userService.findById(firstUser.getId())))
+            Assertions.assertThat(
+                            Assertions.catchException(
+                                    () -> userService.findById(firstUser.getId())))
                     .isInstanceOf(AppEntityNotFoundException.class);
         }
 
@@ -128,19 +129,19 @@ public class UserServiceTest extends AbstractAppTest {
         void shouldAddBoard_whenUserExists() {
             // Arrange
             var userId = getOwningUser().getId();
-            var boardCountForUserBeforeAddition =
-                    boardService.findAllByUserId(userId).size();
+            var boardCountForUserBeforeAddition = boardService.findAllByUserId(userId).size();
             var name = dataFactory.getRandomWord(ValidationConstants.MIN_BOARD_NAME_LENGTH + 2);
 
             // Act
-            var board = userService.addBoardByUserId(
-                    userId, SaveBoardRequestDTO.builder().name(name).build());
+            var board =
+                    userService.addBoardByUserId(
+                            userId, SaveBoardRequestDTO.builder().name(name).build());
 
             // Assert
-            var boardCountForUserAfterAddition =
-                    boardService.findAllByUserId(userId).size();
+            var boardCountForUserAfterAddition = boardService.findAllByUserId(userId).size();
 
-            Assertions.assertThat(boardCountForUserAfterAddition).isEqualTo(boardCountForUserBeforeAddition + 1);
+            Assertions.assertThat(boardCountForUserAfterAddition)
+                    .isEqualTo(boardCountForUserBeforeAddition + 1);
             Assertions.assertThat(board.getName()).isEqualTo(name);
         }
 
@@ -148,20 +149,23 @@ public class UserServiceTest extends AbstractAppTest {
         void shouldThrow_whenUserDoesntExist() {
             // Arrange
             var userId = UUID.randomUUID().toString();
-            var boardCountForUserBeforeAddition =
-                    boardService.findAllByUserId(userId).size();
+            var boardCountForUserBeforeAddition = boardService.findAllByUserId(userId).size();
             var name = dataFactory.getRandomWord(ValidationConstants.MIN_BOARD_NAME_LENGTH + 2);
 
             // Act
-            var exception = Assertions.catchException(() -> userService.addBoardByUserId(
-                    userId, SaveBoardRequestDTO.builder().name(name).build()));
+            var exception =
+                    Assertions.catchException(
+                            () ->
+                                    userService.addBoardByUserId(
+                                            userId,
+                                            SaveBoardRequestDTO.builder().name(name).build()));
 
             // Assert
-            var boardCountForUserAfterAddition =
-                    boardService.findAllByUserId(userId).size();
+            var boardCountForUserAfterAddition = boardService.findAllByUserId(userId).size();
 
             Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
-            Assertions.assertThat(boardCountForUserAfterAddition).isEqualTo(boardCountForUserBeforeAddition);
+            Assertions.assertThat(boardCountForUserAfterAddition)
+                    .isEqualTo(boardCountForUserBeforeAddition);
         }
     }
 }

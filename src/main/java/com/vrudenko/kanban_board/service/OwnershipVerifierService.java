@@ -17,17 +17,13 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class OwnershipVerifierService {
-    @Autowired
-    private UserRepository userRepository;
+    @Autowired private UserRepository userRepository;
 
-    @Autowired
-    private BoardRepository boardRepository;
+    @Autowired private BoardRepository boardRepository;
 
-    @Autowired
-    private TaskRepository taskRepository;
+    @Autowired private TaskRepository taskRepository;
 
-    @Autowired
-    private ColumnRepository columnRepository;
+    @Autowired private ColumnRepository columnRepository;
 
     @Transactional
     public Pair<UserEntity, BoardEntity> verifyOwnershipOfBoard(String userId, String boardId)

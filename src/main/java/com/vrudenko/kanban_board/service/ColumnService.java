@@ -17,17 +17,13 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class ColumnService {
-    @Autowired
-    private ColumnRepository columnRepository;
+    @Autowired private ColumnRepository columnRepository;
 
-    @Autowired
-    private ColumnMapper columnMapper;
+    @Autowired private ColumnMapper columnMapper;
 
-    @Autowired
-    private TaskService taskService;
+    @Autowired private TaskService taskService;
 
-    @Autowired
-    private OwnershipVerifierService ownershipVerifierService;
+    @Autowired private OwnershipVerifierService ownershipVerifierService;
 
     @Transactional
     public void deleteAllByBoardId(String userId, String boardId) {
@@ -51,7 +47,8 @@ public class ColumnService {
     }
 
     @Transactional
-    public TaskResponseDTO addTaskByColumnId(String userId, String columnId, SaveTaskRequestDTO taskDTO) {
+    public TaskResponseDTO addTaskByColumnId(
+            String userId, String columnId, SaveTaskRequestDTO taskDTO) {
         var column = findById(userId, columnId);
 
         return taskService.save(taskDTO, column);

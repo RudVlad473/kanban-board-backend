@@ -40,14 +40,17 @@ public class AuthenticationController {
     // only these authentication routes yield session cookie
     @GetMapping(ApiPaths.SIGNIN)
     public ResponseEntity signin(
-            @RequestBody SigninRequestDTO signinDTO, HttpServletRequest request, HttpServletResponse response) {
+            @RequestBody SigninRequestDTO signinDTO,
+            HttpServletRequest request,
+            HttpServletResponse response) {
         var user = userRepository.findByEmail(signinDTO.getEmail());
 
         if (user.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
 
-        var successfullyAuthenticated = authenticate(user.get().getId(), signinDTO.getPassword(), request, response);
+        var successfullyAuthenticated =
+                authenticate(user.get().getId(), signinDTO.getPassword(), request, response);
 
         if (!successfullyAuthenticated) {
             throw new AccessDeniedException("Was not able to sign in");
@@ -59,7 +62,9 @@ public class AuthenticationController {
     // only these authentication routes yield session cookie
     @PostMapping(ApiPaths.SIGNUP)
     public ResponseEntity<String> signup(
-            @RequestBody SignupRequestDTO signupDTO, HttpServletRequest request, HttpServletResponse response) {
+            @RequestBody SignupRequestDTO signupDTO,
+            HttpServletRequest request,
+            HttpServletResponse response) {
         var userAlreadyExists = userRepository.findByEmail(signupDTO.getEmail()).isPresent();
 
         if (userAlreadyExists) {
@@ -68,7 +73,8 @@ public class AuthenticationController {
 
         var createdUser = userRepository.save(userMapper.fromSignupRequestDTO(signupDTO));
 
-        var successfullyAuthenticated = authenticate(createdUser.getId(), signupDTO.getPassword(), request, response);
+        var successfullyAuthenticated =
+                authenticate(createdUser.getId(), signupDTO.getPassword(), request, response);
 
         if (!successfullyAuthenticated) {
             throw new AccessDeniedException("Was not able to sign up");
@@ -78,21 +84,25 @@ public class AuthenticationController {
     }
 
     public Boolean authenticate(
-            String userId, String password, HttpServletRequest request, HttpServletResponse response) {
+            String userId,
+            String password,
+            HttpServletRequest request,
+            HttpServletResponse response) {
         var token = UsernamePasswordAuthenticationToken.unauthenticated(userId, password);
 
         return Try.of(() -> authenticationManager.authenticate(token))
-                .mapTry(authentication -> {
-                    // get user credential for wrapped to token
-                    var context = securityContextHolderStrategy.createEmptyContext();
+                .mapTry(
+                        authentication -> {
+                            // get user credential for wrapped to token
+                            var context = securityContextHolderStrategy.createEmptyContext();
 
-                    // set context application from authentication
-                    context.setAuthentication(authentication);
-                    securityContextHolderStrategy.setContext(context);
-                    securityContextRepository.saveContext(context, request, response);
+                            // set context application from authentication
+                            context.setAuthentication(authentication);
+                            securityContextHolderStrategy.setContext(context);
+                            securityContextRepository.saveContext(context, request, response);
 
-                    return true;
-                })
+                            return true;
+                        })
                 .getOrElse(false);
     }
 }

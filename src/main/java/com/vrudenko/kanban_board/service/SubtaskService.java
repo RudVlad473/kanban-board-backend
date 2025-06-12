@@ -13,14 +13,11 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class SubtaskService {
-    @Autowired
-    private SubtaskRepository subtaskRepository;
+    @Autowired private SubtaskRepository subtaskRepository;
 
-    @Autowired
-    private SubtaskMapper subtaskMapper;
+    @Autowired private SubtaskMapper subtaskMapper;
 
-    @Autowired
-    private OwnershipVerifierService ownershipVerifierService;
+    @Autowired private OwnershipVerifierService ownershipVerifierService;
 
     @Transactional
     SubtaskResponseDTO save(TaskEntity task, SaveSubtaskRequestDTO dto) {

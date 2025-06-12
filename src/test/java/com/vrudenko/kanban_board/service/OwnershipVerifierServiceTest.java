@@ -14,8 +14,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
 public class OwnershipVerifierServiceTest extends AbstractAppTest {
-    @Autowired
-    OwnershipVerifierService ownershipVerifierService;
+    @Autowired OwnershipVerifierService ownershipVerifierService;
 
     @Nested
     class VerifyOwnershipOfBoardTest {
@@ -43,7 +42,8 @@ public class OwnershipVerifierServiceTest extends AbstractAppTest {
 
             // Act
             var exception =
-                    Assertions.catchException(() -> ownershipVerifierService.verifyOwnershipOfBoard(userId, boardId));
+                    Assertions.catchException(
+                            () -> ownershipVerifierService.verifyOwnershipOfBoard(userId, boardId));
 
             // Assert
             Assertions.assertThat(exception).isInstanceOf(AppAccessDeniedException.class);
@@ -57,7 +57,8 @@ public class OwnershipVerifierServiceTest extends AbstractAppTest {
 
             // Act
             var exception =
-                    Assertions.catchException(() -> ownershipVerifierService.verifyOwnershipOfBoard(userId, boardId));
+                    Assertions.catchException(
+                            () -> ownershipVerifierService.verifyOwnershipOfBoard(userId, boardId));
 
             // Assert
             Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
@@ -71,7 +72,8 @@ public class OwnershipVerifierServiceTest extends AbstractAppTest {
 
             // Act
             var exception =
-                    Assertions.catchException(() -> ownershipVerifierService.verifyOwnershipOfBoard(userId, boardId));
+                    Assertions.catchException(
+                            () -> ownershipVerifierService.verifyOwnershipOfBoard(userId, boardId));
 
             // Assert
             Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
@@ -102,7 +104,10 @@ public class OwnershipVerifierServiceTest extends AbstractAppTest {
 
             // Act
             var exception =
-                    Assertions.catchException(() -> ownershipVerifierService.verifyOwnershipOfColumn(userId, columnId));
+                    Assertions.catchException(
+                            () ->
+                                    ownershipVerifierService.verifyOwnershipOfColumn(
+                                            userId, columnId));
 
             // Assert
             Assertions.assertThat(exception).isInstanceOf(AppAccessDeniedException.class);
@@ -116,7 +121,10 @@ public class OwnershipVerifierServiceTest extends AbstractAppTest {
 
             // Act
             var exception =
-                    Assertions.catchException(() -> ownershipVerifierService.verifyOwnershipOfColumn(userId, columnId));
+                    Assertions.catchException(
+                            () ->
+                                    ownershipVerifierService.verifyOwnershipOfColumn(
+                                            userId, columnId));
 
             // Assert
             Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
@@ -130,7 +138,10 @@ public class OwnershipVerifierServiceTest extends AbstractAppTest {
 
             // Act
             var exception =
-                    Assertions.catchException(() -> ownershipVerifierService.verifyOwnershipOfColumn(userId, columnId));
+                    Assertions.catchException(
+                            () ->
+                                    ownershipVerifierService.verifyOwnershipOfColumn(
+                                            userId, columnId));
 
             // Assert
             Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
@@ -161,7 +172,8 @@ public class OwnershipVerifierServiceTest extends AbstractAppTest {
 
             // Act
             var exception =
-                    Assertions.catchException(() -> ownershipVerifierService.verifyOwnershipOfTask(userId, taskId));
+                    Assertions.catchException(
+                            () -> ownershipVerifierService.verifyOwnershipOfTask(userId, taskId));
 
             // Assert
             Assertions.assertThat(exception).isInstanceOf(AppAccessDeniedException.class);
@@ -175,7 +187,8 @@ public class OwnershipVerifierServiceTest extends AbstractAppTest {
 
             // Act
             var exception =
-                    Assertions.catchException(() -> ownershipVerifierService.verifyOwnershipOfTask(userId, taskId));
+                    Assertions.catchException(
+                            () -> ownershipVerifierService.verifyOwnershipOfTask(userId, taskId));
 
             // Assert
             Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
@@ -189,7 +202,8 @@ public class OwnershipVerifierServiceTest extends AbstractAppTest {
 
             // Act
             var exception =
-                    Assertions.catchException(() -> ownershipVerifierService.verifyOwnershipOfColumn(userId, taskId));
+                    Assertions.catchException(
+                            () -> ownershipVerifierService.verifyOwnershipOfColumn(userId, taskId));
 
             // Assert
             Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);

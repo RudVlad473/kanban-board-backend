@@ -18,7 +18,8 @@ public class UserAuthenticationProvider implements AuthenticationProvider {
     private final PasswordEncoder passwordEncoder;
 
     @Override
-    public Authentication authenticate(Authentication authentication) throws AuthenticationException {
+    public Authentication authenticate(Authentication authentication)
+            throws AuthenticationException {
         var userId = authentication.getPrincipal().toString();
         var passwordHash = authentication.getCredentials().toString();
 

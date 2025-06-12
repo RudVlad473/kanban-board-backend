@@ -16,10 +16,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  * If interface or an abstract class is used here, it should provide an implementation, otherwise it
  * won't work
  */
-@Mapper(componentModel = MappingConstants.ComponentModel.SPRING, unmappedTargetPolicy = ReportingPolicy.IGNORE)
+@Mapper(
+        componentModel = MappingConstants.ComponentModel.SPRING,
+        unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public abstract class UserMapper {
-    @Autowired
-    PasswordEncoder passwordEncoder;
+    @Autowired PasswordEncoder passwordEncoder;
 
     public abstract UserResponseDTO toResponseDTO(UserEntity entity);
 
@@ -31,6 +32,8 @@ public abstract class UserMapper {
 
     public abstract SignupRequestDTO toSignupRequestDTO(UserEntity entity);
 
-    @Mapping(target = "passwordHash", expression = "java(passwordEncoder.encode(dto.getPassword()))")
+    @Mapping(
+            target = "passwordHash",
+            expression = "java(passwordEncoder.encode(dto.getPassword()))")
     public abstract UserEntity fromSignupRequestDTO(SignupRequestDTO dto);
 }

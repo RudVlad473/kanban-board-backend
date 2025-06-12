@@ -21,20 +21,15 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class UserService implements UserDetailsService {
-    @Autowired
-    private UserRepository userRepository;
+    @Autowired private UserRepository userRepository;
 
-    @Autowired
-    private UserMapper userMapper;
+    @Autowired private UserMapper userMapper;
 
-    @Autowired
-    private BoardService boardService;
+    @Autowired private BoardService boardService;
 
-    @Autowired
-    private BoardMapper boardMapper;
+    @Autowired private BoardMapper boardMapper;
 
-    @Autowired
-    private BoardRepository boardRepository;
+    @Autowired private BoardRepository boardRepository;
 
     @Transactional
     public UserEntity findById(String id) throws AppEntityNotFoundException {

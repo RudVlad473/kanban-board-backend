@@ -18,11 +18,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
 public class TaskServiceTest extends AbstractAppTest {
-    @Autowired
-    TaskService taskService;
+    @Autowired TaskService taskService;
 
-    @Autowired
-    SubtaskService subtaskService;
+    @Autowired SubtaskService subtaskService;
 
     @Nested
     class FindAllByColumnIdTest {
@@ -59,7 +57,9 @@ public class TaskServiceTest extends AbstractAppTest {
             final var columnId = UUID.randomUUID().toString();
 
             // act
-            var exception = Assertions.catchException(() -> taskService.findAllByColumnId(userId, columnId));
+            var exception =
+                    Assertions.catchException(
+                            () -> taskService.findAllByColumnId(userId, columnId));
 
             // assert
             Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
@@ -72,7 +72,9 @@ public class TaskServiceTest extends AbstractAppTest {
             final var columnId = mockPopulatedColumn.getId();
 
             // act
-            var exception = Assertions.catchException(() -> taskService.findAllByColumnId(userId, columnId));
+            var exception =
+                    Assertions.catchException(
+                            () -> taskService.findAllByColumnId(userId, columnId));
 
             // assert
             Assertions.assertThat(exception).isInstanceOf(AppAccessDeniedException.class);
@@ -85,7 +87,9 @@ public class TaskServiceTest extends AbstractAppTest {
             final var columnId = mockPopulatedBoard.getId();
 
             // act
-            var exception = Assertions.catchException(() -> taskService.findAllByColumnId(userId, columnId));
+            var exception =
+                    Assertions.catchException(
+                            () -> taskService.findAllByColumnId(userId, columnId));
 
             // assert
             Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
@@ -183,7 +187,9 @@ public class TaskServiceTest extends AbstractAppTest {
             final var columnId = UUID.randomUUID().toString();
 
             // act
-            var exception = Assertions.catchException(() -> taskService.getTaskCountByColumnId(userId, columnId));
+            var exception =
+                    Assertions.catchException(
+                            () -> taskService.getTaskCountByColumnId(userId, columnId));
 
             // assert
             Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
@@ -196,7 +202,9 @@ public class TaskServiceTest extends AbstractAppTest {
             final var columnId = mockPopulatedColumn.getId();
 
             // act
-            var exception = Assertions.catchException(() -> taskService.getTaskCountByColumnId(userId, columnId));
+            var exception =
+                    Assertions.catchException(
+                            () -> taskService.getTaskCountByColumnId(userId, columnId));
 
             // assert
             Assertions.assertThat(exception).isInstanceOf(AppAccessDeniedException.class);
@@ -230,24 +238,28 @@ public class TaskServiceTest extends AbstractAppTest {
             final var userId = getOwningUser().getId();
             final var taskId = mockPopulatedTask.getId();
 
-            final var newTitle = dataFactory.getRandomWord(ValidationConstants.MIN_TASK_TITLE_LENGTH + 2);
-            final var newDescription = dataFactory.getRandomText(ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH + 2);
+            final var newTitle =
+                    dataFactory.getRandomWord(ValidationConstants.MIN_TASK_TITLE_LENGTH + 2);
+            final var newDescription =
+                    dataFactory.getRandomText(ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH + 2);
 
             // act
-            var task = taskService.updateById(
-                    userId,
-                    taskId,
-                    UpdateTaskRequestDTO.builder()
-                            .title(newTitle)
-                            .description(newDescription)
-                            .build());
+            var task =
+                    taskService.updateById(
+                            userId,
+                            taskId,
+                            UpdateTaskRequestDTO.builder()
+                                    .title(newTitle)
+                                    .description(newDescription)
+                                    .build());
 
             // assert
             Assertions.assertThat(task).isInstanceOf(TaskResponseDTO.class);
             Assertions.assertThat(task.getTitle()).isEqualTo(newTitle);
             Assertions.assertThat(task.getDescription()).isEqualTo(newDescription);
             Assertions.assertThat(task.getId()).isEqualTo(taskId);
-            Assertions.assertThat(taskService.findById(userId, task.getId())).isInstanceOf(TaskEntity.class);
+            Assertions.assertThat(taskService.findById(userId, task.getId()))
+                    .isInstanceOf(TaskEntity.class);
         }
 
         @Test
@@ -256,21 +268,27 @@ public class TaskServiceTest extends AbstractAppTest {
             final var userId = getOwningUser().getId();
             final var taskId = UUID.randomUUID().toString();
 
-            final var newTitle = dataFactory.getRandomWord(ValidationConstants.MIN_TASK_TITLE_LENGTH + 2);
-            final var newDescription = dataFactory.getRandomText(ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH + 2);
+            final var newTitle =
+                    dataFactory.getRandomWord(ValidationConstants.MIN_TASK_TITLE_LENGTH + 2);
+            final var newDescription =
+                    dataFactory.getRandomText(ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH + 2);
 
             // act
-            var exception = Assertions.catchException(() -> taskService.updateById(
-                    userId,
-                    taskId,
-                    UpdateTaskRequestDTO.builder()
-                            .title(newTitle)
-                            .description(newDescription)
-                            .build()));
+            var exception =
+                    Assertions.catchException(
+                            () ->
+                                    taskService.updateById(
+                                            userId,
+                                            taskId,
+                                            UpdateTaskRequestDTO.builder()
+                                                    .title(newTitle)
+                                                    .description(newDescription)
+                                                    .build()));
 
             // assert
             Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
-            Assertions.assertThat(Assertions.catchException(() -> taskService.findById(userId, taskId)))
+            Assertions.assertThat(
+                            Assertions.catchException(() -> taskService.findById(userId, taskId)))
                     .isInstanceOf(AppEntityNotFoundException.class);
         }
 
@@ -280,21 +298,27 @@ public class TaskServiceTest extends AbstractAppTest {
             final var userId = getNoBoardsUser().getId();
             final var taskId = mockPopulatedTask.getId();
 
-            final var newTitle = dataFactory.getRandomWord(ValidationConstants.MIN_TASK_TITLE_LENGTH + 2);
-            final var newDescription = dataFactory.getRandomText(ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH + 2);
+            final var newTitle =
+                    dataFactory.getRandomWord(ValidationConstants.MIN_TASK_TITLE_LENGTH + 2);
+            final var newDescription =
+                    dataFactory.getRandomText(ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH + 2);
 
             // act
-            var exception = Assertions.catchException(() -> taskService.updateById(
-                    userId,
-                    taskId,
-                    UpdateTaskRequestDTO.builder()
-                            .title(newTitle)
-                            .description(newDescription)
-                            .build()));
+            var exception =
+                    Assertions.catchException(
+                            () ->
+                                    taskService.updateById(
+                                            userId,
+                                            taskId,
+                                            UpdateTaskRequestDTO.builder()
+                                                    .title(newTitle)
+                                                    .description(newDescription)
+                                                    .build()));
 
             // assert
             Assertions.assertThat(exception).isInstanceOf(AppAccessDeniedException.class);
-            Assertions.assertThat(Assertions.catchException(() -> taskService.findById(userId, taskId)))
+            Assertions.assertThat(
+                            Assertions.catchException(() -> taskService.findById(userId, taskId)))
                     .isInstanceOf(AppAccessDeniedException.class);
         }
     }
@@ -309,14 +333,14 @@ public class TaskServiceTest extends AbstractAppTest {
             var title = dataFactory.getRandomText(ValidationConstants.MIN_SUBTASK_TITLE_LENGTH + 1);
 
             // act
-            var subtask = taskService.addSubtaskByTaskId(
-                    userId, taskId, SaveSubtaskRequestDTO.builder().title(title).build());
+            var subtask =
+                    taskService.addSubtaskByTaskId(
+                            userId, taskId, SaveSubtaskRequestDTO.builder().title(title).build());
 
             // assert
             Assertions.assertThat(subtask.getTitle()).isEqualTo(title);
             Assertions.assertThat(subtask.getIsCompleted()).isFalse();
-            Assertions.assertThat(
-                            subtaskService.findById(subtask.getId()).getTask().getId())
+            Assertions.assertThat(subtaskService.findById(subtask.getId()).getTask().getId())
                     .isEqualTo(taskId);
             Assertions.assertThat(subtask).isInstanceOf(SubtaskResponseDTO.class);
         }
@@ -329,8 +353,13 @@ public class TaskServiceTest extends AbstractAppTest {
             var title = dataFactory.getRandomText(ValidationConstants.MIN_SUBTASK_TITLE_LENGTH + 1);
 
             // act
-            var exception = Assertions.catchException(() -> taskService.addSubtaskByTaskId(
-                    userId, taskId, SaveSubtaskRequestDTO.builder().title(title).build()));
+            var exception =
+                    Assertions.catchException(
+                            () ->
+                                    taskService.addSubtaskByTaskId(
+                                            userId,
+                                            taskId,
+                                            SaveSubtaskRequestDTO.builder().title(title).build()));
 
             // assert
             Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
@@ -344,8 +373,13 @@ public class TaskServiceTest extends AbstractAppTest {
             var title = dataFactory.getRandomText(ValidationConstants.MIN_SUBTASK_TITLE_LENGTH + 1);
 
             // act
-            var exception = Assertions.catchException(() -> taskService.addSubtaskByTaskId(
-                    userId, taskId, SaveSubtaskRequestDTO.builder().title(title).build()));
+            var exception =
+                    Assertions.catchException(
+                            () ->
+                                    taskService.addSubtaskByTaskId(
+                                            userId,
+                                            taskId,
+                                            SaveSubtaskRequestDTO.builder().title(title).build()));
 
             // assert
             Assertions.assertThat(exception).isInstanceOf(AppAccessDeniedException.class);

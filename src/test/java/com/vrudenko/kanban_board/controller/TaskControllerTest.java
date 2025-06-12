@@ -33,11 +33,9 @@ class TaskControllerTest extends AbstractAppTest {
         return ApiPaths.BOARDS + "/" + boardId + ApiPaths.COLUMNS + "/" + columnId + ApiPaths.TASKS;
     }
 
-    @Autowired
-    private MockMvc mockMvc;
+    @Autowired private MockMvc mockMvc;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+    @Autowired private ObjectMapper objectMapper;
 
     @Nested
     class FindAllByUserId {
@@ -47,7 +45,9 @@ class TaskControllerTest extends AbstractAppTest {
             var boardId = mockPopulatedBoard.getId();
             var columnId = mockPopulatedColumn.getId();
             var userId = getOwningUser().getId();
-            var allTasks = objectMapper.writeValueAsString(ListUtils.union(List.of(mockPopulatedTask), mockTasks));
+            var allTasks =
+                    objectMapper.writeValueAsString(
+                            ListUtils.union(List.of(mockPopulatedTask), mockTasks));
 
             // Act
             // Assert
@@ -110,18 +110,20 @@ class TaskControllerTest extends AbstractAppTest {
             var boardId = mockPopulatedBoard.getId();
             var columnId = mockPopulatedColumn.getId();
             var url = getTaskPrefix(boardId, columnId) + "/" + taskId;
-            var updateDto =
-                    UpdateTaskRequestDTO.builder().title("Updated Task Name").build();
-            var expectedResponse = TaskResponseDTO.builder()
-                    .id(taskId)
-                    .title(updateDto.getTitle())
-                    .build(); // Columns preservation would need to be checked differently or
+            var updateDto = UpdateTaskRequestDTO.builder().title("Updated Task Name").build();
+            var expectedResponse =
+                    TaskResponseDTO.builder()
+                            .id(taskId)
+                            .title(updateDto.getTitle())
+                            .build(); // Columns preservation would need to be checked differently
+            // or
 
             // Act
             // Assert
-            mockMvc.perform(put(url).with(user(userId))
-                            .contentType(APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(updateDto)))
+            mockMvc.perform(
+                            put(url).with(user(userId))
+                                    .contentType(APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(updateDto)))
                     .andDo(print())
                     .andExpect(status().isOk())
                     .andExpect(content().json(objectMapper.writeValueAsString(expectedResponse)))
@@ -129,26 +131,29 @@ class TaskControllerTest extends AbstractAppTest {
         }
 
         @Test
-        void testWithAuthenticatedUser_shouldUpdateDescriptionOnly_whenTaskExists() throws Exception {
+        void testWithAuthenticatedUser_shouldUpdateDescriptionOnly_whenTaskExists()
+                throws Exception {
             // Arrange
             var userId = getOwningUser().getId();
             var taskId = mockPopulatedTask.getId();
             var boardId = mockPopulatedBoard.getId();
             var columnId = mockPopulatedColumn.getId();
             var url = getTaskPrefix(boardId, columnId) + "/" + taskId;
-            var updateDto = UpdateTaskRequestDTO.builder()
-                    .description("Updated Task Description")
-                    .build();
-            var expectedResponse = TaskResponseDTO.builder()
-                    .id(taskId)
-                    .description(updateDto.getDescription())
-                    .build(); // Columns preservation would need to be checked differently or
+            var updateDto =
+                    UpdateTaskRequestDTO.builder().description("Updated Task Description").build();
+            var expectedResponse =
+                    TaskResponseDTO.builder()
+                            .id(taskId)
+                            .description(updateDto.getDescription())
+                            .build(); // Columns preservation would need to be checked differently
+            // or
 
             // Act
             // Assert
-            mockMvc.perform(put(url).with(user(userId))
-                            .contentType(APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(updateDto)))
+            mockMvc.perform(
+                            put(url).with(user(userId))
+                                    .contentType(APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(updateDto)))
                     .andDo(print())
                     .andExpect(status().isOk())
                     .andExpect(content().json(objectMapper.writeValueAsString(expectedResponse)))
@@ -163,21 +168,29 @@ class TaskControllerTest extends AbstractAppTest {
             var boardId = mockPopulatedBoard.getId();
             var columnId = mockPopulatedColumn.getId();
             var url = getTaskPrefix(boardId, columnId) + "/" + taskId;
-            var updateDto = UpdateTaskRequestDTO.builder()
-                    .title(dataFactory.getRandomText(ValidationConstants.MIN_TASK_TITLE_LENGTH + 3))
-                    .description(dataFactory.getRandomText(ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH + 3))
-                    .build();
-            var expectedResponse = TaskResponseDTO.builder()
-                    .id(taskId)
-                    .title(updateDto.getTitle())
-                    .description(updateDto.getDescription())
-                    .build(); // Columns preservation would need to be checked differently or
+            var updateDto =
+                    UpdateTaskRequestDTO.builder()
+                            .title(
+                                    dataFactory.getRandomText(
+                                            ValidationConstants.MIN_TASK_TITLE_LENGTH + 3))
+                            .description(
+                                    dataFactory.getRandomText(
+                                            ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH + 3))
+                            .build();
+            var expectedResponse =
+                    TaskResponseDTO.builder()
+                            .id(taskId)
+                            .title(updateDto.getTitle())
+                            .description(updateDto.getDescription())
+                            .build(); // Columns preservation would need to be checked differently
+            // or
 
             // Act
             // Assert
-            mockMvc.perform(put(url).with(user(userId))
-                            .contentType(APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(updateDto)))
+            mockMvc.perform(
+                            put(url).with(user(userId))
+                                    .contentType(APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(updateDto)))
                     .andDo(print())
                     .andExpect(status().isOk())
                     .andExpect(content().json(objectMapper.writeValueAsString(expectedResponse)))
@@ -185,21 +198,22 @@ class TaskControllerTest extends AbstractAppTest {
         }
 
         @Test
-        void testWithAuthenticatedUser_shouldReturnNotFound_whenTaskDoesNotExist() throws Exception {
+        void testWithAuthenticatedUser_shouldReturnNotFound_whenTaskDoesNotExist()
+                throws Exception {
             // Arrange
             var userId = getOwningUser().getId();
             var nonExistentTaskId = UUID.randomUUID().toString();
             var boardId = mockPopulatedBoard.getId();
             var columnId = mockPopulatedColumn.getId();
             var url = getTaskPrefix(boardId, columnId) + "/" + nonExistentTaskId;
-            var updateDto =
-                    SaveBoardRequestDTO.builder().name("Updated Board Name").build();
+            var updateDto = SaveBoardRequestDTO.builder().name("Updated Board Name").build();
 
             // Act
             // Assert
-            mockMvc.perform(put(url).with(user(userId))
-                            .contentType(APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(updateDto)))
+            mockMvc.perform(
+                            put(url).with(user(userId))
+                                    .contentType(APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(updateDto)))
                     .andDo(print())
                     .andExpect(status().isNotFound())
                     .andReturn();
@@ -218,9 +232,10 @@ class TaskControllerTest extends AbstractAppTest {
 
             // Act
             // Assert
-            mockMvc.perform(put(url).with(user(userId))
-                            .contentType(APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(updateDto)))
+            mockMvc.perform(
+                            put(url).with(user(userId))
+                                    .contentType(APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(updateDto)))
                     .andDo(print())
                     .andExpect(status().isBadRequest())
                     .andReturn();
