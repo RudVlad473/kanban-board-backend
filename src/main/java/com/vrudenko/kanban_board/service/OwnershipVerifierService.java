@@ -2,12 +2,14 @@ package com.vrudenko.kanban_board.service;
 
 import com.vrudenko.kanban_board.entity.BoardEntity;
 import com.vrudenko.kanban_board.entity.ColumnEntity;
+import com.vrudenko.kanban_board.entity.SubtaskEntity;
 import com.vrudenko.kanban_board.entity.TaskEntity;
 import com.vrudenko.kanban_board.entity.UserEntity;
 import com.vrudenko.kanban_board.exception.AppAccessDeniedException;
 import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
 import com.vrudenko.kanban_board.repository.BoardRepository;
 import com.vrudenko.kanban_board.repository.ColumnRepository;
+import com.vrudenko.kanban_board.repository.SubtaskRepository;
 import com.vrudenko.kanban_board.repository.TaskRepository;
 import com.vrudenko.kanban_board.repository.UserRepository;
 import jakarta.transaction.Transactional;
@@ -24,6 +26,8 @@ public class OwnershipVerifierService {
     @Autowired private TaskRepository taskRepository;
 
     @Autowired private ColumnRepository columnRepository;
+
+    @Autowired private SubtaskRepository subtaskRepository;
 
     @Transactional
     public Pair<UserEntity, BoardEntity> verifyOwnershipOfBoard(String userId, String boardId)
@@ -80,5 +84,20 @@ public class OwnershipVerifierService {
         var pair = verifyOwnershipOfColumn(userId, task.get().getColumn().getId());
 
         return Pair.of(pair.getFirst(), task.get());
+    }
+
+    @Transactional
+    public Pair<UserEntity, SubtaskEntity> verifyOwnershipOfSubtask(String userId, String subtaskId)
+            throws AppEntityNotFoundException, AppAccessDeniedException {
+        var subtask = subtaskRepository.findById(subtaskId);
+
+        if (subtask.isEmpty()) {
+            throw new AppEntityNotFoundException("Subtask");
+        }
+
+        // TODO: optimize verification logic, by passing already fetched entities
+        var pair = verifyOwnershipOfTask(userId, subtask.get().getTask().getId());
+
+        return Pair.of(pair.getFirst(), subtask.get());
     }
 }

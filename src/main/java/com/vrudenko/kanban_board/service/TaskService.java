@@ -13,6 +13,8 @@ import com.vrudenko.kanban_board.mapper.TaskMapper;
 import com.vrudenko.kanban_board.repository.TaskRepository;
 import jakarta.transaction.Transactional;
 import java.util.List;
+import java.util.Optional;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -60,8 +62,13 @@ public class TaskService {
     @Transactional
     public TaskResponseDTO updateById(String userId, String taskId, UpdateTaskRequestDTO dto) {
         var task = findById(userId, taskId);
-        task.setTitle(dto.getTitle());
-        task.setDescription(dto.getDescription());
+
+        if (Optional.ofNullable(dto.getTitle()).isPresent()) {
+            task.setTitle(dto.getTitle());
+        }
+        if (Optional.ofNullable(dto.getDescription()).isPresent()) {
+            task.setDescription(dto.getDescription());
+        }
 
         taskRepository.save(task);
 
@@ -72,7 +79,7 @@ public class TaskService {
     public void deleteById(String userId, String taskId) {
         var task = findById(userId, taskId);
 
-        // TODO: delete all subtasks
+        subtaskService.deleteAllByTaskId(userId, taskId);
 
         taskRepository.deleteById(task.getId());
     }
