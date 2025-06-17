@@ -1,21 +1,31 @@
 package com.vrudenko.kanban_board.handler;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vrudenko.kanban_board.exception.AppAccessDeniedException;
 import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
+import io.vavr.control.Try;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.HashMap;
 import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.data.util.Pair;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 
 @ControllerAdvice
 public class GlobalExceptionHandler {
+    @Autowired private ObjectMapper objectMapper;
+
     @ExceptionHandler(EntityNotFoundException.class)
     public ResponseEntity<String> handleEntityNotFound(EntityNotFoundException ex) {
         return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
@@ -44,6 +54,27 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AppAccessDeniedException.class)
     public ResponseEntity<String> handleAppAccessDeniedException(AppAccessDeniedException ex) {
         return new ResponseEntity<>(ex.getMessage(), HttpStatus.UNAUTHORIZED);
+    }
+
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<String> handleMethodValidationException(
+            HandlerMethodValidationException ex) {
+        var listOfMessages =
+                ex.getParameterValidationResults().stream()
+                        .map(r -> r.getMethodParameter().getMethod());
+
+        // god why
+        Pair<String, HttpStatusCode> stringHttpStatusPair =
+                Try.of(
+                                () ->
+                                        Pair.of(
+                                                objectMapper.writeValueAsString(listOfMessages),
+                                                ex.getStatusCode()))
+                        .getOrElseGet(
+                                (Throwable cause) ->
+                                        Pair.of(ex.getMessage(), HttpStatus.BAD_REQUEST));
+        return new ResponseEntity<>(
+                stringHttpStatusPair.getFirst(), stringHttpStatusPair.getSecond());
     }
 
     // handles errors from db
