@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
+// TODO: rewrite these repetative tests using parametrized approach
 @SpringBootTest
 public class OwnershipVerifierServiceTest extends AbstractAppTest {
     @Autowired OwnershipVerifierService ownershipVerifierService;
@@ -28,8 +29,8 @@ public class OwnershipVerifierServiceTest extends AbstractAppTest {
             var pair = ownershipVerifierService.verifyOwnershipOfBoard(userId, boardId);
 
             // Assert
-            Assertions.assertThat(pair.getFirst().getId()).isSameAs(userId);
-            Assertions.assertThat(pair.getSecond().getId()).isSameAs(boardId);
+            Assertions.assertThat(pair.getFirst().getId()).isEqualTo(userId);
+            Assertions.assertThat(pair.getSecond().getId()).isEqualTo(boardId);
             Assertions.assertThat(pair.getFirst()).isInstanceOf(UserEntity.class);
             Assertions.assertThat(pair.getSecond()).isInstanceOf(BoardEntity.class);
         }
@@ -92,8 +93,8 @@ public class OwnershipVerifierServiceTest extends AbstractAppTest {
             var pair = ownershipVerifierService.verifyOwnershipOfColumn(userId, columnId);
 
             // Assert
-            Assertions.assertThat(pair.getFirst().getId()).isSameAs(userId);
-            Assertions.assertThat(pair.getSecond().getId()).isSameAs(columnId);
+            Assertions.assertThat(pair.getFirst().getId()).isEqualTo(userId);
+            Assertions.assertThat(pair.getSecond().getId()).isEqualTo(columnId);
         }
 
         @Test
@@ -160,8 +161,8 @@ public class OwnershipVerifierServiceTest extends AbstractAppTest {
             var pair = ownershipVerifierService.verifyOwnershipOfTask(userId, taskId);
 
             // Assert
-            Assertions.assertThat(pair.getFirst().getId()).isSameAs(userId);
-            Assertions.assertThat(pair.getSecond().getId()).isSameAs(taskId);
+            Assertions.assertThat(pair.getFirst().getId()).isEqualTo(userId);
+            Assertions.assertThat(pair.getSecond().getId()).isEqualTo(taskId);
         }
 
         @Test
@@ -203,7 +204,75 @@ public class OwnershipVerifierServiceTest extends AbstractAppTest {
             // Act
             var exception =
                     Assertions.catchException(
-                            () -> ownershipVerifierService.verifyOwnershipOfColumn(userId, taskId));
+                            () -> ownershipVerifierService.verifyOwnershipOfTask(userId, taskId));
+
+            // Assert
+            Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
+        }
+    }
+
+    @Nested
+    class VerifyOwnershipOfSubtaskTest {
+        @Test
+        void shouldReturnUserAndSubtask_whenUserOwnsTheSubtask() {
+            // Arrange
+            var userId = getOwningUser().getId();
+            var subtaskId = mockSubtasks.getFirst().getId();
+
+            // Act
+            var pair = ownershipVerifierService.verifyOwnershipOfSubtask(userId, subtaskId);
+
+            // Assert
+            Assertions.assertThat(pair.getFirst().getId()).isEqualTo(userId);
+            Assertions.assertThat(pair.getSecond().getId()).isEqualTo(subtaskId);
+        }
+
+        @Test
+        void shouldThrow_whenUserDoesntOwnSubtask() {
+            // Arrange
+            var userId = getNoBoardsUser().getId();
+            var subtaskId = mockSubtasks.getFirst().getId();
+
+            // Act
+            var exception =
+                    Assertions.catchException(
+                            () ->
+                                    ownershipVerifierService.verifyOwnershipOfSubtask(
+                                            userId, subtaskId));
+
+            // Assert
+            Assertions.assertThat(exception).isInstanceOf(AppAccessDeniedException.class);
+        }
+
+        @Test
+        void shouldThrow_whenSubtaskDoesntExist() {
+            // Arrange
+            var userId = getOwningUser().getId();
+            var subtaskId = UUID.randomUUID().toString();
+
+            // Act
+            var exception =
+                    Assertions.catchException(
+                            () ->
+                                    ownershipVerifierService.verifyOwnershipOfSubtask(
+                                            userId, subtaskId));
+
+            // Assert
+            Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
+        }
+
+        @Test
+        void shouldThrow_whenUserDoesntExist() {
+            // Arrange
+            var userId = UUID.randomUUID().toString();
+            var subtaskId = mockTasks.getFirst().getId();
+
+            // Act
+            var exception =
+                    Assertions.catchException(
+                            () ->
+                                    ownershipVerifierService.verifyOwnershipOfSubtask(
+                                            userId, subtaskId));
 
             // Assert
             Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);

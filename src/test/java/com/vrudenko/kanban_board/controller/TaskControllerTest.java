@@ -17,6 +17,7 @@ import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
 import com.vrudenko.kanban_board.dto.task_dto.UpdateTaskRequestDTO;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.apache.commons.collections4.ListUtils;
 import org.junit.jupiter.api.Nested;
@@ -62,8 +63,8 @@ class TaskControllerTest extends AbstractAppTest {
         void testWithAuthenticatedUser_shouldReturnEmptyList_whenNoTasksExist() throws Exception {
             // Arrange
             var boardId = mockPopulatedBoard.getId();
-            var columnId = mockEmptyBoards.getFirst().getId();
-            var userId = getNoBoardsUser().getId();
+            var columnId = mockColumns.getFirst().getId();
+            var userId = getOwningUser().getId();
 
             // Act
             // Assert
@@ -77,8 +78,10 @@ class TaskControllerTest extends AbstractAppTest {
 
     @Nested
     class DeleteById {
+        // TODO: add tests for cascade deletion (i.e. when deleting task, all its subtasks should be
+        // deleted too)
         @Test
-        void testWithAuthenticatedUser_shouldDeleteBoard_whenTaskExists() throws Exception {
+        void testWithAuthenticatedUser_shouldDeleteTask_whenBoardExists() throws Exception {
             // Arrange
             var userId = getOwningUser().getId();
             var taskId = mockPopulatedTask.getId();
@@ -112,11 +115,8 @@ class TaskControllerTest extends AbstractAppTest {
             var url = getTaskPrefix(boardId, columnId) + "/" + taskId;
             var updateDto = UpdateTaskRequestDTO.builder().title("Updated Task Name").build();
             var expectedResponse =
-                    TaskResponseDTO.builder()
-                            .id(taskId)
-                            .title(updateDto.getTitle())
-                            .build(); // Columns preservation would need to be checked differently
-            // or
+                    Map.ofEntries(
+                            Map.entry("id", taskId), Map.entry("title", updateDto.getTitle()));
 
             // Act
             // Assert
@@ -141,12 +141,7 @@ class TaskControllerTest extends AbstractAppTest {
             var url = getTaskPrefix(boardId, columnId) + "/" + taskId;
             var updateDto =
                     UpdateTaskRequestDTO.builder().description("Updated Task Description").build();
-            var expectedResponse =
-                    TaskResponseDTO.builder()
-                            .id(taskId)
-                            .description(updateDto.getDescription())
-                            .build(); // Columns preservation would need to be checked differently
-            // or
+            var expectedResponse = Map.of("id", taskId, "description", updateDto.getDescription());
 
             // Act
             // Assert
