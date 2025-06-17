@@ -5,12 +5,11 @@ import com.vrudenko.kanban_board.base.entity.BaseTask;
 import com.vrudenko.kanban_board.dto.annotation.Description;
 import com.vrudenko.kanban_board.dto.annotation.TaskTitle;
 import jakarta.validation.constraints.AssertTrue;
+import java.util.Optional;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
-
-import java.util.Optional;
 
 @Getter
 @Setter

@@ -4,9 +4,7 @@ import com.vrudenko.kanban_board.constant.ValidationConstants;
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
 import jakarta.validation.ReportAsSingleViolation;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
