@@ -27,6 +27,6 @@ public class SubtaskEntity extends BaseEntity implements BaseSubtask {
     @Column(nullable = false)
     private String title;
 
-    @Column(nullable = false)
-    private Boolean isCompleted;
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private Boolean isCompleted = false;
 }

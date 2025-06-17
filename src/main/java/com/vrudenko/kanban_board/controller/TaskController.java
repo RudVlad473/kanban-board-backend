@@ -27,7 +27,7 @@ class TaskController {
     @Autowired TaskService taskService;
 
     @GetMapping
-    public ResponseEntity<List<TaskResponseDTO>> findAllByUserId(
+    public ResponseEntity<List<TaskResponseDTO>> findAllByColumnId(
             @CurrentUserId String userId, @PathVariable @NotBlank String columnId) {
         var boards = taskService.findAllByColumnId(userId, columnId);
 

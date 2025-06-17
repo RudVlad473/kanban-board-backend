@@ -7,11 +7,15 @@ import org.mapstruct.Mapper;
 import org.mapstruct.MappingConstants;
 import org.mapstruct.ReportingPolicy;
 
+import java.util.List;
+
 @Mapper(
         componentModel = MappingConstants.ComponentModel.SPRING,
         unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface SubtaskMapper {
     SubtaskEntity fromSaveSubtaskRequestDTO(SaveSubtaskRequestDTO dto);
 
-    SubtaskResponseDTO toTaskResponseDTO(SubtaskEntity entity);
+    SubtaskResponseDTO toSubtaskResponseDTO(SubtaskEntity entity);
+
+    List<SubtaskResponseDTO> toSubtaskResponseDTOList(List<SubtaskEntity> entities);
 }
