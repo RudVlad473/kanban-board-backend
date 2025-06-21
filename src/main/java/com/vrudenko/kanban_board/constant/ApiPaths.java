@@ -19,4 +19,7 @@ public final class ApiPaths {
     public static final String SIGNIN = "/signin";
     public static final String SIGNUP = "/signup";
     public static final String LOGOUT = "/logout";
+
+    /** Utilities */
+    public static final String SWAGGER_UI = "/swagger-ui";
 }

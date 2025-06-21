@@ -30,6 +30,9 @@ public class SecurityConfiguration {
     @Value("${server.servlet.context-path}")
     private String CONTEXT_PATH;
 
+    @Value("${springdoc.api-docs.path}")
+    private String SWAGGER_DOCS_PATH;
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         var securityContextRepository = new HttpSessionSecurityContextRepository();
@@ -43,7 +46,13 @@ public class SecurityConfiguration {
 
         http.authorizeHttpRequests(
                 auth -> {
-                    auth.requestMatchers(ApiPaths.SIGNIN, ApiPaths.SIGNUP).permitAll();
+                    auth.requestMatchers(
+                                    ApiPaths.SIGNIN,
+                                    ApiPaths.SIGNUP,
+                                    SWAGGER_DOCS_PATH,
+                                    String.format("%s/*", SWAGGER_DOCS_PATH),
+                                    String.format("%s/*", ApiPaths.SWAGGER_UI))
+                            .permitAll();
 
                     auth.anyRequest().authenticated();
                 });
