@@ -74,16 +74,16 @@ jobs:
                echo "Docker is already installed."
              fi
 
-            docker pull $ACTUAL_IMAGE_NAME
-            docker stop myapp || true
-            docker rm myapp || true
-            docker run -d --name myapp -p 80:8080 \
+            sudo docker pull $ACTUAL_IMAGE_NAME
+            sudo docker stop myapp || true
+            sudo docker rm myapp || true
+            sudo docker run -d --name myapp -p 80:8080 \
               -e DB_HOST=${{ secrets.DB_HOST }} \
               -e DB_NAME=${{ secrets.DB_NAME }} \
               -e DB_USER=${{ secrets.DB_USER }} \
               -e DB_PASS=${{ secrets.DB_PASS }} \
             $ACTUAL_IMAGE_NAME
-            docker image prune -af
+            sudo docker image prune -af
           EOF
 
   cleanup:
