@@ -6,12 +6,12 @@ on:
       - master
 
 env:
-  BASE_IMAGE_NAME: rudenkovladimir/kanban-board-backend
+  DOCKERHUB_USER: rudenkovladimir
+  DOCKERHUB_REPOSITORY: kanban-board-backend
 
 jobs:
-  build-and-push:
+  setup:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -25,14 +25,27 @@ jobs:
       - name: Grant permission to gradlew
         run: chmod +x gradlew
 
+      - name: Create environment variables
+        run: echo "BASE_IMAGE_NAME=${DOCKERHUB_USER}/${DOCKERHUB_REPOSITORY}" >> $GITHUB_ENV
+
+  run-tests:
+    runs-on: ubuntu-latest
+    needs: setup
+    if: success()
+    steps:
       - name: Run tests
         run: ./gradlew test
 
       - name: Run Spotless
         run: ./gradlew spotlessCheck
 
+  build-and-push-docker-image:
+    runs-on: ubuntu-latest
+    needs: run-tests
+    if: success()
+    steps:
       - name: Log in to Docker Hub
-        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "rudenkovladimir" --password-stdin
+        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u $DOCKERHUB_USER --password-stdin
 
       # need to add a tag to image to not cause name collisions on dockerhub when pushing
       - name: Set image tag from commit
@@ -47,11 +60,10 @@ jobs:
       - name: Push Docker image
         run: docker push $ACTUAL_IMAGE_NAME
 
-  deploy:
-    needs: build-and-push
+  deploy-to-ec2:
+    needs: build-and-push-docker-image
     runs-on: ubuntu-latest
     if: success()
-
     steps:
       - name: Set up SSH
         run: |
@@ -59,6 +71,7 @@ jobs:
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+#          1. install docker if not installed; 2. stop old container, start a new one using new image
       - name: Deploy on EC2
         run: |
           ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
@@ -86,11 +99,12 @@ jobs:
             sudo docker image prune -af
           EOF
 
-  cleanup:
-    runs-on: ubuntu-latest
-    needs: deploy
-    if: success()
 
+
+  cleanup-old-images:
+    runs-on: ubuntu-latest
+    needs: deploy-to-ec2
+    if: success()
     steps:
       # we need to do that because we only want to have a single active prod deployment for that project
       - name: Delete old Docker Hub images
@@ -99,16 +113,30 @@ jobs:
           REPO_NAME=$(echo "$BASE_IMAGE_NAME" | cut -d/ -f2)
 
           # Get list of all tags
-          TAGS=$(curl -s -u "rudenkovladimir:${{ secrets.DOCKERHUB_TOKEN }}" \
-            "https://hub.docker.com/v2/repositories/rudenkovladimir/$REPO_NAME/tags/" \
+          TAGS=$(curl -s -u "$DOCKERHUB_USER:${{ secrets.DOCKERHUB_TOKEN }}" \
+            "https://hub.docker.com/v2/repositories/$DOCKERHUB_USER/$REPO_NAME/tags/" \
             | jq -r '.results[].name')
 
           # Delete all tags except the current one
           for TAG in $TAGS; do
             if [ "$TAG" != "$IMAGE_TAG" ]; then
               echo "Deleting tag: $TAG"
-              curl -s -X DELETE -u "rudenkovladimir:${{ secrets.DOCKERHUB_TOKEN }}" \
-                "https://hub.docker.com/v2/repositories/rudenkovladimir/$REPO_NAME/tags/$TAG/"
+              curl -s -X DELETE -u "$DOCKERHUB_USER:${{ secrets.DOCKERHUB_TOKEN }}" \
+                "https://hub.docker.com/v2/repositories/$DOCKERHUB_USER/$REPO_NAME/tags/$TAG/"
             fi
           done
 
+
+
+  # if deployment failed, we need to cleanup the image we pushed, because it won't be used
+  cleanup-unused-image:
+    runs-on: ubuntu-latest
+    needs: deploy-to-ec2
+    if: failure()
+    steps:
+      - name: Remove just-pushed image
+        run: |
+          REPO_NAME=$(echo "$BASE_IMAGE_NAME" | cut -d/ -f2)
+          echo "Deleting failed tag: $IMAGE_TAG"
+          curl -s -X DELETE -u "$DOCKERHUB_USER:${{ secrets.DOCKERHUB_TOKEN }}" \
+            "https://hub.docker.com/v2/repositories/$DOCKERHUB_USER/$REPO_NAME/tags/$IMAGE_TAG/"
