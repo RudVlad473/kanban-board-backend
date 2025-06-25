@@ -47,52 +47,57 @@ jobs:
       - name: Push Docker image
         run: docker push $ACTUAL_IMAGE_NAME
 
-#  deploy:
-#    needs: build-and-push
-#    runs-on: ubuntu-latest
-#    if: success()
-#
-#    steps:
-#      - name: Set up SSH
-#        run: |
-#          mkdir -p ~/.ssh
-#          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
-#          chmod 600 ~/.ssh/id_rsa
-#          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
-#
-#      - name: Deploy on EC2
-#        run: |
-#          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
-#            docker pull $ACTUAL_IMAGE_NAME
-#            docker stop myapp || true
-#            docker rm myapp || true
-#            docker run -d --name myapp -p 80:8080 $ACTUAL_IMAGE_NAME
-#            docker image prune -af
-#          EOF
-#
-#  cleanup:
-#    runs-on: ubuntu-latest
-#    needs: deploy
-#    if: success()
-#
-#    steps:
-#      # we need to do that because we only want to have a single active prod deployment for that project
-#      - name: Delete old Docker Hub images
-#        run: |
-#          # Extract repo name (everything after /)
-#          REPO_NAME=$(echo "$BASE_IMAGE_NAME" | cut -d/ -f2)
-#
-#          # Get list of all tags
-#          TAGS=$(curl -s -u "rudenkovladimir:${{ secrets.DOCKERHUB_TOKEN }}" \
-#            "https://hub.docker.com/v2/repositories/rudenkovladimir/$REPO_NAME/tags/" \
-#            | jq -r '.results[].name')
-#
-#          # Delete all tags except the current one
-#          for TAG in $TAGS; do
-#            if [ "$TAG" != "$IMAGE_TAG" ]; then
-#              echo "Deleting tag: $TAG"
-#              curl -s -X DELETE -u "rudenkovladimir:${{ secrets.DOCKERHUB_TOKEN }}" \
-#                "https://hub.docker.com/v2/repositories/rudenkovladimir/$REPO_NAME/tags/$TAG/"
-#            fi
-#          done
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: success()
+
+    steps:
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy on EC2
+        run: |
+          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
+            docker pull $ACTUAL_IMAGE_NAME
+            docker stop myapp || true
+            docker rm myapp || true
+            docker run -d --name myapp -p 80:8080 \
+              -e DB_HOST=${{ secrets.DB_HOST }} \
+              -e DB_NAME=${{ secrets.DB_NAME }} \
+              -e DB_USER=${{ secrets.DB_USER }} \
+              -e DB_PASS=${{ secrets.DB_PASS }} \
+            $ACTUAL_IMAGE_NAME
+            docker image prune -af
+          EOF
+
+  cleanup:
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: success()
+
+    steps:
+      # we need to do that because we only want to have a single active prod deployment for that project
+      - name: Delete old Docker Hub images
+        run: |
+          # Extract repo name (everything after /)
+          REPO_NAME=$(echo "$BASE_IMAGE_NAME" | cut -d/ -f2)
+
+          # Get list of all tags
+          TAGS=$(curl -s -u "rudenkovladimir:${{ secrets.DOCKERHUB_TOKEN }}" \
+            "https://hub.docker.com/v2/repositories/rudenkovladimir/$REPO_NAME/tags/" \
+            | jq -r '.results[].name')
+
+          # Delete all tags except the current one
+          for TAG in $TAGS; do
+            if [ "$TAG" != "$IMAGE_TAG" ]; then
+              echo "Deleting tag: $TAG"
+              curl -s -X DELETE -u "rudenkovladimir:${{ secrets.DOCKERHUB_TOKEN }}" \
+                "https://hub.docker.com/v2/repositories/rudenkovladimir/$REPO_NAME/tags/$TAG/"
+            fi
+          done
 
