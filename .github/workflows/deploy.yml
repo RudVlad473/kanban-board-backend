@@ -70,28 +70,29 @@ jobs:
 #            docker image prune -af
 #          EOF
 #
-  cleanup:
-    runs-on: ubuntu-latest
-    if: success()
-
-    steps:
-      # we need to do that because we only want to have a single active prod deployment for that project
-      - name: Delete old Docker Hub images
-        run: |
-          # Extract repo name (everything after /)
-          REPO_NAME=$(echo "$BASE_IMAGE_NAME" | cut -d/ -f2)
-
-          # Get list of all tags
-          TAGS=$(curl -s -u "rudenkovladimir:${{ secrets.DOCKERHUB_TOKEN }}" \
-            "https://hub.docker.com/v2/repositories/rudenkovladimir/$REPO_NAME/tags/" \
-            | jq -r '.results[].name')
-
-          # Delete all tags except the current one
-          for TAG in $TAGS; do
-            if [ "$TAG" != "$IMAGE_TAG" ]; then
-              echo "Deleting tag: $TAG"
-              curl -s -X DELETE -u "rudenkovladimir:${{ secrets.DOCKERHUB_TOKEN }}" \
-                "https://hub.docker.com/v2/repositories/rudenkovladimir/$REPO_NAME/tags/$TAG/"
-            fi
-          done
+#  cleanup:
+#    runs-on: ubuntu-latest
+#    needs: deploy
+#    if: success()
+#
+#    steps:
+#      # we need to do that because we only want to have a single active prod deployment for that project
+#      - name: Delete old Docker Hub images
+#        run: |
+#          # Extract repo name (everything after /)
+#          REPO_NAME=$(echo "$BASE_IMAGE_NAME" | cut -d/ -f2)
+#
+#          # Get list of all tags
+#          TAGS=$(curl -s -u "rudenkovladimir:${{ secrets.DOCKERHUB_TOKEN }}" \
+#            "https://hub.docker.com/v2/repositories/rudenkovladimir/$REPO_NAME/tags/" \
+#            | jq -r '.results[].name')
+#
+#          # Delete all tags except the current one
+#          for TAG in $TAGS; do
+#            if [ "$TAG" != "$IMAGE_TAG" ]; then
+#              echo "Deleting tag: $TAG"
+#              curl -s -X DELETE -u "rudenkovladimir:${{ secrets.DOCKERHUB_TOKEN }}" \
+#                "https://hub.docker.com/v2/repositories/rudenkovladimir/$REPO_NAME/tags/$TAG/"
+#            fi
+#          done
 
