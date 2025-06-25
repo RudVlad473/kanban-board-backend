@@ -33,6 +33,9 @@ jobs:
     needs: setup
     if: success()
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
       - name: Run tests
         run: ./gradlew test
 
@@ -120,9 +123,6 @@ jobs:
                 "https://hub.docker.com/v2/repositories/$BASE_IMAGE_NAME/tags/$TAG/"
             fi
           done
-
-
-
 
   # if deployment failed, we need to cleanup the image we pushed, because it won't be used
   cleanup-unused-image:
