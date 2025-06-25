@@ -3,7 +3,7 @@ name: CI/CD with Docker
 on:
   push:
     branches:
-      - main
+      - master
 
 env:
   BASE_IMAGE_NAME: rudenkovladimir/kanban-board-backend
