@@ -1,0 +1,103 @@
+name: CI/CD with Docker
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  BASE_IMAGE_NAME: rudenkovladimir/kanban-board-backend
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'adopt'
+
+      - name: Grant permission to gradlew
+        run: chmod +x gradlew
+
+      - name: Run tests
+        run: ./gradlew test
+
+      - name: Run Spotless
+        run: ./gradlew spotlessCheck
+
+      - name: Build app
+        run: ./gradlew bootJar
+
+      - name: Log in to Docker Hub
+        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "rudenkovladimir" --password-stdin
+
+      # need to add a tag to image to not cause name collisions on dockerhub when pushing
+      - name: Set image tag with current date
+        id: vars
+        # this logic makes IMAGE_TAG visible for other steps, since github action's steps are isolated
+        run: echo "IMAGE_TAG=$(date +'%Y%m%d')" >> $GITHUB_ENV
+
+      - name: Set full image name
+        run: echo "ACTUAL_IMAGE_NAME=${IMAGE_NAME}:${IMAGE_TAG}" >> $GITHUB_ENV
+
+      - name: Build Docker image
+        run: docker build -t $ACTUAL_IMAGE_NAME .
+
+      - name: Push Docker image
+        run: docker push $ACTUAL_IMAGE_NAME
+
+#  deploy:
+#    needs: build-and-push
+#    runs-on: ubuntu-latest
+#    if: success()
+#
+#    steps:
+#      - name: Set up SSH
+#        run: |
+#          mkdir -p ~/.ssh
+#          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+#          chmod 600 ~/.ssh/id_rsa
+#          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+#
+#      - name: Deploy on EC2
+#        run: |
+#          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
+#            docker pull $ACTUAL_IMAGE_NAME
+#            docker stop myapp || true
+#            docker rm myapp || true
+#            docker run -d --name myapp -p 80:8080 $ACTUAL_IMAGE_NAME
+#            docker image prune -af
+#          EOF
+#
+#  cleanup:
+#    needs: deploy
+#    runs-on: ubuntu-latest
+#    if: success()
+#
+#    steps:
+#      # we need to do that because we only want to have a single active prod deployment for that project
+#      - name: Delete old Docker Hub images
+#        run: |
+#          # Extract repo name (everything after /)
+#          REPO_NAME=$(echo "$BASE_IMAGE_NAME" | cut -d/ -f2)
+#
+#          # Get list of all tags
+#          TAGS=$(curl -s -u "rudenkovladimir:${{ secrets.DOCKERHUB_TOKEN }}" \
+#            "https://hub.docker.com/v2/repositories/rudenkovladimir/$REPO_NAME/tags/" \
+#            | jq -r '.results[].name')
+#
+#          # Delete all tags except the current one
+#          for TAG in $TAGS; do
+#            if [ "$TAG" != "$IMAGE_TAG" ]; then
+#              echo "Deleting tag: $TAG"
+#              curl -s -X DELETE -u "rudenkovladimir:${{ secrets.DOCKERHUB_TOKEN }}" \
+#                "https://hub.docker.com/v2/repositories/rudenkovladimir/$REPO_NAME/tags/$TAG/"
+#            fi
+#          done
+#
