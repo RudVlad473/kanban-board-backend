@@ -50,6 +50,9 @@ jobs:
       actual_image_name: ${{ steps.set_full_image_name.outputs.actual_image_name }}
       image_tag: ${{ steps.set_image_tag_from_commit.outputs.image_tag }}
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
       - name: Log in to Docker Hub
         run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u $DOCKERHUB_USER --password-stdin
 
