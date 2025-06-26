@@ -128,14 +128,14 @@ jobs:
     if: failure()
     steps:
       - name: Remove just-pushed image
-      run: |
-        echo "Deleting failed tag: $IMAGE_TAG"
-        TOKEN=$(curl -s "https://auth.docker.io/token?service=registry.docker.io&scope=repository:$BASE_IMAGE_NAME:pull,push" \
-          | jq -r .token)
-        DIGEST=$(curl -sI \
-          -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
-          -H "Authorization: Bearer $TOKEN" \
-          "https://registry-1.docker.io/v2/${BASE_IMAGE_NAME}/manifests/$IMAGE_TAG" \
-          | awk '/Docker-Content-Digest/ {print $2}' | tr -d $'\r')
-        curl -s -X DELETE \
-          -H "Authorization: Bearer $TOKEN" \
+        run: |
+          echo "Deleting failed tag: $IMAGE_TAG"
+          TOKEN=$(curl -s "https://auth.docker.io/token?service=registry.docker.io&scope=repository:$BASE_IMAGE_NAME:pull,push" \
+            | jq -r .token)
+          DIGEST=$(curl -sI \
+            -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
+            -H "Authorization: Bearer $TOKEN" \
+            "https://registry-1.docker.io/v2/${BASE_IMAGE_NAME}/manifests/$IMAGE_TAG" \
+            | awk '/Docker-Content-Digest/ {print $2}' | tr -d $'\r')
+          curl -s -X DELETE \
+            -H "Authorization: Bearer $TOKEN" \
