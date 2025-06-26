@@ -12,9 +12,12 @@ env:
 jobs:
   setup:
     runs-on: ubuntu-latest
+    outputs:
+      base_image_name: ${{ steps.create_environment_variables.outputs.base_image_name }}
     steps:
       - name: Create environment variables
-        run: echo "BASE_IMAGE_NAME=$DOCKERHUB_USER/$DOCKERHUB_REPOSITORY" >> $GITHUB_ENV
+        id: create_environment_variables
+        run: echo "base_image_name=$DOCKERHUB_USER/$DOCKERHUB_REPOSITORY" >> "$GITHUB_OUTPUT"
 
   run-tests:
     runs-on: ubuntu-latest
@@ -41,24 +44,29 @@ jobs:
 
   build-and-push-docker-image:
     runs-on: ubuntu-latest
-    needs: run-tests
+    needs: [ setup, run-tests ]
     if: success()
+    outputs:
+      actual_image_name: ${{ steps.set_full_image_name.outputs.actual_image_name }}
+      image_tag: ${{ steps.set_image_tag_from_commit.outputs.image_tag }}
     steps:
       - name: Log in to Docker Hub
         run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u $DOCKERHUB_USER --password-stdin
 
       # need to add a tag to image to not cause name collisions on dockerhub when pushing
       - name: Set image tag from commit
-        run: echo "IMAGE_TAG=${GITHUB_SHA::7}" >> $GITHUB_ENV
+        id: set_image_tag_from_commit
+        run: echo "image_tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       - name: Set full image name
-        run: echo "ACTUAL_IMAGE_NAME=${{ env.BASE_IMAGE_NAME }}:$IMAGE_TAG" >> $GITHUB_ENV
+        id: set_full_image_name
+        run: echo "actual_image_name=${{needs.setup.outputs.base_image_name}}:${{ steps.set_image_tag_from_commit.outputs.image_tag }}" >> "$GITHUB_OUTPUT"
 
       - name: Build Docker image
-        run: docker build -t $ACTUAL_IMAGE_NAME .
+        run: docker build -t ${{ steps.set_full_image_name.outputs.actual_image_name }} .
 
       - name: Push Docker image
-        run: docker push $ACTUAL_IMAGE_NAME
+        run: docker push ${{ steps.set_full_image_name.outputs.actual_image_name }}
 
   deploy-to-ec2:
     needs: build-and-push-docker-image
@@ -87,7 +95,7 @@ jobs:
                echo "Docker is already installed."
              fi
 
-            sudo docker pull $ACTUAL_IMAGE_NAME
+            sudo docker pull ${{ needs.build-and-push-docker-image.outputs.actual_image_name }}
             sudo docker stop myapp || true
             sudo docker rm myapp || true
             sudo docker run -d --name myapp -p 80:8080 \
@@ -95,13 +103,13 @@ jobs:
               -e DB_NAME=${{ secrets.DB_NAME }} \
               -e DB_USER=${{ secrets.DB_USER }} \
               -e DB_PASS=${{ secrets.DB_PASS }} \
-            $ACTUAL_IMAGE_NAME
+            ${{ needs.build-and-push-docker-image.outputs.actual_image_name }}
             sudo docker image prune -af
           EOF
 
   cleanup-old-images:
     runs-on: ubuntu-latest
-    needs: deploy-to-ec2
+    needs: [ deploy-to-ec2, build-and-push-docker-image, setup ]
     if: success()
     steps:
       # we need to do that because we only want to have a single active prod deployment for that project
@@ -109,33 +117,33 @@ jobs:
         run: |
           # Get list of all tags
           TAGS=$(curl -s -u "$DOCKERHUB_USER:${{ secrets.DOCKERHUB_TOKEN }}" \
-            "https://hub.docker.com/v2/repositories/${{ env.BASE_IMAGE_NAME }}/tags/" \
+            "https://hub.docker.com/v2/repositories/${{ needs.setup.outputs.base_image_name }}/tags/" \
             | jq -r '.results[].name')
 
           # Delete all tags except the current one
           for TAG in $TAGS; do
-            if [ "$TAG" != "$IMAGE_TAG" ]; then
+            if [ "$TAG" != "${{ needs.build-and-push-docker-image.outputs.image_tag }}" ]; then
               echo "Deleting tag: $TAG"
               curl -s -X DELETE -u "$DOCKERHUB_USER:${{ secrets.DOCKERHUB_TOKEN }}" \
-                "https://hub.docker.com/v2/repositories/${{ env.BASE_IMAGE_NAME }}/tags/$TAG/"
+                "https://hub.docker.com/v2/repositories/$DOCKERHUB_USER/tags/$TAG/"
             fi
           done
 
   # if deployment failed, we need to cleanup the image we pushed, because it won't be used
   cleanup-unused-image:
     runs-on: ubuntu-latest
-    needs: deploy-to-ec2
+    needs: [ deploy-to-ec2, build-and-push-docker-image, setup ]
     if: failure()
     steps:
       - name: Remove just-pushed image
         run: |
-          echo "Deleting failed tag: $IMAGE_TAG"
-          TOKEN=$(curl -s "https://auth.docker.io/token?service=registry.docker.io&scope=repository:${{ env.BASE_IMAGE_NAME }}:pull,push" \
+          echo "Deleting failed tag: ${{ needs.build-and-push-docker-image.outputs.image_tag }}"
+          TOKEN=$(curl -s "https://auth.docker.io/token?service=registry.docker.io&scope=repository:${{ needs.setup.outputs.base_image_name }}:pull,push" \
             | jq -r .token)
           DIGEST=$(curl -sI \
             -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
             -H "Authorization: Bearer $TOKEN" \
-            "https://registry-1.docker.io/v2/${{ env.BASE_IMAGE_NAME }}/manifests/$IMAGE_TAG" \
+            "https://registry-1.docker.io/v2/${{ needs.setup.outputs.base_image_name }}/manifests/${{ needs.build-and-push-docker-image.outputs.image_tag }}" \
             | awk '/Docker-Content-Digest/ {print $2}' | tr -d $'\r')
           curl -s -X DELETE \
             -H "Authorization: Bearer $TOKEN" \
