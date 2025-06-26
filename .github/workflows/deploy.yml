@@ -41,7 +41,7 @@ jobs:
 
   build-and-push-docker-image:
     runs-on: ubuntu-latest
-    needs: ["setup", "run-tests"]
+    needs: [ "setup", "run-tests" ]
     if: success()
     steps:
       - name: Log in to Docker Hub
@@ -128,8 +128,14 @@ jobs:
     if: failure()
     steps:
       - name: Remove just-pushed image
-        run: |
-          REPO_NAME=$(echo "$BASE_IMAGE_NAME" | cut -d/ -f2)
-          echo "Deleting failed tag: $IMAGE_TAG"
-          curl -s -X DELETE -u "$DOCKERHUB_USER:${{ secrets.DOCKERHUB_TOKEN }}" \
-            "https://hub.docker.com/v2/repositories/$BASE_IMAGE_NAME/tags/$IMAGE_TAG/"
+      run: |
+        echo "Deleting failed tag: $IMAGE_TAG"
+        TOKEN=$(curl -s "https://auth.docker.io/token?service=registry.docker.io&scope=repository:$BASE_IMAGE_NAME:pull,push" \
+          | jq -r .token)
+        DIGEST=$(curl -sI \
+          -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
+          -H "Authorization: Bearer $TOKEN" \
+          "https://registry-1.docker.io/v2/${BASE_IMAGE_NAME}/manifests/$IMAGE_TAG" \
+          | awk '/Docker-Content-Digest/ {print $2}' | tr -d $'\r')
+        curl -s -X DELETE \
+          -H "Authorization: Bearer $TOKEN" \
