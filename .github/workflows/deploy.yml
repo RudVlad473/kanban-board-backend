@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Create environment variables
-        run: echo "BASE_IMAGE_NAME=${DOCKERHUB_USER}/${DOCKERHUB_REPOSITORY}" >> $GITHUB_ENV
+        run: echo "BASE_IMAGE_NAME=$DOCKERHUB_USER/$DOCKERHUB_REPOSITORY" >> $GITHUB_ENV
 
   run-tests:
     runs-on: ubuntu-latest
@@ -52,7 +52,7 @@ jobs:
         run: echo "IMAGE_TAG=${GITHUB_SHA::7}" >> $GITHUB_ENV
 
       - name: Set full image name
-        run: echo "ACTUAL_IMAGE_NAME=${BASE_IMAGE_NAME}:${IMAGE_TAG}" >> $GITHUB_ENV
+        run: echo "ACTUAL_IMAGE_NAME=$BASE_IMAGE_NAME:$IMAGE_TAG" >> $GITHUB_ENV
 
       - name: Build Docker image
         run: docker build -t $ACTUAL_IMAGE_NAME .
