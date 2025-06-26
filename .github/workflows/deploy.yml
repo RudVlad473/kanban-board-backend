@@ -41,7 +41,7 @@ jobs:
 
   build-and-push-docker-image:
     runs-on: ubuntu-latest
-    needs: [ "setup", "run-tests" ]
+    needs: run-tests
     if: success()
     steps:
       - name: Log in to Docker Hub
