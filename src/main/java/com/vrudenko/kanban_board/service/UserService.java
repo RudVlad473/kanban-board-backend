@@ -4,6 +4,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.vrudenko.kanban_board.dto.board_dto.BoardResponseDTO;
 import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.user_dto.SigninRequestDTO;
+import com.vrudenko.kanban_board.dto.user_dto.SignupRequestDTO;
 import com.vrudenko.kanban_board.dto.user_dto.UserResponseDTO;
 import com.vrudenko.kanban_board.entity.UserEntity;
 import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
@@ -42,10 +43,19 @@ public class UserService implements UserDetailsService {
         return user.get();
     }
 
-    public UserResponseDTO save(SigninRequestDTO userDTO) {
-        var savedUser = userRepository.save(userMapper.fromSigninRequestDTO(userDTO));
+    public UserEntity findByEmail(String email) throws AppEntityNotFoundException {
+        var user = userRepository.findByEmail(email);
 
-        return userMapper.toResponseDTO(savedUser);
+        if (user.isEmpty()) {
+            throw new AppEntityNotFoundException("User");
+        }
+
+        return user.get();
+    }
+
+    public UserResponseDTO save(SignupRequestDTO userDTO) {
+        return userMapper.toResponseDTO(
+                userRepository.save(userMapper.fromSignupRequestDTO(userDTO)));
     }
 
     @Transactional

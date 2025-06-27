@@ -5,15 +5,18 @@ import com.vrudenko.kanban_board.dto.user_dto.SigninRequestDTO;
 import com.vrudenko.kanban_board.dto.user_dto.SignupRequestDTO;
 import com.vrudenko.kanban_board.mapper.UserMapper;
 import com.vrudenko.kanban_board.repository.UserRepository;
+import com.vrudenko.kanban_board.service.UserService;
 import io.vavr.control.Try;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.net.URI;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.context.SecurityContextHolderStrategy;
@@ -33,27 +36,27 @@ public class AuthenticationController {
     private final AuthenticationManager authenticationManager;
     private final SecurityContextHolderStrategy securityContextHolderStrategy =
             SecurityContextHolder.getContextHolderStrategy();
-    private final UserRepository userRepository;
-    private final UserMapper userMapper;
     private final SecurityContextRepository securityContextRepository;
 
+    @Autowired private UserService userService;
+
     // only these authentication routes yield session cookie
-    @GetMapping(ApiPaths.SIGNIN)
-    public ResponseEntity signin(
-            @RequestBody SigninRequestDTO signinDTO,
+    @PostMapping(ApiPaths.SIGNIN)
+    public ResponseEntity<Void> signin(
+            @RequestBody SigninRequestDTO dto,
             HttpServletRequest request,
             HttpServletResponse response) {
-        var user = userRepository.findByEmail(signinDTO.getEmail());
+        try {
+            var user = userService.findByEmail(dto.getEmail());
 
-        if (user.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
+            var successfullyAuthenticated =
+                    authenticate(user.getId(), dto.getPassword(), request, response);
 
-        var successfullyAuthenticated =
-                authenticate(user.get().getId(), signinDTO.getPassword(), request, response);
-
-        if (!successfullyAuthenticated) {
-            throw new AccessDeniedException("Was not able to sign in");
+            if (!successfullyAuthenticated) {
+                throw new AccessDeniedException("Was not able to sign in");
+            }
+        } catch (Exception e) {
+            throw new BadCredentialsException("Invalid username or password");
         }
 
         return ResponseEntity.ok().build();
@@ -65,25 +68,25 @@ public class AuthenticationController {
             @RequestBody SignupRequestDTO signupDTO,
             HttpServletRequest request,
             HttpServletResponse response) {
-        var userAlreadyExists = userRepository.findByEmail(signupDTO.getEmail()).isPresent();
+        try {
+            var createdUser = userService.save(signupDTO);
 
-        if (userAlreadyExists) {
-            return new ResponseEntity<>("User with this email already exists", HttpStatus.CONFLICT);
-        }
+            var successfullyAuthenticated =
+                    authenticate(createdUser.getId(), signupDTO.getPassword(), request, response);
 
-        var createdUser = userRepository.save(userMapper.fromSignupRequestDTO(signupDTO));
+            if (!successfullyAuthenticated) {
+                userService.deleteById(createdUser.getId());
 
-        var successfullyAuthenticated =
-                authenticate(createdUser.getId(), signupDTO.getPassword(), request, response);
-
-        if (!successfullyAuthenticated) {
-            throw new AccessDeniedException("Was not able to sign up");
+                throw new AccessDeniedException("Was not able to sign up");
+            }
+        } catch (Exception e) {
+            throw new BadCredentialsException("Invalid username or password");
         }
 
         return ResponseEntity.created(URI.create(request.getRequestURI())).build();
     }
 
-    public Boolean authenticate(
+    private Boolean authenticate(
             String userId,
             String password,
             HttpServletRequest request,

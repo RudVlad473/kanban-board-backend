@@ -34,7 +34,8 @@ public class UserEntity extends BaseEntity implements BaseUser, UserDetails {
     @OneToMany(mappedBy = "user")
     private List<BoardEntity> boards;
 
-    // since we may have other kinds of authentication that may not require password, it can be null
+    // since we may have other kinds of authentication that may not require
+    // password, it can be null
     @Column(nullable = true)
     @JsonIgnore
     private String passwordHash;

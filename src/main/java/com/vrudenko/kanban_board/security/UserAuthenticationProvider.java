@@ -21,15 +21,15 @@ public class UserAuthenticationProvider implements AuthenticationProvider {
     public Authentication authenticate(Authentication authentication)
             throws AuthenticationException {
         var userId = authentication.getPrincipal().toString();
-        var passwordHash = authentication.getCredentials().toString();
+        var plainPassword = authentication.getCredentials().toString();
 
         var userDetails = userDetailsService.loadUserByUsername(userId);
 
-        if (!passwordEncoder.matches(passwordHash, userDetails.getPassword())) {
+        if (!passwordEncoder.matches(plainPassword, userDetails.getPassword())) {
             throw new BadCredentialsException("Invalid username or password");
         }
 
-        return new UsernamePasswordAuthenticationToken(userId, passwordHash, new ArrayList<>());
+        return new UsernamePasswordAuthenticationToken(userId, null, new ArrayList<>());
     }
 
     @Override
