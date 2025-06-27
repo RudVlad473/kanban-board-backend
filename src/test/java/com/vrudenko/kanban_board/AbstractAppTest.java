@@ -12,9 +12,6 @@ import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
 import com.vrudenko.kanban_board.dto.user_dto.SignupRequestDTO;
 import com.vrudenko.kanban_board.dto.user_dto.UserResponseDTO;
-import com.vrudenko.kanban_board.entity.UserEntity;
-import com.vrudenko.kanban_board.mapper.BoardMapper;
-import com.vrudenko.kanban_board.mapper.UserMapper;
 import com.vrudenko.kanban_board.service.BoardService;
 import com.vrudenko.kanban_board.service.ColumnService;
 import com.vrudenko.kanban_board.service.TaskService;
@@ -25,7 +22,6 @@ import org.fluttercode.datafactory.impl.DataFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.crypto.password.PasswordEncoder;
 
 public abstract class AbstractAppTest {
     private @Autowired UserService userService;
