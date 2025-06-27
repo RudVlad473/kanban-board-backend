@@ -78,7 +78,8 @@ class TaskControllerTest extends AbstractAppTest {
 
     @Nested
     class DeleteById {
-        // TODO: add tests for cascade deletion (i.e. when deleting task, all its subtasks should be
+        // TODO: add tests for cascade deletion (i.e. when deleting task, all its
+        // subtasks should be
         // deleted too)
         @Test
         void testWithAuthenticatedUser_shouldDeleteTask_whenBoardExists() throws Exception {
@@ -177,7 +178,8 @@ class TaskControllerTest extends AbstractAppTest {
                             .id(taskId)
                             .title(updateDto.getTitle())
                             .description(updateDto.getDescription())
-                            .build(); // Columns preservation would need to be checked differently
+                            .build(); // Columns preservation would need to be checked
+            // differently
             // or
 
             // Act

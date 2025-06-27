@@ -86,13 +86,20 @@ public class ColumnControllerTest extends AbstractAppTest {
             var url = getColumnsPrefix(nonExistentBoardId);
 
             // Act & Assert
-            // This depends on ColumnService.findAllByBoardId behavior for non-existent boardId.
-            // If it's designed to throw an exception that results in 404, this test is valid.
-            // If it returns an empty list for a non-existent board, this test should be like
+            // This depends on ColumnService.findAllByBoardId behavior for non-existent
+            // boardId.
+            // If it's designed to throw an exception that results in 404, this test is
+            // valid.
+            // If it returns an empty list for a non-existent board, this test should be
+            // like
             // testWithAuthenticatedUser_shouldReturnEmptyList_whenNoColumnsExistForBoard
             mockMvc.perform(get(url).with(user(userId)))
                     .andDo(print())
-                    .andExpect(status().isNotFound()); // Or handle as per actual service behavior
+                    .andExpect(status().isNotFound()); // Or handle
+            // as per
+            // actual
+            // service
+            // behavior
         }
     }
 

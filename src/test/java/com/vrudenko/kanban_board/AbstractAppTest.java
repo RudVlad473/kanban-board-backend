@@ -10,6 +10,7 @@ import com.vrudenko.kanban_board.dto.subtask_dto.SaveSubtaskRequestDTO;
 import com.vrudenko.kanban_board.dto.subtask_dto.SubtaskResponseDTO;
 import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
+import com.vrudenko.kanban_board.dto.user_dto.SignupRequestDTO;
 import com.vrudenko.kanban_board.dto.user_dto.UserResponseDTO;
 import com.vrudenko.kanban_board.entity.UserEntity;
 import com.vrudenko.kanban_board.mapper.BoardMapper;
@@ -24,12 +25,11 @@ import org.fluttercode.datafactory.impl.DataFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 public abstract class AbstractAppTest {
     private @Autowired UserService userService;
-    private @Autowired UserMapper userMapper;
     private @Autowired BoardService boardService;
-    private @Autowired BoardMapper boardMapper;
     private @Autowired ColumnService columnService;
     private @Autowired TaskService taskService;
 
@@ -40,7 +40,15 @@ public abstract class AbstractAppTest {
     protected final int MOCK_SUBTASKS_AMOUNT = 7;
 
     // users
+    @Getter
+    private final String owningUserPassword =
+            dataFactory.getRandomWord(ValidationConstants.MIN_PASSWORD_LENGTH);
+
     @Getter private UserResponseDTO owningUser;
+
+    @Getter
+    private final String noBoardsUserPassword =
+            dataFactory.getRandomWord(ValidationConstants.MIN_PASSWORD_LENGTH);
 
     @Getter private UserResponseDTO noBoardsUser;
 
@@ -60,10 +68,10 @@ public abstract class AbstractAppTest {
     protected ImmutableList<SubtaskResponseDTO> mockSubtasks = ImmutableList.of();
 
     @BeforeEach
-    void setup() {
+    protected void setup() {
         // user
-        owningUser = createUser();
-        noBoardsUser = createUser();
+        owningUser = createUser(owningUserPassword);
+        noBoardsUser = createUser(noBoardsUserPassword);
 
         // board
         mockEmptyBoards =
@@ -132,17 +140,18 @@ public abstract class AbstractAppTest {
     }
 
     protected UserResponseDTO createUser() {
+        return createUser(dataFactory.getRandomWord(ValidationConstants.MIN_PASSWORD_LENGTH));
+    }
+
+    protected UserResponseDTO createUser(String password) {
         return userService.save(
-                userMapper.toSigninRequestDTO(
-                        UserEntity.builder()
-                                .email(dataFactory.getEmailAddress())
-                                .displayName(
-                                        dataFactory.getRandomWord(
-                                                ValidationConstants.MIN_USER_DISPLAY_NAME_LENGTH))
-                                .passwordHash(
-                                        dataFactory.getRandomWord(
-                                                ValidationConstants.MIN_PASSWORD_LENGTH))
-                                .build()));
+                SignupRequestDTO.builder()
+                        .email(dataFactory.getEmailAddress())
+                        .displayName(
+                                dataFactory.getRandomWord(
+                                        ValidationConstants.MIN_USER_DISPLAY_NAME_LENGTH))
+                        .password(password)
+                        .build());
     }
 
     protected TaskResponseDTO createTask() {

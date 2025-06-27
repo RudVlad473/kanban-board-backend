@@ -26,7 +26,9 @@ public class UserServiceTest extends AbstractAppTest {
     List<UserResponseDTO> mockUsers = new ArrayList<>();
 
     @BeforeEach
-    void setup() {
+    protected void setup() {
+        super.setup();
+
         for (var i = 0; i < AMOUNT_OF_FAKE_USERS; i++) {
             mockUsers.add(createUser());
         }

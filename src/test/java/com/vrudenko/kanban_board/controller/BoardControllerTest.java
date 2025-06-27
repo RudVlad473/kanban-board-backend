@@ -110,7 +110,13 @@ public class BoardControllerTest extends AbstractAppTest {
                     BoardResponseDTO.builder()
                             .id(boardId)
                             .name(updateDto.getName())
-                            .build(); // Columns preservation would need to be checked differently
+                            .build(); // Columns
+            // preservation
+            // would
+            // need
+            // to be
+            // checked
+            // differently
             // or
             // BoardResponseDTO updated to include them with accessible methods.
 
