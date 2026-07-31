@@ -21,11 +21,11 @@ Ship the two remaining Epic 2 deliverables — a real "get full board" endpoint 
 
 ### Active
 
-- [ ] `GET /boards/{boardId}/full` — single endpoint returning a board with nested columns, tasks, and subtasks, avoiding client-side N+1 round trips. Must avoid Cartesian-product blowup from a naive triple `JOIN FETCH` across two `List` collections — use `@BatchSize` or two-queries-and-stitch, with the choice explained.
-- [ ] Optimistic locking on `TaskEntity` and `ColumnEntity` (`@Version`) to prevent silent overwrite on concurrent drag-and-drop reorder/move. Includes a test proving `ObjectOptimisticLockingFailureException` on conflicting concurrent updates, and a 409 mapping in `GlobalExceptionHandler`.
+- [ ] Optimistic locking on `TaskEntity` and `ColumnEntity` (`@Version`) to prevent silent overwrite on concurrent drag-and-drop reorder/move, backed by a manual one-off `ALTER TABLE` against the real Postgres schema (`ddl-auto` unset there). Includes a test proving `ObjectOptimisticLockingFailureException` on conflicting concurrent updates (asserted at the 409 HTTP-status level), a fix to `GlobalExceptionHandler`'s existing incorrect 423 mapping, and a Lombok equals/hashCode audit on both entities.
 
 ### Out of Scope
 
+- `GET /boards/{boardId}/full` (nested board→columns→tasks→subtasks endpoint) — deferred to v2 per [REQUIREMENTS.md](REQUIREMENTS.md); scoped out of this GSD project after requirements definition, not permanently excluded
 - Epics 1, 3–7 (Kafka activity feed, Flyway/OpenAPI polish, Redis, Testcontainers, Observability, Kubernetes) — deferred to future milestones, not part of this GSD project
 - Re-fixing `OwnershipVerifierService`'s chain of `findById()` calls (Finding 1) — measured and confirmed non-issue; already resolves in 1 query via EAGER join chain, no work needed
 - Full microservice extraction / broader architectural rework — not part of Epic 2's scope
@@ -52,7 +52,7 @@ Ship the two remaining Epic 2 deliverables — a real "get full board" endpoint 
 |----------|-----------|---------|
 | Scope this GSD project to Epic 2 completion only, not the full 7-epic plan | User wants to resume exactly where prior work left off rather than commit to the full modernization roadmap right now | — Pending |
 | Treat Finding 1 (ownership chain) as closed, no further code change | Already measured and confirmed as 1 query via EAGER join chain; re-opening would be wasted effort | ✓ Good |
-| `/full` endpoint fetch strategy (`@BatchSize` vs two-query-stitch vs naive triple JOIN FETCH) deferred to phase planning/research | Needs codebase-specific investigation of collection sizes and Cartesian-product risk before committing | — Pending |
+| Narrow v1 to optimistic locking only; defer `/full` endpoint to v2 | User confirmed this narrower scope during requirements definition, after research showed both were independent, separately-sized pieces of work | ✓ Good |
 
 ## Evolution
 
