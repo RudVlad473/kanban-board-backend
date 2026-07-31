@@ -44,16 +44,16 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LOCK-01 | TBD | Pending |
-| LOCK-02 | TBD | Pending |
-| LOCK-03 | TBD | Pending |
-| LOCK-04 | TBD | Pending |
+| LOCK-01 | Phase 1 | Pending |
+| LOCK-02 | Phase 1 | Pending |
+| LOCK-03 | Phase 1 | Pending |
+| LOCK-04 | Phase 1 | Pending |
 
 **Coverage:**
 - v1 requirements: 4 total
-- Mapped to phases: 0 (roadmap not yet created)
-- Unmapped: 4 ⚠️
+- Mapped to phases: 4 ✓
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-07-31*
-*Last updated: 2026-07-31 after initial definition*
+*Last updated: 2026-07-31 after roadmap creation*
