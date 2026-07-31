@@ -1,19 +1,15 @@
 package com.vrudenko.kanban_board;
 
+import static io.restassured.RestAssured.given;
+
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.dto.user_dto.SigninRequestDTO;
-import com.vrudenko.kanban_board.dto.user_dto.SignupRequestDTO;
-import com.vrudenko.kanban_board.entity.UserEntity;
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.data.util.Pair;
-import org.springframework.http.HttpStatus;
-
-import static io.restassured.RestAssured.given;
-import static org.hamcrest.Matchers.notNullValue;
 
 public abstract class AbstractAppE2ETest extends AbstractAppTest {
     /** Env variables */

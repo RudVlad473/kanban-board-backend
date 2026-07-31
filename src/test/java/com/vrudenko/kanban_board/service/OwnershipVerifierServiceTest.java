@@ -17,6 +17,33 @@ import org.springframework.boot.test.context.SpringBootTest;
 public class OwnershipVerifierServiceTest extends AbstractAppTest {
     @Autowired OwnershipVerifierService ownershipVerifierService;
 
+    // Because SubtaskEntity.task, TaskEntity.column, ColumnEntity.board, and BoardEntity.user are
+    // all default-EAGER @ManyToOne (no @Fetch override), Hibernate collapses a fresh
+    // subtaskRepository.findById() into one SQL statement with LEFT JOINs across the whole
+    // ownership chain, and the subsequent per-level findById() calls in this service hit the L1
+    // persistence-context cache instead of issuing new SQL (verified below). So walking the chain
+    // is not actually N+1 for a single ownership check — this test guards against that changing
+    // (e.g. if a `fetch = FetchType.LAZY` override is added later without updating the queries).
+    @Nested
+    class QueryCountTest {
+        @Test
+        void verifyOwnershipOfSubtask_issuesOneQuery() {
+            // Arrange
+            var userId = getOwningUser().getId();
+            var subtaskId = mockSubtasks.getFirst().getId();
+
+            // Act
+            var queryCount =
+                    countQueries(
+                            () ->
+                                    ownershipVerifierService.verifyOwnershipOfSubtask(
+                                            userId, subtaskId));
+
+            // Assert
+            Assertions.assertThat(queryCount).isEqualTo(1);
+        }
+    }
+
     @Nested
     class VerifyOwnershipOfBoardTest {
         @Test

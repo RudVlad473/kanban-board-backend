@@ -66,6 +66,12 @@ public class SignupRequestDTOTest {
                 .isEqualTo("email");
     }
 
+    // TODO: flaky — validEmail/validPassword are built from DataFactory random generation
+    // (see fields above) and occasionally produce a value that fails @AppEmail/@Password on its
+    // own, which shows up here as a non-zero violation count unrelated to displayName. Confirmed
+    // pre-existing via `git stash` (fails intermittently on unmodified code too, ~coin-flip rate
+    // across repeated full-suite runs). Fix by asserting on the specific violation's property path
+    // instead of raw count, or by using fixed known-valid values instead of random generation.
     @Test
     public void whenDisplayNameIsMissing_thenNoViolation() {
         // arrange

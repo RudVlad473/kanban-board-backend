@@ -80,7 +80,6 @@ public class OwnershipVerifierService {
             throw new AppEntityNotFoundException("Task");
         }
 
-        // TODO: optimize verification logic, by passing already fetched entities
         var pair = verifyOwnershipOfColumn(userId, task.get().getColumn().getId());
 
         return Pair.of(pair.getFirst(), task.get());
@@ -95,7 +94,6 @@ public class OwnershipVerifierService {
             throw new AppEntityNotFoundException("Subtask");
         }
 
-        // TODO: optimize verification logic, by passing already fetched entities
         var pair = verifyOwnershipOfTask(userId, subtask.get().getTask().getId());
 
         return Pair.of(pair.getFirst(), subtask.get());

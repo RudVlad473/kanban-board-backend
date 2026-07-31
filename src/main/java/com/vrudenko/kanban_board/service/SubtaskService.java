@@ -87,4 +87,16 @@ public class SubtaskService {
 
         subtaskRepository.deleteAllByTaskId(pair.getSecond().getId());
     }
+
+    /**
+     * Batch variant for callers that already verified ownership of the parent task(s) (e.g. a
+     * column-level bulk delete) — avoids re-verifying per task id.
+     */
+    void deleteAllByTaskIds(List<String> taskIds) {
+        if (taskIds.isEmpty()) {
+            return;
+        }
+
+        subtaskRepository.deleteAllByTaskIdIn(taskIds);
+    }
 }

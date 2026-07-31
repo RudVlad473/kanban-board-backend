@@ -27,11 +27,10 @@ public class ColumnService {
 
     @Transactional
     public void deleteAllByBoardId(String userId, String boardId) {
-        // TODO: figure out how to optimize ownership verification calls
         var pair = ownershipVerifierService.verifyOwnershipOfBoard(userId, boardId);
 
-        for (var column : findAllByBoardId(userId, boardId)) {
-            taskService.deleteAllByColumnId(userId, column.getId());
+        for (var column : columnRepository.findAllByBoardId(pair.getSecond().getId())) {
+            taskService.deleteAllByColumn(column);
         }
 
         columnRepository.deleteAllByBoardId(pair.getSecond().getId());

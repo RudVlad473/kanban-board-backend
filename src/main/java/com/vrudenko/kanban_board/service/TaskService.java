@@ -11,6 +11,7 @@ import com.vrudenko.kanban_board.entity.ColumnEntity;
 import com.vrudenko.kanban_board.entity.TaskEntity;
 import com.vrudenko.kanban_board.mapper.TaskMapper;
 import com.vrudenko.kanban_board.repository.TaskRepository;
+import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import java.util.List;
 import java.util.Optional;
@@ -26,6 +27,8 @@ public class TaskService {
     @Autowired private OwnershipVerifierService ownershipVerifierService;
 
     @Autowired private SubtaskService subtaskService;
+
+    @Autowired private EntityManager entityManager;
 
     public TaskResponseDTO save(SaveTaskRequestDTO dto, ColumnEntity column) {
         var task = taskMapper.fromSaveTaskRequestDTO(dto);
@@ -87,12 +90,32 @@ public class TaskService {
     public void deleteAllByColumnId(String userId, String columnId) {
         var pair = ownershipVerifierService.verifyOwnershipOfColumn(userId, columnId);
 
-        // TODO: delete all subtasks in batch using list of task ids
-        for (var task : findAllByColumnId(userId, pair.getSecond().getId())) {
-            subtaskService.deleteAllByTaskId(userId, task.getId());
+        deleteAllByColumn(pair.getSecond());
+    }
 
-            deleteById(userId, task.getId());
-        }
+    /**
+     * For callers (e.g. {@link ColumnService#deleteAllByBoardId}) that already verified ownership
+     * of {@code column} — skips re-verifying it and batches the subtask/task deletes instead of
+     * looping one delete per task, so the query count doesn't scale with the number of tasks.
+     *
+     * <p>The batch deletes below are bulk JPQL statements, which bypass the persistence context —
+     * Hibernate doesn't know the deleted rows are gone, so anything still tracked in this session
+     * (relevant when a caller loops this over many columns/boards in one transaction, e.g. account
+     * deletion) can go stale. Flushing and clearing afterward keeps the session consistent with the
+     * DB for whatever runs next in the same transaction.
+     */
+    @Transactional
+    void deleteAllByColumn(ColumnEntity column) {
+        var taskIds =
+                taskRepository.findAllByColumnId(column.getId()).stream()
+                        .map(TaskEntity::getId)
+                        .toList();
+
+        subtaskService.deleteAllByTaskIds(taskIds);
+        taskRepository.deleteAllByIdInBatch(taskIds);
+
+        entityManager.flush();
+        entityManager.clear();
     }
 
     @Transactional

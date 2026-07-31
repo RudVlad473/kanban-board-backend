@@ -16,9 +16,11 @@ import com.vrudenko.kanban_board.service.BoardService;
 import com.vrudenko.kanban_board.service.ColumnService;
 import com.vrudenko.kanban_board.service.TaskService;
 import com.vrudenko.kanban_board.service.UserService;
+import jakarta.persistence.EntityManagerFactory;
 import java.util.stream.Stream;
 import lombok.Getter;
 import org.fluttercode.datafactory.impl.DataFactory;
+import org.hibernate.SessionFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +30,8 @@ public abstract class AbstractAppTest {
     private @Autowired BoardService boardService;
     private @Autowired ColumnService columnService;
     private @Autowired TaskService taskService;
+
+    private @Autowired EntityManagerFactory entityManagerFactory;
 
     protected final DataFactory dataFactory = new DataFactory();
 
@@ -163,6 +167,19 @@ public abstract class AbstractAppTest {
                                         ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH,
                                         ValidationConstants.MAX_TASK_DESCRIPTION_LENGTH))
                         .build());
+    }
+
+    /**
+     * Returns the number of JDBC statements Hibernate prepared while running {@code action}. Uses
+     * {@code getPrepareStatementCount()} rather than {@code getQueryExecutionCount()} because the
+     * latter only counts HQL/JPQL queries, not {@code find()}-by-id lookups (which is what {@code
+     * repository.findById()} compiles to).
+     */
+    protected long countQueries(Runnable action) {
+        var statistics = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
+        statistics.clear();
+        action.run();
+        return statistics.getPrepareStatementCount();
     }
 
     protected SubtaskResponseDTO createSubtask() {
