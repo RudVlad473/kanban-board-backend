@@ -1,19 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: Awaiting next milestone
-stopped_at: "Completed quick task 260801-gib: Append rules 2-7 to docs/CODE_STYLE.md and fix HttpStatus literals in locking E2E tests"
-last_updated: "2026-08-01T13:48:06.670Z"
+milestone: v1.1
+milestone_name: Kafka Activity Feed
+status: planning
+last_updated: "2026-08-01T13:54:36.153Z"
 last_activity: 2026-08-01
-last_activity_desc: Milestone v1.0 completed and archived
 progress:
-  total_phases: 1
-  completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
-current_phase: 1
-current_phase_name: Optimistic Locking
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -27,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-31)
 
 ## Current Position
 
-Phase: Milestone v1.0 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-08-01 — Milestone v1.0 completed and archived
+Status: Defining requirements
+Last activity: 2026-08-01 — Milestone v1.1 started
 
 ## Performance Metrics
 

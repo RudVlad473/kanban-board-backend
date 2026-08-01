@@ -8,6 +8,19 @@ A Spring Boot 3.5.0 / Java 21 REST API backend for a Kanban board application (u
 
 Ship optimistic locking on concurrent edits as clean, independently reviewable, technically defensible work that matches the standard already set by the completed part of Epic 2. (The "get full board" endpoint was narrowed out to v2 during requirements definition — see Out of Scope.)
 
+## Current Milestone: v1.1 Kafka Activity Feed
+
+**Goal:** Deliver a real, event-driven per-board activity log (Kafka + consumer + idempotent persistence), plus the genuinely-missing "move task between columns" endpoint, as Epic 1 of the backend modernization plan.
+
+**Target features:**
+- `docker-compose.yml` (postgres + kafka via native KRaft image + app) for a full local dev environment
+- `spring-kafka` dependency; domain events published from Task/Board/Column services after mutations
+- New `PATCH /tasks/{taskId}/move` endpoint
+- `@KafkaListener`-based `ActivityLogConsumer` persisting to a new `ActivityLogEntity`
+- `GET /boards/{boardId}/activity`, paginated, ownership-verified
+- Idempotent consumption (UUID `eventId`) and a dead-letter topic
+- Testcontainers-based Kafka integration test
+
 ## Requirements
 
 ### Validated
@@ -23,14 +36,15 @@ Ship optimistic locking on concurrent edits as clean, independently reviewable, 
 
 ### Active
 
-(None — Phase 1 was this project's only phase; all v1 requirements are now Validated.)
+- Kafka + event-driven activity log (Epic 1 of the backend modernization plan) — v1.1, scoping in progress
 
 ### Out of Scope
 
-- `GET /boards/{boardId}/full` (nested board→columns→tasks→subtasks endpoint) — deferred to v2 per [REQUIREMENTS.md](REQUIREMENTS.md); scoped out of this GSD project after requirements definition, not permanently excluded
-- Epics 1, 3–7 (Kafka activity feed, Flyway/OpenAPI polish, Redis, Testcontainers, Observability, Kubernetes) — deferred to future milestones, not part of this GSD project
+- `GET /boards/{boardId}/full` (nested board→columns→tasks→subtasks endpoint) — deferred to v2 per REQUIREMENTS.md history; scoped out during v1.0's requirements definition, not permanently excluded
+- Epics 3–7 (Flyway/OpenAPI polish, Redis, Testcontainers as a project-wide migration, Observability, Kubernetes) — deferred to future milestones
 - Re-fixing `OwnershipVerifierService`'s chain of `findById()` calls (Finding 1) — measured and confirmed non-issue; already resolves in 1 query via EAGER join chain, no work needed
-- Full microservice extraction / broader architectural rework — not part of Epic 2's scope
+- Full microservice extraction of the activity-log consumer into a separate deployable service — the in-process `@KafkaListener` already demonstrates the event-driven pattern; a possible later epic, not this one
+- GraphQL, Elasticsearch, WebFlux/reactive, Kotlin, Oracle/PL-SQL, Angular — explicitly excluded by the modernization plan as niche/low-ROI for this project's scope
 
 ## Context
 
@@ -78,4 +92,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-01 after Phase 1 completion*
+*Last updated: 2026-08-01 after starting v1.1 milestone*
