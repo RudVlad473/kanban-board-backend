@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-31)
 Phase: 1
 Plan: Not started
 Status: All phases complete
-Last activity: 2026-08-01 — Phase 1 complete
+Last activity: 2026-08-01 - Completed quick task 260801-gby: Create docs/CODE_STYLE.md with agent code-style preferences (enums over magic constants), referenced from CLAUDE.md
 
 Progress: [██████████] 100%
 
@@ -91,6 +91,12 @@ Carried from research (address during Phase 1 planning):
 - `ColumnRepository.deleteAllByBoardId` (derived, non-bulk) will start honoring version checks post-`@Version`, creating asymmetry with the bulk task-delete path — needs an explicit test/decision.
 - Tests must assert at controller/service ("whole path") altitude — the 423-vs-409 and version-bypass issues are invisible at repository scope.
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260801-gby | Create docs/CODE_STYLE.md with agent code-style preferences (enums over magic constants), referenced from CLAUDE.md | 2026-08-01 | 685b471 | [260801-gby-create-docs-code-style-md-with-agent-cod](./quick/260801-gby-create-docs-code-style-md-with-agent-cod/) |
+
 ## Deferred Items
 
 Items acknowledged and carried forward:
@@ -103,5 +109,5 @@ Items acknowledged and carried forward:
 ## Session Continuity
 
 Last session: 2026-08-01T09:23:21.784Z
-Stopped at: Completed 01-03-PLAN.md
+Stopped at: Completed quick task 260801-gby: Create docs/CODE_STYLE.md with agent code-style preferences (enums over magic constants), referenced from CLAUDE.md
 Resume file: None
