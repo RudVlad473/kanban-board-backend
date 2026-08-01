@@ -6,7 +6,7 @@ A Spring Boot 3.5.0 / Java 21 REST API backend for a Kanban board application (u
 
 ## Core Value
 
-Ship the two remaining Epic 2 deliverables — a real "get full board" endpoint and optimistic locking on concurrent edits — as clean, independently reviewable, interview-defensible work that matches the standard already set by the completed part of Epic 2.
+Ship optimistic locking on concurrent edits as clean, independently reviewable, interview-defensible work that matches the standard already set by the completed part of Epic 2. (The "get full board" endpoint was narrowed out to v2 during requirements definition — see Out of Scope.)
 
 ## Requirements
 
@@ -18,10 +18,12 @@ Ship the two remaining Epic 2 deliverables — a real "get full board" endpoint 
 - ✓ Bulk task/column delete N+1 fix (batched JPQL deletes, `entityManager.flush()/clear()`) — Epic 2, done 2026-07-31
 - ✓ Query-count regression guard (`OwnershipVerifierServiceTest.QueryCountTest`) — Epic 2, done 2026-07-31
 - ✓ Confirmed non-issue: `OwnershipVerifierService` chain already resolves in 1 query via EAGER joins (Finding 1) — no code change needed
+- ✓ Optimistic locking on `TaskEntity` and `ColumnEntity` (`@Version`), required client-supplied version checked explicitly before mutation on both `TaskService.updateById` and the new `ColumnService.updateById`, `GlobalExceptionHandler`'s 423→409 fix, and a Lombok equals/hashCode exclusion on `ColumnEntity.version` — Phase 1, done 2026-08-01. Proven end-to-end by real HTTP E2E tests (`TaskLockingE2ETest`, `ColumnLockingE2ETest`).
+- ✓ New `PUT /boards/{boardId}/columns/{columnId}` endpoint — Phase 1, done 2026-08-01 (previously missing; added so `ColumnEntity`'s `@Version` is reachable/testable via the API)
 
 ### Active
 
-- [ ] Optimistic locking on `TaskEntity` and `ColumnEntity` (`@Version`) to prevent silent overwrite on concurrent drag-and-drop reorder/move, backed by a manual one-off `ALTER TABLE` against the real Postgres schema (`ddl-auto` unset there). Includes a test proving `ObjectOptimisticLockingFailureException` on conflicting concurrent updates (asserted at the 409 HTTP-status level), a fix to `GlobalExceptionHandler`'s existing incorrect 423 mapping, and a Lombok equals/hashCode audit on both entities.
+(None — Phase 1 was this project's only phase; all v1 requirements are now Validated.)
 
 ### Out of Scope
 
@@ -38,6 +40,8 @@ Ship the two remaining Epic 2 deliverables — a real "get full board" endpoint 
 - Codebase map available at `.planning/codebase/` (ARCHITECTURE.md, STACK.md, CONVENTIONS.md, TESTING.md, INTEGRATIONS.md, CONCERNS.md, STRUCTURE.md) — read before planning.
 - Existing convention: services use `@Autowired` field injection (not constructor) to sidestep circular bean dependencies between Board/Column/Task/Subtask/Ownership services.
 - Existing convention: DTOs are flat (no nested entity graphs) specifically to avoid `LazyInitializationException` — the new `/full` endpoint DTO will need deliberate nested structure, a departure from this pattern that should be justified explicitly.
+- **Outstanding manual step (Phase 1):** `docs/plans/backend-modernization/02-optimistic-locking-ddl.sql` has NOT been run against the real Postgres database yet. Since `master` auto-deploys to EC2 on every push, this script must be run manually right before this phase's PR merges/deploys, or every Task/Column request will 500 in production on a missing `version` column.
+- Phase 1's required auth-path fix (`UserAuthenticationProvider` propagating the actual authenticated principal instead of a broken bare-userId string) initially introduced a real security regression — the full `UserEntity` (with bcrypt `passwordHash`) flowing into the JDBC-backed session table. Caught by code review, fixed same-session (commit `c5fb656`) by using a minimal Spring Security `User` principal instead.
 
 ## Constraints
 
@@ -50,9 +54,11 @@ Ship the two remaining Epic 2 deliverables — a real "get full board" endpoint 
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Scope this GSD project to Epic 2 completion only, not the full 7-epic plan | User wants to resume exactly where prior work left off rather than commit to the full modernization roadmap right now | — Pending |
+| Scope this GSD project to Epic 2 completion only, not the full 7-epic plan | User wants to resume exactly where prior work left off rather than commit to the full modernization roadmap right now | ✓ Good |
 | Treat Finding 1 (ownership chain) as closed, no further code change | Already measured and confirmed as 1 query via EAGER join chain; re-opening would be wasted effort | ✓ Good |
 | Narrow v1 to optimistic locking only; defer `/full` endpoint to v2 | User confirmed this narrower scope during requirements definition, after research showed both were independent, separately-sized pieces of work | ✓ Good |
+| Client-supplied `version` required + explicitly compared server-side, not just relying on Hibernate's automatic `@Version` dirty-check | This codebase's update flow loads-then-saves fresh within one transaction, so the automatic check alone would never catch a stale-read conflict across separate requests — the explicit check is what actually delivers the phase's goal | ✓ Good |
+| Manual DDL now, not deferred to Epic 3/Flyway | Deferring would leave production broken between merge and Epic 3 landing, since master auto-deploys on push | ✓ Good — script delivered; live-DB run still outstanding (see Context) |
 
 ## Evolution
 
@@ -72,4 +78,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-31 after initialization*
+*Last updated: 2026-08-01 after Phase 1 completion*
