@@ -154,6 +154,23 @@ public abstract class AbstractAppTest {
                         .build());
     }
 
+    /**
+     * Creates a board+column owned by an arbitrary user, for tests that need a fixture owned by
+     * someone other than {@link #getOwningUser()} (e.g. cross-user ownership rejection tests).
+     * There is no REST endpoint for creating a board directly (boards are only created via {@link
+     * com.vrudenko.kanban_board.service.UserService#addBoardByUserId}), so this goes through the
+     * service layer directly, same as the rest of this class's fixture setup.
+     */
+    protected ColumnResponseDTO createColumnForUser(
+            String userId, String boardName, String columnName) {
+        var board =
+                userService.addBoardByUserId(
+                        userId, SaveBoardRequestDTO.builder().name(boardName).build());
+
+        return boardService.addColumnByBoardId(
+                userId, board.getId(), SaveColumnRequestDTO.builder().name(columnName).build());
+    }
+
     protected TaskResponseDTO createTask() {
         return columnService.addTaskByColumnId(
                 getOwningUser().getId(),
