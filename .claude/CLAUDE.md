@@ -6,7 +6,7 @@
 
 A Spring Boot 3.5.0 / Java 21 REST API backend for a Kanban board application (users → boards → columns → tasks → subtasks), with session-based authentication and ownership-based access control. This GSD project scopes specifically to finishing **Epic 2** of the existing [backend modernization plan](../docs/plans/backend-modernization/README.md): closing out the JPA/Hibernate depth work (N+1 fixes, optimistic locking) that was partially completed in a prior session.
 
-**Core Value:** Ship the two remaining Epic 2 deliverables — a real "get full board" endpoint and optimistic locking on concurrent edits — as clean, independently reviewable, interview-defensible work that matches the standard already set by the completed part of Epic 2.
+**Core Value:** Ship the two remaining Epic 2 deliverables — a real "get full board" endpoint and optimistic locking on concurrent edits — as clean, independently reviewable, technically defensible work that matches the standard already set by the completed part of Epic 2.
 
 ### Constraints
 

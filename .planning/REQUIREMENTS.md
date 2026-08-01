@@ -1,7 +1,7 @@
 # Requirements: Kanban Board Backend — Epic 2 Completion
 
 **Defined:** 2026-07-31
-**Core Value:** Ship the remaining Epic 2 deliverables as clean, independently reviewable, interview-defensible work
+**Core Value:** Ship the remaining Epic 2 deliverables as clean, independently reviewable, technically defensible work
 
 ## v1 Requirements
 

@@ -6,7 +6,7 @@ A Spring Boot 3.5.0 / Java 21 REST API backend for a Kanban board application (u
 
 ## Core Value
 
-Ship optimistic locking on concurrent edits as clean, independently reviewable, interview-defensible work that matches the standard already set by the completed part of Epic 2. (The "get full board" endpoint was narrowed out to v2 during requirements definition — see Out of Scope.)
+Ship optimistic locking on concurrent edits as clean, independently reviewable, technically defensible work that matches the standard already set by the completed part of Epic 2. (The "get full board" endpoint was narrowed out to v2 during requirements definition — see Out of Scope.)
 
 ## Requirements
 
@@ -34,7 +34,7 @@ Ship optimistic locking on concurrent edits as clean, independently reviewable, 
 
 ## Context
 
-- This is a personal/portfolio project; the modernization plan's stated purpose is closing real technology gaps for interview-relevance (see [README.md](../docs/plans/backend-modernization/README.md)), but this specific GSD project is scoped purely to the remaining Epic 2 technical work.
+- This is a personal/portfolio project; the modernization plan's stated purpose is closing real technology gaps in the backend stack (see [README.md](../docs/plans/backend-modernization/README.md)), but this specific GSD project is scoped purely to the remaining Epic 2 technical work.
 - Full epic spec: [02-n-plus-one-optimistic-locking.md](../docs/plans/backend-modernization/02-n-plus-one-optimistic-locking.md).
 - Progress notes and gotchas already hit during the completed portion of Epic 2 are logged in [STATUS.md](../docs/plans/backend-modernization/STATUS.md) — includes a real gotcha about mixing derived `deleteAllByXIn` (fetch-then-remove) with bulk JPQL deletes causing FK violations, and stale persistence-context entities requiring `flush()`/`clear()`.
 - Codebase map available at `.planning/codebase/` (ARCHITECTURE.md, STACK.md, CONVENTIONS.md, TESTING.md, INTEGRATIONS.md, CONCERNS.md, STRUCTURE.md) — read before planning.
