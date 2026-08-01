@@ -24,7 +24,7 @@ Core technologies:
 - Spring Data JPA (already on classpath) — its PersistenceExceptionTranslationPostProcessor automatically wraps JPA's OptimisticLockException as Spring's ObjectOptimisticLockingFailureException, requiring zero extra config.
 - @Version (jakarta.persistence) — codebase already uses the Jakarta namespace throughout; no migration needed, just add the field.
 
-Explicitly not adopted: MULTISET-based fetching (Hibernate 6.5+ native, or Blaze Persistence/jOOQ) is the "next generation" fix for the same Cartesian-product problem in one query, but requires a version floor or new dependency — out of scope for this epic; mention only as interview color.
+Explicitly not adopted: MULTISET-based fetching (Hibernate 6.5+ native, or Blaze Persistence/jOOQ) is the "next generation" fix for the same Cartesian-product problem in one query, but requires a version floor or new dependency — out of scope for this epic; note only as background context.
 
 ### Expected Features
 
