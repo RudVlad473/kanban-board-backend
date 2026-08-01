@@ -8,6 +8,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.util.List;
 import lombok.*;
 
@@ -31,4 +32,8 @@ public class TaskEntity extends BaseEntity implements BaseTask {
 
     @Column(length = ValidationConstants.MAX_TASK_DESCRIPTION_LENGTH)
     private String description;
+
+    @Version
+    @Column(nullable = false)
+    private Long version;
 }

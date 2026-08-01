@@ -16,6 +16,7 @@ import jakarta.transaction.Transactional;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -61,9 +62,24 @@ public class TaskService {
         return pair.getSecond();
     }
 
+    /**
+     * Explicit version check is required in addition to {@code @Version}: this load-then-save flow
+     * runs entirely within one transaction, so Hibernate's own dirty-checking optimistic lock
+     * (which fires on the UPDATE statement) does not by itself model the "client read at version N,
+     * another client already wrote version N+1, this client's write should be rejected" scenario
+     * across separate HTTP requests. Comparing the caller-supplied {@code dto.getVersion()} against
+     * the just-loaded managed entity's version, before any field is mutated, is what actually
+     * catches a stale read-then-write race and turns it into a rejected request instead of a silent
+     * overwrite.
+     */
     @Transactional
     public TaskResponseDTO updateById(String userId, String taskId, UpdateTaskRequestDTO dto) {
         var task = findById(userId, taskId);
+
+        if (!task.getVersion().equals(dto.getVersion())) {
+            throw new OptimisticLockingFailureException(
+                    "Task was modified by another request, please refetch.");
+        }
 
         if (Optional.ofNullable(dto.getTitle()).isPresent()) {
             task.setTitle(dto.getTitle());
@@ -73,6 +89,12 @@ public class TaskService {
         }
 
         taskRepository.save(task);
+
+        // Hibernate only bumps the in-memory @Version field once the UPDATE statement actually
+        // runs, which normally happens at transaction commit, not at save(). Flushing here forces
+        // that UPDATE (and the version increment) to happen before the response DTO is built, so
+        // the caller sees the new version instead of the stale pre-update one (D-01).
+        entityManager.flush();
 
         return taskMapper.toTaskResponseDTO(task);
     }

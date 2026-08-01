@@ -80,7 +80,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(OptimisticLockingFailureException.class)
     public ResponseEntity<String> handleOptimisticLockingFailure(
             OptimisticLockingFailureException ex) {
-        return new ResponseEntity<>(ex.getMessage(), HttpStatus.LOCKED);
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.CONFLICT);
     }
 
     // handles errors from authentication

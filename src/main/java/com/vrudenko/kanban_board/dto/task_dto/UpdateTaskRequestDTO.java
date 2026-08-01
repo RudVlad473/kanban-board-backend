@@ -5,6 +5,7 @@ import com.vrudenko.kanban_board.base.entity.BaseTask;
 import com.vrudenko.kanban_board.dto.annotation.Description;
 import com.vrudenko.kanban_board.dto.annotation.TaskTitle;
 import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.NotNull;
 import java.util.Optional;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -20,6 +21,8 @@ public class UpdateTaskRequestDTO implements BaseTask {
     @TaskTitle String title;
 
     @Description String description;
+
+    @NotNull private Long version;
 
     @AssertTrue(message = "Either 'title' or 'description' (or both) must be provided.")
     private boolean atLeastOneFieldPopulated() {

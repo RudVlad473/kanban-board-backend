@@ -1,6 +1,5 @@
 package com.vrudenko.kanban_board.entity;
 
-import com.vrudenko.kanban_board.base.entity.BaseBoard;
 import com.vrudenko.kanban_board.base.entity.BaseColumn;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -8,6 +7,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -30,4 +30,9 @@ public class ColumnEntity extends BaseEntity implements BaseColumn {
 
     @OneToMany(mappedBy = "column")
     private List<TaskEntity> task;
+
+    @Version
+    @EqualsAndHashCode.Exclude
+    @Column(nullable = false)
+    private Long version;
 }

@@ -29,7 +29,7 @@ public class UserAuthenticationProvider implements AuthenticationProvider {
             throw new BadCredentialsException("Invalid username or password");
         }
 
-        return new UsernamePasswordAuthenticationToken(userId, null, new ArrayList<>());
+        return new UsernamePasswordAuthenticationToken(userDetails, null, new ArrayList<>());
     }
 
     @Override
