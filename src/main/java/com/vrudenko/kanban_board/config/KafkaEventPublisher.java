@@ -1,0 +1,44 @@
+package com.vrudenko.kanban_board.config;
+
+import com.vrudenko.kanban_board.constant.KafkaTopics;
+import com.vrudenko.kanban_board.event.ActivityEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
+
+/**
+ * The only place in {@code src/main} that touches the Kafka client API. Listens for any {@link
+ * ActivityEvent} published via {@code ApplicationEventPublisher} while inside a transaction, and
+ * sends it to {@link KafkaTopics#ACTIVITY} strictly after that transaction commits — never during
+ * it, so a committed mutation's HTTP outcome never depends on Kafka reachability (D-01). A failed
+ * send is logged, never silently swallowed (D-02); the mutation itself has already succeeded and
+ * returned to the caller by the time this method runs.
+ */
+@Component
+public class KafkaEventPublisher {
+    private static final Logger log = LoggerFactory.getLogger(KafkaEventPublisher.class);
+
+    @Autowired private KafkaTemplate<String, Object> kafkaTemplate;
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onActivityEvent(ActivityEvent event) {
+        kafkaTemplate
+                .send(KafkaTopics.ACTIVITY, event.eventId().toString(), event)
+                .whenComplete(
+                        (result, ex) -> {
+                            if (ex != null) {
+                                log.error(
+                                        "Failed to publish {} (eventId={}, boardId={}) to {}",
+                                        event.getClass().getSimpleName(),
+                                        event.eventId(),
+                                        event.boardId(),
+                                        KafkaTopics.ACTIVITY,
+                                        ex);
+                            }
+                        });
+    }
+}

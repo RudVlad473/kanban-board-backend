@@ -4,18 +4,23 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.primitives.Ints;
 import com.vrudenko.kanban_board.dto.subtask_dto.SaveSubtaskRequestDTO;
 import com.vrudenko.kanban_board.dto.subtask_dto.SubtaskResponseDTO;
+import com.vrudenko.kanban_board.dto.task_dto.MoveTaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
 import com.vrudenko.kanban_board.dto.task_dto.UpdateTaskRequestDTO;
 import com.vrudenko.kanban_board.entity.ColumnEntity;
 import com.vrudenko.kanban_board.entity.TaskEntity;
+import com.vrudenko.kanban_board.event.TaskMovedEvent;
 import com.vrudenko.kanban_board.mapper.TaskMapper;
 import com.vrudenko.kanban_board.repository.TaskRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
@@ -30,6 +35,8 @@ public class TaskService {
     @Autowired private SubtaskService subtaskService;
 
     @Autowired private EntityManager entityManager;
+
+    @Autowired private ApplicationEventPublisher eventPublisher;
 
     public TaskResponseDTO save(SaveTaskRequestDTO dto, ColumnEntity column) {
         var task = taskMapper.fromSaveTaskRequestDTO(dto);
@@ -95,6 +102,54 @@ public class TaskService {
         // that UPDATE (and the version increment) to happen before the response DTO is built, so
         // the caller sees the new version instead of the stale pre-update one (D-01).
         entityManager.flush();
+
+        return taskMapper.toTaskResponseDTO(task);
+    }
+
+    /**
+     * Reuses the exact explicit version-check-before-mutate pattern from {@link #updateById} (see
+     * its Javadoc for why the explicit check is required in addition to {@code @Version}). Also
+     * verifies ownership of the TARGET column (not just the task) via {@link
+     * OwnershipVerifierService#verifyOwnershipOfColumn}, and rejects a move across board boundaries
+     * (MOVE-03) before the version check — a wrong-board target is a request-shape problem
+     * independent of concurrency, so 400 is the more specific signal to return first.
+     */
+    @Transactional
+    public TaskResponseDTO moveToColumn(String userId, String taskId, MoveTaskRequestDTO dto) {
+        var task = findById(userId, taskId);
+        var sourceColumnId = task.getColumn().getId();
+        var sourceBoardId = task.getColumn().getBoard().getId();
+
+        var targetColumnPair =
+                ownershipVerifierService.verifyOwnershipOfColumn(userId, dto.getTargetColumnId());
+        var targetColumn = targetColumnPair.getSecond();
+
+        if (!targetColumn.getBoard().getId().equals(sourceBoardId)) {
+            throw new IllegalArgumentException(
+                    "Cannot move a task to a column on a different board.");
+        }
+
+        if (!task.getVersion().equals(dto.getVersion())) {
+            throw new OptimisticLockingFailureException(
+                    "Task was modified by another request, please refetch.");
+        }
+
+        task.setColumn(targetColumn);
+        taskRepository.save(task);
+
+        // Same reason as updateById: force the UPDATE (and version increment) to happen now, so
+        // the response DTO carries the new version instead of the stale pre-move one.
+        entityManager.flush();
+
+        eventPublisher.publishEvent(
+                new TaskMovedEvent(
+                        UUID.randomUUID(),
+                        userId,
+                        sourceBoardId,
+                        task.getId(),
+                        sourceColumnId,
+                        targetColumn.getId(),
+                        Instant.now()));
 
         return taskMapper.toTaskResponseDTO(task);
     }
