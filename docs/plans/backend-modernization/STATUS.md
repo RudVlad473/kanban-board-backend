@@ -45,3 +45,18 @@ Tracker for [the backend modernization plan](README.md). Update as epics are sta
     constraints. Not touched; flagged separately, not part of this epic.
   - Remaining in Epic 2: the `GET /boards/{boardId}/full` endpoint and optimistic locking — not
     started yet.
+- **2026-08-01 — Epic 2, optimistic locking manual DDL bridge delivered.** Added
+  [`02-optimistic-locking-ddl.sql`](02-optimistic-locking-ddl.sql): `ALTER TABLE tasks ADD COLUMN
+  IF NOT EXISTS version bigint NOT NULL DEFAULT 0;` and the equivalent for `columns`. This is a
+  **one-off manual bridge step for this phase only** — the real Postgres profile has `ddl-auto`
+  unset, so Hibernate will not create the new `@Version` column added to `TaskEntity`/
+  `ColumnEntity` automatically. **Must be run manually via psql against the real database
+  immediately before merging/deploying this phase's PR.** This is one-way: master auto-deploys to
+  EC2 on every push (`.github/workflows/deploy.yml`), so if the column is missing when the new
+  code ships, every request touching a Task or Column hits a missing-column SQL error in
+  production. **Flag raised and resolved during discussion:** the initial instinct was to defer
+  this DDL to Epic 3's Flyway migration work, but that was explicitly rejected — it would leave
+  production broken between merge and whenever Epic 3 actually lands. Running it manually now,
+  right before merge, was chosen instead. **Epic 3 must not silently re-apply or lose this step**
+  — when Flyway migration tooling is introduced, this manual change needs to be reflected in
+  migration history (e.g. as an already-applied/baseline migration), not re-run or forgotten.
