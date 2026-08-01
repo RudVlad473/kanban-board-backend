@@ -68,8 +68,12 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 3 plans
 
 Plans:
+**Wave 1**
 
 - [ ] 02-01-PLAN.md — Tracer: `PATCH /tasks/{taskId}/move` publishes `TaskMovedEvent` after commit (wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 02-02-PLAN.md — The four remaining domain events across Task/Board/Column services (wave 2)
 - [ ] 02-03-PLAN.md — Local Kafka stack: docker-compose with KRaft broker behind a health gate (wave 2)
 
