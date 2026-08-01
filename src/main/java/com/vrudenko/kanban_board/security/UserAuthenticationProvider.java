@@ -7,6 +7,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -29,7 +30,14 @@ public class UserAuthenticationProvider implements AuthenticationProvider {
             throw new BadCredentialsException("Invalid username or password");
         }
 
-        return new UsernamePasswordAuthenticationToken(userDetails, null, new ArrayList<>());
+        // Use a minimal principal (username only, no password hash) rather than the
+        // full UserEntity returned by loadUserByUsername — the Authentication object
+        // is what Spring Session serializes into the JDBC-backed spring_session table
+        // on every request, so passing the entity directly would persist passwordHash
+        // to the database on every authenticated request.
+        var principal = new User(userDetails.getUsername(), "", new ArrayList<>());
+
+        return new UsernamePasswordAuthenticationToken(principal, null, new ArrayList<>());
     }
 
     @Override
