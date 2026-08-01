@@ -2,6 +2,7 @@ package com.vrudenko.kanban_board.controller;
 
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.dto.column_dto.ColumnResponseDTO;
+import com.vrudenko.kanban_board.dto.column_dto.UpdateColumnRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
 import com.vrudenko.kanban_board.security.CurrentUserId;
@@ -17,6 +18,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -41,5 +43,13 @@ public class ColumnController {
             HttpServletRequest request) {
         return ResponseEntity.created(URI.create(request.getRequestURI()))
                 .body(columnService.addTaskByColumnId(userId, columnId, dto));
+    }
+
+    @PutMapping(ApiPaths.COLUMN_ID)
+    public ResponseEntity<ColumnResponseDTO> updateById(
+            @CurrentUserId String userId,
+            @PathVariable @NotBlank String columnId,
+            @Valid @RequestBody UpdateColumnRequestDTO dto) {
+        return ResponseEntity.ok(columnService.updateById(userId, columnId, dto));
     }
 }

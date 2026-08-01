@@ -4,6 +4,7 @@ import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -12,6 +13,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vrudenko.kanban_board.AbstractAppTest;
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
+import com.vrudenko.kanban_board.dto.column_dto.ColumnResponseDTO;
+import com.vrudenko.kanban_board.dto.column_dto.UpdateColumnRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
 import com.vrudenko.kanban_board.service.TaskService;
@@ -171,6 +174,137 @@ public class ColumnControllerTest extends AbstractAppTest {
                     .andDo(print())
                     // Assert
                     .andExpect(status().isNotFound());
+        }
+    }
+
+    @Nested
+    class UpdateById {
+        @Test
+        void testWithAuthenticatedUser_shouldUpdateColumn_whenColumnExists() throws Exception {
+            // Arrange
+            var userId = getOwningUser().getId();
+            var boardId = mockPopulatedBoard.getId();
+            var columnId = mockPopulatedColumn.getId();
+            var url = getColumnsPrefix(boardId) + "/" + columnId;
+            var updateDto =
+                    UpdateColumnRequestDTO.builder()
+                            .name(
+                                    dataFactory.getRandomWord(
+                                            ValidationConstants.MIN_COLUMN_NAME_LENGTH + 2))
+                            .version(mockPopulatedColumn.getVersion())
+                            .build();
+            var expectedResponse =
+                    ColumnResponseDTO.builder()
+                            .id(columnId)
+                            .name(updateDto.getName())
+                            .version(mockPopulatedColumn.getVersion() + 1)
+                            .build();
+
+            // Act
+            // Assert
+            mockMvc.perform(
+                            put(url).with(user(userId))
+                                    .contentType(APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(updateDto)))
+                    .andDo(print())
+                    .andExpect(status().isOk())
+                    .andExpect(content().json(objectMapper.writeValueAsString(expectedResponse)))
+                    .andReturn();
+        }
+
+        @Test
+        void testWithAuthenticatedUser_shouldReturnNotFound_whenColumnDoesNotExist()
+                throws Exception {
+            // Arrange
+            var userId = getOwningUser().getId();
+            var boardId = mockPopulatedBoard.getId();
+            var nonExistentColumnId = UUID.randomUUID().toString();
+            var url = getColumnsPrefix(boardId) + "/" + nonExistentColumnId;
+            var updateDto =
+                    UpdateColumnRequestDTO.builder()
+                            .name("Updated Column Name")
+                            .version(0L)
+                            .build();
+
+            // Act
+            // Assert
+            mockMvc.perform(
+                            put(url).with(user(userId))
+                                    .contentType(APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(updateDto)))
+                    .andDo(print())
+                    .andExpect(status().isNotFound())
+                    .andReturn();
+        }
+
+        @Test
+        void testWithAuthenticatedUser_shouldReturnBadRequest_whenNameIsBlank() throws Exception {
+            // Arrange
+            var userId = getOwningUser().getId();
+            var boardId = mockPopulatedBoard.getId();
+            var columnId = mockPopulatedColumn.getId();
+            var url = getColumnsPrefix(boardId) + "/" + columnId;
+            var updateDto =
+                    UpdateColumnRequestDTO.builder()
+                            .name("")
+                            .version(mockPopulatedColumn.getVersion())
+                            .build();
+
+            // Act
+            // Assert
+            mockMvc.perform(
+                            put(url).with(user(userId))
+                                    .contentType(APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(updateDto)))
+                    .andDo(print())
+                    .andExpect(status().isBadRequest())
+                    .andReturn();
+        }
+
+        @Test
+        void testWithAuthenticatedUser_shouldReturnBadRequest_whenVersionIsMissing()
+                throws Exception {
+            // Arrange
+            var userId = getOwningUser().getId();
+            var boardId = mockPopulatedBoard.getId();
+            var columnId = mockPopulatedColumn.getId();
+            var url = getColumnsPrefix(boardId) + "/" + columnId;
+            var updateDto = UpdateColumnRequestDTO.builder().name("No version supplied").build();
+
+            // Act
+            // Assert
+            mockMvc.perform(
+                            put(url).with(user(userId))
+                                    .contentType(APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(updateDto)))
+                    .andDo(print())
+                    .andExpect(status().isBadRequest())
+                    .andReturn();
+        }
+
+        @Test
+        void testWithAuthenticatedUser_shouldReturnConflict_whenVersionIsStale() throws Exception {
+            // Arrange
+            var userId = getOwningUser().getId();
+            var boardId = mockPopulatedBoard.getId();
+            var columnId = mockPopulatedColumn.getId();
+            var url = getColumnsPrefix(boardId) + "/" + columnId;
+            var staleVersion = mockPopulatedColumn.getVersion() - 1;
+            var updateDto =
+                    UpdateColumnRequestDTO.builder()
+                            .name("Stale version update")
+                            .version(staleVersion)
+                            .build();
+
+            // Act
+            // Assert
+            mockMvc.perform(
+                            put(url).with(user(userId))
+                                    .contentType(APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(updateDto)))
+                    .andDo(print())
+                    .andExpect(status().isConflict())
+                    .andReturn();
         }
     }
 }
