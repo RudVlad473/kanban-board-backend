@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -17,6 +18,14 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * it, so a committed mutation's HTTP outcome never depends on Kafka reachability (D-01). A failed
  * send is logged, never silently swallowed (D-02); the mutation itself has already succeeded and
  * returned to the caller by the time this method runs.
+ *
+ * <p>Dispatched via {@code @Async} onto the {@code kafkaPublishExecutor} pool ({@link
+ * AsyncConfig}): {@code KafkaTemplate.send()} blocks the calling thread inside {@code
+ * KafkaProducer.doSend -> waitOnMetadata} for up to {@code max.block.ms} even before returning its
+ * future, so without this the AFTER_COMMIT listener thread — the request thread in production, the
+ * fixture-setup thread in tests — would still stall for that bound on every mutation. Running
+ * off-thread means neither production requests nor test fixture creation ever wait on Kafka
+ * reachability at all.
  */
 @Component
 public class KafkaEventPublisher {
@@ -24,6 +33,7 @@ public class KafkaEventPublisher {
 
     @Autowired private KafkaTemplate<String, Object> kafkaTemplate;
 
+    @Async("kafkaPublishExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onActivityEvent(ActivityEvent event) {
         kafkaTemplate
