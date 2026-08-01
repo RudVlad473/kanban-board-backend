@@ -10,18 +10,18 @@ Requirements for this milestone. Each maps to roadmap phases.
 ### Kafka Infrastructure
 
 - [ ] **KAFKA-01**: `docker-compose.yml` at repo root provides `postgres`, `kafka` (native KRaft image, no Zookeeper), and the app itself, so `docker compose up` gives a full local dev environment
-- [ ] **KAFKA-02**: `spring-kafka` and `org.testcontainers:kafka` (+ `spring-boot-testcontainers`) are added to `build.gradle`, version-managed by Spring Boot 3.5.0's BOM (no explicit version pins)
+- [x] **KAFKA-02**: `spring-kafka` and `org.testcontainers:kafka` (+ `spring-boot-testcontainers`) are added to `build.gradle`, version-managed by Spring Boot 3.5.0's BOM (no explicit version pins)
 
 ### Domain Events
 
-- [ ] **EVENT-01**: Five typed domain event records (`TaskCreatedEvent`, `TaskMovedEvent`, `TaskDeletedEvent`, `BoardCreatedEvent`, `ColumnCreatedEvent`) exist in a new `event` package, each carrying `userId`, the relevant entity id(s), a timestamp, and a UUID `eventId`
-- [ ] **EVENT-02**: `TaskService`, `BoardService`, and `ColumnService` publish the corresponding event to the `kanban.activity` topic after each successful mutation, via `ApplicationEventPublisher` + `@TransactionalEventListener(phase = AFTER_COMMIT)` — not a raw `KafkaTemplate.send()` call inside the `@Transactional` method — so a rolled-back transaction never produces a ghost event and a committed transaction never silently drops one
+- [x] **EVENT-01**: Five typed domain event records (`TaskCreatedEvent`, `TaskMovedEvent`, `TaskDeletedEvent`, `BoardCreatedEvent`, `ColumnCreatedEvent`) exist in a new `event` package, each carrying `userId`, the relevant entity id(s), a timestamp, and a UUID `eventId`
+- [x] **EVENT-02**: `TaskService`, `BoardService`, and `ColumnService` publish the corresponding event to the `kanban.activity` topic after each successful mutation, via `ApplicationEventPublisher` + `@TransactionalEventListener(phase = AFTER_COMMIT)` — not a raw `KafkaTemplate.send()` call inside the `@Transactional` method — so a rolled-back transaction never produces a ghost event and a committed transaction never silently drops one
 
 ### Move Task Endpoint
 
-- [ ] **MOVE-01**: `PATCH /tasks/{taskId}/move` moves a task to a target column, wired through `TaskService`, and publishes `TaskMovedEvent`
-- [ ] **MOVE-02**: `PATCH /tasks/{taskId}/move` reuses the existing explicit `@Version` check-before-mutate convention (compare caller-supplied version before mutating, reject stale versions) rather than introducing a second, differently-behaved update path
-- [ ] **MOVE-03**: `PATCH /tasks/{taskId}/move` rejects (400/403) a move where the target column belongs to a different board than the task's current board
+- [x] **MOVE-01**: `PATCH /tasks/{taskId}/move` moves a task to a target column, wired through `TaskService`, and publishes `TaskMovedEvent`
+- [x] **MOVE-02**: `PATCH /tasks/{taskId}/move` reuses the existing explicit `@Version` check-before-mutate convention (compare caller-supplied version before mutating, reject stale versions) rather than introducing a second, differently-behaved update path
+- [x] **MOVE-03**: `PATCH /tasks/{taskId}/move` rejects (400/403) a move where the target column belongs to a different board than the task's current board
 
 ### Activity Log Consumer & Persistence
 
@@ -78,12 +78,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | KAFKA-01 | Phase 2 | Pending |
-| KAFKA-02 | Phase 2 | Pending |
-| EVENT-01 | Phase 2 | Pending |
-| EVENT-02 | Phase 2 | Pending |
-| MOVE-01 | Phase 2 | Pending |
-| MOVE-02 | Phase 2 | Pending |
-| MOVE-03 | Phase 2 | Pending |
+| KAFKA-02 | Phase 2 | Complete |
+| EVENT-01 | Phase 2 | Complete |
+| EVENT-02 | Phase 2 | Complete |
+| MOVE-01 | Phase 2 | Complete |
+| MOVE-02 | Phase 2 | Complete |
+| MOVE-03 | Phase 2 | Complete |
 | ACTLOG-01 | Phase 3 | Pending |
 | ACTLOG-02 | Phase 3 | Pending |
 | ACTLOG-03 | Phase 3 | Pending |

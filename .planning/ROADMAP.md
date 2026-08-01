@@ -65,12 +65,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Moving a task to a column that belongs to a different board is rejected (400/403), not silently allowed.
   4. Every successful board create, column create, task create, task move, and task delete publishes its corresponding typed domain event (`TaskCreatedEvent`, `TaskMovedEvent`, `TaskDeletedEvent`, `BoardCreatedEvent`, `ColumnCreatedEvent`) to `kanban.activity` only after the enclosing transaction commits — a rolled-back mutation never publishes an event, and no committed mutation silently fails to publish.
 
-**Plans**: 3 plans
+**Plans**: 1/3 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 02-01-PLAN.md — Tracer: `PATCH /tasks/{taskId}/move` publishes `TaskMovedEvent` after commit (wave 1)
+- [x] 02-01-PLAN.md — Tracer: `PATCH /tasks/{taskId}/move` publishes `TaskMovedEvent` after commit (wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -99,5 +99,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Optimistic Locking | 3/3 | Complete | 2026-08-01 |
-| 2. Kafka Foundation, Domain Events & Move Endpoint | 0/3 | Planned | - |
+| 2. Kafka Foundation, Domain Events & Move Endpoint | 1/3 | In Progress|  |
 | 3. Activity Log Consumer, Reliability & Read API | 0/TBD | Not started | - |

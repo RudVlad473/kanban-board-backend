@@ -4,16 +4,16 @@ milestone: v1.1
 milestone_name: Kafka Activity Feed
 current_phase: 2
 current_phase_name: Kafka Foundation, Domain Events & Move Endpoint
-status: planning
-stopped_at: Phase 2 context gathered
-last_updated: "2026-08-01T15:17:42.470Z"
+status: executing
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-08-01T15:39:10.507Z"
 last_activity: 2026-08-01
-last_activity_desc: ROADMAP.md created for v1.1, phases 2-3 defined, 16/16 requirements mapped
+last_activity_desc: Phase 2 execution started
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 3
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-08-01)
 
 ## Current Position
 
-Phase: 2 of 3 (Kafka Foundation, Domain Events & Move Endpoint)
-Plan: — (not yet planned)
-Status: Roadmap ready — awaiting /gsd-plan-phase 2
-Last activity: 2026-08-01 — ROADMAP.md created for v1.1, phases 2-3 defined, 16/16 requirements mapped
+Phase: 2 (Kafka Foundation, Domain Events & Move Endpoint) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-08-01 — Phase 2 execution started
 
 Progress: [███░░░░░░░] 33%
 
@@ -64,6 +64,7 @@ Progress: [███░░░░░░░] 33%
 | Phase 01 P01 | 45min | 3 tasks | 11 files |
 | Phase 01 P02 | 35min | 3 tasks | 7 files |
 | Phase 01 P03 | 15min | 1 tasks | 2 files |
+| Phase 02 P01 | 14min | 2 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -77,10 +78,13 @@ Recent decisions affecting current work:
 - [Roadmap/v1.1]: Phase 2 explicitly depends on Phase 1 — `PATCH /tasks/{taskId}/move` (MOVE-02) reuses the exact explicit `@Version` compare-before-mutate convention delivered in Phase 1, not a new locking path.
 - [v1.0/Scope]: Narrow v1.0 to optimistic locking only; defer `/full` endpoint to v2.
 - [v1.0/Finding 1]: Ownership chain treated as closed — already 1 query via EAGER joins, no code change.
+- [Phase ?]: [Phase 2 Plan 01]: KafkaEventPublisher is the sole Kafka client API touchpoint in src/main — TaskService never imports org.springframework.kafka, confirmed by grep
+- [Phase ?]: [Phase 2 Plan 01]: MOVE-03 cross-board guard (400) runs before the MOVE-02 version guard (409) since a wrong-board target is a request-shape problem, not a concurrency one
+- [Phase ?]: [Phase 2 Plan 01]: Added AbstractAppTest.createColumnForUser fixture helper since no REST endpoint exists to create a board directly — boards are only created via UserService.addBoardByUserId
 
 ### Pending Todos
 
-None yet.
+- [major] Stop exposing version as client-writable in update DTOs — `version` in `UpdateTaskRequestDTO`/`UpdateColumnRequestDTO` should be treated as read-only from the client's perspective (server-owned increment), not a normal editable field. See `.planning/todos/pending/2026-08-01-stop-exposing-version-as-client-writable-in-update-dtos.md`.
 
 ### Blockers/Concerns
 
@@ -112,9 +116,9 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-01T14:37:58.348Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-kafka-foundation-domain-events-move-endpoint/02-CONTEXT.md
+Last session: 2026-08-01T15:39:10.489Z
+Stopped at: Completed 02-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
