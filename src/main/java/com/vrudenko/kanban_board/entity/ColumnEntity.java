@@ -1,6 +1,7 @@
 package com.vrudenko.kanban_board.entity;
 
 import com.vrudenko.kanban_board.base.entity.BaseBoard;
+import com.vrudenko.kanban_board.base.entity.BaseColumn;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.JoinColumn;
@@ -19,7 +20,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @EqualsAndHashCode(callSuper = false)
 @Table(name = "columns")
-public class ColumnEntity extends BaseEntity implements BaseBoard {
+public class ColumnEntity extends BaseEntity implements BaseColumn {
     @Column(nullable = false)
     private String name;
 
