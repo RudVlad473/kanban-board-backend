@@ -1,10 +1,10 @@
 # Stack Research
 
-**Domain:** JPA/Hibernate depth work on existing Spring Boot 3.5.0 REST API (nested-aggregate fetching + optimistic locking)
-**Researched:** 2026-07-31
-**Confidence:** HIGH
+**Domain:** Kafka-based event-driven activity log, added to an existing Spring Boot 3.5.0 / Java 21 REST API
+**Researched:** 2026-08-01
+**Confidence:** MEDIUM (version numbers verified directly against the pinned `spring-boot-dependencies` BOM at the `v3.5.0` git tag — a primary source — but the fetch tooling available this session classifies as LOW-tier by default; cross-check before merging if in doubt. See Sources.)
 
-This is a narrow, well-trodden corner of the JPA/Hibernate ecosystem — both problems (bag-fetch Cartesian products, optimistic locking + HTTP mapping) are canonical, extensively documented patterns with a clear consensus answer as of Hibernate 6.x / Spring Boot 3.5. No exotic tech is needed; this is entirely about correct use of what's already on the classpath (`spring-boot-starter-data-jpa`, which pulls in Hibernate ORM 6.x transitively).
+This file covers ONLY the NEW additions needed for the v1.1 Kafka activity-feed milestone (Epic 1 of the backend modernization plan). Everything already validated and in `build.gradle` (Spring Boot 3.5.0, Java 21, Spring Data JPA, Spring Security, MapStruct, springdoc-openapi, Lombok, ULID Creator, Vavr, Guava, REST Assured, H2, `@Version` optimistic locking) is out of scope — already shipped in v1.0, do not re-research or re-version. The prior milestone's JPA/Hibernate stack research that previously lived in this file has been superseded; it's preserved in git history and in `PROJECT.md`'s Validated section / `docs/plans/backend-modernization/STATUS.md`.
 
 ## Recommended Stack
 
@@ -12,213 +12,108 @@ This is a narrow, well-trodden corner of the JPA/Hibernate ecosystem — both pr
 
 | Technology | Version | Purpose | Why Recommended |
 |------------|---------|---------|-----------------|
-| Hibernate ORM | 6.x (bundled transitively via `spring-boot-starter-data-jpa` in Spring Boot 3.5.0 — no explicit version pin needed) | JPA provider already in use | Already the project's ORM; both features (batch fetch, `@Version`) are core Hibernate/JPA capabilities, no additional dependency required |
-| Spring Data JPA | matches Spring Boot 3.5.0 BOM (Spring Data 2025.0.x line) | Repository abstraction, exception translation | Already in use; its `PersistenceExceptionTranslationPostProcessor` is what turns JPA's `jakarta.persistence.OptimisticLockException` into Spring's `ObjectOptimisticLockingFailureException` — this translation is automatic and requires zero extra config, only correct exception handling downstream |
+| `spring-kafka` | **3.3.6** (BOM-managed — do not pin explicitly) | Producer/consumer abstraction (`KafkaTemplate`, `@KafkaListener`, `DefaultErrorHandler`) over the raw Kafka client | This is the exact version Spring Boot 3.5.0's own `spring-boot-dependencies` BOM pins (verified by reading the `build.gradle` of the `spring-boot` repo at the `v3.5.0` git tag directly — a primary source, not a blog post). The project already applies `io.spring.dependency-management` (line 4 of `build.gradle`), so declaring `implementation 'org.springframework.kafka:spring-kafka'` with **no version string** — same pattern already used for `spring-boot-starter-security`, `spring-boot-starter-web`, etc. — resolves the correct, tested-together version automatically. |
+| `org.apache.kafka:kafka-clients` | **3.9.1** (transitive via `spring-kafka`, do not declare directly) | Underlying Kafka wire-protocol client | Pulled in transitively by `spring-kafka`; only add directly if you need a client-only feature `spring-kafka` doesn't expose (not the case here). |
+| `apache/kafka-native` (Docker image) | Track `:latest` or pin to a current 4.x tag (e.g. `4.1.2`) | Single-node KRaft (no Zookeeper) local broker for `docker-compose.yml` | Epic spec explicitly calls for the native KRaft image, no separate Zookeeper service. `apache/kafka-native` is the GraalVM ahead-of-time-compiled variant of the official `apache/kafka` image — same env-var config surface, faster cold start and lower memory, which matters for the `docker compose up` inner-dev-loop. Client/broker version skew (broker on Kafka 4.x, client lib on 3.9.x wire protocol) is a non-issue: Kafka brokers are backward compatible with older client protocol versions. |
 
-**Note on Hibernate version pinning:** do not hand-roll a `hibernate.version` override in `build.gradle`. Spring Boot 3.5.0's dependency management BOM already selects a compatible Hibernate 6.x patch release tested against that Spring Boot/Spring Data combination; overriding it risks subtle behavioral regressions in fetch/batch semantics documented below. Confidence: MEDIUM (exact patch version not independently verified against Maven Central in this pass — verify with `./gradlew dependencies --configuration compileClasspath | grep hibernate-core` before writing the phase plan, since it costs one command and removes all doubt).
+### Supporting Libraries
 
-### Supporting Libraries / Config (no new dependencies)
+| Library | Version | Purpose | When to Use |
+|---------|---------|---------|-------------|
+| `org.testcontainers:kafka` | BOM-managed → **1.21.0** (do not pin explicitly) | Spins up a real containerized Kafka broker for integration tests | Add as `testImplementation`, no version string — same BOM-managed convention already used for `com.h2database:h2`. This is the artifact the epic spec names explicitly. Note: a separately-versioned `org.testcontainers:testcontainers-kafka` module (2.x line, part of a Testcontainers-Java 2.0 rebrand) exists in the wider ecosystem, but Spring Boot 3.5.0 does **not** manage that line — use the classic `org.testcontainers:kafka` coordinate so it resolves cleanly off the BOM already in play. |
+| `org.testcontainers:junit-jupiter` | BOM-managed | JUnit 5 integration (`@Testcontainers`, `@Container`) for the Kafka container lifecycle | Needed alongside `org.testcontainers:kafka` for the integration test the epic calls for (publish `TaskMovedEvent` end-to-end through a real broker, assert `ActivityLogEntity` row appears). |
+| `org.springframework.boot:spring-boot-testcontainers` | BOM-managed | Enables `@ServiceConnection` on a `KafkaContainer` bean | Lets Spring Boot auto-wire `spring.kafka.bootstrap-servers` (and related `spring.kafka.*` connection props) from the running Testcontainers Kafka instance with **zero manual `@DynamicPropertySource` wiring** — one annotation on a `@TestConfiguration`-declared container bean. This is the idiomatic Spring Boot 3.1+ pattern and keeps the new test config terse and consistent with how clean the rest of this codebase's tests are. |
 
-| Config/Annotation | Where | Purpose | When to Use |
-|---|---|---|---|
-| `@BatchSize(size = N)` | On `@OneToMany` collection fields (`BoardEntity.column`, `ColumnEntity.task`, `TaskEntity.subtasks`) | Batches lazy-collection initialization into `IN (...)` queries instead of one query per parent | Use for the `/full` endpoint's second and third collection levels, after JOIN FETCH-ing the first |
-| `@Version` | New `Long version` field, added to `TaskEntity` and `ColumnEntity` (per the epic spec) | Optimistic concurrency control | Any entity subject to concurrent update races — here specifically drag/reorder targets |
-| `hibernate.default_batch_fetch_size` (application.properties) | Global Hibernate setting | Alternative to per-entity `@BatchSize` | Prefer per-entity `@BatchSize` here since only 2–3 collections need it and explicitness aids the explain-the-SQL goal stated in the epic spec; use global config only if this pattern spreads to many more entities later |
+### Development Tools
+
+| Tool | Purpose | Notes |
+|------|---------|-------|
+| `docker-compose.yml` (new, repo root) | Full local dev environment: `postgres` + `kafka` (native KRaft) + the app | Currently absent from the repo — only a `Dockerfile` exists. Single-node KRaft combined mode (broker+controller in one process) needs: `KAFKA_NODE_ID`, `KAFKA_PROCESS_ROLES=broker,controller`, `KAFKA_LISTENERS` (a `PLAINTEXT` listener for clients + a `CONTROLLER` listener), `KAFKA_ADVERTISED_LISTENERS`, `KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER`, `KAFKA_LISTENER_SECURITY_PROTOCOL_MAP`, `KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:9093`, and — specifically for single-node — `KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1` (the internal `__consumer_offsets` topic defaults to replication factor 3 and will fail to come up with only one broker otherwise). Official reference compose files live in `apache/kafka`'s own repo under `docker/examples/docker-compose-files/single-node/` — pull the exact YAML from there rather than hand-assembling it, to avoid a subtly wrong listener/advertised-listener combination (a very common Kraft-in-Docker footgun). |
+| Kafka UI (optional, e.g. `provectuslabs/kafka-ui` or Redpanda Console) | Ad-hoc topic/message inspection during local dev | Not required by the epic spec. A cheap add (one more `docker-compose.yml` service, zero app code) if you want to visually confirm message shape and DLT routing while building the consumer — mention as optional, skip if you want to keep the compose file minimal and reviewable. |
 
 ## Installation
 
-No new dependencies. Everything needed ships with the existing `org.springframework.boot:spring-boot-starter-data-jpa` dependency already in `build.gradle`. This is purely an annotation/configuration/query-shape change.
-
 ```bash
-# Nothing to install — verify existing Hibernate version only:
-./gradlew dependencies --configuration compileClasspath | grep hibernate-core
+# build.gradle additions (Gradle/Groovy DSL, matching existing file style)
+
+# Core — versions omitted deliberately; resolved via Spring Boot's
+# io.spring.dependency-management BOM (already applied, line 4 of build.gradle)
+implementation 'org.springframework.kafka:spring-kafka'
+
+# Testing — same BOM-managed convention already used for com.h2database:h2
+testImplementation 'org.testcontainers:kafka'
+testImplementation 'org.testcontainers:junit-jupiter'
+testImplementation 'org.springframework.boot:spring-boot-testcontainers'
 ```
 
----
+No `npm`/lockfile step — this is a Gradle project; the four lines above are the complete dependency-side change. Run `./gradlew build` once added to confirm resolution. No version bump to `io.spring.dependency-management` (currently 1.1.6) is needed.
 
-## Question 1 — `GET /boards/{boardId}/full` without Cartesian-product blowup or N+1
+### `application.properties` additions
 
-### The core problem (verified, HIGH confidence — Hibernate ORM is explicit about this)
-
-`BoardEntity.column`, `ColumnEntity.task`, and `TaskEntity.subtasks` are all mapped as `List<...>` (`@OneToMany` "bags" — unordered, duplicate-permitting collections, since none carry `@OrderColumn` or a `Set` type). Hibernate **cannot** `JOIN FETCH` two bags in the same query — this throws `org.hibernate.loader.MultipleBagFetchException` at query-parse time, not runtime, so a naive triple `JOIN FETCH board.columns.tasks.subtasks` (fetching both `columns→tasks` and `tasks→subtasks` in one query) will fail outright before it even produces bad data.
-
-Even if you defeated that exception (e.g., by converting all three collections to `Set`), you would trade a compile/parse-time error for a *silent correctness and performance regression*: JOIN-fetching two one-to-many collections in a single SQL query produces a Cartesian product at the database level. For a board with, say, 5 columns × 8 tasks/column × 3 subtasks/task, a naive triple join returns `5 × 8 × 3 = 120` duplicated-and-inflated row combinations for what should conceptually be ~53 entities (5 + 40 + 120 if you count subtasks — but the point is the *row count returned by the DB*, before Hibernate's result-set deduplication, balloons multiplicatively across every fetched level, not additively). At small board sizes this is invisible; it becomes a real performance and memory problem exactly as boards grow, which is precisely the failure mode this epic exists to eliminate.
-
-### Recommended approach for this codebase: JOIN FETCH one level + `@BatchSize` for the rest
-
-Given the shape here — 3 levels deep (Board → Column → Task → Subtask), each a `List` — the standard, Hibernate-idiomatic answer as of 6.x is:
-
-1. **JOIN FETCH exactly one collection** in the primary query — the first level (`board.columns`), since it's the only one guaranteed to be reasonably small (a handful of columns per board) and directly needed to shape the response root.
-2. **Apply `@BatchSize`** to the deeper collections (`ColumnEntity.task`, `TaskEntity.subtasks`) so that when the mapper/service subsequently touches `column.getTask()` and `task.getSubtasks()`, Hibernate issues **one batched `SELECT ... WHERE column_id IN (?, ?, ?, ...)`** per level — not one query per row. With `@BatchSize(size = 25)` and a board that has, say, 8 columns, that's 1 query for columns' tasks (all 8 column IDs batched into one `IN` clause) and 1 query for subtasks (all task IDs from those columns batched into one `IN` clause) — **3 total queries for the whole aggregate, flat and bounded**, regardless of how many columns/tasks exist (it becomes `ceil(N/batchSize)` queries only if N exceeds the batch size, which is a graceful degradation, not N+1).
-
-```java
-// Repository — first level via JOIN FETCH
-public interface BoardRepository extends JpaRepository<BoardEntity, String> {
-    @Query("SELECT b FROM BoardEntity b LEFT JOIN FETCH b.column WHERE b.id = :boardId")
-    Optional<BoardEntity> findByIdWithColumns(@Param("boardId") String boardId);
-}
+```properties
+# === Kafka ===
+spring.kafka.bootstrap-servers=${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+spring.kafka.producer.key-serializer=org.apache.kafka.common.serialization.StringSerializer
+spring.kafka.producer.value-serializer=org.springframework.kafka.support.serializer.JsonSerializer
+spring.kafka.consumer.group-id=kanban-activity-log
+spring.kafka.consumer.key-deserializer=org.apache.kafka.common.serialization.StringDeserializer
+spring.kafka.consumer.value-deserializer=org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+spring.kafka.consumer.properties.spring.deserializer.value.delegate.class=org.springframework.kafka.support.serializer.JsonDeserializer
+spring.kafka.consumer.properties.spring.json.trusted.packages=com.vrudenko.kanban_board.event
 ```
 
-```java
-// Entity — batch the deeper collections instead of joining them
-@Entity
-public class ColumnEntity extends BaseEntity implements BaseBoard {
-    // ...
-    @OneToMany(mappedBy = "column")
-    @BatchSize(size = 25)
-    private List<TaskEntity> task;
-}
+Follows the existing file's `# === section ===` comment convention (see `spring.datasource.*`, `spring.jpa.*` blocks already there). `KAFKA_BOOTSTRAP_SERVERS` should join `DB_HOST`/`DB_NAME`/`DB_USER`/`DB_PASS` as an env var supplied both by the new `docker-compose.yml` (pointing at the `kafka` service, e.g. `kafka:9092`) and by whatever mechanism supplies the Postgres env vars in the EC2 deploy today (needs a decision: does v1.1 also stand up Kafka in production, or is the Kafka activity feed local/dev-only for now? — flagged as an open question below). `ErrorHandlingDeserializer` wrapping `JsonDeserializer` is what lets a malformed/poison message be handed to `DefaultErrorHandler` → `DeadLetterPublishingRecoverer` instead of killing the listener container outright — this directly enables the epic's dead-letter-topic requirement.
 
-@Entity
-public class TaskEntity extends BaseEntity implements BaseTask {
-    // ...
-    @OneToMany(mappedBy = "task")
-    @BatchSize(size = 25)
-    private List<SubtaskEntity> subtasks;
-}
-```
+## Alternatives Considered
 
-Then in the service, accessing `board.getColumn().forEach(c -> c.getTask().forEach(t -> t.getSubtasks()...))` inside the same `@Transactional` method triggers exactly the batched queries described above — Hibernate detects the access pattern across the batch and coalesces it, it does not refetch per-row.
-
-**Why this over the alternatives:**
-
-| Alternative | Why not chosen here |
-|---|---|
-| Naive triple `JOIN FETCH` across two `List` bags | Throws `MultipleBagFetchException` at startup/query-parse time — doesn't even run. |
-| Convert all collections to `Set` + triple JOIN FETCH | Removes the exception but reintroduces the Cartesian product silently — worse, because it *works* at small scale and only degrades as boards grow, making it a landmine rather than a hard failure. Also a bigger diff (entity type changes ripple into mappers, equals/hashCode, and any ordering assumptions the frontend relies on for column/task order — column/task order is almost certainly meaningful for a kanban board, and `Set` has no reliable order without an explicit `@OrderColumn`, which this codebase doesn't have). |
-| Two-queries-and-stitch-in-Java (fetch board+columns in query 1, then a second `JOIN FETCH` query for `columns.tasks`, merging via Hibernate's persistence-context identity) | Valid and Vlad Mihalcea's stated general-purpose answer, but requires an extra explicit merge step and only handles 2 levels before you need a 3rd query anyway for subtasks — at that point it's the same query count as the batch-size approach but with more code to maintain (manual `IN (:ids)` List<Long> extraction) for no benefit, since `@BatchSize` gives the same query-count outcome declaratively. Two-query-stitch becomes preferable over `@BatchSize` mainly when result sets are enormous (thousands of rows) and you want to paginate the parent query independently — not the case for a single board's aggregate. |
-| `@EntityGraph(attributePaths = {"column", "column.task", "column.task.subtasks"})` | Under the hood, Hibernate compiles multi-level `@EntityGraph` fetches into the same JOIN FETCH SQL as JPQL — so a graph spanning two `List` levels hits the *identical* `MultipleBagFetchException`. `@EntityGraph` is not a workaround for the bag-fetch restriction; it's syntactic sugar over the same mechanism, so it doesn't change this analysis. |
-| MULTISET-based fetching (Hibernate 6.5+ native, or via Blaze Persistence/jOOQ) | Real, modern (2024+) fix for this exact problem in a single query without Cartesian products, using a SQL-level array/collection sub-select rather than a join. Not recommended here: it requires Hibernate 6.5+ (verify against the pinned Boot 3.5.0 version) or an additional third-party library (Blaze Persistence/jOOQ), meaningfully expands scope for a portfolio-scoped epic, and `@BatchSize` already solves the problem with primitives already on the classpath. Worth knowing as "the newer alternative" but not worth adopting here. |
-
-**Confidence: HIGH.** `MultipleBagFetchException` and the `@BatchSize` mitigation are extensively and consistently documented across Hibernate's own contributors (Vlad Mihalcea, a Hibernate core team alumnus) and independent sources (Baeldung, Thorben Janssen), with no contradictions found across sources.
-
-### DTO shape implication
-
-The `/full` endpoint necessarily breaks this codebase's stated flat-DTO convention (see `ARCHITECTURE.md` — DTOs are flat specifically to dodge `LazyInitializationException`). That's fine and expected — the epic spec calls this out explicitly as a deliberate, justified departure. The key discipline to carry over: perform **all** collection traversal (`getTask()`, `getSubtasks()`) inside the `@Transactional` service method, and build the nested response DTO tree there, before the Hibernate session closes. Do not return the entity graph itself out of the service layer and expect a MapStruct mapper invoked later (e.g., from the controller) to still have an open session — that reintroduces the exact `LazyInitializationException` risk the flat-DTO convention was built to avoid. A dedicated `BoardFullResponseDTO` (with nested `ColumnDTO { List<TaskDTO> { List<SubtaskDTO> } }`) built via nested MapStruct mappers (`uses = {ColumnMapper.class}` etc.) invoked from within the transactional service method is the correct shape.
-
----
-
-## Question 2 — `@Version` optimistic locking + 409 mapping
-
-### Mechanism (verified, HIGH confidence)
-
-Adding `@jakarta.persistence.Version private Long version;` to `TaskEntity` and `ColumnEntity` is genuinely all that's needed to activate optimistic locking for those entities — Hibernate automatically:
-- Includes `version` in every `UPDATE ... WHERE id = ? AND version = ?` it issues for that entity,
-- Increments it on every successful update,
-- Throws `jakarta.persistence.OptimisticLockException` (wrapped by Spring Data as `org.springframework.orm.ObjectOptimisticLockingFailureException`, itself a subtype of `org.springframework.dao.OptimisticLockingFailureException`) when the `WHERE` clause matches zero rows because another transaction already bumped the version first.
-
-```java
-// BaseEntity — do NOT add here; see rationale below
-// TaskEntity.java
-@Entity
-public class TaskEntity extends BaseEntity implements BaseTask {
-    @Version
-    private Long version;
-    // ... existing fields
-}
-
-// ColumnEntity.java
-@Entity
-public class ColumnEntity extends BaseEntity implements BaseBoard {
-    @Version
-    private Long version;
-    // ... existing fields
-}
-```
-
-**Why `Long`, not `int`/`Integer`:** `Long` avoids overflow entirely in practice and is the type used in virtually every reference example (Baeldung, Vlad Mihalcea, Spring's own JPA guides). `int` technically works too (JPA spec supports `int`, `Integer`, `long`, `Long`, `short`, `Short`, and `java.sql.Timestamp`/`Instant` for the version column), but `Long` is the pragmatic, future-proof default and matches the epic spec's explicit instruction (`@Version private Long version;`). Confidence: HIGH for correctness of either type; MEDIUM-leaning-convention for "why Long specifically" (it's community convention/spec-compliant, not a hard requirement).
-
-**Why put `@Version` directly on `TaskEntity`/`ColumnEntity` rather than on `BaseEntity`:** the epic spec scopes this to `TaskEntity` and `ColumnEntity` only (the two entities actually subject to concurrent drag/reorder races). `BoardEntity` and `SubtaskEntity` don't have that access pattern in the app today (subtasks are edited one at a time by their owner; boards aren't collaboratively dragged). Adding `@Version` to `BaseEntity` would silently apply optimistic locking to every entity including `UserEntity`, which is broader blast radius than the epic asks for, and risks failing existing tests/flows that update those entities without expecting version-check semantics (e.g., any code path doing partial-field updates via `save()` after a stale read). Add it narrowly to the two entities named in the spec.
-
-### Parent-collection version nuance (relevant to this schema — verified, HIGH confidence)
-
-`ColumnEntity.task` and `BoardEntity.column` are the **non-owning side** of their `@OneToMany` (`mappedBy`), with `TaskEntity.column`/`ColumnEntity.board` owning the FK. Per the JPA spec, Hibernate does **not** bump a parent's `@Version` merely because a child in its `mappedBy` collection changed (e.g., moving a `TaskEntity` to a different `ColumnEntity`, or editing a task's title, does **not** increment `ColumnEntity.version` or `BoardEntity.version`). This is actually the *correct* behavior for this use case: the stated conflict scenario is two clients editing/reordering **the same task** concurrently — that's a direct `TaskEntity.version` conflict, detected correctly without any extra configuration. You do not need `OPTIMISTIC_FORCE_INCREMENT` locking or any parent-version-cascading trick here; that mechanism exists for a different problem (detecting "this list's membership/order changed" as a whole), which is out of scope per the epic spec (only "silent overwrite of a single row" is asked for). Flag this only as a known limitation if reordering *within a column* (position/order field on `TaskEntity` itself, presumably) is the concurrency surface — if position is a field on `TaskEntity`, then `TaskEntity.version` still catches it correctly, since both concurrent reorder operations are `UPDATE tasks SET ... WHERE id=? AND version=?` on the same row.
-
-### Exception-to-409 mapping — critical fix needed in the existing handler
-
-**This is the most important concrete finding: the codebase's current `GlobalExceptionHandler` already has an `@ExceptionHandler(OptimisticLockingFailureException.class)` that maps to `HttpStatus.LOCKED` (423), not 409.** `ObjectOptimisticLockingFailureException` (what Spring Data actually throws on a version mismatch) **is a subclass of** `org.springframework.dao.OptimisticLockingFailureException` — so today's handler already intercepts it, but returns the wrong status code for the epic's requirement (409, not 423).
-
-Two ways to fix, in order of preference:
-
-**Option A (recommended): change the existing handler's status to 409, keep the broader type.**
-```java
-@ExceptionHandler(OptimisticLockingFailureException.class)
-public ResponseEntity<String> handleOptimisticLockingFailure(OptimisticLockingFailureException ex) {
-    return new ResponseEntity<>(ex.getMessage(), HttpStatus.CONFLICT); // 409, not 423
-}
-```
-This is a one-line change. It correctly returns 409 for `ObjectOptimisticLockingFailureException` (the concrete exception thrown by Spring Data JPA repositories on a stale `@Version` write) and any other `OptimisticLockingFailureException` subtype, since Spring's exception hierarchy is designed for exactly this kind of broad, safe catch-all.
-
-**Option B (more precise, if you want the epic's exact exception type explicit in the signature for documentation clarity):** add a dedicated handler for `ObjectOptimisticLockingFailureException` above the more general one — Spring's `@ExceptionHandler` resolution picks the most specific matching type, so ordering doesn't strictly matter, but it reads more clearly:
-```java
-@ExceptionHandler(ObjectOptimisticLockingFailureException.class)
-public ResponseEntity<String> handleObjectOptimisticLockingFailure(ObjectOptimisticLockingFailureException ex) {
-    return new ResponseEntity<>(
-        "The record was updated by another request. Please reload and try again.",
-        HttpStatus.CONFLICT); // 409
-}
-```
-Recommendation: **do Option A** — it's the minimal, correct diff, and 409 Conflict is the RFC 7231-conventional status for "the request conflicts with the current state of the target resource," which is exactly what a stale-version write is. Reserve Option B only if the team wants a friendlier, non-leaky message distinct from other `OptimisticLockingFailureException` subtypes (there likely aren't other subtypes reachable in this codebase today, so Option A is sufficient and lower-risk).
-
-**Why NOT 423 Locked (the current behavior):** 423 is defined by WebDAV (RFC 4918) to mean the resource is explicitly locked (e.g., a pessimistic lock held by another session) — semantically wrong for optimistic concurrency, where there is no lock at all, just a detected write conflict after the fact. 409 Conflict is both the epic spec's explicit requirement and the semantically correct HTTP status per REST convention (this exact mapping — `ObjectOptimisticLockingFailureException` → 409 — appears consistently across every optimistic-locking + Spring Boot resource surveyed).
-
-### Test approach (matches epic spec, confirms via Spring's real wrapper type)
-
-```java
-@Test
-void concurrentUpdate_throwsObjectOptimisticLockingFailureException() {
-    // Load same task in two separate "sessions" (two independent finds)
-    TaskEntity session1 = taskRepository.findById(taskId).orElseThrow();
-    TaskEntity session2 = taskRepository.findById(taskId).orElseThrow();
-
-    session1.setTitle("Updated by session 1");
-    taskRepository.saveAndFlush(session1); // version bumps 0 -> 1
-
-    session2.setTitle("Updated by session 2"); // session2 still holds version 0
-    assertThrows(
-        ObjectOptimisticLockingFailureException.class,
-        () -> taskRepository.saveAndFlush(session2));
-}
-```
-Use `saveAndFlush` (not plain `save`) in the test so the `UPDATE` is actually sent to the DB synchronously and the exception surfaces within the test method rather than being deferred to a later flush/commit boundary.
-
-**Confidence: HIGH** for the whole `@Version` → `ObjectOptimisticLockingFailureException` → 409 chain; this is one of the most consistently documented patterns in the Spring/JPA ecosystem, cross-checked across Baeldung, multiple independent blog sources, and confirmed directly against this codebase's actual `GlobalExceptionHandler.java` source (read directly, not inferred).
-
----
+| Recommended | Alternative | When to Use Alternative |
+|-------------|-------------|--------------------------|
+| `org.testcontainers:kafka` (real containerized broker) | Spring's `@EmbeddedKafka` / `spring-kafka-test` (in-JVM fake broker) | `@EmbeddedKafka` boots faster and is fine for pure unit-level producer/consumer wiring tests, but doesn't exercise real broker partition/offset/redelivery semantics as faithfully — which is exactly what's needed to credibly demonstrate idempotent-consumption and dead-letter-topic behavior. The epic spec already names Testcontainers directly; that choice is correct as scoped. Reach for `@EmbeddedKafka` instead only if the test suite later grows many more fast unit-style Kafka tests and Testcontainers startup cost becomes a CI bottleneck. |
+| `apache/kafka-native` (native KRaft image) | `apache/kafka` (JVM KRaft image), or `confluentinc/cp-kafka` / Bitnami Kafka images | Plain `apache/kafka` (JVM) is a safe fallback if the native image has a compatibility hiccup locally — same env-var contract, just slower cold start. `confluentinc/cp-kafka` / Bitnami are heavier, bring Confluent-specific tooling/licensing surface not needed for a local dev broker, and aren't what the epic spec asks for — skip them. |
+| No explicit version on `spring-kafka` / `org.testcontainers:kafka` (BOM-managed) | Pinning explicit versions | Only pin explicitly if there's a specific documented reason to diverge from Boot's tested-together dependency set (e.g. a CVE fix not yet in the BOM) — and if so, override via the `kafka.version` / `spring-kafka.version` / `testcontainers.version` Gradle properties Spring's dependency-management plugin exposes, not a bare version string on the dependency line, so the override stays visible and centralized. |
 
 ## What NOT to Use
 
 | Avoid | Why | Use Instead |
-|-------|-----|-------------|
-| Naive triple `JOIN FETCH board.column.task.subtasks` in one JPQL query | Throws `MultipleBagFetchException` immediately — two `List` associations can't both be join-fetched in one query | JOIN FETCH the first level only; `@BatchSize` the rest |
-| Converting all collections to `Set` to dodge `MultipleBagFetchException` | Fixes the exception but produces a silent Cartesian product at the DB level, and loses reliable column/task ordering (no `@OrderColumn` today) | Keep `List`, use JOIN FETCH (level 1) + `@BatchSize` (levels 2–3) |
-| `@EntityGraph` spanning two `List` levels as a "fix" for bag-fetch | Compiles to the same JOIN FETCH SQL under the hood — hits the identical exception, it's not a real workaround | Same JOIN FETCH + `@BatchSize` combination |
-| Pessimistic locking (`@Lock(LockModeType.PESSIMISTIC_WRITE)`) for the drag/reorder conflict scenario | Epic spec explicitly asks for optimistic locking; pessimistic locks hold DB row locks for the transaction duration, which is unnecessary friction for a low-contention, human-interaction-paced conflict (drag-and-drop), and doesn't match the "detect and 409, let the client retry" UX the spec wants | `@Version` + catch `ObjectOptimisticLockingFailureException` → 409 |
-| Mapping `ObjectOptimisticLockingFailureException` (or its parent) to `HttpStatus.LOCKED` (423) | Current codebase behavior; 423 is WebDAV's "resource is locked," semantically wrong for a stale-write conflict detected after the fact, and doesn't match the epic's explicit 409 requirement | `HttpStatus.CONFLICT` (409) |
-| Adding `@Version` to `BaseEntity` (all entities) | Broader blast radius than the epic asks for; risks unexpected version-check failures on `UserEntity`/`BoardEntity`/`SubtaskEntity` update paths not designed around version semantics | Add `@Version` directly to `TaskEntity` and `ColumnEntity` only, per spec |
-| MULTISET-based collection fetching (Hibernate 6.5+ native or via Blaze Persistence/jOOQ) for the `/full` endpoint | Real and modern, but adds either a Hibernate-version floor to verify or a new third-party dependency, for a problem `@BatchSize` already solves with what's on the classpath today | JOIN FETCH + `@BatchSize`; note MULTISET as the "next generation" alternative in the written rationale only |
+|-------|-----|--------------|
+| Zookeeper-based Kafka setup (`wurstmeister/kafka`, `confluentinc/cp-zookeeper` + `cp-kafka` pair, etc.) | Zookeeper mode is legacy for new Kafka deployments; adds an extra container and moving part for zero benefit on a single-node local dev broker | KRaft mode, single combined broker+controller process, via `apache/kafka-native` — explicitly what the epic spec calls for |
+| Manually pinning `kafka-clients` / `spring-kafka` versions independent of the Spring Boot BOM | Easy path to a version-skew bug (e.g. a `spring-kafka` version expecting client APIs not present in a manually-pinned `kafka-clients`) that Boot's own compatibility testing doesn't cover | Let `io.spring.dependency-management` resolve both from the Boot 3.5.0 BOM (already applied to this project); omit version strings entirely, exactly as done for `spring-boot-starter-*` today |
+| `@DynamicPropertySource` + manually constructed `KafkaContainer` property wiring for the integration test | More boilerplate than necessary; this project doesn't use this pattern anywhere today, so introducing it here would be inconsistent with the rest of the test suite | `@ServiceConnection` on a Testcontainers `KafkaContainer` bean (via `spring-boot-testcontainers`) — one annotation, matches the "as clean and reviewable as the rest of the modernization plan" bar set in `PROJECT.md` |
+| A full microservice extraction of the activity-log consumer | Explicitly out of scope per `PROJECT.md` ("Full microservice extraction of the activity-log consumer... not this one") | In-process `@KafkaListener` in the same Spring Boot app, in a new `com.vrudenko.kanban_board.activitylog` package |
+| Kafka Streams / ksqlDB | No stream-processing requirement here — this is a single producer to single consumer to DB-write pipeline, not a topology | Plain `spring-kafka` producer (`KafkaTemplate`) + `@KafkaListener` consumer, as scoped |
+
+## Stack Patterns by Variant
+
+**If the dead-letter topic needs a fixed, predictable name (`kanban.activity.dlt`, per the epic spec) rather than Spring's default `{topic}.DLT` suffix:**
+- Supply a custom destination resolver (a `BiFunction<ConsumerRecord<?, ?>, Exception, TopicPartition>`) to the `DeadLetterPublishingRecoverer` constructor instead of the default single-arg form
+- Because the epic spec explicitly names `kafka.activity.dlt` as the target, not Spring's default `kanban.activity.DLT`
+
+**If idempotent consumption needs to survive consumer restarts/rebalances, not just in-memory dedup:**
+- Use `ActivityLogRepository.existsByEventId(...)` as a DB-backed idempotency check (as the epic spec already specifies) rather than an in-memory `Set<UUID>` or Kafka-native exactly-once semantics (transactional producer/consumer)
+- Because DB-backed dedup survives process restarts and is simpler to reason about than configuring end-to-end Kafka transactions for a feature this scoped; exactly-once semantics would be a large scope increase not justified by the epic's stated goals
 
 ## Version Compatibility
 
 | Package A | Compatible With | Notes |
 |-----------|------------------|-------|
-| Spring Boot 3.5.0 | Hibernate ORM 6.x (exact patch pinned by Boot's BOM) | Do not override `hibernate.version` manually; run `./gradlew dependencies` to confirm the resolved version before phase planning if precision matters for docs |
-| `@BatchSize` (org.hibernate.annotations) | Hibernate 6.x, unchanged API surface from 5.x | No migration concerns; annotation package is stable across the 5→6 major version |
-| `@Version` (jakarta.persistence, not javax.persistence) | Spring Boot 3.x mandates the Jakarta EE 9+ namespace | Codebase already on `jakarta.persistence.*` imports (confirmed in `SubtaskEntity.java`, `TaskEntity.java`) — no namespace migration needed, just add the annotation |
-| `ObjectOptimisticLockingFailureException` (org.springframework.orm) | Spring Data JPA (any 3.x line paired with Boot 3.5.0) | Already transitively available; no new dependency |
+| `spring-boot` 3.5.0 | `spring-kafka` 3.3.6 (BOM-managed) | Verified directly against `spring-boot-dependencies`' `build.gradle` at the `v3.5.0` git tag — the exact pinned version, not inferred from release notes |
+| `spring-boot` 3.5.0 | `org.apache.kafka:kafka-clients` 3.9.1 (transitive via `spring-kafka`) | Same source as above |
+| `spring-boot` 3.5.0 | `org.testcontainers` BOM 1.21.0 | Same source as above; use the classic `org.testcontainers:kafka` module coordinate at this version line, not the newer `testcontainers-kafka` 2.x rebrand, which Boot 3.5.0 does not manage |
+| `kafka-clients` 3.9.x (app-side client) | `apache/kafka-native` broker 4.x (local dev image) | Kafka brokers are wire-protocol backward compatible with older client versions; a 3.9.x client against a 4.x broker is a normal, supported combination — differing version numbers across the client/broker boundary are expected, not a bug |
+| `io.spring.dependency-management` 1.1.6 (already in `build.gradle`) | All of the above | No plugin version bump required; it just needs to import the Boot 3.5.0 BOM, which it already does via the `org.springframework.boot` plugin block |
+
+## Open Questions for Roadmap / Phase Planning
+
+- **Production Kafka:** `PROJECT.md` and the epic spec both frame this primarily as a local-dev/portfolio-demonstration feature (`docker-compose.yml` for local dev). It's not yet decided whether v1.1 also stands up a managed Kafka broker in production (EC2 deploy target) or whether the activity-feed feature is dev/demo-only until a later milestone. This affects whether `KAFKA_BOOTSTRAP_SERVERS` needs a production value wired into the deploy pipeline now or can default to `localhost:9092` safely for this milestone. Flag for roadmap phase-1 scoping.
+- **Dead-letter topic auto-creation:** confirm whether `kanban.activity` and `kanban.activity.dlt` topics should be auto-created (`spring.kafka.template.default-topic` + broker `auto.create.topics.enable=true`, the KRaft image's default) or explicitly declared via `NewTopic` `@Bean`s (more explicit, more reviewable, catches partition-count/replication-factor decisions at code-review time rather than implicitly at runtime). Recommend explicit `NewTopic` beans for a portfolio-quality diff — call out during phase planning.
 
 ## Sources
 
-- [vladmihalcea.com/hibernate-multiplebagfetchexception](https://vladmihalcea.com/hibernate-multiplebagfetchexception/) — HIGH confidence (Hibernate core team alumnus, canonical source on this exact exception; fetched directly and cross-checked)
-- [baeldung.com/java-hibernate-multiplebagfetchexception](https://www.baeldung.com/java-hibernate-multiplebagfetchexception) — HIGH confidence (well-established, cross-checked against Vlad Mihalcea's post, consistent)
-- [thorben-janssen.com/fix-multiplebagfetchexception-hibernate](https://thorben-janssen.com/fix-multiplebagfetchexception-hibernate/) — HIGH confidence (Hibernate-focused technical author, fetched directly, consistent with above)
-- [thorben-janssen.com/hibernate-tips-how-to-fetch-associations-in-batches](https://thorben-janssen.com/hibernate-tips-how-to-fetch-associations-in-batches/) — MEDIUM confidence (single-level example only; multi-level batching behavior extrapolated from general `@BatchSize`/`default_batch_fetch_size` semantics, not independently confirmed for 3-level hierarchies in this specific source)
-- [vladmihalcea.com/how-to-increment-the-parent-entity-version-whenever-a-child-entity-gets-modified-with-jpa-and-hibernate](https://vladmihalcea.com/how-to-increment-the-parent-entity-version-whenever-a-child-entity-gets-modified-with-jpa-and-hibernate/) — HIGH confidence (confirms non-owning-side version-bump behavior, directly relevant to this schema's `mappedBy` structure)
-- [Baeldung — JPA Optimistic Locking](https://www.baeldung.com/jpa-optimistic-locking) — referenced via search snippet (direct fetch blocked by 403); MEDIUM confidence, cross-checked against multiple other sources returning consistent claims (Long version field convention, exception wrapping chain, 409 recommendation)
-- Direct source read: `C:/Dev/Repos/kanban-board-backend/src/main/java/com/vrudenko/kanban_board/handler/GlobalExceptionHandler.java` — HIGH confidence (ground truth for current 423 mapping that needs to change)
-- Direct source read: `TaskEntity.java`, `ColumnEntity.java`, `BoardEntity.java`, `SubtaskEntity.java`, `BaseEntity.java` — HIGH confidence (ground truth for entity structure, confirms all three parent-child collections are unordered `List` bags with no `@Version` yet)
-- Spring Boot 3.5 Release Notes (GitHub wiki) — fetched, did not explicitly surface the pinned Hibernate patch version; flagged as MEDIUM/verify-before-use above
+- GitHub raw `build.gradle` at `spring-projects/spring-boot` tag `v3.5.0` (`spring-boot-project/spring-boot-dependencies/build.gradle`) — direct read of the pinned `kafka` (3.9.1), `spring-kafka` (3.3.6), and `testcontainers` (1.21.0) version properties. This is a primary source (the actual tagged release's build file), so treat the version numbers above as reliable even though the generic tooling classification for this fetch method defaults to LOW confidence this session — cross-checked, not guessed.
+- [docs.spring.io — Handling Exceptions (Spring for Apache Kafka reference)](https://docs.spring.io/spring-kafka/reference/kafka/annotation-error-handling.html) — `DefaultErrorHandler` / `DeadLetterPublishingRecoverer` pattern, default `{topic}.DLT` naming, custom destination resolver — MEDIUM confidence (official framework reference docs)
+- [Apache Kafka docs — Docker](https://kafka.apache.org/41/getting-started/docker/) and [apache/kafka `docker/examples/README.md`](https://github.com/apache/kafka/blob/trunk/docker/examples/README.md) — official image names/tags (`apache/kafka`, `apache/kafka-native`, current release line 4.1.x) and pointer to the official single-node KRaft compose examples — LOW-MEDIUM confidence (official project docs, but the exact compose YAML itself was not directly retrieved this session — pull the actual file from `docker/examples/docker-compose-files/single-node/` in the `apache/kafka` repo before finalizing the project's `docker-compose.yml`)
+- General web search (built-in `WebSearch` tool) corroborating the KRaft single-node env-var set (`KAFKA_NODE_ID`, `KAFKA_PROCESS_ROLES`, `KAFKA_CONTROLLER_QUORUM_VOTERS`, `KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR`) and the Testcontainers-vs-`@EmbeddedKafka` / `@ServiceConnection` patterns — LOW confidence per this session's tooling tier (no MCP-backed search/docs provider — Context7, Exa, Brave, Tavily, Firecrawl — was available; all reported unavailable via the research-plan seam, so `WebSearch`/`WebFetch` fallback was used throughout). Cross-check the exact compose file and error-handling code against current official docs before merging.
 
 ---
-*Stack research for: JPA/Hibernate nested-aggregate fetching + optimistic locking (Epic 2 completion)*
-*Researched: 2026-07-31*
+*Stack research for: Kafka event-driven activity feed (v1.1 milestone, Epic 1 of backend modernization plan)*
+*Researched: 2026-08-01*

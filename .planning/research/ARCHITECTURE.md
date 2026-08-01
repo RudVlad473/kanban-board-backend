@@ -1,402 +1,343 @@
 # Architecture Research
 
-**Domain:** Spring Boot 3.5.0 / JPA-Hibernate REST backend — Epic 2 completion (nested aggregate endpoint + optimistic locking)
-**Researched:** 2026-07-31
-**Confidence:** HIGH (grounded directly in this codebase's existing entities, DTOs, mappers, repositories, services, `application.properties`/`application-test.properties`, and the epic spec — no external framework research needed; this is an integration-pattern question, not an ecosystem survey)
+**Domain:** Kafka event-driven activity feed grafted onto an existing layered Spring Boot 3.5 / Java 21 REST API
+**Researched:** 2026-08-01
+**Confidence:** MEDIUM (project-specific integration reasoning is HIGH — it's derived directly from the read codebase; the generic Spring Kafka/Testcontainers/Docker facts are LOW-confidence single-source web search, cross-checked against Spring's own documented defaults where cited)
 
 ## Standard Architecture
 
 ### System Overview
 
-The existing layered architecture is unchanged by this work — both new deliverables are **additive slices** through the same five layers, not a new layer:
+The Kafka feature is a **producer append + a parallel consumer pipeline**, not a new layer inserted into the existing request path. `TaskService`/`BoardService`/`ColumnService` gain one new dependency (`KafkaTemplate`) and one new call each, at the tail of already-`@Transactional` mutating methods. Everything downstream of the topic — consumer, entity, repository, new controller — is a **second, independent vertical slice** that mirrors the existing Board/Column/Task/Subtask slice pattern exactly (controller → service → mapper → repository → entity), just fed by Kafka instead of HTTP.
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  Controller   BoardController.getFullBoard()  [NEW endpoint method]         │
-│               GET /boards/{boardId}/full                                    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  Service      BoardService.getFullBoard()  [NEW orchestration method]       │
-│               → OwnershipVerifierService (existing, unchanged)              │
-│               → ColumnRepository / TaskRepository / SubtaskRepository       │
-│                 (NEW batch-fetch query methods)                             │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  Mapper       NEW: BoardFullMapper / BoardFullResponseDTO tree              │
-│               (separate MapStruct interface, does NOT touch existing        │
-│               BoardMapper/ColumnMapper/TaskMapper/SubtaskMapper)             │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  Repository   ColumnRepository.findByIdWithColumns() [NEW]                  │
-│               TaskRepository.findAllByColumnIdIn() [NEW]                    │
-│               SubtaskRepository.findAllByTaskIdIn() [NEW]                   │
-│               (existing findAllByColumnId/findAllByBoardId untouched)       │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  Entity       TaskEntity.version, ColumnEntity.version  [NEW @Version field]│
-│               (BaseEntity itself NOT touched — see rationale below)         │
+│                    EXISTING: HTTP Controllers                                │
+│  BoardController  ColumnController  TaskController  SubtaskController        │
+│                                          + PATCH /tasks/{id}/move (NEW)      │
+└──────────────────────────────────────┬───────────────────────────────────────┘
+                                        ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    EXISTING: Service Layer (@Transactional)                  │
+│  BoardService   ColumnService   TaskService (+ moveToColumn NEW)             │
+│         │              │              │                                      │
+│         └──────────────┴──────────────┴───► after commit-bound work:        │
+│                                              @Autowired KafkaTemplate (NEW)   │
+│                                              publish(topic, DomainEvent)      │
+└──────────────────────────────────────┬───────────────────────────────────────┘
+                                        ▼
+                         topic: kanban.activity  (NEW — Kafka broker)
+                                        │
+                                        ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│         NEW: com.vrudenko.kanban_board.activitylog package                   │
+│  ┌──────────────────────────┐                                                │
+│  │  ActivityLogConsumer     │  @KafkaListener(topics = "kanban.activity")    │
+│  │  - existsByEventId() dedupe                                              │
+│  │  - map event → ActivityLogEntity                                         │
+│  │  - ActivityLogRepository.save()                                          │
+│  └──────────────────────────┘                                                │
+│           │ on repeated failure → DefaultErrorHandler                        │
+│           ▼                                                                  │
+│  topic: kanban.activity.dlt (NEW, via DeadLetterPublishingRecoverer)         │
+└──────────────────────────────────────┬───────────────────────────────────────┘
+                                        ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│         NEW: ActivityLogRepository (Spring Data JPA)                         │
+└──────────────────────────────────────┬───────────────────────────────────────┘
+                                        ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│         NEW: ActivityLogEntity → table activity_log                          │
+└──────────────────────────────────────┬───────────────────────────────────────┘
+                                        ▼
+              PostgreSQL (existing DB, one new table, no schema coupling)
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  NEW read path: GET /boards/{boardId}/activity                              │
+│  ActivityController → ActivityLogService.findByBoardId(userId, boardId,     │
+│    Pageable) → OwnershipVerifierService.verifyOwnershipOfBoard() (REUSED)   │
+│    → ActivityLogRepository.findAllByBoardId(..., Pageable)                  │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
-
-Both deliverables touch different, non-overlapping seams of the same stack (new mapper/DTOs/repo-methods for `/full`; a new entity field + exception mapping for optimistic locking), which is why they can be built as two independent phases (see Build Order below).
 
 ### Component Responsibilities
 
 | Component | Responsibility | Typical Implementation |
 |-----------|----------------|------------------------|
-| `BoardController` (existing, extended) | New `GET /boards/{boardId}/full` route | One additional `@GetMapping` method, same class, same `@PreAuthorize`/`@CurrentUserId` pattern already used for every other endpoint |
-| `BoardService` (existing, extended) | Orchestrates ownership check + calls new repository batch-fetch methods + delegates to new full-tree mapper | One additional `@Transactional` method; does not change any existing method signature |
-| `BoardFullMapper` (new, separate MapStruct interface) | Entity tree → nested DTO tree, isolated from flat DTO mappers | New file in `mapper/`, `componentModel = SPRING`, references existing `SubtaskMapper` for the leaf conversion via MapStruct's `uses = {...}` composition |
-| `BoardFullResponseDTO` / `ColumnFullResponseDTO` / `TaskFullResponseDTO` (new DTOs) | The one deliberately-nested response contract | New files in a `dto/board_dto/full/` subpackage (see Q1 below), built from data that is **guaranteed already loaded** before mapping — same anti-`LazyInitializationException` discipline as the flat DTOs, just enforced by construction (batch-fetch) instead of by omission (flat shape) |
-| `ColumnRepository` / `TaskRepository` / `SubtaskRepository` (existing, extended) | New batch-fetch query methods (`findByIdWithColumns`, `findAllByColumnIdIn`, `findAllByTaskIdIn`) | One `JOIN FETCH` for the first level (Board+Columns); plain `findAllBy...In` for the two deeper levels (see Data Flow) |
-| `TaskEntity` / `ColumnEntity` (existing, extended) | New `@Version` field for optimistic locking | Field added directly on the two entities, not on `BaseEntity` (see Q2) |
-| `GlobalExceptionHandler` (existing, extended) | Map `ObjectOptimisticLockingFailureException` → 409 | New/adjusted `@ExceptionHandler`, same `@ControllerAdvice` class |
+| `event` package (NEW) | Immutable domain event payloads | Java `record`s: `TaskCreatedEvent`, `TaskMovedEvent`, `TaskDeletedEvent`, `BoardCreatedEvent`, `ColumnCreatedEvent`, each with `eventId` (UUID), `userId`, entity id(s), `timestamp`. No JPA/Spring annotations — plain data. |
+| `KafkaProducerConfig` (NEW, in `config/`) | Producer serialization + `KafkaTemplate<String, Object>` bean | `ProducerFactory` with `StringSerializer` key + `JsonSerializer` value; Boot auto-configures this from `spring.kafka.*` properties if you don't hand-roll it — hand-roll only if you need `JsonSerializer` type-header suppression or custom `ObjectMapper`. |
+| `TaskService`/`BoardService`/`ColumnService` (MODIFIED) | Publish one event per successful mutation, in addition to existing persistence logic | New `@Autowired private KafkaTemplate<String, Object> kafkaTemplate;` field + one `kafkaTemplate.send("kanban.activity", key, event)` call at the end of each mutating method body, inside the same `@Transactional` boundary (see Anti-Patterns for why this needs care). |
+| `TaskService.moveToColumn` (NEW method) + `PATCH /tasks/{id}/move` (NEW endpoint) | The actual missing feature — reassign `TaskEntity.column`, publish `TaskMovedEvent` | Same shape as `updateById`: `ownershipVerifierService.verifyOwnershipOfTask`, then verify the *target* column via `verifyOwnershipOfColumn` (cross-board move must be rejected or explicitly allowed — decide this in planning), mutate, save, publish. |
+| `ActivityLogConsumer` (NEW, `activitylog` package) | Kafka listener; idempotent persistence | `@KafkaListener(topics = "kanban.activity", groupId = "activity-log")` method taking the event type (or `ConsumerRecord<String,Object>`); checks `activityLogRepository.existsByEventId(event.eventId())` before insert. |
+| `ActivityLogEntity` (NEW, `entity/`) | Persisted audit row | Extends `BaseEntity` (gets ULID id) or plain `@Id UUID eventId` as the natural key — see Patterns below. Fields: `boardId`, `userId`, `action`, `detail`, `createdAt`, `eventId` (unique). |
+| `ActivityLogRepository` (NEW, `repository/`) | Data access + idempotency check + paginated read | `existsByEventId(UUID)`, `findAllByBoardIdOrderByCreatedAtDesc(String boardId, Pageable)`. |
+| `ActivityLogService` (NEW, `service/`) | Read-path business logic, ownership enforcement | Mirrors `TaskService.findAllByColumnId` shape: calls `ownershipVerifierService.verifyOwnershipOfBoard(userId, boardId)` first, then queries. |
+| `ActivityController` (NEW, `controller/`) | `GET /boards/{boardId}/activity`, paginated | Same `@RestController` + `@PreAuthorize("isAuthenticated()")` + `@CurrentUserId` shape as the other four controllers. |
+| `DefaultErrorHandler` + `DeadLetterPublishingRecoverer` (NEW, in `KafkaConsumerConfig`) | Route poison messages to `kanban.activity.dlt` after retries exhausted | `@Bean DefaultErrorHandler` wrapping `new DeadLetterPublishingRecoverer(kafkaTemplate)` + a bounded `FixedBackOff`/`ExponentialBackOff`, wired into the listener container factory. |
 
 ## Recommended Project Structure
 
-No new top-level packages are required. Two small additions to the existing structure:
-
 ```
 src/main/java/com/vrudenko/kanban_board/
-├── dto/
-│   ├── board_dto/
-│   │   ├── BoardResponseDTO.java        # unchanged — flat, still used by GET /boards
-│   │   └── full/                        # NEW subpackage, isolates the nested shape
-│   │       ├── BoardFullResponseDTO.java
-│   │       ├── ColumnFullResponseDTO.java
-│   │       └── TaskFullResponseDTO.java
-│   │           # subtask leaf reuses the existing dto/subtask_dto/SubtaskResponseDTO.java as-is
-├── mapper/
-│   ├── BoardMapper.java                 # unchanged
-│   ├── ColumnMapper.java                # unchanged
-│   ├── TaskMapper.java                  # unchanged
-│   ├── SubtaskMapper.java               # unchanged
-│   └── BoardFullMapper.java             # NEW — composes SubtaskMapper via `uses = {...}`
-├── repository/
-│   ├── ColumnRepository.java            # + findByIdWithColumns (NEW method)
-│   ├── TaskRepository.java              # + findAllByColumnIdIn (NEW method)
-│   └── SubtaskRepository.java           # + findAllByTaskIdIn (NEW method)
+├── event/                          # NEW — producer-side event contracts
+│   ├── TaskCreatedEvent.java
+│   ├── TaskMovedEvent.java
+│   ├── TaskDeletedEvent.java
+│   ├── BoardCreatedEvent.java
+│   └── ColumnCreatedEvent.java
+├── activitylog/                    # NEW — consumer-side vertical slice
+│   └── ActivityLogConsumer.java
 ├── entity/
-│   ├── TaskEntity.java                  # + @Version private Long version;
-│   └── ColumnEntity.java                # + @Version private Long version;
+│   └── ActivityLogEntity.java      # NEW — sits alongside existing entities
+├── repository/
+│   └── ActivityLogRepository.java  # NEW — same convention as other repos
+├── service/
+│   └── ActivityLogService.java     # NEW — read path, reuses OwnershipVerifierService
+├── controller/
+│   └── ActivityController.java     # NEW — 5th controller, same shape as the other 4
+├── dto/
+│   └── activity_dto/                # NEW — matches board_dto/column_dto/task_dto convention
+│       └── ActivityLogResponseDTO.java
+├── mapper/
+│   └── ActivityLogMapper.java      # NEW — MapStruct, same componentModel=SPRING pattern
+└── config/
+    ├── KafkaProducerConfig.java    # NEW (only if Boot auto-config is insufficient)
+    └── KafkaConsumerConfig.java    # NEW — error handler + DLT wiring
 ```
 
 ### Structure Rationale
 
-- **`dto/board_dto/full/` subpackage:** Keeps the nested DTOs physically separate from the flat ones. A developer opening `board_dto/` sees the flat convention is still the default; the `full/` subpackage is an explicit, scoped exception, not a silent parallel convention. This mirrors how the codebase already scopes things by domain (`board_dto`, `column_dto`, `task_dto`, `subtask_dto`).
-- **New `BoardFullMapper`, not modifying existing mappers:** MapStruct interfaces are cheap to add and each existing mapper (`BoardMapper`, `ColumnMapper`, `TaskMapper`, `SubtaskMapper`) already has a single, narrow responsibility (one entity's flat DTO conversions). Adding nested-mapping methods to them would blur that responsibility and risk MapStruct generating an unwanted overload that the flat endpoints could accidentally pick up. A dedicated mapper for the aggregate is the safer boundary.
-- **`@Version` directly on `TaskEntity`/`ColumnEntity`, not on `BaseEntity`:** see Q2 discussion below — this is the one place structure diverges from "just extend the base class."
+- **`event/` as its own top-level package, not nested under `service/`:** events are the wire contract between producer and consumer, conceptually closer to DTOs than to service logic. The epic spec explicitly calls this out (`com.vrudenko.kanban_board.event`). Keeping it flat and dependency-free (no JPA, no Spring) means `TaskService` and `ActivityLogConsumer` can both depend on it without pulling in more coupling than necessary.
+- **`activitylog/` as its own package, not `service/ActivityLogConsumer.java`:** the consumer is architecturally distinct from the CRUD services — it's not invoked by a controller, it's invoked by the Kafka container thread pool. Isolating it makes the boundary between "things HTTP requests call" and "things the Kafka listener container calls" visible in the package structure, which matters here because thread-context assumptions differ (no `SecurityContext`, no `@CurrentUserId`, no HTTP request scope).
+- **`ActivityLogEntity`/`Repository`/`Service`/`Controller`/`dto/activity_dto`/`Mapper` all follow the existing per-domain vertical-slice convention exactly** (see `board_dto`, `column_dto`, `task_dto`, `subtask_dto`, `user_dto` in the current `dto/` tree, and the parallel `Board/Column/Task/Subtask` controller-service-repository triads). This is a deliberate choice: the activity log is a fifth domain entity, not a cross-cutting infrastructure concern, so it should look exactly like Board/Column/Task/Subtask to any reviewer already familiar with the codebase.
+- **`config/KafkaConsumerConfig.java` separate from `KafkaProducerConfig.java`:** producer concerns (serialization, `KafkaTemplate` bean) and consumer concerns (error handling, DLT, listener container factory) have no functional overlap and are configured independently in Spring Kafka's API surface; splitting them avoids one bloated Kafka config class that mixes send-side and receive-side wiring.
 
 ## Architectural Patterns
 
-### Pattern 1: Scoped nested DTO tree, reusing existing flat DTOs as leaves where possible
+### Pattern 1: Field-injected `KafkaTemplate` as a fourth kind of collaborator
 
-**What:** The new `/full` endpoint needs `Board → Columns → Tasks → Subtasks`. Rather than inventing four brand-new DTOs top-to-bottom, only the levels that need a `List<Child>` field are new (`BoardFullResponseDTO`, `ColumnFullResponseDTO`, `TaskFullResponseDTO`). The leaf level (`Subtask`) has no children to nest — reuse the existing `SubtaskResponseDTO` unchanged.
+**What:** `TaskService`, `BoardService`, `ColumnService` already field-inject repositories, mappers, and other services via `@Autowired`. `KafkaTemplate<String, Object>` is added as one more `@Autowired private` field on each, following the exact existing convention — no constructor injection introduced anywhere in this feature, even though `KafkaTemplate` has no circular-dependency risk (it's a leaf bean). Consistency with the codebase's established pattern outweighs the theoretical argument for constructor injection on this one new dependency.
 
-**When to use:** Whenever a genuinely nested read-model is needed alongside an existing flat convention. The key discipline: the flat convention exists to avoid `LazyInitializationException`, not because nesting is inherently wrong. Nesting is safe as long as every field on every level was fetched inside the same transaction before mapping — which the batch-fetch strategy in Q3 guarantees.
+**When to use:** Every mutating service method that needs to announce a domain event.
 
-**Trade-offs:** Adds 3 new DTO classes and 1 new mapper, but touches zero existing DTOs/mappers. The alternative (giving `TaskResponseDTO` an optional nested `ColumnResponseDTO`) was rejected because it would change the meaning of the existing flat DTO for every other endpoint that returns it, inviting exactly the lazy-init risk the flat convention was designed to prevent.
-
-**Example:**
-```java
-// dto/board_dto/full/BoardFullResponseDTO.java
-@Getter @Setter @Builder
-public class BoardFullResponseDTO {
-    private String id;
-    private String name;
-    private List<ColumnFullResponseDTO> columns;
-}
-
-// dto/board_dto/full/ColumnFullResponseDTO.java
-@Getter @Setter @Builder
-public class ColumnFullResponseDTO {
-    private String id;
-    private String name;
-    private List<TaskFullResponseDTO> tasks;
-}
-
-// dto/board_dto/full/TaskFullResponseDTO.java
-@Getter @Setter @Builder
-public class TaskFullResponseDTO {
-    private String id;
-    private String title;
-    private String description;
-    private List<SubtaskResponseDTO> subtasks; // reuse existing flat leaf DTO as-is
-}
-```
-
-```java
-// mapper/BoardFullMapper.java
-@Mapper(
-    componentModel = MappingConstants.ComponentModel.SPRING,
-    unmappedTargetPolicy = ReportingPolicy.IGNORE,
-    uses = {SubtaskMapper.class})
-public interface BoardFullMapper {
-    BoardFullResponseDTO toFullResponseDTO(BoardEntity board);
-    // MapStruct auto-generates Column->ColumnFull and Task->TaskFull sub-mappings
-    // by matching field names/types; add explicit @Mapping only if names diverge
-    // (e.g. BoardEntity.column -> BoardFullResponseDTO.columns, since the existing
-    // entity field is oddly singular-named for a List — see Pitfalls file).
-}
-```
-
-Because MapStruct maps by walking the object graph you give it, this only works correctly if the `List<ColumnEntity>`/`List<TaskEntity>`/`List<SubtaskEntity>` on the entities passed in are already Hibernate-initialized collections (not lazy proxies) — which is exactly what the batch-fetch strategy in Pattern 3 must guarantee before the entity ever reaches the mapper.
-
-### Pattern 2: `@Version` added directly to the two entities that need it, not to `BaseEntity`
-
-**What:** `@Version private Long version;` goes on `TaskEntity` and `ColumnEntity` directly, as a sibling field to their existing `title`/`name` fields — not pulled up into `BaseEntity`.
-
-**When to use:** Optimistic locking is being scoped, per the epic spec, to the two entities where concurrent-edit conflicts are a real product scenario (drag-and-drop reorder/move of tasks and columns). `BoardEntity`, `SubtaskEntity`, and `UserEntity` have no such concurrent-edit story in this milestone.
-
-**Trade-offs:**
-- **Why not add it to `BaseEntity`:** `BaseEntity` is a `@MappedSuperclass` shared by `UserEntity`, `BoardEntity`, `ColumnEntity`, `TaskEntity`, `SubtaskEntity`. Adding `@Version` there would silently add a `version` column requirement to *every* table, including ones that don't need it (`users`, `boards`, `subtasks`) — a bigger, unscoped schema change than the epic asks for, and it would force Hibernate's automatic version-check-on-every-update behavior onto entities where no test/behavior currently expects it (e.g. it could change `BoardService.updateById()`'s save semantics unexpectedly, or `UserService`'s account-deletion cascade timing, without anyone having decided that on purpose).
-- **Why directly on the two entities is safe:** Each entity is a concrete `@Entity` class, and `@Version` is a completely ordinary mapped field. No inheritance change, no migration coordination beyond the two tables actually being modified. It keeps the blast radius of this change exactly matching the epic's stated scope.
-- **If a later epic decides ALL entities need versioning:** that's a deliberate, separate decision — promote the field to `BaseEntity` at that point, as its own reviewable change. Don't pre-emptively generalize now.
+**Trade-offs:** Field injection makes `KafkaTemplate` implicitly optional-looking in tests (easy to leave unmocked and NPE) — existing service unit tests will need `@Mock KafkaTemplate` added wherever a mutating method is exercised. This is a real, mechanical cost across `TaskServiceTest`, `BoardServiceTest`, `ColumnServiceTest` — budget for it in planning rather than discovering it mid-phase.
 
 **Example:**
 ```java
-// entity/TaskEntity.java
-@Entity
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor
-@Table(name = "tasks")
-public class TaskEntity extends BaseEntity implements BaseTask {
-    @ManyToOne @JoinColumn(name = "column_id")
-    private ColumnEntity column;
+@Service
+public class TaskService {
+    @Autowired private TaskRepository taskRepository;
+    @Autowired private TaskMapper taskMapper;
+    @Autowired private OwnershipVerifierService ownershipVerifierService;
+    @Autowired private SubtaskService subtaskService;
+    @Autowired private EntityManager entityManager;
+    @Autowired private KafkaTemplate<String, Object> kafkaTemplate; // NEW
 
-    @OneToMany(mappedBy = "task")
-    private List<SubtaskEntity> subtasks;
+    @Transactional
+    public TaskResponseDTO moveToColumn(String userId, String taskId, MoveTaskRequestDTO dto) {
+        var task = findById(userId, taskId);
+        var targetColumn = ownershipVerifierService
+                .verifyOwnershipOfColumn(userId, dto.getTargetColumnId())
+                .getSecond();
 
-    @Column(nullable = false, length = ValidationConstants.MAX_TASK_TITLE_LENGTH)
-    private String title;
+        task.setColumn(targetColumn);
+        taskRepository.save(task);
 
-    @Column(length = ValidationConstants.MAX_TASK_DESCRIPTION_LENGTH)
-    private String description;
+        kafkaTemplate.send("kanban.activity", task.getId(),
+                new TaskMovedEvent(UUID.randomUUID(), userId, task.getId(), targetColumn.getId(), Instant.now()));
 
-    @Version
-    private Long version;   // NEW
+        return taskMapper.toTaskResponseDTO(task);
+    }
 }
 ```
 
-**On "without needing a manual migration script" — verified against the actual config, and the answer is more nuanced than it first looks:**
+### Pattern 2: Publish-after-persist, inside the same `@Transactional` method, accepting the dual-write gap
 
-Checked both properties files directly:
-- `src/main/resources/application-test.properties` sets `spring.jpa.hibernate.ddl-auto=create-drop` (H2, in-memory, recreated fresh every test run) — adding `@Version` here is automatically reflected with **zero migration concern**, since the schema is rebuilt from the entity model on every test boot.
-- `src/main/resources/application.properties` (the real/dev/prod profile against PostgreSQL) **does not set `spring.jpa.hibernate.ddl-auto` at all**. Spring Boot's own default for a non-embedded database (PostgreSQL is not auto-detected as embedded) is `ddl-auto=none` — meaning Hibernate does **not** auto-alter the schema in this profile today. This is a materially different situation than "typical pre-Flyway project using `update`" — it means either (a) the current `tasks`/`columns` tables were created by some one-time manual/other mechanism already, and adding `@Version` in code alone will NOT create the column against a real Postgres instance and the app will fail at runtime with a "column version does not exist" SQL error the first time Hibernate tries to `SELECT`/`UPDATE` including that column, or (b) local/deployed Postgres instances are being recreated from scratch each time (e.g. via Docker Compose wiping the volume) in which case it's moot.
+**What:** The epic spec's own phrasing — "after each successful mutating operation... publish the corresponding event" — puts the `kafkaTemplate.send()` call at the tail of the same `@Transactional` service method that does the DB write, not in a separate step. Because Kafka isn't part of the JDBC transaction, this is **not** transactionally atomic with the DB commit: it's possible for the DB write to commit and the Kafka send to fail (network blip, broker down), silently dropping an activity-log entry, or for the send to succeed but the surrounding transaction to later roll back on an unrelated later statement, publishing an event for a change that never persisted.
 
-**Practical, still-no-Flyway-needed path, given `ddl-auto=none` in the real profile:**
-1. Confirm which of the two situations above is true (check for a Docker Compose file, init scripts, or ask whether the Postgres instance is long-lived or ephemeral in this project's dev/deploy setup).
-2. If the Postgres instance is long-lived (most likely for a project the user drives locally), the safest zero-Flyway option is **not** relying on `ddl-auto` at all (don't flip it to `update` just for this — that's a bigger behavior change than the epic asks for, and would silently start auto-migrating the schema on every future entity change too, which the project has apparently avoided doing deliberately). Instead, run one manual, one-off DDL statement against the dev database as part of implementing this change:
-   ```sql
-   ALTER TABLE tasks ADD COLUMN version bigint NOT NULL DEFAULT 0;
-   ALTER TABLE columns ADD COLUMN version bigint NOT NULL DEFAULT 0;
-   ```
-   This is a manual SQL statement, but it is *not* a migration **script/tool** (no Flyway, no versioned migration files, no new dependency) — it's a single ad hoc statement run once against the local/dev DB, consistent with how the schema evidently already got created without Flyway. Document it in the PR description as the "how to apply" step, same spirit as a commit message noting a manual step.
-   `DEFAULT 0` (not `NULL`) matters: Hibernate's optimistic-lock check treats a `null` version specially (as "not yet versioned"/first insert), so backfilling existing rows to `0` avoids ambiguous behavior on the first `UPDATE` of a pre-existing row after the column is added.
-3. If the team later decides recurring schema drift like this is common enough to formalize, that's exactly the trigger for introducing Flyway — already flagged as future work (Epic 3+) in `PROJECT.md`'s Out of Scope, so don't pull it into this milestone.
+**When to use:** This is the correct trade-off for this project's actual goal (a legitimate, demonstrable Kafka use case) — a fully-consistent alternative (transactional outbox table + separate relay process) is real production practice but is disproportionate ceremony for a personal/portfolio project's Epic 1, and the codebase has no existing outbox infrastructure to build on.
 
-This nuance (verified `ddl-auto` is unset/`none` in the real profile, not `update`) is the single most important correction to carry into phase planning — treat "how does the version column get into the real Postgres schema" as an explicit task in whichever phase implements optimistic locking, not an assumed side-effect of the code change.
+**Trade-offs:** Document this explicitly as a known, accepted limitation (the epic spec's own "Explanation to have afterward" section anticipates exactly this question). Two mitigations worth actually implementing, both cheap: (1) call `entityManager.flush()` before the `kafkaTemplate.send()` (the codebase already does this in `TaskService.updateById` for a different reason — to surface the bumped `@Version` — so the pattern already exists) so the DB write is durable before the event goes out, narrowing the dual-write window to "DB committed, Kafka down" rather than both being in flight; (2) don't block the request thread on delivery confirmation — let `send()` return its `CompletableFuture` and log-and-continue on failure rather than making Kafka availability a hard dependency of every board mutation.
 
-### Pattern 3: Batch-fetch-and-stitch for the nested aggregate — one query per tree level (not a naive triple `JOIN FETCH`, not `@BatchSize` alone)
-
-**What:** Fetch the aggregate in a small, fixed number of queries regardless of how many columns/tasks/subtasks exist, then assemble the Java object graph before mapping to DTOs.
-
-**When to use:** Any time a single response needs to nest **two or more** `List`-valued to-many relationships (`Board.columns` × `Column.tasks` × `Task.subtasks` here). This is exactly the Cartesian-product trap the epic spec calls out.
-
-**Trade-offs — why one-query-per-level-and-stitch over the alternatives:**
-
-| Approach | Query count | Cartesian risk | Verdict |
-|---|---|---|---|
-| Naive triple `JOIN FETCH` (`board.columns.tasks.subtasks` in one JPQL query) | 1 | **High** — Hibernate cannot `JOIN FETCH` more than one `List`/bag association in a single query without either a `MultipleBagFetchException` or duplicate-row bloat from the Cartesian product; nesting three collection levels compounds this | Rejected — explicitly what the epic spec says to avoid |
-| `@BatchSize` on all three collections | Variable (batched `IN` queries triggered lazily per collection as they're accessed, one batch per `parentIds.size() / batchSize`) | None | Viable, but relies on lazy-loading firing correctly at mapping time within the transaction, and the exact query count is less predictable/explicit than counting it upfront |
-| **One-query-per-level-and-stitch (recommended)** | Exactly 3 queries total (Board+Columns, then Tasks, then Subtasks), independent of board size | None | Recommended — explicit, deterministic query count, doesn't depend on Hibernate's lazy-loading/batching machinery working invisibly; easiest to reason about, count in a test, and explain to a reviewer |
-
-**Recommended shape — 3 queries, one per collection level, each a flat (non-transitive) fetch:**
-
-The important constraint: never `JOIN FETCH` across **two** collection associations in the same query, even implicitly. `Board → Columns` is one collection; `Column → Tasks` is another; `Task → Subtasks` is a third. Fetching any two of them together in one JPQL statement re-triggers the same multiple-bag-fetch problem the naive-triple-join is rejected for — so each query below fetches exactly one collection level, using the parent IDs already collected from the previous query.
-
-**Query 1** — Board + its Columns (one collection, safe to `JOIN FETCH`):
+**Example:**
 ```java
-// ColumnRepository (or BoardRepository) — new method
-@Query("SELECT b FROM BoardEntity b JOIN FETCH b.column c WHERE b.id = :boardId")
-Optional<BoardEntity> findByIdWithColumns(@Param("boardId") String boardId);
-```
-(Note: `BoardEntity.column` is the existing, oddly-singular field name for the `List<ColumnEntity>` — see Pitfalls file.)
-
-**Query 2** — all Tasks for the column IDs from query 1 (flat `IN`, no nested fetch):
-```java
-// TaskRepository — new method
-List<TaskEntity> findAllByColumnIdIn(Collection<String> columnIds);
+taskRepository.save(task);
+entityManager.flush();   // DB write durable before we tell Kafka about it
+kafkaTemplate.send("kanban.activity", task.getId(), event)
+        .exceptionally(ex -> { /* log; do not fail the HTTP response over this */ return null; });
 ```
 
-**Query 3** — all Subtasks for the task IDs from query 2 (flat `IN`, no nested fetch):
+### Pattern 3: Idempotent consumer via UUID `eventId` existence check
+
+**What:** Kafka's default delivery guarantee is at-least-once — a consumer restart, rebalance, or manual offset reset can redeliver a message the consumer already processed. `ActivityLogConsumer` must check `activityLogRepository.existsByEventId(event.eventId())` before inserting, so redelivery is a no-op rather than a duplicate row.
+
+**When to use:** Every `@KafkaListener` method that performs a non-idempotent side effect (a DB insert). This is a hard requirement, not an optimization — the epic spec calls it out explicitly as "the concrete 'at-least-once + idempotency' story worth being able to tell."
+
+**Trade-offs:** A plain `existsByEventId` + `save()` has a narrow race window under concurrent redelivery (two threads/instances both pass the exists-check before either inserts) — acceptable for a single-consumer-instance dev/portfolio deployment. The more robust version makes `eventId` a **unique DB constraint** and catches `DataIntegrityViolationException` on the insert as the actual dedupe mechanism, with the `existsByEventId` check as a cheap pre-filter to avoid the wasted-insert attempt in the common case. Recommend doing both: unique constraint for correctness, exists-check for efficiency.
+
+**Example:**
 ```java
-// SubtaskRepository — new method
-List<SubtaskEntity> findAllByTaskIdIn(Collection<String> taskIds);
-```
-
-Then stitch in Java: group tasks by `columnId`, group subtasks by `taskId`, and assign them back onto the in-memory (already Hibernate-managed, same-transaction) entity graph before mapping.
-
-This is a 3-query strategy, not 2 — describe it accurately as "one query per tree level, stitched in Java" when documenting/defending the choice. It's still small, fixed, and independent of data volume (O(1) queries regardless of how many columns/tasks/subtasks exist), and it fully avoids the Cartesian-product blowup because no single query ever joins across more than one collection association. `@BatchSize` was considered as the practical alternative and is worth mentioning as "considered, rejected for weaker query-count predictability" — exactly the kind of trade-off the epic spec asks to be ready to explain.
-
-**Example (service-layer stitching):**
-```java
-// BoardService.java — new method
-@Transactional
-public BoardFullResponseDTO getFullBoard(String userId, String boardId) {
-    var pair = ownershipVerifierService.verifyOwnershipOfBoard(userId, boardId);
-    var board = columnRepository.findByIdWithColumns(pair.getSecond().getId())
-            .orElseThrow(() -> new AppEntityNotFoundException("Board"));
-
-    var columnIds = board.getColumn().stream().map(ColumnEntity::getId).toList();
-    var tasks = taskRepository.findAllByColumnIdIn(columnIds);
-    var taskIds = tasks.stream().map(TaskEntity::getId).toList();
-    var subtasks = subtaskRepository.findAllByTaskIdIn(taskIds);
-
-    var tasksByColumnId = tasks.stream().collect(Collectors.groupingBy(t -> t.getColumn().getId()));
-    var subtasksByTaskId = subtasks.stream().collect(Collectors.groupingBy(s -> s.getTask().getId()));
-
-    board.getColumn().forEach(col -> {
-        var colTasks = tasksByColumnId.getOrDefault(col.getId(), List.of());
-        colTasks.forEach(t -> t.setSubtasks(subtasksByTaskId.getOrDefault(t.getId(), List.of())));
-        col.setTask(colTasks);
-    });
-
-    return boardFullMapper.toFullResponseDTO(board);
+@KafkaListener(topics = "kanban.activity", groupId = "activity-log")
+public void consume(ActivityEventEnvelope event) {
+    if (activityLogRepository.existsByEventId(event.eventId())) {
+        return; // already processed — at-least-once redelivery, no-op
+    }
+    activityLogRepository.save(activityLogMapper.toEntity(event));
 }
 ```
-This mutates the in-memory (already-fetched) entity graph's transient collection fields to attach the stitched children before handing off to the mapper — since these are the same Hibernate-managed entities within the same transaction, setting `col.setTask(...)` to the manually-fetched list is safe (it overwrites the lazy proxy reference before anything ever tries to lazy-load it), and MapStruct then walks the now-fully-populated graph.
+
+### Pattern 4: Single `kanban.activity` topic, one envelope type or union via headers
+
+**What:** The epic spec defines five distinct event records but a single topic (`kanban.activity`) and a single `ActivityLogConsumer`. Spring Kafka's `JsonDeserializer` needs either (a) a common supertype/interface all five events implement (e.g. `ActivityEvent` with `eventId()`, `userId()`, `timestamp()`), consumed as that supertype with a `@KafkaListener` that switches on the concrete type, or (b) `spring.json.type.mapping` configured to map a `__TypeId__` header to each concrete record class, consumed via separate `@KafkaHandler` methods on a `@KafkaListener`-annotated class.
+
+**When to use:** Given five *related* event types sharing one topic and one consumer (not five independently-scaled consumers), a common `sealed interface ActivityEvent permits TaskCreatedEvent, TaskMovedEvent, ...` with `@KafkaListener` + multiple `@KafkaHandler` overloads is the cleanest fit for Java 21's sealed types, and avoids hand-rolling a type-discriminator field.
+
+**Trade-offs:** Sealed interfaces + `@KafkaHandler` is slightly more Spring-Kafka-specific machinery to learn than a single flat DTO, but it keeps the five event `record`s honest data classes without a shared abstract base class doing inheritance gymnastics.
 
 ## Data Flow
 
-### Request Flow — `GET /boards/{boardId}/full`
+### Write Path: Move Task → Event → Activity Log Row
 
 ```
-HTTP GET /boards/{boardId}/full
-    |
-BoardController.getFullBoard(userId, boardId)          [NEW method, same class]
-    |
-BoardService.getFullBoard(userId, boardId)              [NEW method]
-    |
-OwnershipVerifierService.verifyOwnershipOfBoard()        [existing, unchanged -- 1 query]
-    |
-ColumnRepository.findByIdWithColumns(boardId)             [NEW -- query 1: Board + Columns]
-    |
-TaskRepository.findAllByColumnIdIn(columnIds)              [NEW -- query 2: all Tasks for those columns]
-    |
-SubtaskRepository.findAllByTaskIdIn(taskIds)                [NEW -- query 3: all Subtasks for those tasks]
-    |
-[in-memory stitch: group tasks by columnId, subtasks by taskId, attach to entity graph]
-    |
-BoardFullMapper.toFullResponseDTO(board)                  [NEW MapStruct mapper, walks fully-populated graph]
-    |
-BoardFullResponseDTO (nested: Board -> Columns -> Tasks -> Subtasks)
-    |
-200 OK, JSON body
+PATCH /tasks/{taskId}/move  (NEW endpoint)
+    ↓
+TaskController.moveToColumn()          [@PreAuthorize isAuthenticated, @CurrentUserId]
+    ↓
+TaskService.moveToColumn()             [@Transactional]
+    ↓ verifyOwnershipOfTask + verifyOwnershipOfColumn(target)   [REUSED — OwnershipVerifierService]
+    ↓ task.setColumn(target); taskRepository.save(task); entityManager.flush()
+    ↓ kafkaTemplate.send("kanban.activity", taskId, new TaskMovedEvent(eventId, userId, taskId, targetColumnId, now))
+    ↓
+[HTTP response returns here — consumer runs fully async, on a different thread/JVM-internal thread pool]
+    ↓
+kanban.activity topic (Kafka broker, async)
+    ↓
+ActivityLogConsumer.consume()          [@KafkaListener — separate thread, no HttpSession/SecurityContext]
+    ↓ existsByEventId(eventId)?  → yes: no-op (idempotency)
+    ↓                              → no: continue
+    ↓ map event → ActivityLogEntity(boardId, userId, action="TASK_MOVED", detail, createdAt)
+    ↓ activityLogRepository.save()
+    ↓ (on repeated processing failure → DefaultErrorHandler → DeadLetterPublishingRecoverer → kanban.activity.dlt)
+    ↓
+PostgreSQL: activity_log table (NEW)
 ```
 
-Total: **1 (ownership) + 3 (fetch levels) = 4 queries**, constant regardless of board size — versus the client currently needing `1 + columns + tasks` round trips if it renders the same view by calling today's flat per-level endpoints itself.
-
-### Request Flow — Optimistic locking conflict (drag-and-drop reorder)
+### Read Path: GET Activity Log (mirrors existing GET patterns exactly)
 
 ```
-Client A: GET task (version=3) --.
-Client B: GET task (version=3) --+ both read same version
-                                  |
-Client A: PUT task (moves column) -> UPDATE ... WHERE id=? AND version=3 -> succeeds, version becomes 4
-                                  |
-Client B: PUT task (reorders)     -> UPDATE ... WHERE id=? AND version=3 -> 0 rows affected
-                                  |
-                    Hibernate detects 0-row update on a versioned entity
-                                  |
-                    throws ObjectOptimisticLockingFailureException
-                                  |
-                    propagates up through TaskService.updateById() (unchanged method body,
-                    exception surfaces naturally from taskRepository.save())
-                                  |
-                    GlobalExceptionHandler.handleObjectOptimisticLockingFailure()  [NEW/adjusted handler]
-                                  |
-                    409 Conflict response to Client B
+GET /boards/{boardId}/activity?page=0&size=20
+    ↓
+ActivityController.findAllByBoardId()   [@PreAuthorize isAuthenticated, @CurrentUserId]
+    ↓
+ActivityLogService.findAllByBoardId(userId, boardId, pageable)   [@Transactional]
+    ↓ ownershipVerifierService.verifyOwnershipOfBoard(userId, boardId)   [REUSED]
+    ↓ activityLogRepository.findAllByBoardId(board.getId(), pageable)
+    ↓ activityLogMapper.toResponseDTOList(...)
+    ↓
+200 OK  Page<ActivityLogResponseDTO>
 ```
-
-Note: the existing `GlobalExceptionHandler` already has a handler for `OptimisticLockingFailureException` mapped to **423 Locked**. `ObjectOptimisticLockingFailureException` (thrown specifically by JPA/Hibernate `@Version` conflicts) is a subtype of `OptimisticLockingFailureException` — so the existing generic handler will already catch it, unless a more specific handler is added. The epic spec explicitly asks for **409**, not the existing **423** — this requires either changing the existing handler's status code from 423->409, or adding a new, more-specific `@ExceptionHandler(ObjectOptimisticLockingFailureException.class)` that Spring will dispatch to in preference to the generic one. Decide explicitly which; don't leave both silently disagreeing about status code — flagged as a Pitfall.
 
 ### Key Data Flows
 
-1. **`/full` endpoint:** One ownership check + three flat `IN`-clause fetch queries + in-memory stitch + MapStruct mapping. No new N+1 risk introduced because every list is fetched with a single batched query keyed by parent IDs collected from the previous step, not fetched per-parent-in-a-loop.
-2. **Optimistic locking:** No change to data flow shape at all — `@Version` piggybacks on the existing `UPDATE` path (`taskRepository.save()` / `columnRepository.save()`), Hibernate appends `AND version = ?` to the `UPDATE` and increments it automatically. The only new flows are (a) the exception path, which needs one decision (409 vs 423) reconciled in `GlobalExceptionHandler`, and (b) the one-time schema change against the real Postgres instance (see Pattern 2 — `ddl-auto=none` in the real profile means this doesn't happen automatically).
+1. **Write-path decoupling:** the HTTP request/response cycle for a task/board/column mutation never waits on the Kafka consumer or the `activity_log` insert — it only waits on the (fire-and-forget, or at most `.send()`-acknowledged) publish. This is the entire point of the "event-driven side effect" framing in the epic spec: a slow or temporarily-down activity log cannot make board mutations fail.
+2. **No new dependency from existing services into `activitylog` package:** `TaskService` depends on `KafkaTemplate` and `event/*`, never on `ActivityLogConsumer`, `ActivityLogRepository`, or `ActivityLogEntity` directly. The only coupling from old code to new code is "publish an event," which keeps `activitylog` fully removable/replaceable (e.g., swappable for a separate microservice later, as the epic spec's "Out of Scope" section anticipates) without touching `TaskService`/`BoardService`/`ColumnService` again.
+3. **Read-path reuses `OwnershipVerifierService` unmodified:** `ActivityLogService` calls the exact same `verifyOwnershipOfBoard(userId, boardId)` method every other read-by-board-id path uses. `ActivityLogEntity` needs a `boardId` field precisely so this reuse is possible — no new authorization logic is introduced by this feature, which is a good sign the boundary is drawn correctly.
 
 ## Scaling Considerations
 
 | Scale | Architecture Adjustments |
 |-------|--------------------------|
-| Personal/portfolio project (current) | 4-query stitch is more than sufficient; boards realistically have single-digit columns, tens of tasks |
-| If boards grow to hundreds of tasks | Same query shape still holds — it's O(1) queries regardless of row count, only row-count-proportional data transfer grows. Add `@BatchSize` on `Column.task`/`Task.subtasks` as a *defense-in-depth* fallback for any other endpoint that isn't the `/full` aggregate but still risks incidental lazy access, without changing the `/full` endpoint's own explicit-fetch strategy |
-| If concurrent editors become common (multi-user boards, not just multi-tab) | Optimistic locking as implemented is the correct default; only escalate to pessimistic locking (`@Lock(PESSIMISTIC_WRITE)`) if conflict *retry* UX becomes a real product requirement — out of scope for this milestone |
+| Single EC2 instance, dev/portfolio traffic (current deployment) | Single-partition `kanban.activity` topic, single consumer instance (same JVM as the producer, in-process `@KafkaListener`) is entirely sufficient. This is explicitly the target per the epic spec — "the in-process `@KafkaListener` already demonstrates the event-driven pattern." Don't build for more than this. |
+| Higher write volume / multiple app instances | Increase topic partitions and use a meaningful partition key (already using `task.getId()`/entity id as the Kafka message key above — this preserves per-entity ordering, which matters if e.g. two rapid moves of the same task must be logged in order) so multiple consumer instances in the same group can scale horizontally without reordering per-key events. |
+| Consumer extracted to a separate deployable service (explicitly out of scope per PROJECT.md) | At that point `event/` becomes a genuine shared contract (published as a small shared library or duplicated record definitions) between two deployables, and schema evolution (adding fields to event records) becomes a real concern requiring backward-compatible JSON changes — not a problem worth solving now. |
 
 ### Scaling Priorities
 
-1. **First bottleneck:** None expected at this project's scale — the 4-query stitch is already the scalable shape (constant query count). No premature optimization needed.
-2. **Second bottleneck:** If a "board list with full nesting" endpoint is ever requested (multiple boards, each fully nested), the same stitch pattern applies per-board but batching across boards would need care — explicitly out of scope; the current epic only asks for single-board `/full`.
+1. **First real risk at current scale is not throughput, it's the dual-write gap** (Pattern 2) — under low volume this is rare but not impossible (broker restart during a deploy), and it's worth being able to explain rather than worth engineering away for a single-node personal project.
+2. **Second: consumer-side idempotency correctness** (Pattern 3) matters more than performance — a single duplicated activity-log row is a visible, embarrassing bug in a portfolio demo; get the unique-constraint + exists-check combination right before optimizing anything else.
 
 ## Anti-Patterns
 
-### Anti-Pattern 1: Naive triple `JOIN FETCH` across `board.columns.tasks.subtasks` in one query
+### Anti-Pattern 1: Publishing the Kafka event *before* `taskRepository.save()`/commit
 
-**What people do:** Reach for `@Query("SELECT b FROM BoardEntity b JOIN FETCH b.column c JOIN FETCH c.task t JOIN FETCH t.subtasks WHERE b.id = :id")` because it "looks like" the natural one-query solution.
-**Why it's wrong:** Hibernate cannot cleanly fetch multiple bag (`List`) associations in a single query without either throwing `MultipleBagFetchException` or silently producing a Cartesian-product result set (rows duplicated once per combination of column×task×subtask), which both wastes bandwidth and can produce duplicate entities in the Java-side collection unless deduplicated with `DISTINCT`/`Set`.
-**Do this instead:** One query per list-nesting level, each keyed by the parent IDs collected from the previous level (Pattern 3 above).
+**What people do:** Call `kafkaTemplate.send()` first "to get it out of the way," then do the DB write.
 
-### Anti-Pattern 2: Letting the new nested DTOs replace/merge into the existing flat DTOs
+**Why it's wrong:** If the DB write subsequently fails (validation exception thrown later in the same method, constraint violation, etc.) or the transaction rolls back, an activity-log entry gets created for a mutation that never actually happened — a false audit trail entry, which defeats the entire purpose of an activity/audit log.
 
-**What people do:** Add an optional `List<ColumnResponseDTO> columns` field directly onto the existing `BoardResponseDTO`, reasoning "it's optional, other endpoints just won't populate it."
-**Why it's wrong:** Every consumer of `BoardResponseDTO` (today: `GET /boards`) would now carry a nullable field with unclear contract ("is this null because it's the flat endpoint, or because the board has no columns?"), and any future engineer touching `BoardMapper` risks accidentally trying to populate/traverse it outside a transaction, reintroducing the exact `LazyInitializationException` risk the flat convention exists to prevent.
-**Do this instead:** New, separate `BoardFullResponseDTO` (Pattern 1) reached only via the new `/full` endpoint and its own dedicated mapper. Zero ambiguity about which endpoint returns which shape.
+**Do this instead:** Always persist first, flush to make the write durable, publish last — exactly the order in Pattern 2's example. If the method can throw after the mutation but before the publish, that's an acceptable "missing" event (silent under-logging), which is far less bad than a false "phantom" event.
 
-### Anti-Pattern 3: Adding `@Version` to `BaseEntity`
+### Anti-Pattern 2: Consumer reading `SecurityContext` / `@CurrentUserId` / calling `OwnershipVerifierService` for write-side authorization
 
-**What people do:** Since `BaseEntity` is the shared base class, reach for adding `@Version` there "once, for everyone," reasoning it's more DRY.
-**Why it's wrong:** Silently obligates every entity (`UserEntity`, `BoardEntity`, `SubtaskEntity` included) to carry version-check semantics on every update, expanding the schema/behavior change beyond what the epic scoped (only `TaskEntity`/`ColumnEntity` have a concurrent-edit scenario worth guarding). It also risks surprising currently-passing tests that don't expect optimistic-lock exceptions on unrelated entities, and — since `ddl-auto=none` in the real profile — would silently expand the manual-DDL surface to five tables instead of two.
-**Do this instead:** Add the field directly to the two entities that need it (Pattern 2). Promote to `BaseEntity` later only as an explicit, separately-reviewed decision if broader coverage becomes a real requirement.
+**What people do:** Instinctively reach for the same ownership-verification pattern used everywhere else in the codebase inside `ActivityLogConsumer`, e.g. calling `ownershipVerifierService.verifyOwnershipOfBoard(...)` before persisting the log row.
 
-### Anti-Pattern 4: Re-verifying ownership per list level during the `/full` fetch
+**Why it's wrong:** The `@KafkaListener` method runs on a Kafka consumer container thread, not an HTTP request thread — there is no `SecurityContext`, no session, no authenticated principal available via the existing `@CurrentUserId`/`CurrentUserIdResolver` machinery. The event was already authorized once, at publish time, inside the originating service method (which *did* run in an authenticated HTTP request and *did* go through `OwnershipVerifierService`). Re-checking authorization on the consumer side is both impossible with the existing security stack as-is and conceptually redundant — trust the event payload's `userId` as already-verified.
 
-**What people do:** Call `ownershipVerifierService.verifyOwnershipOfColumn()` per column, or `verifyOwnershipOfTask()` per task, while building the nested tree — mirroring the (already-being-fixed-elsewhere) N+1 pattern from Finding 2 in the epic spec.
-**Why it's wrong:** Ownership of the board is already established once at the top (`verifyOwnershipOfBoard`); every column/task/subtask under an owned board is transitively owned by the same user via the FK chain. Re-verifying at each level is the exact same wasted-chatty-query anti-pattern the epic spec is fixing elsewhere in `OwnershipVerifierService`.
-**Do this instead:** Verify board ownership once at the top of `BoardService.getFullBoard()`, then fetch children by `boardId`/`columnIds`/`taskIds` directly via repository queries — no further ownership re-checks needed, since the WHERE-clause scoping to already-verified parent IDs is itself the security boundary.
+**Do this instead:** `ActivityLogConsumer` only does idempotency check + straightforward field mapping + save. Ownership/authorization enforcement belongs exclusively on the **read** side (`ActivityLogService.findAllByBoardId` calling `verifyOwnershipOfBoard`, which does run on a normal authenticated HTTP thread), not the write side.
 
-### Anti-Pattern 5: Assuming `ddl-auto` will silently create the `version` column in the real database
+### Anti-Pattern 3: `@KafkaListener` method thin enough to skip idempotency, "because it's just a log"
 
-**What people do:** Add `@Version` to the entities, run the app locally against Postgres, see it "just work" in dev, and assume production will behave the same without checking `application.properties`.
-**Why it's wrong:** The real profile has no `spring.jpa.hibernate.ddl-auto` set, which defaults to `none` for PostgreSQL (non-embedded) — Hibernate will not auto-add the `version` column against a persistent Postgres instance the way it does in the test profile's `create-drop` mode. If the dev Postgres instance happens to be recreated from scratch frequently (e.g. Docker volume wiped often), this could go unnoticed until a longer-lived instance (or a teammate's persistent local DB) hits a "column does not exist" SQL error.
-**Do this instead:** Explicitly verify how the real schema currently gets created (check for init scripts/Docker Compose/manual setup), and add the `version` column via one manual, one-off `ALTER TABLE ... ADD COLUMN version bigint NOT NULL DEFAULT 0` statement per table — not a code-only change. See Pattern 2 for the full reasoning.
+**What people do:** Treat the activity log as low-stakes ("it's just an audit trail, duplicates don't matter much") and skip the `existsByEventId` check to save a query.
+
+**Why it's wrong:** This is the exact opposite of the epic's stated purpose — the whole reason this feature exists is to have a concrete, defensible "at-least-once + idempotency" story. Skipping it converts the feature from "demonstrates event-driven design correctly" into "has an obvious, easily-probed correctness bug," which is a worse outcome for a portfolio piece than not having the feature at all.
+
+**Do this instead:** Idempotency check is not optional scope — treat it as part of the entity/repository design from the start (unique constraint on `eventId` at the DDL level), not a follow-up hardening pass.
+
+### Anti-Pattern 4: Wiring `KafkaTemplate` via constructor injection while the rest of the service class uses field injection
+
+**What people do:** "Constructor injection is best practice," so the new `KafkaTemplate` field gets a constructor while `taskRepository`, `taskMapper`, etc. stay `@Autowired` fields on the same class.
+
+**Why it's wrong:** Mixing injection styles within one class is inconsistent and confusing to a reviewer, and — per this codebase's own documented rationale (CLAUDE.md, ARCHITECTURE.md Anti-Patterns) — the existing all-field-injection convention exists specifically to sidestep circular bean dependencies between the Board/Column/Task/Subtask/Ownership service graph. `KafkaTemplate` doesn't participate in that graph and has no circularity risk, but introducing a second injection style for one field is a stylistic regression, not an improvement, in a codebase that has already made and documented this trade-off.
+
+**Do this instead:** `@Autowired private KafkaTemplate<String, Object> kafkaTemplate;` — same as every other collaborator in `TaskService`/`BoardService`/`ColumnService`.
 
 ## Integration Points
 
 ### External Services
 
-Not applicable — no new external service integration in this scope (no Kafka/Redis/Flyway per PROJECT.md's explicit Out of Scope).
+| Service | Integration Pattern | Notes |
+|---------|---------------------|-------|
+| Kafka broker (new, via `docker-compose.yml`) | `spring-kafka` `KafkaTemplate` (producer) + `@KafkaListener` (consumer), both auto-configured from `spring.kafka.bootstrap-servers` | Use the official `apache/kafka` Docker Hub image in **KRaft mode** (combined broker+controller, no separate Zookeeper container needed) — this is now the standard, simplest way to run single-node Kafka for local dev; minimal env vars: `KAFKA_PROCESS_ROLES=controller,broker`, `KAFKA_NODE_ID`, `KAFKA_CONTROLLER_QUORUM_VOTERS`, listeners on 9092 (client)/9093 (controller). [LOW confidence, web search only — verify exact env var names against the image's current README at implementation time.] |
+| PostgreSQL (existing) | `ActivityLogRepository extends JpaRepository`, same `spring.datasource.*` connection the rest of the app already uses | No new datasource — `activity_log` is just a new table in the existing schema, created via the same manual-DDL-then-later-Flyway path the project is already using for `version` columns (per PROJECT.md's outstanding-manual-step precedent). Plan for a matching manual DDL step before deploy, same lesson as the optimistic-locking migration. |
+| Testcontainers Kafka module (`org.testcontainers:kafka`, test-scope only) | `@Container static KafkaContainer` + `@DynamicPropertySource` to override `spring.kafka.bootstrap-servers` at test runtime | Standard pattern: spin up a real embedded-in-Docker broker per test class, publish an event via the real `KafkaTemplate` bean, then poll (with a timeout — production/consumption is async across threads) for the `ActivityLogEntity` row to appear via the repository. This is also how the epic spec (and Epic 5's Testcontainers epic) wants Testcontainers formalized project-wide, so this is the first real usage, not a one-off. |
 
 ### Internal Boundaries
 
 | Boundary | Communication | Notes |
 |----------|---------------|-------|
-| `BoardController` ↔ `BoardService` | Direct method call, existing `@Autowired` field injection pattern, unchanged | New `getFullBoard()` method added to both; no new cross-service dependency introduced (still only calls `OwnershipVerifierService` + repositories, same as existing `BoardService` methods) |
-| `BoardService` ↔ `ColumnRepository`/`TaskRepository`/`SubtaskRepository` | Direct repository calls for the 3-level fetch-and-stitch | New query methods added to existing repository interfaces; **no new service-to-service dependency** — `BoardService` calling `TaskRepository`/`SubtaskRepository` directly (rather than through `TaskService`/`SubtaskService`) is a deliberate, scoped exception to "services call services," justified because this is a read-only aggregate query, not a business operation, and going through the intermediate services would force fetching through their existing per-entity ownership-verification methods again (reintroducing Anti-Pattern 4) |
-| `BoardFullMapper` ↔ `SubtaskMapper` | MapStruct `uses = {...}` composition | Read-only composition; does not create a runtime circular dependency because MapStruct wires this at compile time as plain bean references, same as any other Spring `@Autowired` — no different from existing mapper usage patterns |
-| `TaskService`/`ColumnService` ↔ `GlobalExceptionHandler` | Exception propagation (not a direct call) | `ObjectOptimisticLockingFailureException` thrown by `taskRepository.save()`/`columnRepository.save()` propagates up through unchanged service method bodies to the existing `@ControllerAdvice`; requires a decision on 409 vs. existing 423 mapping (see Data Flow section) |
-| New code ↔ real Postgres schema | One-off manual DDL, not framework-managed | Because `ddl-auto` is unset (defaults to `none`) in `application.properties`, the `version` column must be added to the real database out-of-band from the code change — this is the one boundary in this work that is NOT purely a Spring-managed integration (see Pattern 2, Anti-Pattern 5) |
+| `TaskService`/`BoardService`/`ColumnService` → `event/` | Direct construction of event records | New, one-directional, dependency-free — events have no behavior, just data. |
+| `TaskService`/`BoardService`/`ColumnService` → Kafka broker | `KafkaTemplate.send(topic, key, event)` | Fire-and-forget from the service's perspective (see Pattern 2) — do not block the HTTP response on consumer processing. |
+| Kafka broker → `ActivityLogConsumer` | `@KafkaListener` container thread | Fully decoupled from the HTTP request lifecycle — no shared thread-locals (`SecurityContext`, `EntityManager` transaction) with the producing request. |
+| `ActivityLogConsumer` → `ActivityLogRepository`/`ActivityLogEntity` | Direct, same-JVM JPA save | Straightforward — this is the one place genuinely new persistence logic is introduced. |
+| `ActivityController`/`ActivityLogService` → `OwnershipVerifierService` | Direct method call, **reused unmodified** | The single most important existing-architecture integration point: this is what makes the new read endpoint consistent with every other board-scoped resource in the app, and it costs zero new authorization code. |
+| New endpoint `PATCH /tasks/{taskId}/move` → `TaskController`/`TaskService` | Same `@PreAuthorize("isAuthenticated()")` + `@CurrentUserId` + `OwnershipVerifierService` shape as every other mutating endpoint | No new security pattern needed — this is a same-shape addition to an existing controller, not a new component category. |
 
-## Answers to the Three Specific Questions (summary)
+## Suggested Build Order
 
-**Q1 — Where does the nested DTO structure live, and how is it reconciled with the flat convention?**
-New `dto/board_dto/full/` subpackage holding `BoardFullResponseDTO` → `ColumnFullResponseDTO` → `TaskFullResponseDTO` → (reuse existing `SubtaskResponseDTO` as the leaf). A dedicated `BoardFullMapper` (new MapStruct interface, composing the existing `SubtaskMapper` via `uses`) does the conversion. The flat convention is preserved everywhere else untouched; the new nested shape is safe specifically because the batch-fetch strategy (Q3) guarantees every nested field is already Hibernate-initialized before mapping — the flat convention's *purpose* (avoid `LazyInitializationException`) is upheld by fetch discipline, not by DTO shape alone.
+Dependencies flow strictly downward through this list — each step is unblocked by the previous one and (mostly) independently testable:
 
-**Q2 — Where does `@Version` belong relative to `BaseEntity`, and how to add it without a migration script?**
-Directly on `TaskEntity` and `ColumnEntity`, not on `BaseEntity` — scoped to exactly the two entities the epic's product scenario (drag-and-drop conflict) concerns. Verified in the actual config: the test profile (`application-test.properties`) uses `ddl-auto=create-drop`, so the field just works there with zero extra effort. The real profile (`application.properties`) has **no `ddl-auto` set at all**, which defaults to `none` for PostgreSQL — meaning Hibernate will NOT auto-add the column against a real, persistent Postgres instance. The correct "no Flyway needed" path is one manual, one-off `ALTER TABLE tasks/columns ADD COLUMN version bigint NOT NULL DEFAULT 0` statement per table (not a migration tool/versioned script — just an ad hoc DDL statement, consistent with however the rest of the schema evidently already got created without Flyway). Use `DEFAULT 0`, not leaving it nullable, so pre-existing rows don't hit Hibernate's null-version-means-unversioned edge case on their first post-change `UPDATE`.
+1. **`docker-compose.yml`** (postgres + apache/kafka KRaft + app) — unblocks all local development and the later Testcontainers work; zero code dependencies, do this first.
+2. **`spring-kafka` dependency in `build.gradle`** — trivial, unblocks everything else.
+3. **`event/` package** (five records) — pure data, no dependencies on anything else new; write these before touching any service.
+4. **`ActivityLogEntity` + `ActivityLogRepository`** (with `eventId` unique constraint + `existsByEventId`) — needed before the consumer can be written or tested; this is also where the manual-DDL-before-deploy lesson from the optimistic-locking phase applies again.
+5. **Producer side: `KafkaTemplate` wiring into `TaskService`/`BoardService`/`ColumnService`**, including the new `moveToColumn` method + `PATCH /tasks/{taskId}/move` endpoint. Can be built and unit-tested (mocked `KafkaTemplate`) independently of the consumer existing yet.
+6. **`ActivityLogConsumer`** (`@KafkaListener`, idempotency check, mapping) — now has both an entity to write to and events to consume; this is the first point a real end-to-end flow can be exercised.
+7. **`DefaultErrorHandler` + `DeadLetterPublishingRecoverer`** (`kanban.activity.dlt`) — layer onto the working consumer once the happy path is proven; retrofitting error handling onto an already-tested consumer is lower-risk than building it blind.
+8. **Read path: `ActivityLogService` + `ActivityController` + `ActivityLogResponseDTO`/`ActivityLogMapper`** (`GET /boards/{boardId}/activity`, paginated, reusing `OwnershipVerifierService`) — depends only on step 4's entity existing with data in it; can be built/tested with directly-inserted rows even before the producer/consumer are wired.
+9. **Testcontainers integration test** (`org.testcontainers:kafka`) — genuinely end-to-end, so it necessarily comes last: publish a real `TaskMovedEvent` through a real broker, assert the `ActivityLogEntity` row lands. This is also the test that will catch any mismatch between steps 5 and 6 that unit tests with mocks would miss.
 
-**Q3 — What repository/service changes support batch-fetching in a small, fixed number of queries?**
-Three new flat (non-transitive) fetch queries, one per list-nesting level: `ColumnRepository.findByIdWithColumns(boardId)` (Board + Columns via one `JOIN FETCH`), `TaskRepository.findAllByColumnIdIn(columnIds)` (flat `IN` query, no nested fetch), `SubtaskRepository.findAllByTaskIdIn(taskIds)` (flat `IN` query). Stitch results in Java inside `BoardService.getFullBoard()` by grouping children by parent ID and assigning into the entity graph's transient list fields before mapping. This is a 3-query strategy (one query per tree level), not the naive single triple-join and not `@BatchSize`'s variable batch count — accurately describe it as "one query per level of the tree, stitched in Java," and note `@BatchSize` was considered and rejected specifically for weaker query-count predictability, per the epic's own ask to justify the choice.
+This order matches the plan's own "Testing" note (the Testcontainers test is described as validating the already-built pieces end-to-end) and keeps each step reviewable as an independent, buildable increment — consistent with this project's one-epic-per-PR discipline, even if the phases within the epic end up as separate commits/PRs.
 
-## Build Order / Sequencing Note
+## Sources
 
-**These two deliverables are independent and can be built in either order** — they touch disjoint parts of the stack (new DTOs/mapper/repo-methods for `/full`; new entity field + exception-handler adjustment + one-off DDL for locking) with no shared code path. Recommended order, if sequencing anyway for review-size reasons: **optimistic locking first**, because it's the smaller, more self-contained change (one field × 2 entities + one exception-handler decision + one manual DDL step + one test), giving a quick clean PR; then the `/full` endpoint, which is the larger surface area (3 new DTOs, 1 new mapper, 3 new repository methods, stitching logic, and its own dedicated test). Building locking first also surfaces the `ddl-auto=none` schema-application question early, before it can be mixed up with the also-nontrivial `/full` endpoint work. No hard dependency either way — flag this as a build-order *preference*, not a requirement, for roadmap phase ordering.
+- Existing codebase, read directly: [`ARCHITECTURE.md`](../codebase/ARCHITECTURE.md), `TaskService.java`, `OwnershipVerifierService.java`, `TaskController.java`, `BaseEntity.java`, `build.gradle`, `application.properties` — HIGH confidence, primary source.
+- [Epic 1 — Kafka + event-driven activity feed](../../docs/plans/backend-modernization/01-kafka-activity-feed.md) — the driving spec for this milestone — HIGH confidence, primary source.
+- [Apache Kafka Support :: Spring Boot](https://docs.spring.io/spring-boot/reference/messaging/kafka.html) — LOW confidence (web search summary, not directly fetched/verified against current doc version).
+- [Handling Exceptions :: Spring Kafka](https://docs.spring.io/spring-kafka/reference/kafka/annotation-error-handling.html) — DefaultErrorHandler / DeadLetterPublishingRecoverer pattern — LOW confidence (web search summary).
+- [DeadLetterPublishingRecoverer API docs](https://docs.spring.io/spring-kafka/api/org/springframework/kafka/listener/DeadLetterPublishingRecoverer.html) — LOW confidence (web search summary).
+- [apache/kafka Docker Hub image](https://hub.docker.com/r/apache/kafka) — KRaft single-node docker-compose pattern — LOW confidence (web search summary; verify exact env vars against the image README before writing the compose file).
+- [Testing Spring Boot Kafka Listener using Testcontainers](https://testcontainers.com/guides/testing-spring-boot-kafka-listener-using-testcontainers/) — LOW confidence (web search summary).
+- [Spring for Apache Kafka 4.0.0-M1, 3.3.4, and 3.2.8 are Available Now](https://spring.io/blog/2025/03/18/spring-kafka-4-0-0-M1-and-3-3-4-and-3-2-8-available-now/) — version compatibility with Spring Boot 3.5.x — LOW confidence (web search summary).
 
 ---
-*Architecture research for: Spring Boot / JPA-Hibernate kanban backend — Epic 2 completion (nested aggregate + optimistic locking)*
-*Researched: 2026-07-31*
+*Architecture research for: Kafka event-driven activity feed integration into an existing layered Spring Boot backend*
+*Researched: 2026-08-01*
