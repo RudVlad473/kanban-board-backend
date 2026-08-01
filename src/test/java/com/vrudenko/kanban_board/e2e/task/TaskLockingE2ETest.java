@@ -11,6 +11,7 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.util.Pair;
+import org.springframework.http.HttpStatus;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 public class TaskLockingE2ETest extends AbstractAppE2ETest {
@@ -60,7 +61,7 @@ public class TaskLockingE2ETest extends AbstractAppE2ETest {
                         .extract();
 
         // Assert
-        Assertions.assertThat(firstResponse.statusCode()).isEqualTo(200);
+        Assertions.assertThat(firstResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
         var firstResponseBody = firstResponse.as(TaskResponseDTO.class);
         Assertions.assertThat(firstResponseBody.getVersion()).isNotEqualTo(startingVersion);
 
@@ -75,7 +76,7 @@ public class TaskLockingE2ETest extends AbstractAppE2ETest {
                         .extract();
 
         // Assert
-        Assertions.assertThat(secondResponse.statusCode()).isEqualTo(409);
+        Assertions.assertThat(secondResponse.statusCode()).isEqualTo(HttpStatus.CONFLICT.value());
 
         // Act: re-submitting the same stale PUT again (without refetching) must still be
         // rejected, never silently succeed
@@ -89,7 +90,7 @@ public class TaskLockingE2ETest extends AbstractAppE2ETest {
                         .extract();
 
         // Assert
-        Assertions.assertThat(retryResponse.statusCode()).isEqualTo(409);
+        Assertions.assertThat(retryResponse.statusCode()).isEqualTo(HttpStatus.CONFLICT.value());
     }
 
     @Test
@@ -119,7 +120,7 @@ public class TaskLockingE2ETest extends AbstractAppE2ETest {
                         .extract();
 
         // Assert
-        Assertions.assertThat(response.statusCode()).isEqualTo(200);
+        Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
         var responseBody = response.as(TaskResponseDTO.class);
         Assertions.assertThat(responseBody.getVersion()).isGreaterThan(startingVersion);
     }
@@ -147,6 +148,6 @@ public class TaskLockingE2ETest extends AbstractAppE2ETest {
                         .extract();
 
         // Assert
-        Assertions.assertThat(response.statusCode()).isEqualTo(400);
+        Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
     }
 }
