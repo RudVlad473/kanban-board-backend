@@ -13,6 +13,12 @@ services:
   kafka:
     image: apache/kafka-native:4.3.1
     hostname: kafka
+    user: root # the named volume's mountpoint is created root-owned by the Docker volume driver on
+    # first use since apache/kafka-native does not pre-create /var/lib/kafka/data in the image
+    # (verified: `docker run --entrypoint sh apache/kafka-native:4.3.1 -c 'ls /var/lib/kafka'` ->
+    # No such file or directory), while the image's entrypoint otherwise runs as uid 1000 (appuser)
+    # — without this override the broker fails at startup with
+    # `AccessDeniedException: /var/lib/kafka/data/bootstrap.checkpoint.tmp`. Local-dev-only scope.
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: 'broker,controller'
