@@ -7,7 +7,7 @@ status: completed
 stopped_at: Completed 01-03-PLAN.md
 last_updated: "2026-08-01T11:40:00.000Z"
 last_activity: 2026-08-01
-last_activity_desc: "Completed quick task 260801-gib: Append rules 2-7 to docs/CODE_STYLE.md and fix HttpStatus literals in locking E2E tests"
+last_activity_desc: "Completed quick task 260801-k93: Reworded hiring-context language out of 17 tracked docs to neutral technical phrasing"
 progress:
   total_phases: 1
   completed_phases: 1
@@ -22,7 +22,7 @@ current_phase_name: Optimistic Locking
 
 See: .planning/PROJECT.md (updated 2026-07-31)
 
-**Core value:** Ship the remaining Epic 2 deliverable — optimistic locking on concurrent edits — as clean, independently reviewable, interview-defensible work.
+**Core value:** Ship the remaining Epic 2 deliverable — optimistic locking on concurrent edits — as clean, independently reviewable, technically defensible work.
 **Current focus:** Phase 1 — Optimistic Locking
 
 ## Current Position
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-31)
 Phase: 1
 Plan: Not started
 Status: All phases complete
-Last activity: 2026-08-01 - Completed quick task 260801-gib: Append rules 2-7 to docs/CODE_STYLE.md and fix HttpStatus literals in locking E2E tests
+Last activity: 2026-08-01 - Completed quick task 260801-k93: Reworded hiring-context language out of 17 tracked docs to neutral technical phrasing
 
 Progress: [██████████] 100%
 
@@ -97,6 +97,7 @@ Carried from research (address during Phase 1 planning):
 |---|-------------|------|--------|-----------|
 | 260801-gby | Create docs/CODE_STYLE.md with agent code-style preferences (enums over magic constants), referenced from CLAUDE.md | 2026-08-01 | 685b471 | [260801-gby-create-docs-code-style-md-with-agent-cod](./quick/260801-gby-create-docs-code-style-md-with-agent-cod/) |
 | 260801-gib | Append rules 2-7 to docs/CODE_STYLE.md (ownership-verified loading, AssertJ/catchException, no-mocks, @Nested/AAA, Update*RequestDTO shape, Optional isEmpty()-guard) and fix bare-int HTTP status literals in TaskLockingE2ETest/ColumnLockingE2ETest to use HttpStatus enum constants | 2026-08-01 | 85ed93f | [260801-gib-survey-the-repo-for-existing-code-conven](./quick/260801-gib-survey-the-repo-for-existing-code-conven/) |
+| 260801-k93 | Reword hiring-context language ("interview-defensible", "interview prep" headings, etc.) out of 17 git-tracked docs to neutral technical phrasing, preserving meaning | 2026-08-01 | 1bdfb79 | [260801-k93-remove-interview-related-language-from-d](./quick/260801-k93-remove-interview-related-language-from-d/) |
 
 ## Deferred Items
 
