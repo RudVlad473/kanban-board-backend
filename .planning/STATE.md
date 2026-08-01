@@ -84,7 +84,7 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-- [major] Stop exposing version as client-writable in update DTOs — `version` in `UpdateTaskRequestDTO`/`UpdateColumnRequestDTO` should be treated as read-only from the client's perspective (server-owned increment), not a normal editable field. See `.planning/todos/pending/2026-08-01-stop-exposing-version-as-client-writable-in-update-dtos.md`.
+- [minor] Create a sequence diagram documenting the full system flow — deferred until all functional epics of the backend modernization plan are complete and the project is ready for frontend hand-off. See `.planning/todos/pending/2026-08-01-create-sequence-diagram-documenting-full-system-flow-for-fro.md`.
 
 ### Blockers/Concerns
 
