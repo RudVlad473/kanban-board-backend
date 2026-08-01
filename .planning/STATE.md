@@ -3,50 +3,54 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Kafka Activity Feed
 status: planning
-last_updated: "2026-08-01T13:54:36.153Z"
+last_updated: "2026-08-01T14:30:00.000Z"
 last_activity: 2026-08-01
 progress:
-  total_phases: 0
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_phases: 3
+  completed_phases: 1
+  total_plans: 3
+  completed_plans: 3
+  percent: 33
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-07-31)
+See: .planning/PROJECT.md (updated 2026-08-01)
 
-**Core value:** Ship the remaining Epic 2 deliverable — optimistic locking on concurrent edits — as clean, independently reviewable, technically defensible work.
-**Current focus:** Phase 1 — Optimistic Locking
+**Core value:** Deliver a real, event-driven per-board activity log (Kafka + consumer + idempotent persistence), plus the genuinely-missing "move task between columns" endpoint, as Epic 1 of the backend modernization plan.
+**Current focus:** Phase 2 — Kafka Foundation, Domain Events & Move Endpoint
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-08-01 — Milestone v1.1 started
+Phase: 2 of 3 (Kafka Foundation, Domain Events & Move Endpoint)
+Plan: — (not yet planned)
+Status: Roadmap ready — awaiting /gsd-plan-phase 2
+Last activity: 2026-08-01 — ROADMAP.md created for v1.1, phases 2-3 defined, 16/16 requirements mapped
+
+Progress: [███░░░░░░░] 33%
 
 ## Performance Metrics
 
 **Velocity:**
 
 - Total plans completed: 3
-- Average duration: — min
-- Total execution time: 0.0 hours
+- Average duration: 32 min
+- Total execution time: 1.6 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 1 | 3 | - | - |
+| 1 | 3 | 95min | 32min |
+| 2 | TBD | - | - |
+| 3 | TBD | - | - |
 
 **Recent Trend:**
 
-- Last 5 plans: —
-- Trend: —
+- Last 5 plans: 45min, 35min, 15min
+- Trend: Improving
 
 *Updated after each plan completion*
 **Per-Plan Metrics:**
@@ -64,13 +68,11 @@ Last activity: 2026-08-01 — Milestone v1.1 started
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- [Scope]: Narrow v1 to optimistic locking only; defer `/full` endpoint to v2.
-- [Finding 1]: Ownership chain treated as closed — already 1 query via EAGER joins, no code change.
-- [Phase ?]: Fixed pre-existing cookie-auth bug (UserAuthenticationProvider stored raw userId string as principal instead of UserDetails) that silently broke every real session-cookie authenticated request; first exercised by this plan's mandated E2E test
-- [Phase ?]: Added entityManager.flush() after save() in TaskService.updateById so the response DTO carries the incremented @Version instead of the stale pre-flush value
-- [Phase ?]: Reused the exact TaskService.updateById load-compare-mutate-flush pattern for ColumnService.updateById (Plan 02)
-- [Phase ?]: Documented bulk-delete @Version bypass and deleteAllByBoardId derived-vs-bulk asymmetry as Javadoc, closing both research-carried blockers
-- [Phase ?]: Checkpoint resolved: deliver optimistic-locking DDL as standalone .sql file (deliver-sql-file); user accepted one-way obligation to run it manually via psql before merge/deploy
+- [Roadmap/v1.1]: Continued phase numbering from v1.0 — this milestone starts at Phase 2, not Phase 1.
+- [Roadmap/v1.1]: Split 16 requirements into 2 phases (coarse granularity): Phase 2 = producer side (Kafka infra, domain events, move endpoint), Phase 3 = consumer side (activity log, idempotency, DLT, read API, e2e verification). Research's 5-phase suggestion was compressed to match coarse granularity — TEST-01/02 folded into Phase 3 as additional success criteria rather than a standalone verification-only phase.
+- [Roadmap/v1.1]: Phase 2 explicitly depends on Phase 1 — `PATCH /tasks/{taskId}/move` (MOVE-02) reuses the exact explicit `@Version` compare-before-mutate convention delivered in Phase 1, not a new locking path.
+- [v1.0/Scope]: Narrow v1.0 to optimistic locking only; defer `/full` endpoint to v2.
+- [v1.0/Finding 1]: Ownership chain treated as closed — already 1 query via EAGER joins, no code change.
 
 ### Pending Todos
 
@@ -78,13 +80,12 @@ None yet.
 
 ### Blockers/Concerns
 
-Carried from research (address during Phase 1 planning):
+Carried from research (address during Phase 2/3 planning):
 
-- Real Postgres schema requires a one-off manual `ALTER TABLE ... ADD COLUMN version bigint NOT NULL DEFAULT 0` on both tables (`ddl-auto` unset). Confirm whether the Postgres instance is long-lived or recreated (check for Docker Compose/init scripts).
-- Bulk JPQL delete paths (`deleteAllByIdInBatch`, `@Modifying` bulk deletes) silently bypass `@Version` — must be documented as an accepted delete-wins tradeoff, not fixed.
-- Lombok `@Data`/`@EqualsAndHashCode` on `ColumnEntity` will include `version` in equals/hashCode unless excluded — breaks entity identity across saves.
-- `ColumnRepository.deleteAllByBoardId` (derived, non-bulk) will start honoring version checks post-`@Version`, creating asymmetry with the bulk task-delete path — needs an explicit test/decision.
-- Tests must assert at controller/service ("whole path") altitude — the 423-vs-409 and version-bypass issues are invisible at repository scope.
+- Exact KRaft env-var set and internal-vs-external listener config for `apache/kafka-native` was only web-search-sourced (LOW confidence) — pull the reference compose YAML from `apache/kafka`'s own repo before finalizing Phase 2 planning.
+- `DefaultErrorHandler`/`DeadLetterPublishingRecoverer` retry-before-DLT tuning is thinly sourced (LOW-MEDIUM) — worth a research pass during Phase 3 planning to avoid stale `SeekToCurrentErrorHandler`-era tutorials.
+- Cursor vs. offset pagination for `GET /boards/{boardId}/activity` is underspecified by the epic; this milestone ships offset `Pageable` per REQUIREMENTS.md (PAGE-V2-01 defers keyset pagination to v2) — confirm during Phase 3 planning before the repository query shape is locked in.
+- Production (EC2) Kafka deployment is explicitly out of scope for v1.1 (KAFKA-V2-01) — the dev `docker-compose.yml` must not be reused unmodified as a deploy artifact without a review pass.
 
 ### Quick Tasks Completed
 
@@ -101,14 +102,16 @@ Items acknowledged and carried forward:
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
 | Endpoint | `GET /boards/{boardId}/full` nested read (FULL-01..03) | Deferred to v2 | 2026-07-31 |
-| Epics | Modernization Epics 1, 3–7 (Kafka, Flyway/OpenAPI, Redis, Testcontainers, Observability, K8s) | Deferred to future milestones | 2026-07-31 |
+| Epics | Modernization Epics 3–7 (Flyway/OpenAPI, Redis, Testcontainers project-wide, Observability, K8s) | Deferred to future milestones | 2026-07-31 |
+| Kafka | Production (EC2) Kafka deployment (KAFKA-V2-01) | Deferred to v2 | 2026-08-01 |
+| Kafka | Cursor/keyset pagination on activity feed (PAGE-V2-01) | Deferred to v2 | 2026-08-01 |
 
 ## Session Continuity
 
-Last session: 2026-08-01T11:40:00.000Z
-Stopped at: Completed quick task 260801-gib: Append rules 2-7 to docs/CODE_STYLE.md and fix HttpStatus literals in locking E2E tests
+Last session: 2026-08-01T14:30:00.000Z
+Stopped at: Created ROADMAP.md for v1.1 (Phases 2-3), updated REQUIREMENTS.md traceability — 16/16 v1 requirements mapped, no orphans
 Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Run `/gsd-plan-phase 2` to plan Kafka Foundation, Domain Events & Move Endpoint

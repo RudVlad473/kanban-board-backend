@@ -77,29 +77,29 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| KAFKA-01 | TBD | Pending |
-| KAFKA-02 | TBD | Pending |
-| EVENT-01 | TBD | Pending |
-| EVENT-02 | TBD | Pending |
-| MOVE-01 | TBD | Pending |
-| MOVE-02 | TBD | Pending |
-| MOVE-03 | TBD | Pending |
-| ACTLOG-01 | TBD | Pending |
-| ACTLOG-02 | TBD | Pending |
-| ACTLOG-03 | TBD | Pending |
-| READ-01 | TBD | Pending |
-| READ-02 | TBD | Pending |
-| RELY-01 | TBD | Pending |
-| RELY-02 | TBD | Pending |
-| TEST-01 | TBD | Pending |
-| TEST-02 | TBD | Pending |
+| KAFKA-01 | Phase 2 | Pending |
+| KAFKA-02 | Phase 2 | Pending |
+| EVENT-01 | Phase 2 | Pending |
+| EVENT-02 | Phase 2 | Pending |
+| MOVE-01 | Phase 2 | Pending |
+| MOVE-02 | Phase 2 | Pending |
+| MOVE-03 | Phase 2 | Pending |
+| ACTLOG-01 | Phase 3 | Pending |
+| ACTLOG-02 | Phase 3 | Pending |
+| ACTLOG-03 | Phase 3 | Pending |
+| READ-01 | Phase 3 | Pending |
+| READ-02 | Phase 3 | Pending |
+| RELY-01 | Phase 3 | Pending |
+| RELY-02 | Phase 3 | Pending |
+| TEST-01 | Phase 3 | Pending |
+| TEST-02 | Phase 3 | Pending |
 
 **Coverage:**
 
 - v1 requirements: 16 total
-- Mapped to phases: 0 (pending roadmap creation)
-- Unmapped: 16 ⚠️ (filled by roadmapper)
+- Mapped to phases: 16 (Phase 2: 7, Phase 3: 9)
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-08-01*
-*Last updated: 2026-08-01 after requirements definition*
+*Last updated: 2026-08-01 after ROADMAP.md creation (v1.1 Phases 2-3)*
