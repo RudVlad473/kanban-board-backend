@@ -29,11 +29,26 @@ the result, rather than stopping at `./gradlew bootRun`.
 - **CI/CD pipeline** runs the test suite and a formatting check (Spotless) on
   every push, then builds and pushes a Docker image and deploys it to an
   EC2 instance — old images get pruned automatically after a successful deploy
+- **Event-driven activity pipeline**: mutations on boards/columns/tasks publish
+  typed domain events to Kafka after their transaction commits, rather than
+  writing an audit row synchronously in the request path
 
 ## Tech stack
 
 Java 21, Spring Boot 3.5.0, Spring Security, Spring Data JPA, Hibernate,
-PostgreSQL (H2 for tests), MapStruct, Docker, GitHub Actions, AWS EC2
+PostgreSQL (H2 for tests), MapStruct, Kafka, Docker, GitHub Actions, AWS EC2
+
+## Running locally
+
+```bash
+cp .env.example .env
+docker compose up
+```
+
+Brings up Postgres, a local Kafka broker, and the app together. See
+[docs/LOCAL_DEV.md](docs/LOCAL_DEV.md) for the full runbook, including why
+the app waits on Kafka's health check and this compose file's local-dev-only
+scope.
 
 ## What's not done yet
 
