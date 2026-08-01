@@ -33,13 +33,13 @@ Epic 3 as a ~1-hour polish item.
    Kafka consumer tests don't cleanly fit the existing "unit = services/DTOs, integration =
    controllers" rule — say so explicitly rather than silently breaking the stated convention).
 6. Do not do all epics in one giant PR. Each is a separate, defensible unit of work you can
-   describe individually in an interview ("tell me about a project where you...").
+   describe individually.
 
 ## Epics
 
 | # | Epic | Effort | Priority |
 |---|---|---|---|
-| 1 | [Kafka + event-driven activity feed](01-kafka-activity-feed.md) | 1–2 weeks | Highest — biggest interview-relevance gain |
+| 1 | [Kafka + event-driven activity feed](01-kafka-activity-feed.md) | 1–2 weeks | Highest — biggest capability gain |
 | 2 | [Fix N+1 chain + optimistic locking](02-n-plus-one-optimistic-locking.md) | 3–5 days | Highest — directly answers the JPA-depth question |
 | 3 | [Flyway migrations + OpenAPI polish](03-flyway-openapi.md) | 1–2 days | High — cheap, expected, do it early |
 | 4 | [Redis: cache + rate limiting](04-redis.md) | 3–5 days | Medium-high |
@@ -47,9 +47,8 @@ Epic 3 as a ~1-hour polish item.
 | 6 | [Observability: Actuator + Micrometer + Prometheus](06-observability.md) | 2–3 days | Medium — cheap, often overlooked |
 | 7 | [Kubernetes, local only (stretch)](07-kubernetes-stretch.md) | 2–4 days | Low — scoped intentionally small |
 
-Total realistic timeline: roughly **3–5 weeks** of evenings/weekends work, run in parallel with
-applying. Treat Epics 1–3 as the ones worth having *done* before backend-only/fintech-style
-interviews specifically, and the rest as ongoing.
+Total realistic timeline: roughly **3–5 weeks** of evenings/weekends work. Treat Epics 1–3 as the
+ones worth having *done* first, and the rest as ongoing.
 
 ## Deliberately excluded / deferred
 

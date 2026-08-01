@@ -12,8 +12,7 @@ depth* for a developer, not cluster-admin depth. Don't over-invest here.
   charts for those instead of hand-rolling).
 - Get it running locally on `kind` or `minikube` — that's the whole bar. Do not attempt an EC2/EKS
   migration; the existing GitHub Actions → DockerHub → single-EC2 pipeline stays as-is for actual
-  deployment. This is a local demonstration artifact for interview purposes, not a production
-  migration.
+  deployment. This is a local demonstration artifact, not a production migration.
 - Be able to explain `kubectl get pods`, `kubectl logs`, `kubectl describe`, what a `Service` vs
   `Deployment` vs `ConfigMap`/`Secret` is for, and roughly how a rolling update works — that's the
   whole depth bar for a mid-level developer per the earlier report.

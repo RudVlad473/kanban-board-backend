@@ -60,7 +60,7 @@ ids` comment is flagging.
    a single-subtask endpoint (documents Finding 1: ~5 queries for one ownership check) and one
    hitting `deleteAllByColumnId` with multiple tasks in the column (documents Finding 2: query
    count scaling with task count). Commit both in a "red"/documenting state first — this
-   before/after pair is the single best interview artifact from this whole plan.
+   before/after pair is the single best demonstration artifact from this whole plan.
 2. **Fix Finding 1 — collapse the ownership chain into one query per entry point.** Two acceptable
    approaches — implement the first, mention you considered the second:
    1. Add a repository method like
@@ -93,10 +93,10 @@ ids` comment is flagging.
    updates both, and asserts the second save throws `ObjectOptimisticLockingFailureException`.
    Map that exception to a 409 in `GlobalExceptionHandler`.
 
-## Interview-ready explanation
+## Explanation to have afterward
 
 Be able to explain the difference between "chatty but bounded" (Finding 1) and "genuine N+1"
-(Finding 2) — that distinction itself is a good interview answer. Also be able to draw the
-before/after query count, explain `JOIN FETCH` vs `@EntityGraph` vs `@BatchSize` and when you'd
-reach for each, and explain optimistic vs pessimistic locking using your drag-and-drop scenario as
-the concrete example.
+(Finding 2) — that distinction itself is the key takeaway. Also be able to draw the before/after
+query count, explain `JOIN FETCH` vs `@EntityGraph` vs `@BatchSize` and when you'd reach for each,
+and explain optimistic vs pessimistic locking using your drag-and-drop scenario as the concrete
+example.

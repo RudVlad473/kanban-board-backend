@@ -6,7 +6,7 @@
 verify or deepen." There is currently no Redis dependency in the project at all, so for this
 codebase it's a real gap, not just a depth question. Two features, chosen because both have a
 genuine reason to exist and both demonstrate *different* Redis capabilities (caching vs. rate
-limiting), which is more defensible in an interview than one caching demo.
+limiting), which is more defensible than one caching demo.
 
 ## Tasks
 
