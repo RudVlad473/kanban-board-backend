@@ -13,7 +13,7 @@ This milestone closes out the remaining Epic 2 deliverable of the backend modern
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Optimistic Locking** - Add `@Version` to Task/Column, map concurrent conflicts to HTTP 409, and prove it end-to-end
+- [x] **Phase 1: Optimistic Locking** - Add `@Version` to Task/Column, map concurrent conflicts to HTTP 409, and prove it end-to-end (completed 2026-08-01)
 
 ## Phase Details
 
@@ -43,4 +43,4 @@ Phases execute in numeric order: 1
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Optimistic Locking | 3/3 | In Progress|  |
+| 1. Optimistic Locking | 3/3 | Complete    | 2026-08-01 |
