@@ -4,16 +4,16 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 1
 current_phase_name: Optimistic Locking
-status: executing
-stopped_at: Completed 01-02-PLAN.md
-last_updated: "2026-08-01T09:17:01.274Z"
+status: verifying
+stopped_at: Completed 01-03-PLAN.md
+last_updated: "2026-08-01T09:23:21.798Z"
 last_activity: 2026-08-01
 last_activity_desc: Phase 1 execution started
 progress:
   total_phases: 1
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 2
+  completed_plans: 3
 ---
 
 # Project State
@@ -29,10 +29,10 @@ See: .planning/PROJECT.md (updated 2026-07-31)
 
 Phase: 1 (Optimistic Locking) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-01 — Phase 1 execution started
 
-Progress: [███████░░░] 67%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Progress: [███████░░░] 67%
 |------|----------|-------|-------|
 | Phase 01 P01 | 45min | 3 tasks | 11 files |
 | Phase 01 P02 | 35min | 3 tasks | 7 files |
+| Phase 01 P03 | 15min | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -74,6 +75,7 @@ Recent decisions affecting current work:
 - [Phase ?]: Added entityManager.flush() after save() in TaskService.updateById so the response DTO carries the incremented @Version instead of the stale pre-flush value
 - [Phase ?]: Reused the exact TaskService.updateById load-compare-mutate-flush pattern for ColumnService.updateById (Plan 02)
 - [Phase ?]: Documented bulk-delete @Version bypass and deleteAllByBoardId derived-vs-bulk asymmetry as Javadoc, closing both research-carried blockers
+- [Phase ?]: Checkpoint resolved: deliver optimistic-locking DDL as standalone .sql file (deliver-sql-file); user accepted one-way obligation to run it manually via psql before merge/deploy
 
 ### Pending Todos
 
@@ -100,6 +102,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-01T09:17:01.258Z
-Stopped at: Completed 01-02-PLAN.md
+Last session: 2026-08-01T09:23:21.784Z
+Stopped at: Completed 01-03-PLAN.md
 Resume file: None

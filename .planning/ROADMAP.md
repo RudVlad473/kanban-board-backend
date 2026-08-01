@@ -30,11 +30,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. Adding the `version` field does not break entity identity: `ColumnEntity`'s `@Data`-generated equals/hashCode and `TaskEntity`'s equals/hashCode exclude `version`, verified so the same entity remains equal to itself across saves.
   5. The bulk-delete version-bypass tradeoff is explicitly documented (the recently-added bulk JPQL delete paths skip `@Version` checks by design — accepted, not a bug), and `./gradlew spotlessCheck` and `./gradlew test` both pass.
 
-**Plans**: 2/3 plans executed
+**Plans**: 3/3 plans executed
 
 - [x] 01-01-PLAN.md
 - [x] 01-02-PLAN.md
-- [ ] 01-03-PLAN.md
+- [x] 01-03-PLAN.md
 
 ## Progress
 
@@ -43,4 +43,4 @@ Phases execute in numeric order: 1
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Optimistic Locking | 2/3 | In Progress|  |
+| 1. Optimistic Locking | 3/3 | In Progress|  |
