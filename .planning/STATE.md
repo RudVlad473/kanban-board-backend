@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 1
 current_phase_name: Optimistic Locking
 status: executing
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-08-01T09:07:51.474Z"
+stopped_at: Completed 01-02-PLAN.md
+last_updated: "2026-08-01T09:17:01.274Z"
 last_activity: 2026-08-01
 last_activity_desc: Phase 1 execution started
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-07-31)
 ## Current Position
 
 Phase: 1 (Optimistic Locking) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-08-01 — Phase 1 execution started
 
-Progress: [███░░░░░░░] 33%
+Progress: [███████░░░] 67%
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Progress: [███░░░░░░░] 33%
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 01 P01 | 45min | 3 tasks | 11 files |
+| Phase 01 P02 | 35min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -71,6 +72,8 @@ Recent decisions affecting current work:
 - [Finding 1]: Ownership chain treated as closed — already 1 query via EAGER joins, no code change.
 - [Phase ?]: Fixed pre-existing cookie-auth bug (UserAuthenticationProvider stored raw userId string as principal instead of UserDetails) that silently broke every real session-cookie authenticated request; first exercised by this plan's mandated E2E test
 - [Phase ?]: Added entityManager.flush() after save() in TaskService.updateById so the response DTO carries the incremented @Version instead of the stale pre-flush value
+- [Phase ?]: Reused the exact TaskService.updateById load-compare-mutate-flush pattern for ColumnService.updateById (Plan 02)
+- [Phase ?]: Documented bulk-delete @Version bypass and deleteAllByBoardId derived-vs-bulk asymmetry as Javadoc, closing both research-carried blockers
 
 ### Pending Todos
 
@@ -97,6 +100,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-01T09:07:51.458Z
-Stopped at: Completed 01-01-PLAN.md
+Last session: 2026-08-01T09:17:01.258Z
+Stopped at: Completed 01-02-PLAN.md
 Resume file: None
