@@ -116,6 +116,7 @@ A Spring Boot 3.5.0 / Java 21 REST API backend for a Kanban board application (u
 - Features: Format annotations, import order, remove unused imports automatically
 - Spotless with GoogleJavaFormat enforces consistent formatting
 - No separate linting tool configured; formatting rules are the linting standard
+- Judgement-level style rules (beyond what Spotless can check) are recorded in [`docs/CODE_STYLE.md`](../docs/CODE_STYLE.md) — consult it before writing or modifying Java code
 
 ## Import Organization
 
