@@ -5,15 +5,15 @@ milestone_name: Kafka Activity Feed
 current_phase: 2
 current_phase_name: Kafka Foundation, Domain Events & Move Endpoint
 status: executing
-stopped_at: Completed 02-02-PLAN.md
-last_updated: "2026-08-01T20:35:00.000Z"
+stopped_at: Completed 02-03-PLAN.md
+last_updated: "2026-08-01T20:44:25.203Z"
 last_activity: 2026-08-01
-last_activity_desc: Completed 02-02-PLAN.md (domain events expansion + async Kafka publish fix)
+last_activity_desc: Phase 2 execution started
 progress:
   total_phases: 3
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 2
+  completed_plans: 3
   percent: 33
 ---
 
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-08-01)
 ## Current Position
 
 Phase: 2 (Kafka Foundation, Domain Events & Move Endpoint) — EXECUTING
-Plan: 3 of 3 (02-03 remaining — local Kafka stack)
-Status: Executing
-Last activity: 2026-08-01 — Completed 02-02-PLAN.md (domain events expansion + async Kafka publish fix)
+Plan: 3 of 3
+Status: Ready to execute
+Last activity: 2026-08-01 — Phase 2 execution started
 
-Progress: [██████░░░░] 67%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -65,6 +65,7 @@ Progress: [██████░░░░] 67%
 | Phase 01 P02 | 35min | 3 tasks | 7 files |
 | Phase 01 P03 | 15min | 1 tasks | 2 files |
 | Phase 02 P01 | 14min | 2 tasks | 13 files |
+| Phase 2 P3 | 70min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,8 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 2 Plan 01]: KafkaEventPublisher is the sole Kafka client API touchpoint in src/main — TaskService never imports org.springframework.kafka, confirmed by grep
 - [Phase ?]: [Phase 2 Plan 01]: MOVE-03 cross-board guard (400) runs before the MOVE-02 version guard (409) since a wrong-board target is a request-shape problem, not a concurrency one
 - [Phase ?]: [Phase 2 Plan 01]: Added AbstractAppTest.createColumnForUser fixture helper since no REST endpoint exists to create a board directly — boards are only created via UserService.addBoardByUserId
+- [Phase ?]: [Phase 2 Plan 03]: Fixed Dockerfile's retired openjdk:21-jdk-slim runtime base image to eclipse-temurin:21-jre-jammy - was silently breaking production CI/CD too, not just this plan's local stack
+- [Phase ?]: [Phase 2 Plan 03]: kafka service runs as user: root in docker-compose.yml to fix a named-volume permission failure (apache/kafka-native does not pre-create /var/lib/kafka/data, so the Docker volume driver creates it root-owned) - local-dev-only scope, avoids a 4th compose service
 
 ### Pending Todos
 
@@ -116,8 +119,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-01T15:39:10.489Z
-Stopped at: Completed 02-01-PLAN.md
+Last session: 2026-08-01T20:44:25.180Z
+Stopped at: Completed 02-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

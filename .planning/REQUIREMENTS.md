@@ -9,7 +9,7 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Kafka Infrastructure
 
-- [ ] **KAFKA-01**: `docker-compose.yml` at repo root provides `postgres`, `kafka` (native KRaft image, no Zookeeper), and the app itself, so `docker compose up` gives a full local dev environment
+- [x] **KAFKA-01**: `docker-compose.yml` at repo root provides `postgres`, `kafka` (native KRaft image, no Zookeeper), and the app itself, so `docker compose up` gives a full local dev environment
 - [x] **KAFKA-02**: `spring-kafka` and `org.testcontainers:kafka` (+ `spring-boot-testcontainers`) are added to `build.gradle`, version-managed by Spring Boot 3.5.0's BOM (no explicit version pins)
 
 ### Domain Events
@@ -77,7 +77,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| KAFKA-01 | Phase 2 | Pending |
+| KAFKA-01 | Phase 2 | Complete |
 | KAFKA-02 | Phase 2 | Complete |
 | EVENT-01 | Phase 2 | Complete |
 | EVENT-02 | Phase 2 | Complete |
