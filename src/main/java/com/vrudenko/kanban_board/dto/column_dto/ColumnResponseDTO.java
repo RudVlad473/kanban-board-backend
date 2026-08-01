@@ -14,4 +14,5 @@ import lombok.Setter;
 public class ColumnResponseDTO implements BaseId, BaseColumn {
     private String id;
     private String name;
+    private Long version;
 }
