@@ -9,12 +9,16 @@ import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
 import com.vrudenko.kanban_board.entity.BoardEntity;
 import com.vrudenko.kanban_board.entity.ColumnEntity;
+import com.vrudenko.kanban_board.event.ColumnCreatedEvent;
 import com.vrudenko.kanban_board.mapper.ColumnMapper;
 import com.vrudenko.kanban_board.repository.ColumnRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
@@ -29,6 +33,8 @@ public class ColumnService {
     @Autowired private OwnershipVerifierService ownershipVerifierService;
 
     @Autowired private EntityManager entityManager;
+
+    @Autowired private ApplicationEventPublisher eventPublisher;
 
     /**
      * Deletes every column (and, per column, all of its tasks/subtasks via {@link
@@ -59,11 +65,27 @@ public class ColumnService {
         columnRepository.deleteAllByBoardId(pair.getSecond().getId());
     }
 
+    /**
+     * {@code @Transactional} here (rather than relying on the caller, {@link
+     * BoardService#addColumnByBoardId}, already being {@code @Transactional}) makes the
+     * after-commit {@code ColumnCreatedEvent} publish guarantee self-contained — see {@link
+     * TaskService#save(com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO,
+     * com.vrudenko.kanban_board.entity.ColumnEntity)}'s Javadoc for the full reasoning.
+     */
+    @Transactional
     public ColumnResponseDTO save(SaveColumnRequestDTO columnDTO, BoardEntity board) {
         var column = columnMapper.fromSaveColumnRequestDTO(columnDTO);
         column.setBoard(board);
 
         columnRepository.save(column);
+
+        eventPublisher.publishEvent(
+                new ColumnCreatedEvent(
+                        UUID.randomUUID(),
+                        board.getUser().getId(),
+                        board.getId(),
+                        column.getId(),
+                        Instant.now()));
 
         return columnMapper.toColumnResponseDTO(column);
     }
@@ -98,6 +120,11 @@ public class ColumnService {
             String userId, String columnId, UpdateColumnRequestDTO dto) {
         var column = findById(userId, columnId);
 
+        // dto.getVersion() is read ONLY here, for this stale-write precondition check — it is
+        // never assigned onto `column`. The version value that actually gets persisted is
+        // generated entirely by Hibernate's own @Version increment mechanism when the UPDATE
+        // statement runs (forced below via entityManager.flush()), independent of whatever value
+        // the client sent.
         if (!column.getVersion().equals(dto.getVersion())) {
             throw new OptimisticLockingFailureException(
                     "Column was modified by another request, please refetch.");

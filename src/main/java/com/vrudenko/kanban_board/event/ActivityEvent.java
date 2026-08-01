@@ -12,7 +12,12 @@ import java.util.UUID;
  * runs with no {@code SecurityContext} and never re-verifies ownership, so whatever this
  * interface's implementations carry is trusted downstream as-is.
  */
-public sealed interface ActivityEvent permits TaskCreatedEvent, TaskMovedEvent, TaskDeletedEvent {
+public sealed interface ActivityEvent
+        permits TaskCreatedEvent,
+                TaskMovedEvent,
+                TaskDeletedEvent,
+                BoardCreatedEvent,
+                ColumnCreatedEvent {
     UUID eventId();
 
     String userId();

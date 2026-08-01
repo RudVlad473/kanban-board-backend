@@ -8,11 +8,15 @@ import com.vrudenko.kanban_board.dto.column_dto.ColumnResponseDTO;
 import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
 import com.vrudenko.kanban_board.entity.BoardEntity;
 import com.vrudenko.kanban_board.entity.UserEntity;
+import com.vrudenko.kanban_board.event.BoardCreatedEvent;
 import com.vrudenko.kanban_board.mapper.BoardMapper;
 import com.vrudenko.kanban_board.repository.BoardRepository;
 import jakarta.transaction.Transactional;
+import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -24,6 +28,8 @@ public class BoardService {
     @Autowired private ColumnService columnService;
 
     @Autowired private OwnershipVerifierService ownershipVerifierService;
+
+    @Autowired private ApplicationEventPublisher eventPublisher;
 
     public List<BoardResponseDTO> findAllByUserId(String userId) {
         return boardMapper.toResponseDTOList(boardRepository.findAllByUserId(userId));
@@ -76,11 +82,23 @@ public class BoardService {
         return boardMapper.toResponseDTO(savedBoard);
     }
 
+    /**
+     * {@code @Transactional} here (rather than relying on the caller, {@link
+     * UserService#addBoardByUserId}, already being {@code @Transactional}) makes the after-commit
+     * {@code BoardCreatedEvent} publish guarantee self-contained — see {@link
+     * TaskService#save(com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO,
+     * com.vrudenko.kanban_board.entity.ColumnEntity)}'s Javadoc for the full reasoning.
+     */
+    @Transactional
     public BoardResponseDTO save(SaveBoardRequestDTO dto, UserEntity user) {
         var board = boardMapper.fromSaveBoardRequestDTO(dto);
         board.setUser(user);
 
         boardRepository.save(board);
+
+        eventPublisher.publishEvent(
+                new BoardCreatedEvent(
+                        UUID.randomUUID(), user.getId(), board.getId(), Instant.now()));
 
         return boardMapper.toResponseDTO(board);
     }
