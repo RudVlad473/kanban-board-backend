@@ -8,7 +8,7 @@ RUN chmod +x gradlew
 RUN ./gradlew bootJar
 
 # ---- Runtime Stage ----
-FROM openjdk:21-jdk-slim
+FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
 
 COPY --from=build /app/build/libs/*.jar app.jar
