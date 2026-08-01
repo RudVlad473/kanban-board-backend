@@ -209,3 +209,12 @@ None - no external service configuration required.
 ---
 *Phase: 01-optimistic-locking*
 *Completed: 2026-08-01*
+
+## Self-Check: PASSED
+
+- FOUND: src/test/java/com/vrudenko/kanban_board/e2e/task/TaskLockingE2ETest.java
+- FOUND: .planning/phases/01-optimistic-locking/01-01-SUMMARY.md
+- FOUND: 1b496c5 (Task 1 commit)
+- FOUND: 33826df (Task 2 commit)
+- FOUND: 6e63bc0 (Task 3 commit)
+- FOUND: a64eed9 (Summary commit)
