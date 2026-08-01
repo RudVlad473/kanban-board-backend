@@ -406,6 +406,14 @@ Use these entry points:
 Do not make direct repo edits outside a GSD workflow unless the user explicitly asks to bypass it.
 <!-- GSD:workflow-end -->
 
+## GSD Execution Directives
+
+- BEFORE creating or approving any PLAN.md:
+  1. Document 2 alternate technical approaches considered.
+  2. Output a 3-column Trade-off Matrix: [Approach | Pros/Cons | Why Picked].
+  3. Detail any non-obvious performance, memory, or security trade-offs (time complexity, state invalidation risks, etc.).
+- NEVER auto-execute code blocks without explaining the core data-flow mechanism in 3 sentences or less.
+
 <!-- GSD:profile-start -->
 
 ## Developer Profile
