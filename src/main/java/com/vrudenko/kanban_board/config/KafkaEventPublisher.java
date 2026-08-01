@@ -33,6 +33,8 @@ public class KafkaEventPublisher {
 
     @Autowired private KafkaTemplate<String, Object> kafkaTemplate;
 
+    // @Async fixes a real 20-25min full-suite hang (see class Javadoc): without it this method
+    // blocks its caller inside KafkaTemplate.send() regardless of the bounded producer timeout.
     @Async("kafkaPublishExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onActivityEvent(ActivityEvent event) {
