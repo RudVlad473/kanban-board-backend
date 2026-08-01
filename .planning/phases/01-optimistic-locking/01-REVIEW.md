@@ -69,7 +69,13 @@ defensiveness.
 
 ## Warnings
 
-### WR-01: Password hash now flows into the JDBC-backed session store on every authenticated request
+### WR-01: Password hash now flows into the JDBC-backed session store on every authenticated request — FIXED
+
+**Outcome:** Fixed in commit `c5fb656` — `UserAuthenticationProvider.authenticate()` now constructs a
+minimal `org.springframework.security.core.userdetails.User(username, "", authorities)` principal
+instead of returning the full `UserEntity`. `CurrentUserIdResolver` only calls `getUsername()`, so
+behavior is unchanged; `passwordHash` no longer reaches the session store. Full suite +
+`spotlessCheck` re-verified green after the fix.
 
 **File:** `src/main/java/com/vrudenko/kanban_board/security/UserAuthenticationProvider.java:32`
 **Issue:** `authenticate()` now returns
