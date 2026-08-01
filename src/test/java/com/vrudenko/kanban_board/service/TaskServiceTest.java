@@ -280,6 +280,7 @@ public class TaskServiceTest extends AbstractAppTest {
                             UpdateTaskRequestDTO.builder()
                                     .title(newTitle)
                                     .description(newDescription)
+                                    .version(mockPopulatedTask.getVersion())
                                     .build());
 
             // assert
