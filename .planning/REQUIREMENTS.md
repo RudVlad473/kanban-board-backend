@@ -9,10 +9,10 @@ Requirements for this GSD project's scope. Each maps to roadmap phases.
 
 ### Optimistic Locking
 
-- [ ] **LOCK-01**: `TaskEntity` and `ColumnEntity` have a `@Version` field, backed by a manual one-off `ALTER TABLE ... ADD COLUMN version bigint NOT NULL DEFAULT 0` against the real Postgres schema (`ddl-auto` is unset there, so Hibernate won't create the column automatically)
-- [ ] **LOCK-02**: A conflicting concurrent update to the same task/column returns HTTP 409 Conflict, not 423 Locked (fixes the existing but incorrect `GlobalExceptionHandler` mapping of `OptimisticLockingFailureException`)
-- [ ] **LOCK-03**: A test proves that two concurrent updates to the same task/column produce `ObjectOptimisticLockingFailureException`, asserted at the E2E/HTTP-status-code level (409), not just as a service-level exception type
-- [ ] **LOCK-04**: `ColumnEntity`'s `@Data`-generated equals/hashCode and `TaskEntity`'s equals/hashCode exclude the new `version` field, so entity identity is not broken across saves
+- [x] **LOCK-01**: `TaskEntity` and `ColumnEntity` have a `@Version` field, backed by a manual one-off `ALTER TABLE ... ADD COLUMN version bigint NOT NULL DEFAULT 0` against the real Postgres schema (`ddl-auto` is unset there, so Hibernate won't create the column automatically)
+- [x] **LOCK-02**: A conflicting concurrent update to the same task/column returns HTTP 409 Conflict, not 423 Locked (fixes the existing but incorrect `GlobalExceptionHandler` mapping of `OptimisticLockingFailureException`)
+- [x] **LOCK-03**: A test proves that two concurrent updates to the same task/column produce `ObjectOptimisticLockingFailureException`, asserted at the E2E/HTTP-status-code level (409), not just as a service-level exception type
+- [x] **LOCK-04**: `ColumnEntity`'s `@Data`-generated equals/hashCode and `TaskEntity`'s equals/hashCode exclude the new `version` field, so entity identity is not broken across saves
 
 ## v2 Requirements
 
@@ -44,12 +44,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| LOCK-01 | Phase 1 | Pending |
-| LOCK-02 | Phase 1 | Pending |
-| LOCK-03 | Phase 1 | Pending |
-| LOCK-04 | Phase 1 | Pending |
+| LOCK-01 | Phase 1 | Complete |
+| LOCK-02 | Phase 1 | Complete |
+| LOCK-03 | Phase 1 | Complete |
+| LOCK-04 | Phase 1 | Complete |
 
 **Coverage:**
+
 - v1 requirements: 4 total
 - Mapped to phases: 4 ✓
 - Unmapped: 0

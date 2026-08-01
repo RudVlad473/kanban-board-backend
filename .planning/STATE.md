@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 1
 current_phase_name: Optimistic Locking
 status: executing
-stopped_at: Phase 1 context gathered
-last_updated: "2026-08-01T08:46:53.670Z"
-last_activity: 2026-07-31
-last_activity_desc: Roadmap created (1 phase, 4/4 requirements mapped)
+stopped_at: Completed 01-01-PLAN.md
+last_updated: "2026-08-01T09:07:51.474Z"
+last_activity: 2026-08-01
+last_activity_desc: Phase 1 execution started
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 3
-  completed_plans: 0
+  completed_plans: 1
 ---
 
 # Project State
@@ -27,12 +27,12 @@ See: .planning/PROJECT.md (updated 2026-07-31)
 
 ## Current Position
 
-Phase: 1 of 1 (Optimistic Locking)
-Plan: 0 of TBD in current phase
+Phase: 1 (Optimistic Locking) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-07-31 — Roadmap created (1 phase, 4/4 requirements mapped)
+Last activity: 2026-08-01 — Phase 1 execution started
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [███░░░░░░░] 33%
 
 ## Performance Metrics
 
@@ -54,6 +54,11 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: —
 
 *Updated after each plan completion*
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 01 P01 | 45min | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -64,6 +69,8 @@ Recent decisions affecting current work:
 
 - [Scope]: Narrow v1 to optimistic locking only; defer `/full` endpoint to v2.
 - [Finding 1]: Ownership chain treated as closed — already 1 query via EAGER joins, no code change.
+- [Phase ?]: Fixed pre-existing cookie-auth bug (UserAuthenticationProvider stored raw userId string as principal instead of UserDetails) that silently broke every real session-cookie authenticated request; first exercised by this plan's mandated E2E test
+- [Phase ?]: Added entityManager.flush() after save() in TaskService.updateById so the response DTO carries the incremented @Version instead of the stale pre-flush value
 
 ### Pending Todos
 
@@ -90,6 +97,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-07-31T22:15:53.200Z
-Stopped at: Phase 1 context gathered
-Resume file: .planning/phases/01-optimistic-locking/01-CONTEXT.md
+Last session: 2026-08-01T09:07:51.458Z
+Stopped at: Completed 01-01-PLAN.md
+Resume file: None
