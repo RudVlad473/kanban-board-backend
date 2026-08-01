@@ -12,8 +12,8 @@ batch them into one PR.
 - Currently prod `application.properties` has no explicit `spring.jpa.hibernate.ddl-auto` (relying
   on Hibernate default) and test uses `ddl-auto=create-drop`. Set
   `spring.jpa.hibernate.ddl-auto=validate` in prod once Flyway owns the schema — this is the
-  correct pattern (Hibernate validates, Flyway migrates) and is worth being able to state explicitly
-  in an interview, since "why not let Hibernate auto-generate the schema in prod" is a common
+  correct pattern (Hibernate validates, Flyway migrates) and is worth being able to state
+  explicitly, since "why not let Hibernate auto-generate the schema in prod" is a common
   follow-up question.
 - Generate `V1__init.sql` under `src/main/resources/db/migration` reflecting the current schema
   (users, boards, columns, tasks, subtasks, plus the Spring Session JDBC tables already implied by

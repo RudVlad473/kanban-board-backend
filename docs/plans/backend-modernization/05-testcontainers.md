@@ -18,4 +18,4 @@ H2's different SQL dialect/behavior). Bundle the full switch here rather than do
   prod, which is the actual point of doing this).
 - Confirm existing controller/service tests still pass — this is a good moment to note in the
   README that integration tests now hit real Postgres/Kafka via Testcontainers, which is a
-  stronger claim than "H2 in-memory" if asked in an interview.
+  stronger claim than "H2 in-memory".

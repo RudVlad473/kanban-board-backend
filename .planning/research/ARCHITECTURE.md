@@ -204,7 +204,7 @@ This nuance (verified `ddl-auto` is unset/`none` in the real profile, not `updat
 |---|---|---|---|
 | Naive triple `JOIN FETCH` (`board.columns.tasks.subtasks` in one JPQL query) | 1 | **High** — Hibernate cannot `JOIN FETCH` more than one `List`/bag association in a single query without either a `MultipleBagFetchException` or duplicate-row bloat from the Cartesian product; nesting three collection levels compounds this | Rejected — explicitly what the epic spec says to avoid |
 | `@BatchSize` on all three collections | Variable (batched `IN` queries triggered lazily per collection as they're accessed, one batch per `parentIds.size() / batchSize`) | None | Viable, but relies on lazy-loading firing correctly at mapping time within the transaction, and the exact query count is less predictable/explicit than counting it upfront |
-| **One-query-per-level-and-stitch (recommended)** | Exactly 3 queries total (Board+Columns, then Tasks, then Subtasks), independent of board size | None | Recommended — explicit, deterministic query count, doesn't depend on Hibernate's lazy-loading/batching machinery working invisibly; easiest to reason about, count in a test, and explain in an interview |
+| **One-query-per-level-and-stitch (recommended)** | Exactly 3 queries total (Board+Columns, then Tasks, then Subtasks), independent of board size | None | Recommended — explicit, deterministic query count, doesn't depend on Hibernate's lazy-loading/batching machinery working invisibly; easiest to reason about, count in a test, and explain to a reviewer |
 
 **Recommended shape — 3 queries, one per collection level, each a flat (non-transitive) fetch:**
 

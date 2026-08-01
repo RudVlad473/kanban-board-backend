@@ -9,9 +9,9 @@ dominates local hiring. Everything else on the list is cheaper to close or lower
 **The feature, not just the plumbing:** an **audit/activity log per board** — "Jane moved Task X to
 Done", "Jane created Column Y" — a real kanban feature (Trello/Jira both have this), implemented as
 an event-driven side effect instead of a synchronous write. This gives you a legitimate reason for
-Kafka to exist in a CRUD app, which is exactly the objection interviewers raise about resume-driven
-tech ("why does a kanban board need Kafka?") — have this answer ready either way, but it's stronger
-with the feature framing.
+Kafka to exist in a CRUD app, which is exactly the objection raised about resume-driven tech ("why
+does a kanban board need Kafka?") — have this answer ready either way, but it's stronger with the
+feature framing.
 
 ## Tasks
 
@@ -38,7 +38,7 @@ with the feature framing.
   the existing `OwnershipVerifierService.verifyOwnershipOfBoard`.
 - Handle **idempotent consumption**: give each event a UUID `eventId`; before inserting, check
   `ActivityLogRepository.existsByEventId(...)` so redelivery doesn't double-log. This is the concrete
-  "at-least-once + idempotency" story interviewers ask for.
+  "at-least-once + idempotency" story worth being able to tell.
 - Configure a dead-letter topic (`kanban.activity.dlt`) via `DefaultErrorHandler` so a poison
   message doesn't block the consumer.
 - **Testing:** add `org.testcontainers:kafka` (this is also how you formalize Testcontainers —
@@ -46,7 +46,7 @@ with the feature framing.
   `TaskMovedEvent` end-to-end through a real embedded Kafka broker and asserts the
   `ActivityLogEntity` row appears.
 
-## Interview-ready explanation to have afterward
+## Explanation to have afterward
 
 Why Kafka over a direct synchronous write (decoupling the write path from a slower/optional side
 effect; replay/audit value; a natural place to later fan out to notifications/webhooks without

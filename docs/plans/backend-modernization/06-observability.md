@@ -4,8 +4,8 @@
 
 **Why this is here even though it wasn't explicitly requested:** the project currently has *zero*
 observability — no Actuator, no metrics endpoint, nothing. That's exactly the kind of "how would
-you know this is unhealthy in prod" question that comes up in system-design-flavored portions of
-EU-remote product-company interviews, and it's cheap to close.
+you know this is unhealthy in prod" gap that any system-design review surfaces, and it's cheap to
+close.
 
 ## Tasks
 
