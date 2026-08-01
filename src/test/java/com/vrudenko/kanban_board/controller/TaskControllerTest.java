@@ -12,7 +12,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vrudenko.kanban_board.AbstractAppTest;
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
-import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
 import com.vrudenko.kanban_board.dto.task_dto.UpdateTaskRequestDTO;
@@ -114,7 +113,11 @@ class TaskControllerTest extends AbstractAppTest {
             var boardId = mockPopulatedBoard.getId();
             var columnId = mockPopulatedColumn.getId();
             var url = getTaskPrefix(boardId, columnId) + "/" + taskId;
-            var updateDto = UpdateTaskRequestDTO.builder().title("Updated Task Name").build();
+            var updateDto =
+                    UpdateTaskRequestDTO.builder()
+                            .title("Updated Task Name")
+                            .version(mockPopulatedTask.getVersion())
+                            .build();
             var expectedResponse =
                     Map.ofEntries(
                             Map.entry("id", taskId), Map.entry("title", updateDto.getTitle()));
@@ -141,7 +144,10 @@ class TaskControllerTest extends AbstractAppTest {
             var columnId = mockPopulatedColumn.getId();
             var url = getTaskPrefix(boardId, columnId) + "/" + taskId;
             var updateDto =
-                    UpdateTaskRequestDTO.builder().description("Updated Task Description").build();
+                    UpdateTaskRequestDTO.builder()
+                            .description("Updated Task Description")
+                            .version(mockPopulatedTask.getVersion())
+                            .build();
             var expectedResponse = Map.of("id", taskId, "description", updateDto.getDescription());
 
             // Act
@@ -172,12 +178,14 @@ class TaskControllerTest extends AbstractAppTest {
                             .description(
                                     dataFactory.getRandomText(
                                             ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH + 3))
+                            .version(mockPopulatedTask.getVersion())
                             .build();
             var expectedResponse =
                     TaskResponseDTO.builder()
                             .id(taskId)
                             .title(updateDto.getTitle())
                             .description(updateDto.getDescription())
+                            .version(mockPopulatedTask.getVersion() + 1)
                             .build(); // Columns preservation would need to be checked
             // differently
             // or
@@ -203,7 +211,8 @@ class TaskControllerTest extends AbstractAppTest {
             var boardId = mockPopulatedBoard.getId();
             var columnId = mockPopulatedColumn.getId();
             var url = getTaskPrefix(boardId, columnId) + "/" + nonExistentTaskId;
-            var updateDto = SaveBoardRequestDTO.builder().name("Updated Board Name").build();
+            var updateDto =
+                    UpdateTaskRequestDTO.builder().title("Updated Task Name").version(0L).build();
 
             // Act
             // Assert
@@ -226,6 +235,54 @@ class TaskControllerTest extends AbstractAppTest {
             var url = getTaskPrefix(boardId, columnId) + "/" + taskId;
             // Assuming blank name is invalid
             var updateDto = SaveTaskRequestDTO.builder().title("").build();
+
+            // Act
+            // Assert
+            mockMvc.perform(
+                            put(url).with(user(userId))
+                                    .contentType(APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(updateDto)))
+                    .andDo(print())
+                    .andExpect(status().isBadRequest())
+                    .andReturn();
+        }
+
+        @Test
+        void testWithAuthenticatedUser_shouldReturnConflict_whenVersionIsStale() throws Exception {
+            // Arrange
+            var userId = getOwningUser().getId();
+            var taskId = mockPopulatedTask.getId();
+            var boardId = mockPopulatedBoard.getId();
+            var columnId = mockPopulatedColumn.getId();
+            var url = getTaskPrefix(boardId, columnId) + "/" + taskId;
+            var staleVersion = mockPopulatedTask.getVersion() - 1;
+            var updateDto =
+                    UpdateTaskRequestDTO.builder()
+                            .title("Stale version update")
+                            .version(staleVersion)
+                            .build();
+
+            // Act
+            // Assert
+            mockMvc.perform(
+                            put(url).with(user(userId))
+                                    .contentType(APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(updateDto)))
+                    .andDo(print())
+                    .andExpect(status().isConflict())
+                    .andReturn();
+        }
+
+        @Test
+        void testWithAuthenticatedUser_shouldReturnBadRequest_whenVersionIsMissing()
+                throws Exception {
+            // Arrange
+            var userId = getOwningUser().getId();
+            var taskId = mockPopulatedTask.getId();
+            var boardId = mockPopulatedBoard.getId();
+            var columnId = mockPopulatedColumn.getId();
+            var url = getTaskPrefix(boardId, columnId) + "/" + taskId;
+            var updateDto = UpdateTaskRequestDTO.builder().title("No version supplied").build();
 
             // Act
             // Assert
