@@ -30,6 +30,24 @@ public class ColumnService {
 
     @Autowired private EntityManager entityManager;
 
+    /**
+     * Deletes every column (and, per column, all of its tasks/subtasks via {@link
+     * TaskService#deleteAllByColumn}) belonging to {@code boardId}.
+     *
+     * <p><b>Derived-delete vs. bulk-delete asymmetry:</b> {@code
+     * columnRepository.deleteAllByBoardId} is a Spring Data JPA <i>derived</i> delete method (not
+     * an explicit {@code @Modifying @Query}), which Spring Data implements as fetch-then-{@code
+     * remove()}-per-entity, not a single bulk SQL statement. Because it loads each {@link
+     * ColumnEntity} as a managed entity before removing it, it goes through Hibernate's normal
+     * versioned-delete check and DOES honor {@code @Version} — unlike the sibling {@link
+     * TaskService#deleteAllByColumn} bulk-JPQL task/subtask delete, which bypasses {@code @Version}
+     * entirely (see that method's Javadoc for the accepted tradeoff). This means a column
+     * concurrently modified between this method's {@code findAllByBoardId} fetch and the derived
+     * delete's internal per-entity removal can surface {@code OptimisticLockingFailureException}
+     * mid-batch, whereas the equivalent race on the task-delete path above it silently proceeds.
+     * The two delete paths are intentionally inconsistent with each other; this is documented here
+     * rather than reconciled, per the accepted tradeoff carried from research.
+     */
     @Transactional
     public void deleteAllByBoardId(String userId, String boardId) {
         var pair = ownershipVerifierService.verifyOwnershipOfBoard(userId, boardId);

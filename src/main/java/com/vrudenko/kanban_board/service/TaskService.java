@@ -125,6 +125,23 @@ public class TaskService {
      * (relevant when a caller loops this over many columns/boards in one transaction, e.g. account
      * deletion) can go stale. Flushing and clearing afterward keeps the session consistent with the
      * DB for whatever runs next in the same transaction.
+     *
+     * <p><b>{@code @Version} bypass, by design:</b> {@code taskRepository.deleteAllByIdInBatch} and
+     * {@code SubtaskRepository.deleteAllByTaskIdIn} (invoked via {@link
+     * SubtaskService#deleteAllByTaskIds}) both issue a raw bulk JPQL/SQL {@code DELETE ... WHERE id
+     * IN (...)} statement. Bulk statements never load the target rows as managed entities, so there
+     * is nothing for Hibernate to dirty-check {@code @Version} against — these deletes proceed
+     * unconditionally even if the row's version was concurrently bumped by another transaction a
+     * moment earlier. This is an <b>accepted, delete-wins tradeoff</b>, not an oversight: a delete
+     * racing a version-mismatched update simply discards the update's effect on a row that is being
+     * removed anyway, which is the correct outcome for a delete (there is no "stale delete" to
+     * detect — the row either exists to be deleted or it doesn't). Retrofitting per-row {@code AND
+     * version = ?} clauses onto a multi-row bulk statement doesn't fit its semantics (each row
+     * could have a different expected version) and would reintroduce the per-entity-load N+1 cost
+     * this batch delete exists to avoid — so it is intentionally not done here. Contrast with
+     * {@link ColumnService#deleteAllByBoardId}, whose column-delete step is a <i>derived</i>
+     * (fetch-then- remove-per-entity) delete and therefore DOES honor {@code @Version} — the two
+     * sibling delete paths are deliberately asymmetric.
      */
     @Transactional
     void deleteAllByColumn(ColumnEntity column) {
