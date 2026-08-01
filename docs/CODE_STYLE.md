@@ -37,6 +37,231 @@ public ResponseEntity<String> handleAppEntityNotFound(AppEntityNotFoundException
 
 `GlobalExceptionHandler` already follows this rule and is the reference to imitate. The rule generalises beyond HTTP status — any closed value set (roles, states, sort directions) should be an enum.
 
+### 2. Load entities through the ownership-verified loader, never `repository.findById` directly
+
+The four domain services (`BoardService`, `ColumnService`, `TaskService`, `SubtaskService`) must resolve every entity through their own `findById(userId, id)` method, which delegates to `ownershipVerifierService.verifyOwnershipOf...` — never through a direct call to `repository.findById(id)`. For example, `TaskService.findById(userId, taskId)` calls `ownershipVerifierService.verifyOwnershipOfTask(userId, taskId)` and returns `pair.getSecond()`; every other method that needs a task goes through it instead of touching `taskRepository.findById` itself. Once an entity has been verified this way, any downstream repository call made later in the same method must be built from the verified entity's own id (`pair.getSecond().getId()`), not from the raw path-variable parameter that was passed in. `OwnershipVerifierService` (the root of the ownership chain) and `UserService` (the identity root, with no owner above it) are the only two places a direct repository `findById` is sanctioned.
+
+**Why:** this is the entire access-control model of the application, and nothing in the type system enforces it — a direct repository load compiles cleanly, passes a naive test, and silently removes the ownership check it was supposed to go through; re-deriving the downstream id from the verified entity, rather than reusing the raw parameter, also guarantees that the id which was actually authorised is the id that gets used.
+
+Discouraged:
+
+```java
+public TaskResponseDTO updateById(String userId, String taskId, String columnId, UpdateTaskRequestDTO dto) {
+    var task = taskRepository.findById(taskId).get();
+    task.setTitle(dto.getTitle());
+    taskRepository.save(task);
+
+    var siblingTasks = taskRepository.findAllByColumnId(columnId);
+    return taskMapper.toDto(task);
+}
+```
+
+Preferred:
+
+```java
+public TaskResponseDTO updateById(String userId, String taskId, String columnId, UpdateTaskRequestDTO dto) {
+    var task = findById(userId, taskId);
+    task.setTitle(dto.getTitle());
+    taskRepository.save(task);
+
+    var pair = ownershipVerifierService.verifyOwnershipOfColumn(userId, columnId);
+    var siblingTasks = taskRepository.findAllByColumnId(pair.getSecond().getId());
+    return taskMapper.toDto(task);
+}
+```
+
+`TaskService.findById` and `TaskService.findAllByColumnId` are the reference implementations of this pattern.
+
+### 3. Use AssertJ fully qualified; capture exceptions with `catchException`
+
+Assertions are always written as `Assertions.assertThat(...)`, against `import org.assertj.core.api.Assertions;` — never a static import of `assertThat`. When a test needs to assert that a call throws, the exception is captured first with `Assertions.catchException(...)` and asserted on afterwards; JUnit's `assertThrows` is not used.
+
+**Why:** capturing the throwable into a local variable lets a single test assert on the exception and then continue asserting follow-up state in the same method, which `assertThrows`'s callback shape makes awkward; keeping `Assertions` qualified at every call site also matches every existing assertion in the suite, so a reader never has to guess which assertion library produced a given call.
+
+Discouraged:
+
+```java
+import static org.assertj.core.api.Assertions.assertThat;
+
+@Test
+void shouldThrow_whenColumnDoesntExist() {
+    var userId = getOwningUser().getId();
+    var columnId = UUID.randomUUID().toString();
+
+    assertThrows(
+            AppEntityNotFoundException.class,
+            () -> taskService.findAllByColumnId(userId, columnId));
+}
+```
+
+Preferred:
+
+```java
+import org.assertj.core.api.Assertions;
+
+@Test
+void shouldThrow_whenColumnDoesntExist() {
+    var userId = getOwningUser().getId();
+    var columnId = UUID.randomUUID().toString();
+
+    var exception =
+            Assertions.catchException(() -> taskService.findAllByColumnId(userId, columnId));
+
+    Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
+}
+```
+
+`TaskServiceTest` is the reference for this pattern throughout.
+
+### 4. No mocks — test against real Spring wiring
+
+Every test class is a `@SpringBootTest` extending `AbstractAppTest` (or, for full HTTP round-trips, `AbstractAppE2ETest`), exercising the real Spring context against an in-memory H2 database. Mockito, `@Mock`, `@MockBean`, and slice annotations such as `@WebMvcTest` or `@DataJpaTest` are not used anywhere in this repository and must not be introduced. Shared fixtures (mock users, boards, columns, tasks, subtasks) belong in `AbstractAppTest`'s single `@BeforeEach`, not re-created inline inside individual test classes. `AbstractAppTest.countQueries(Runnable)` is the only sanctioned way to assert on query counts; its Javadoc records why it reads `getPrepareStatementCount()` instead of `getQueryExecutionCount()` — the latter misses `repository.findById()` calls entirely.
+
+**Why:** mocking a repository bypasses exactly the ownership chain and JPA behaviour these tests exist to catch regressions in, so a fully green, fully mocked test can sit directly on top of a broken access-control path or a reintroduced N+1 query.
+
+Discouraged:
+
+```java
+@ExtendWith(MockitoExtension.class)
+class TaskServiceTest {
+    @Mock TaskRepository taskRepository;
+    @InjectMocks TaskService taskService;
+}
+```
+
+Preferred:
+
+```java
+@SpringBootTest
+public class TaskServiceTest extends AbstractAppTest {
+    @Autowired TaskService taskService;
+}
+```
+
+`AbstractAppTest` is the reference for shared fixtures and the `countQueries` helper.
+
+### 5. Group by method under test with `@Nested`; name `should<Outcome>_when<Condition>`; mark sections with AAA comments
+
+Test methods that exercise one method under test are grouped inside a `@Nested` class named after that method (for example `FindAllByColumnIdTest`). Test methods are named `should<Outcome>_when<Condition>`, and each method body is divided into `// arrange`, `// act`, `// assert` section comments. `@DisplayName` is not used — the method name is the display name. Two naming dialects both exist and neither should be normalised into the other: service and unit tests use the plain `should<Outcome>_when<Condition>` form; MockMvc controller tests prefix the auth context, as `testWithAuthenticatedUser_should<Outcome>_when<Condition>`.
+
+**Why:** nesting by method under test makes the method itself the unit of navigation, rather than scrolling a flat wall of unrelated test methods; the name-plus-section-comment convention removes the need for a second, separately-maintained `@DisplayName` string that can drift out of sync with what the method actually asserts.
+
+Discouraged:
+
+```java
+@Test
+@DisplayName("returns tasks for an existing column")
+void test1() {
+    var userId = getOwningUser().getId();
+    var columnId = mockPopulatedColumn.getId();
+    var tasks = taskService.findAllByColumnId(userId, columnId);
+    Assertions.assertThat(tasks).isNotEmpty();
+}
+```
+
+Preferred:
+
+```java
+@Nested
+class FindAllByColumnIdTest {
+    @Test
+    void shouldReturn_whenColumnExists() {
+        // arrange
+        var userId = getOwningUser().getId();
+        var columnId = mockPopulatedColumn.getId();
+
+        // act
+        var tasks = taskService.findAllByColumnId(userId, columnId);
+
+        // assert
+        Assertions.assertThat(tasks).isNotEmpty();
+    }
+}
+```
+
+`TaskServiceTest` is the reference for the service dialect; `BoardControllerTest` is the reference for the controller dialect (`testWithAuthenticatedUser_...`).
+
+### 6. `Update*RequestDTO` carries a fixed shape
+
+Every `Update*RequestDTO` carries `@JsonInclude(JsonInclude.Include.NON_NULL)` on the class, a `@NotNull private Long version` field, and — whenever the DTO has more than one independently optional field — a private `@AssertTrue`-annotated `atLeastOneFieldPopulated()` method. `Save*RequestDTO` and `*ResponseDTO` classes never carry `@JsonInclude`; its presence on a class is exactly what marks that class as a partial-update DTO.
+
+**Why:** omitting `@NotNull Long version` silently disables optimistic locking for that entity — the request still passes validation and the write still succeeds, it just stops being safe against concurrent edits; giving the cross-field check a different name on each DTO would make the same check unfindable when scanning across DTOs for this invariant.
+
+Discouraged:
+
+```java
+@Getter
+@Setter
+@Builder
+@EqualsAndHashCode
+public class UpdateWidgetRequestDTO implements BaseWidget {
+    private String name;
+    private Long version;
+}
+```
+
+Preferred:
+
+```java
+@Getter
+@Setter
+@Builder
+@EqualsAndHashCode
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class UpdateTaskRequestDTO implements BaseTask {
+    @TaskTitle private String title;
+    @Description private String description;
+    @NotNull private Long version;
+
+    @AssertTrue(message = "Either 'title' or 'description' (or both) must be provided.")
+    private boolean atLeastOneFieldPopulated() {
+        return Optional.ofNullable(getTitle()).isPresent()
+                || Optional.ofNullable(getDescription()).isPresent();
+    }
+}
+```
+
+`UpdateTaskRequestDTO` is the reference; single-field update DTOs such as `UpdateColumnRequestDTO` correctly omit `atLeastOneFieldPopulated()` since there is no second field to cross-check against.
+
+### 7. Unwrap `Optional` with an `isEmpty()` guard, not `orElseThrow`
+
+An `Optional` returned by a repository is unwrapped with an explicit `isEmpty()` guard that throws the appropriate `App...Exception`, followed by a plain `.get()`. `orElseThrow` does not appear anywhere in `src/main` and should not be introduced. This is a deliberate consistency choice, not a claim that the guard form is technically better: `orElseThrow` is shorter and the more idiomatic modern Java, but every existing unwrap site in this codebase uses the guard form, and staying consistent across those sites is the entire point.
+
+**Why:** the guard is a statement, not an expression, so a second check — another entity load, an ownership comparison — slots in right beside it as a peer in the same flat sequence, instead of forcing the whole thing to be restructured the moment a second condition needs checking.
+
+Discouraged:
+
+```java
+public UserEntity findUser(String userId) {
+    return userRepository.findById(userId).orElseThrow(() -> new AppEntityNotFoundException("User"));
+}
+```
+
+Preferred:
+
+```java
+public Pair<UserEntity, BoardEntity> verifyOwnershipOfBoard(String userId, String boardId) {
+    var user = userRepository.findById(userId);
+    if (user.isEmpty()) {
+        throw new AppEntityNotFoundException("User");
+    }
+
+    var board = boardRepository.findById(boardId);
+    if (board.isEmpty()) {
+        throw new AppEntityNotFoundException("Board");
+    }
+
+    var userOwnsBoard = board.get().getUser().getId().equals(user.get().getId());
+    if (!userOwnsBoard) {
+        throw new AppAccessDeniedException("Board");
+    }
+
+    return Pair.of(user.get(), board.get());
+}
+```
+
+`OwnershipVerifierService.verifyOwnershipOfBoard` is the reference — it chains exactly this shape three times in one flat sequence (user, board, ownership) rather than nesting.
+
 ## Adding a rule
 
 New rules are appended as a new `###` section under `## Rules`, numbered with the next integer. Each rule must carry the same three parts: a rule statement, a bolded **Why** line, and a bad-vs-good code example.
