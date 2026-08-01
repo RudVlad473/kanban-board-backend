@@ -10,6 +10,8 @@ import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
 import com.vrudenko.kanban_board.dto.task_dto.UpdateTaskRequestDTO;
 import com.vrudenko.kanban_board.entity.ColumnEntity;
 import com.vrudenko.kanban_board.entity.TaskEntity;
+import com.vrudenko.kanban_board.event.TaskCreatedEvent;
+import com.vrudenko.kanban_board.event.TaskDeletedEvent;
 import com.vrudenko.kanban_board.event.TaskMovedEvent;
 import com.vrudenko.kanban_board.mapper.TaskMapper;
 import com.vrudenko.kanban_board.repository.TaskRepository;
@@ -38,11 +40,30 @@ public class TaskService {
 
     @Autowired private ApplicationEventPublisher eventPublisher;
 
+    /**
+     * {@code @Transactional} here (rather than relying on the caller, {@link
+     * ColumnService#addTaskByColumnId}, already being {@code @Transactional}) makes the
+     * after-commit {@code TaskCreatedEvent} publish guarantee self-contained:
+     * {@code @TransactionalEventListener} silently skips delivery when no transaction is active, so
+     * a future direct call to this method with no {@code @Transactional} caller would otherwise
+     * drop the event with no error and no log line. {@code REQUIRED} propagation is a no-op inside
+     * an existing transaction, so current callers see no behaviour change.
+     */
+    @Transactional
     public TaskResponseDTO save(SaveTaskRequestDTO dto, ColumnEntity column) {
         var task = taskMapper.fromSaveTaskRequestDTO(dto);
         task.setColumn(column);
 
         taskRepository.save(task);
+
+        eventPublisher.publishEvent(
+                new TaskCreatedEvent(
+                        UUID.randomUUID(),
+                        column.getBoard().getUser().getId(),
+                        column.getBoard().getId(),
+                        column.getId(),
+                        task.getId(),
+                        Instant.now()));
 
         return taskMapper.toTaskResponseDTO(task);
     }
@@ -83,6 +104,10 @@ public class TaskService {
     public TaskResponseDTO updateById(String userId, String taskId, UpdateTaskRequestDTO dto) {
         var task = findById(userId, taskId);
 
+        // dto.getVersion() is read ONLY here, for this stale-write precondition check — it is
+        // never assigned onto `task`. The version value that actually gets persisted is generated
+        // entirely by Hibernate's own @Version increment mechanism when the UPDATE statement runs
+        // (forced below via entityManager.flush()), independent of whatever value the client sent.
         if (!task.getVersion().equals(dto.getVersion())) {
             throw new OptimisticLockingFailureException(
                     "Task was modified by another request, please refetch.");
@@ -154,13 +179,32 @@ public class TaskService {
         return taskMapper.toTaskResponseDTO(task);
     }
 
+    /**
+     * The ids below are captured into locals BEFORE the deletes run, on purpose: once {@code
+     * taskRepository.deleteById(...)} executes there is nothing left to derive {@code boardId} from
+     * for the {@code TaskDeletedEvent}, and Phase 3's consumer runs with no {@code SecurityContext}
+     * and cannot look it up itself.
+     */
     @Transactional
     public void deleteById(String userId, String taskId) {
         var task = findById(userId, taskId);
 
+        var deletedTaskId = task.getId();
+        var deletedColumnId = task.getColumn().getId();
+        var deletedBoardId = task.getColumn().getBoard().getId();
+
         subtaskService.deleteAllByTaskId(userId, taskId);
 
         taskRepository.deleteById(task.getId());
+
+        eventPublisher.publishEvent(
+                new TaskDeletedEvent(
+                        UUID.randomUUID(),
+                        userId,
+                        deletedBoardId,
+                        deletedColumnId,
+                        deletedTaskId,
+                        Instant.now()));
     }
 
     @Transactional
