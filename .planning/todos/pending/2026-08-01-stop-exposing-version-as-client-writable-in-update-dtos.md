@@ -22,9 +22,21 @@ Expected flow once fixed: user 1 modifies a task; user 2 has a stale version; us
 
 ## Solution
 
-TBD — needs a design decision before implementing, e.g.:
-- Keep `version` in the update DTO but document/annotate it clearly as "must equal last-read value, not a field you choose" (lightest touch)
-- Move the stale-check version out of the request body entirely (e.g. into an `If-Match`/ETag-style header) so the JSON body only contains genuinely mutable fields
-- Split into a distinct concept (e.g. `expectedVersion`) so it reads unambiguously as a precondition rather than a field being "set"
+**Desired approach: `ETag` / `If-Match` headers, not a request-body field.**
 
-Whatever is chosen, response DTOs (`TaskResponseDTO`, `ColumnResponseDTO`) should keep returning the authoritative post-update `version` so the client can use it for the next stale-check round-trip.
+Move the stale-check version out of the request body entirely and onto HTTP's own concurrency-control mechanism:
+- Server returns `ETag: "<version>"` on responses that carry a Task/Column representation (GET, POST, PUT).
+- Client echoes the value back as `If-Match: "<version>"` on update requests.
+- Server compares `If-Match` against the current row's version before applying the update; mismatch → `409 CONFLICT` (or `412 PRECONDITION_FAILED`, needs a decision — see below).
+- `version` is removed from `UpdateTaskRequestDTO`/`UpdateColumnRequestDTO` entirely — the request body only contains genuinely mutable fields.
+
+This fully resolves the encapsulation complaint: `version` stops being presented as a domain field at all and becomes transport-level metadata, matching what it actually is (Hibernate bookkeeping, not resource data).
+
+Rejected alternatives (kept for context, not pursued):
+- Keep `version` in the update DTO but annotate/document it as "must equal last-read value, not a field you choose" — lightest touch, but doesn't fix the encapsulation issue, just documents around it.
+- Split into a distinct body field (e.g. `expectedVersion`) — clearer than status quo but still a body field pretending to be domain data.
+
+Open questions to resolve during planning:
+- `409 CONFLICT` (current behavior) vs. `412 PRECONDITION_FAILED` (more HTTP-idiomatic for `If-Match` mismatches) — needs a decision, may have back-compat implications for existing E2E tests (`TaskLockingE2ETest`, `ColumnLockingE2ETest`) that assert `409`.
+- Whether `version` stays in response DTOs (`TaskResponseDTO`, `ColumnResponseDTO`) as a convenience/debugging field in addition to the `ETag` header, or is dropped from the JSON body now that the header is authoritative.
+- GET responses need to start setting `ETag` too, not just update responses, so a client's very first read has something to echo back.
