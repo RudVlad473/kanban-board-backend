@@ -3,6 +3,7 @@ plugins {
     id 'org.springframework.boot' version '3.5.0'
     id 'io.spring.dependency-management' version '1.1.6'
     id 'com.diffplug.spotless' version '7.0.2'
+    id 'net.ltgt.errorprone' version '5.1.0'
 }
 
 group = 'com.vrudenko'
@@ -87,10 +88,25 @@ dependencies {
 
     // https://mvnrepository.com/artifact/com.tngtech.archunit/archunit-junit5
     testImplementation 'com.tngtech.archunit:archunit-junit5:1.4.2'
+
+    errorprone 'com.google.errorprone:error_prone_core:2.50.0'
 }
 
 tasks.named('test') {
     useJUnitPlatform()
+}
+
+// --- ErrorProne (measurement mode) ------------------------------------------
+// TEMPORARY - measurement mode, see Task 2 of quick task 260802-qr8. This block
+// is deliberately non-blocking: allErrorsAsWarnings demotes ERROR findings to
+// warnings so the compile completes and reports the FULL finding list instead
+// of dying at the first ERROR-severity match.
+tasks.withType(JavaCompile).configureEach {
+    options.errorprone {
+        allErrorsAsWarnings = true // TEMPORARY - measurement mode, see Task 2
+        disableWarningsInGeneratedCode = true
+        excludedPaths = '.*[/\\\\]build[/\\\\]generated[/\\\\].*'
+    }
 }
 
 // --- Git hooks bootstrap ---------------------------------------------------
