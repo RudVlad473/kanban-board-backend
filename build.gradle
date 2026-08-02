@@ -51,6 +51,14 @@ dependencies {
     // https://mvnrepository.com/artifact/org.springframework.boot/spring-boot-starter-security
     implementation 'org.springframework.boot:spring-boot-starter-security'
 
+    // Backs the spring.session.* properties in application.properties (store-type=jdbc,
+    // initialize-schema=always). Those properties predate this dependency and were silently
+    // inert without it -- sessions were plain in-memory Tomcat HttpSession despite the config
+    // claiming otherwise. Nothing in src/main imports org.springframework.session, so this line
+    // looks unused to a naive dependency audit; it is not -- do not remove it.
+    // https://mvnrepository.com/artifact/org.springframework.session/spring-session-jdbc
+    implementation 'org.springframework.session:spring-session-jdbc'
+
     // https://mvnrepository.com/artifact/com.google.guava/guava
     implementation 'com.google.guava:guava:32.0.1-android'
 
