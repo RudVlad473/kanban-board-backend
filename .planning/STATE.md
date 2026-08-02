@@ -101,6 +101,7 @@ Recent decisions affecting current work:
 - [minor] Add ErrorProne (`net.ltgt.errorprone`) for compile-time bug detection — blocked on `build.gradle` unlock post-Phase-3. See `.planning/todos/pending/2026-08-02-add-errorprone-for-compile-time-bug-detection.md`.
 - [minor] Add ArchUnit to enforce documented layering and ownership-verification rules — blocked on `build.gradle` unlock post-Phase-3. See `.planning/todos/pending/2026-08-02-add-archunit-to-enforce-documented-layering-and-ownership-ve.md`.
 - [minor] Auto-configure `git core.hooksPath` so the pre-commit hook needs no manual per-clone step — blocked on `build.gradle` unlock post-Phase-3. See `.planning/todos/pending/2026-08-02-auto-configure-git-core-hookspath-so-the-pre-commit-hook-nee.md`.
+- [minor] Use a Snowflake ID generator for activity log events (`eventId`) instead of UUID — for index locality and time-ordering; see also the general note about adopting this as the project's default ID-generation strategy. See `.planning/todos/pending/2026-08-02-use-snowflake-id-generator-for-activity-log-events.md`.
 
 ### Blockers/Concerns
 
