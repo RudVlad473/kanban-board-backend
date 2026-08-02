@@ -63,4 +63,8 @@ public final class ValidationConstants {
                     + " character and more than "
                     + ValidationConstants.MAX_SUBTASK_TITLE_LENGTH
                     + " characters";
+
+    // The widest event (TaskMovedEvent: three ULIDs plus keys) serialises to roughly 130
+    // characters; 2000 is deliberate headroom for future event shapes rather than a tight fit.
+    public static final int MAX_ACTIVITY_DETAIL_LENGTH = 2000;
 }
