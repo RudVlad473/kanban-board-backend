@@ -8,7 +8,7 @@ status: verifying
 stopped_at: Completed 03-03-PLAN.md (Phase 3 complete)
 last_updated: "2026-08-02T14:54:40.197Z"
 last_activity: 2026-08-02
-last_activity_desc: Completed quick task 260802-q6n (ArchUnit layering enforcement)
+last_activity_desc: Completed quick task 260802-qr8 (ErrorProne compile-time gate)
 progress:
   total_phases: 3
   completed_phases: 2
@@ -94,6 +94,7 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 3 Plan 02]: Replaced AbstractKafkaContainerTest's @Testcontainers/@Container lifecycle with an imperative kafka.start() static initializer - the JUnit5-extension-driven singleton container pattern did not reliably share one broker across three sibling E2E test classes in this environment
 - [Phase ?]: [Phase 3 Plan 03]: Service always discards any caller-supplied Pageable sort and substitutes a service-owned two-key Sort (createdAt desc, id desc) - the ULID id tiebreak makes offset pagination a genuine total order instead of merely newest-first
 - [Quick/260802-q6n]: Adding ArchUnit's rule-2 layering test surfaced a genuine, previously-unenforced CODE_STYLE.md violation — `SubtaskService.findById(String)` loaded a `SubtaskEntity` via a direct, unverified `subtaskRepository.findById(id)` call with zero production callers. Removed rather than exempted, so the new rule ships at full strength.
+- [Quick/260802-qr8]: ErrorProne landed at rung 4 (hard-gate main, warn-only test) of the plan's decision ladder, chosen from measured counts (5 main findings, all genuine and fixed; 27 test findings, dominated by low-value `FutureReturnValueIgnored` on Testcontainers Kafka test sends) rather than guessed — operator confirmed at the plan's blocking decision checkpoint. `compileTestJava` is not currently enforcing; only `compileJava` fails the build on an ERROR-severity finding.
 
 ### Pending Todos
 
@@ -101,7 +102,6 @@ Recent decisions affecting current work:
 - [minor] Bump Java version from 21 to 25 (current LTS) — build.gradle toolchain, Dockerfile (both stages), and CI `java-version` all pinned to 21; not urgent (21 LTS supported until ~2028), but worth doing proactively. See `.planning/todos/pending/2026-08-01-bump-java-version-from-21-to-25-current-lts.md`.
 - [minor] Account for schema evolution risk when changing ActivityEvent shapes — a rolling deploy that renames/retypes an event field while old-shape messages are still unconsumed can dead-letter valid (non-poison) messages; Kafka itself enforces no schema. See `.planning/todos/pending/2026-08-01-account-for-schema-evolution-risk-when-changing-activityeven.md`.
 - [minor] Enable virtual threads in Spring Boot config (`spring.threads.virtual.enabled=true`) — evaluate JDBC/Hibernate and Spring Session JDBC blocking-call pinning risk first. See `.planning/todos/pending/2026-08-02-enable-virtual-threads-in-spring-boot-config.md`.
-- [minor] Add ErrorProne (`net.ltgt.errorprone`) for compile-time bug detection — blocked on `build.gradle` unlock post-Phase-3. See `.planning/todos/pending/2026-08-02-add-errorprone-for-compile-time-bug-detection.md`.
 - [minor] Use a Snowflake ID generator for activity log events (`eventId`) instead of UUID — for index locality and time-ordering; see also the general note about adopting this as the project's default ID-generation strategy. See `.planning/todos/pending/2026-08-02-use-snowflake-id-generator-for-activity-log-events.md`.
 
 ### Blockers/Concerns
@@ -122,6 +122,7 @@ Carried from research (address during Phase 2/3 planning):
 | 260801-k93 | Reword hiring-context language ("interview-defensible", "interview prep" headings, etc.) out of 17 git-tracked docs to neutral technical phrasing, preserving meaning | 2026-08-01 | 1bdfb79 | [260801-k93-remove-interview-related-language-from-d](./quick/260801-k93-remove-interview-related-language-from-d/) |
 | 260802-pw0 | Auto-configure git core.hooksPath so the pre-commit hook needs no manual per-clone step | 2026-08-02 | ea64adc | [260802-pw0-auto-configure-git-core-hookspath-so-the](./quick/260802-pw0-auto-configure-git-core-hookspath-so-the/) |
 | 260802-q6n | Add ArchUnit to enforce documented layering and ownership-verification rules (also fixed a genuine pre-existing CODE_STYLE rule-2 violation in SubtaskService) | 2026-08-02 | c3780d7 | [260802-q6n-add-archunit-to-enforce-documented-layer](./quick/260802-q6n-add-archunit-to-enforce-documented-layer/) |
+| 260802-qr8 | Add ErrorProne for compile-time bug detection — measured 5 main / 27 test findings, hard-gated compileJava (main sources), warn-only on compileTestJava | 2026-08-02 | 46f4d80 | [260802-qr8-add-errorprone-for-compile-time-bug-dete](./quick/260802-qr8-add-errorprone-for-compile-time-bug-dete/) |
 
 ## Deferred Items
 
