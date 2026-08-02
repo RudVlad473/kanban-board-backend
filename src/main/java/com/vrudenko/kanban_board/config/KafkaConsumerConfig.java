@@ -101,20 +101,31 @@ public class KafkaConsumerConfig {
      * {@code HashMap} iteration order. A {@link LinkedHashMap} makes the more-specific {@code
      * byte[].class} entry always win over the catch-all {@code Object.class} entry, regardless of
      * hashing.
+     *
+     * <p>The producer factory backing this template is its own {@code @Bean} ({@link
+     * #deadLetterProducerFactory}) rather than a plain local variable: {@link
+     * DefaultKafkaProducerFactory} implements {@code DisposableBean}/{@code SmartLifecycle}, and
+     * only a container-managed bean gets its {@code destroy()}/{@code stop()} called on context
+     * shutdown. A factory reachable only through the {@link KafkaTemplate} that wraps it would leak
+     * its underlying producer (and its network connections/buffers) across context refreshes.
      */
     @Bean
-    public KafkaTemplate<String, Object> deadLetterKafkaTemplate(
+    public ProducerFactory<String, Object> deadLetterProducerFactory(
             ProducerFactory<Object, Object> kafkaProducerFactory) {
         var delegates = new LinkedHashMap<Class<?>, Serializer<?>>();
         delegates.put(byte[].class, new ByteArraySerializer());
         delegates.put(Object.class, new JsonSerializer<>());
 
-        var producerFactory =
-                new DefaultKafkaProducerFactory<String, Object>(
-                        kafkaProducerFactory.getConfigurationProperties(),
-                        new StringSerializer(),
-                        new DelegatingByTypeSerializer(delegates, true));
-        return new KafkaTemplate<>(producerFactory);
+        return new DefaultKafkaProducerFactory<>(
+                kafkaProducerFactory.getConfigurationProperties(),
+                new StringSerializer(),
+                new DelegatingByTypeSerializer(delegates, true));
+    }
+
+    @Bean
+    public KafkaTemplate<String, Object> deadLetterKafkaTemplate(
+            @Qualifier("deadLetterProducerFactory") ProducerFactory<String, Object> deadLetterProducerFactory) {
+        return new KafkaTemplate<>(deadLetterProducerFactory);
     }
 
     /**
