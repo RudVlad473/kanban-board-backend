@@ -370,7 +370,8 @@ public class TaskServiceTest extends AbstractAppTest {
             // assert
             Assertions.assertThat(subtask.getTitle()).isEqualTo(title);
             Assertions.assertThat(subtask.getIsCompleted()).isFalse();
-            Assertions.assertThat(subtaskService.findById(subtask.getId()).getTask().getId())
+            Assertions.assertThat(
+                            subtaskService.findById(userId, subtask.getId()).getTask().getId())
                     .isEqualTo(taskId);
             Assertions.assertThat(subtask).isInstanceOf(SubtaskResponseDTO.class);
         }

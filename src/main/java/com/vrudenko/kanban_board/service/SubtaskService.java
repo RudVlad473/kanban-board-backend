@@ -5,7 +5,6 @@ import com.vrudenko.kanban_board.dto.subtask_dto.SubtaskResponseDTO;
 import com.vrudenko.kanban_board.dto.subtask_dto.UpdateSubtaskRequestDTO;
 import com.vrudenko.kanban_board.entity.SubtaskEntity;
 import com.vrudenko.kanban_board.entity.TaskEntity;
-import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
 import com.vrudenko.kanban_board.mapper.SubtaskMapper;
 import com.vrudenko.kanban_board.repository.SubtaskRepository;
 import jakarta.transaction.Transactional;
@@ -70,16 +69,6 @@ public class SubtaskService {
         var pair = ownershipVerifierService.verifyOwnershipOfSubtask(userId, subtaskId);
 
         subtaskRepository.deleteById(pair.getSecond().getId());
-    }
-
-    SubtaskEntity findById(String id) {
-        var subtask = subtaskRepository.findById(id);
-
-        if (subtask.isEmpty()) {
-            throw new AppEntityNotFoundException("Subtask");
-        }
-
-        return subtask.get();
     }
 
     void deleteAllByTaskId(String userId, String subtaskId) {
