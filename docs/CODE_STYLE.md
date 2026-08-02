@@ -262,6 +262,8 @@ public Pair<UserEntity, BoardEntity> verifyOwnershipOfBoard(String userId, Strin
 
 `OwnershipVerifierService.verifyOwnershipOfBoard` is the reference — it chains exactly this shape three times in one flat sequence (user, board, ownership) rather than nesting.
 
+This rule is mechanically enforced by `src/test/java/com/vrudenko/kanban_board/architecture/LayeringArchTest.java`, which fails `./gradlew test` if a domain service other than `OwnershipVerifierService` or `UserService` calls `repository.findById` directly. That check is a floor, not a ceiling — see the class Javadoc for what it does not catch.
+
 ### 8. Test setup must be fully automated — never a manual step for the developer
 
 Running the test suite must never depend on a developer performing a manual, host-level setup step first (flipping an application GUI setting, hand-editing a config file outside version control, running a one-off command before `./gradlew test` will work). If a test needs specific environment/tooling behavior to run correctly, that behavior must be configured from within the codebase itself — a system property set in test code, a project-local config file that ships in version control, a Gradle task — so that `./gradlew test` (or the equivalent single command) is sufficient on a clean checkout. When a failure turns out to be caused by a missing environment quirk (a client/tooling version incompatibility, a platform-specific default), fix it by encoding the workaround in the codebase, not by writing runbook instructions for a human to follow by hand.
