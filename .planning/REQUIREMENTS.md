@@ -31,8 +31,8 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Read API
 
-- [ ] **READ-01**: `GET /boards/{boardId}/activity` returns the board's activity log, newest-first, authorized via the existing `OwnershipVerifierService.verifyOwnershipOfBoard`
-- [ ] **READ-02**: `GET /boards/{boardId}/activity` is paginated using standard Spring Data `Pageable` (offset-based, consistent with every other list endpoint in this codebase)
+- [x] **READ-01**: `GET /boards/{boardId}/activity` returns the board's activity log, newest-first, authorized via the existing `OwnershipVerifierService.verifyOwnershipOfBoard`
+- [x] **READ-02**: `GET /boards/{boardId}/activity` is paginated using standard Spring Data `Pageable` (offset-based, consistent with every other list endpoint in this codebase)
 
 ### Reliability
 
@@ -87,8 +87,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ACTLOG-01 | Phase 3 | Complete |
 | ACTLOG-02 | Phase 3 | Complete |
 | ACTLOG-03 | Phase 3 | Complete |
-| READ-01 | Phase 3 | Pending |
-| READ-02 | Phase 3 | Pending |
+| READ-01 | Phase 3 | Complete |
+| READ-02 | Phase 3 | Complete |
 | RELY-01 | Phase 3 | Complete |
 | RELY-02 | Phase 3 | Complete |
 | TEST-01 | Phase 3 | Complete |

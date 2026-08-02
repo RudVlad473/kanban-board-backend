@@ -4,17 +4,17 @@ milestone: v1.1
 milestone_name: Kafka Activity Feed
 current_phase: 03
 current_phase_name: activity-log-consumer-reliability-read-api
-status: executing
-stopped_at: Completed 03-02-PLAN.md
-last_updated: "2026-08-02T14:38:37.756Z"
+status: verifying
+stopped_at: Completed 03-03-PLAN.md (Phase 3 complete)
+last_updated: "2026-08-02T14:54:40.197Z"
 last_activity: 2026-08-02
 last_activity_desc: Phase 03 execution started
 progress:
   total_phases: 3
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 6
-  completed_plans: 5
-  percent: 33
+  completed_plans: 6
+  percent: 67
 ---
 
 # Project State
@@ -30,10 +30,10 @@ See: .planning/PROJECT.md (updated 2026-08-01)
 
 Phase: 03 (activity-log-consumer-reliability-read-api) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-02 — Phase 03 execution started
 
-Progress: [████████░░] 83%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -68,6 +68,7 @@ Progress: [████████░░] 83%
 | Phase 2 P3 | 70min | 2 tasks | 6 files |
 | Phase 03 P01 | 25min | 2 tasks | 16 files |
 | Phase 03 P02 | 65min | 2 tasks | 4 files |
+| Phase 03 P03 | 20min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -91,6 +92,7 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 3 Plan 01]: Replaced an exact-nanosecond Instant equality assertion with AssertJ isCloseTo(within(1, MICROS)) — Kafka JSON serialization + JPA persistence round-trip loses sub-microsecond precision without a consistent truncate-vs-round direction
 - [Phase ?]: [Phase 3 Plan 02]: Fixed KafkaConsumerConfig.activityErrorHandler's ambiguous deadLetterKafkaTemplate parameter with @Qualifier - Spring's @Primary disambiguation runs before parameter-name matching, so the dead-letter path was silently using the wrong (JSON/base64-encoding) producer template
 - [Phase ?]: [Phase 3 Plan 02]: Replaced AbstractKafkaContainerTest's @Testcontainers/@Container lifecycle with an imperative kafka.start() static initializer - the JUnit5-extension-driven singleton container pattern did not reliably share one broker across three sibling E2E test classes in this environment
+- [Phase ?]: [Phase 3 Plan 03]: Service always discards any caller-supplied Pageable sort and substitutes a service-owned two-key Sort (createdAt desc, id desc) - the ULID id tiebreak makes offset pagination a genuine total order instead of merely newest-first
 
 ### Pending Todos
 
@@ -133,8 +135,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-02T14:38:37.736Z
-Stopped at: Completed 03-02-PLAN.md
+Last session: 2026-08-02T14:54:40.173Z
+Stopped at: Completed 03-03-PLAN.md (Phase 3 complete)
 Resume file: None
 
 ## Operator Next Steps
