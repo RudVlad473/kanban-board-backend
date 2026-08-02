@@ -94,6 +94,10 @@ Recent decisions affecting current work:
 - [minor] Create a sequence diagram documenting the full system flow — deferred until all functional epics of the backend modernization plan are complete and the project is ready for frontend hand-off. See `.planning/todos/pending/2026-08-01-create-sequence-diagram-documenting-full-system-flow-for-fro.md`.
 - [minor] Bump Java version from 21 to 25 (current LTS) — build.gradle toolchain, Dockerfile (both stages), and CI `java-version` all pinned to 21; not urgent (21 LTS supported until ~2028), but worth doing proactively. See `.planning/todos/pending/2026-08-01-bump-java-version-from-21-to-25-current-lts.md`.
 - [minor] Account for schema evolution risk when changing ActivityEvent shapes — a rolling deploy that renames/retypes an event field while old-shape messages are still unconsumed can dead-letter valid (non-poison) messages; Kafka itself enforces no schema. See `.planning/todos/pending/2026-08-01-account-for-schema-evolution-risk-when-changing-activityeven.md`.
+- [minor] Enable virtual threads in Spring Boot config (`spring.threads.virtual.enabled=true`) — evaluate JDBC/Hibernate and Spring Session JDBC blocking-call pinning risk first. See `.planning/todos/pending/2026-08-02-enable-virtual-threads-in-spring-boot-config.md`.
+- [minor] Add ErrorProne (`net.ltgt.errorprone`) for compile-time bug detection — blocked on `build.gradle` unlock post-Phase-3. See `.planning/todos/pending/2026-08-02-add-errorprone-for-compile-time-bug-detection.md`.
+- [minor] Add ArchUnit to enforce documented layering and ownership-verification rules — blocked on `build.gradle` unlock post-Phase-3. See `.planning/todos/pending/2026-08-02-add-archunit-to-enforce-documented-layering-and-ownership-ve.md`.
+- [minor] Auto-configure `git core.hooksPath` so the pre-commit hook needs no manual per-clone step — blocked on `build.gradle` unlock post-Phase-3. See `.planning/todos/pending/2026-08-02-auto-configure-git-core-hookspath-so-the-pre-commit-hook-nee.md`.
 
 ### Blockers/Concerns
 
