@@ -91,12 +91,12 @@ Plans:
   3. A message that fails processing is routed to the `kanban.activity.dlt` dead-letter topic and does not block subsequent activity events from being consumed.
   4. An automated Testcontainers-based test publishes a real event through a containerized Kafka broker end-to-end and confirms the corresponding `ActivityLogEntity` row is persisted; a companion test confirms duplicate delivery produces exactly one row, and another confirms a poison message reaches the DLT — the pipeline is proven, not just configured.
 
-**Plans**: 3 plans
+**Plans**: 1/3 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 03-01-PLAN.md — Tracer: an event on a real broker becomes a persisted, deduplicated `activity_log` row (wave 1)
+- [x] 03-01-PLAN.md — Tracer: an event on a real broker becomes a persisted, deduplicated `activity_log` row (wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -112,4 +112,4 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. Optimistic Locking | 3/3 | Complete | 2026-08-01 |
 | 2. Kafka Foundation, Domain Events & Move Endpoint | 3/3 | In Progress|  |
-| 3. Activity Log Consumer, Reliability & Read API | 0/3 | Planned | - |
+| 3. Activity Log Consumer, Reliability & Read API | 1/3 | In Progress|  |

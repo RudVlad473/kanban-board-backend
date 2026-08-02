@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Kafka Activity Feed
-current_phase: 2
-current_phase_name: Kafka Foundation, Domain Events & Move Endpoint
+current_phase: 03
+current_phase_name: activity-log-consumer-reliability-read-api
 status: executing
-stopped_at: Phase 3 context gathered
-last_updated: "2026-08-01T22:39:29.134Z"
-last_activity: 2026-08-01
-last_activity_desc: Phase 2 execution started
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-08-02T13:09:38.657Z"
+last_activity: 2026-08-02
+last_activity_desc: Phase 03 execution started
 progress:
   total_phases: 3
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 6
+  completed_plans: 4
   percent: 33
 ---
 
@@ -24,16 +24,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-01)
 
 **Core value:** Deliver a real, event-driven per-board activity log (Kafka + consumer + idempotent persistence), plus the genuinely-missing "move task between columns" endpoint, as Epic 1 of the backend modernization plan.
-**Current focus:** Phase 2 — Kafka Foundation, Domain Events & Move Endpoint
+**Current focus:** Phase 03 — activity-log-consumer-reliability-read-api
 
 ## Current Position
 
-Phase: 2 (Kafka Foundation, Domain Events & Move Endpoint) — EXECUTING
-Plan: 3 of 3
+Phase: 03 (activity-log-consumer-reliability-read-api) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-08-01 — Phase 2 execution started
+Last activity: 2026-08-02 — Phase 03 execution started
 
-Progress: [██████████] 100%
+Progress: [███████░░░] 67%
 
 ## Performance Metrics
 
@@ -66,6 +66,7 @@ Progress: [██████████] 100%
 | Phase 01 P03 | 15min | 1 tasks | 2 files |
 | Phase 02 P01 | 14min | 2 tasks | 13 files |
 | Phase 2 P3 | 70min | 2 tasks | 6 files |
+| Phase 03 P01 | 25min | 2 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -84,6 +85,9 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 2 Plan 01]: Added AbstractAppTest.createColumnForUser fixture helper since no REST endpoint exists to create a board directly — boards are only created via UserService.addBoardByUserId
 - [Phase ?]: [Phase 2 Plan 03]: Fixed Dockerfile's retired openjdk:21-jdk-slim runtime base image to eclipse-temurin:21-jre-jammy - was silently breaking production CI/CD too, not just this plan's local stack
 - [Phase ?]: [Phase 2 Plan 03]: kafka service runs as user: root in docker-compose.yml to fix a named-volume permission failure (apache/kafka-native does not pre-create /var/lib/kafka/data, so the Docker volume driver creates it root-owned) - local-dev-only scope, avoids a 4th compose service
+- [Phase ?]: [Phase 3 Plan 01]: Fixed KafkaConsumerConfig.deadLetterKafkaTemplate silently suppressing Spring Boot's default KafkaTemplate bean (@ConditionalOnMissingBean(KafkaTemplate.class) is bare-type) — added an explicit @Primary kafkaTemplate bean sourced from the autoconfigured ProducerFactory; a real production bug, not just a test artifact
+- [Phase ?]: [Phase 3 Plan 01]: Pinned docker-java's negotiated Docker Engine API version to 1.44 in AbstractKafkaContainerTest (testcontainers-java#11212) to fix Docker Engine 29.x rejecting every Testcontainers transport on Windows — zero host-level Docker Desktop configuration required
+- [Phase ?]: [Phase 3 Plan 01]: Replaced an exact-nanosecond Instant equality assertion with AssertJ isCloseTo(within(1, MICROS)) — Kafka JSON serialization + JPA persistence round-trip loses sub-microsecond precision without a consistent truncate-vs-round direction
 
 ### Pending Todos
 
@@ -121,9 +125,9 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-01T22:39:29.102Z
-Stopped at: Phase 3 context gathered
-Resume file: .planning/phases/03-activity-log-consumer-reliability-read-api/03-CONTEXT.md
+Last session: 2026-08-02T13:09:38.635Z
+Stopped at: Completed 03-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 

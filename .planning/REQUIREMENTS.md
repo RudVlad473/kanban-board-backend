@@ -25,9 +25,9 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Activity Log Consumer & Persistence
 
-- [ ] **ACTLOG-01**: A new `ActivityLogEntity`/`ActivityLogRepository` persists `boardId`, `userId`, `action`, `detail`, `createdAt`, and a UUID `eventId` with a database-level `UNIQUE` constraint on `eventId`
-- [ ] **ACTLOG-02**: A `@KafkaListener`-based `ActivityLogConsumer` in a new `activitylog` package consumes `kanban.activity` and maps all five event types (not just `TaskMovedEvent`) to an `ActivityLogEntity` row
-- [ ] **ACTLOG-03**: Redelivering an event with an already-seen `eventId` does not create a duplicate `ActivityLogEntity` row — idempotency is enforced by the database unique constraint, with `existsByEventId` as a fast-path check, not the sole safety net
+- [x] **ACTLOG-01**: A new `ActivityLogEntity`/`ActivityLogRepository` persists `boardId`, `userId`, `action`, `detail`, `createdAt`, and a UUID `eventId` with a database-level `UNIQUE` constraint on `eventId`
+- [x] **ACTLOG-02**: A `@KafkaListener`-based `ActivityLogConsumer` in a new `activitylog` package consumes `kanban.activity` and maps all five event types (not just `TaskMovedEvent`) to an `ActivityLogEntity` row
+- [x] **ACTLOG-03**: Redelivering an event with an already-seen `eventId` does not create a duplicate `ActivityLogEntity` row — idempotency is enforced by the database unique constraint, with `existsByEventId` as a fast-path check, not the sole safety net
 
 ### Read API
 
@@ -36,12 +36,12 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Reliability
 
-- [ ] **RELY-01**: A dead-letter topic (`kanban.activity.dlt`) via `DefaultErrorHandler` + `DeadLetterPublishingRecoverer` isolates a poison message so it does not block the consumer from processing subsequent events
+- [x] **RELY-01**: A dead-letter topic (`kanban.activity.dlt`) via `DefaultErrorHandler` + `DeadLetterPublishingRecoverer` isolates a poison message so it does not block the consumer from processing subsequent events
 - [ ] **RELY-02**: A test intentionally fails a message and asserts it lands on `kanban.activity.dlt` — the dead-letter path is proven, not just configured
 
 ### Testing
 
-- [ ] **TEST-01**: A Testcontainers-based integration test publishes a `TaskMovedEvent` end-to-end through a real embedded Kafka broker and asserts the corresponding `ActivityLogEntity` row appears
+- [x] **TEST-01**: A Testcontainers-based integration test publishes a `TaskMovedEvent` end-to-end through a real embedded Kafka broker and asserts the corresponding `ActivityLogEntity` row appears
 - [ ] **TEST-02**: A redelivery test publishes an event with the same `eventId` twice and asserts exactly one `ActivityLogEntity` row is created
 
 ## v2 Requirements
@@ -84,14 +84,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MOVE-01 | Phase 2 | Complete |
 | MOVE-02 | Phase 2 | Complete |
 | MOVE-03 | Phase 2 | Complete |
-| ACTLOG-01 | Phase 3 | Pending |
-| ACTLOG-02 | Phase 3 | Pending |
-| ACTLOG-03 | Phase 3 | Pending |
+| ACTLOG-01 | Phase 3 | Complete |
+| ACTLOG-02 | Phase 3 | Complete |
+| ACTLOG-03 | Phase 3 | Complete |
 | READ-01 | Phase 3 | Pending |
 | READ-02 | Phase 3 | Pending |
-| RELY-01 | Phase 3 | Pending |
+| RELY-01 | Phase 3 | Complete |
 | RELY-02 | Phase 3 | Pending |
-| TEST-01 | Phase 3 | Pending |
+| TEST-01 | Phase 3 | Complete |
 | TEST-02 | Phase 3 | Pending |
 
 **Coverage:**
