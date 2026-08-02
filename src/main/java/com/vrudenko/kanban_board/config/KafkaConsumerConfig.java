@@ -1,7 +1,7 @@
 package com.vrudenko.kanban_board.config;
 
 import com.vrudenko.kanban_board.constant.KafkaTopics;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
@@ -10,6 +10,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -86,11 +87,25 @@ public class KafkaConsumerConfig {
      * KafkaProperties} directly) so this template inherits the same bootstrap servers — including
      * any {@code KafkaConnectionDetails} override — and timeouts as {@link #kafkaTemplate}, rather
      * than hard-coding a second, ConnectionDetails-blind copy.
+     *
+     * <p>{@code delegates} must be a {@link LinkedHashMap}, not a plain {@code HashMap}: {@link
+     * DelegatingByTypeSerializer} constructed with {@code assumeType=true} walks the map's
+     * iteration order and dispatches to the first entry whose key {@code isAssignableFrom} the
+     * value's runtime class. {@code Object.class} is assignable from every type, including {@code
+     * byte[]}, so with a plain {@code HashMap} (whose bucket order is not insertion order) every
+     * dead-lettered {@code byte[]} payload could just as easily match {@code Object.class} first,
+     * silently routing it through {@link JsonSerializer} and base64-encoding the very bytes this
+     * template exists to preserve. This was a genuine production bug, not a test artifact: only
+     * live Testcontainers verification against the real dead-letter path (Plan 02's reliability
+     * suite) surfaced it, since {@code ./gradlew compileJava} and any mocked test cannot observe
+     * {@code HashMap} iteration order. A {@link LinkedHashMap} makes the more-specific {@code
+     * byte[].class} entry always win over the catch-all {@code Object.class} entry, regardless of
+     * hashing.
      */
     @Bean
     public KafkaTemplate<String, Object> deadLetterKafkaTemplate(
             ProducerFactory<Object, Object> kafkaProducerFactory) {
-        var delegates = new HashMap<Class<?>, Serializer<?>>();
+        var delegates = new LinkedHashMap<Class<?>, Serializer<?>>();
         delegates.put(byte[].class, new ByteArraySerializer());
         delegates.put(Object.class, new JsonSerializer<>());
 
@@ -109,10 +124,23 @@ public class KafkaConsumerConfig {
      * would be wrong. Every recovery (i.e. every dead-lettering) is logged at error level naming
      * the source topic, partition, offset and cause, so a draining feed shows up as a log line
      * instead of silence.
+     *
+     * <p>{@code @Qualifier("deadLetterKafkaTemplate")} is required on the parameter below, even
+     * though its name already matches the bean name exactly. Spring's autowire-candidate resolution
+     * checks for a {@code @Primary} bean among the candidates for a type <em>before</em> it ever
+     * falls back to matching by parameter name -- with two {@code KafkaTemplate<String, Object>}
+     * beans in this class and {@link #kafkaTemplate} marked {@code @Primary}, a bare, unqualified
+     * parameter here silently resolved to the default JSON-valued template instead of {@link
+     * #deadLetterKafkaTemplate}, regardless of the parameter's name. The dead-lettered {@code
+     * byte[]} payload was then always JSON/base64-encoded by the wrong template, no matter how
+     * correctly {@link #deadLetterKafkaTemplate}'s own delegating serializer was configured. Only
+     * live Testcontainers verification against the real dead-letter path (Plan 02's reliability
+     * suite) could have caught this: {@code ./gradlew compileJava} cannot see which bean an
+     * ambiguous, unqualified autowire point actually resolves to at runtime.
      */
     @Bean
     public DefaultErrorHandler activityErrorHandler(
-            KafkaTemplate<String, Object> deadLetterKafkaTemplate) {
+            @Qualifier("deadLetterKafkaTemplate") KafkaTemplate<String, Object> deadLetterKafkaTemplate) {
         var recoverer =
                 new DeadLetterPublishingRecoverer(
                         deadLetterKafkaTemplate,

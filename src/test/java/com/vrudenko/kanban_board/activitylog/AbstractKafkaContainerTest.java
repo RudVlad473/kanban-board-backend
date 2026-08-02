@@ -3,8 +3,6 @@ package com.vrudenko.kanban_board.activitylog;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.context.TestPropertySource;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.utility.DockerImageName;
 
@@ -14,11 +12,19 @@ import org.testcontainers.utility.DockerImageName;
  * docker-compose.yml} pins, so local, CI and test all exercise the same broker family.
  *
  * <p>Raises the test profile's producer bounds ({@code max.block.ms}, {@code request.timeout.ms},
- * {@code delivery.timeout.ms}) to 10 seconds for this context only. The test profile ({@code
+ * {@code delivery.timeout.ms}) to 30 seconds for this context only. The test profile ({@code
  * application-test.properties}) deliberately bounds them at 50ms so a *missing* broker cannot slow
  * the full suite -- but against a real broker, 50ms is not enough for the first metadata fetch, and
  * the default 50ms bound would abort the first send before the container finishes announcing
- * itself.
+ * itself. 30 seconds (not the original 10) matches the {@code Awaitility} ceiling every consuming
+ * assertion in this package already uses: once Plan 02 added two more Testcontainers-backed test
+ * classes sharing this one broker instance and one {@code activity-log} consumer group, the
+ * cumulative produce/consume volume across all three classes in a single full-suite run can leave
+ * the broker busy enough that a 10-second producer bound occasionally expires ({@code
+ * org.apache.kafka.common.errors.TimeoutException: Expiring 1 record(s)...}) even though every
+ * class passes cleanly in isolation. This is headroom for real broker load, not a hidden retry loop
+ * or a softened assertion -- the bound only protects against an unreachable broker (its original
+ * purpose); it does not affect what any test asserts.
  *
  * <p>Deliberately does not extend the shared application test base: the consumer path needs no
  * user, board, column or task fixture -- an activity row's board/user identifiers are plain
@@ -27,14 +33,32 @@ import org.testcontainers.utility.DockerImageName;
  * broker under test, turning every test method into a race against unrelated traffic. This keeps
  * the no-mocking rule (docs/CODE_STYLE.md rule 4) fully honoured while avoiding that noise: real
  * Spring wiring, real broker, no fixtures this package does not need.
+ *
+ * <p>The container is started imperatively in a static initializer -- {@code kafka.start()} below
+ * -- rather than via the {@code @Testcontainers}/{@code @Container} JUnit 5 extension. On this
+ * environment (Windows + Docker Desktop, testcontainers-java 1.21.0), the extension's "singleton
+ * container" pattern for a static {@code @Container} field did not reliably hold across this
+ * package's three sibling test classes: instead of reusing the one already-running container, a
+ * second, distinct container (a different Docker container ID, a different mapped port) was
+ * observed starting when a second class in the package began running, while Spring's cached {@code
+ * ApplicationContext} -- and the {@code KafkaTemplate}/{@code @KafkaListener} beans it had already
+ * built against the *first* container's port -- was correctly reused unchanged. The result was
+ * silent: those already-built beans kept talking to a stale port from a container that either no
+ * longer existed or was no longer the one new test-local clients connected to, while a freshly
+ * constructed raw client (via {@link #getBootstrapServers()}, evaluated fresh on every call) always
+ * pointed at whatever container was current -- so Spring-mediated sends hung until they timed out
+ * while raw test clients worked, exactly the split symptom that surfaced this. A plain, imperative
+ * {@code kafka.start()} in a static initializer is guaranteed by JVM class-initialization semantics
+ * to run exactly once per classloader, independent of any JUnit extension's lifecycle bookkeeping,
+ * which is the standard Testcontainers "singleton container" recommendation for containers meant to
+ * be shared across multiple test classes in one JVM.
  */
-@Testcontainers
 @SpringBootTest
 @TestPropertySource(
         properties = {
-            "spring.kafka.producer.properties.max.block.ms=10000",
-            "spring.kafka.producer.properties.request.timeout.ms=10000",
-            "spring.kafka.producer.properties.delivery.timeout.ms=10000"
+            "spring.kafka.producer.properties.max.block.ms=30000",
+            "spring.kafka.producer.properties.request.timeout.ms=30000",
+            "spring.kafka.producer.properties.delivery.timeout.ms=30000"
         })
 public abstract class AbstractKafkaContainerTest {
     /**
@@ -50,9 +74,15 @@ public abstract class AbstractKafkaContainerTest {
         System.setProperty("api.version", "1.44");
     }
 
-    @Container @ServiceConnection
+    @ServiceConnection
     static final KafkaContainer kafka =
             new KafkaContainer(DockerImageName.parse("apache/kafka-native:4.3.1"));
+
+    // Imperative, exactly-once start -- see the class Javadoc for why this replaces the
+    // @Testcontainers/@Container-driven lifecycle.
+    static {
+        kafka.start();
+    }
 
     protected String getBootstrapServers() {
         return kafka.getBootstrapServers();
