@@ -1,4 +1,7 @@
 #!/bin/sh
+# Auto-installed: build.gradle points core.hooksPath at .githooks/ on any ./gradlew
+# invocation, so this file needs no per-clone setup. Keep it mode 100755 in the
+# index - git silently skips a non-executable hook on Linux and macOS.
 # Part 1 Assign all staged files to a variable
 stagedFiles=$(git diff --staged --name-only)
 echo "Running spotlessApply. Formatting code..."
