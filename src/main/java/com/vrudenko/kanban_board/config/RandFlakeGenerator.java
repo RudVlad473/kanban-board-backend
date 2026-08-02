@@ -7,8 +7,10 @@ import org.hibernate.id.IdentifierGenerator;
 
 // https://adileo.github.io/awesome-identifiers/
 public class RandFlakeGenerator implements IdentifierGenerator {
-    // 41 bits for time in milliseconds (gives us ~69 years)
-    private static final long TIMESTAMP_BITS = 41L;
+    // Timestamp occupies the bits above RANDOM_BITS (41 bits at current shift width, giving
+    // ~69 years before rollover). Documented here rather than as a constant because nothing in
+    // this class needs to reference the timestamp width directly - only RANDOM_BITS is used to
+    // compute the shift.
     private static final long RANDOM_BITS = 23L;
 
     // Custom epoch (January 1, 2023)

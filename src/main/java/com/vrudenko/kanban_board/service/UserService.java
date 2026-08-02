@@ -7,9 +7,7 @@ import com.vrudenko.kanban_board.dto.user_dto.SignupRequestDTO;
 import com.vrudenko.kanban_board.dto.user_dto.UserResponseDTO;
 import com.vrudenko.kanban_board.entity.UserEntity;
 import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
-import com.vrudenko.kanban_board.mapper.BoardMapper;
 import com.vrudenko.kanban_board.mapper.UserMapper;
-import com.vrudenko.kanban_board.repository.BoardRepository;
 import com.vrudenko.kanban_board.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import java.util.List;
@@ -26,10 +24,6 @@ public class UserService implements UserDetailsService {
     @Autowired private UserMapper userMapper;
 
     @Autowired private BoardService boardService;
-
-    @Autowired private BoardMapper boardMapper;
-
-    @Autowired private BoardRepository boardRepository;
 
     @Transactional
     public UserEntity findById(String id) throws AppEntityNotFoundException {

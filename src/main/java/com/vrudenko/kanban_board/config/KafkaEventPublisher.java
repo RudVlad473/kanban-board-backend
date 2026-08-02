@@ -38,19 +38,24 @@ public class KafkaEventPublisher {
     @Async("kafkaPublishExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onActivityEvent(ActivityEvent event) {
-        kafkaTemplate
-                .send(KafkaTopics.ACTIVITY, event.eventId().toString(), event)
-                .whenComplete(
-                        (result, ex) -> {
-                            if (ex != null) {
-                                log.error(
-                                        "Failed to publish {} (eventId={}, boardId={}) to {}",
-                                        event.getClass().getSimpleName(),
-                                        event.eventId(),
-                                        event.boardId(),
-                                        KafkaTopics.ACTIVITY,
-                                        ex);
-                            }
-                        });
+        // The failure path is already handled inside whenComplete (logged above), and this
+        // listener has nothing further to do with either outcome - so the chained Future
+        // returned by whenComplete() is deliberately unused, not accidentally dropped. Assigning
+        // it to `unused` documents that intent to ErrorProne's FutureReturnValueIgnored check.
+        var unused =
+                kafkaTemplate
+                        .send(KafkaTopics.ACTIVITY, event.eventId().toString(), event)
+                        .whenComplete(
+                                (result, ex) -> {
+                                    if (ex != null) {
+                                        log.error(
+                                                "Failed to publish {} (eventId={}, boardId={}) to {}",
+                                                event.getClass().getSimpleName(),
+                                                event.eventId(),
+                                                event.boardId(),
+                                                KafkaTopics.ACTIVITY,
+                                                ex);
+                                    }
+                                });
     }
 }
