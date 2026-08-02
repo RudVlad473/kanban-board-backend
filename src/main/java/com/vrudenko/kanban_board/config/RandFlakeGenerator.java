@@ -21,7 +21,15 @@ public class RandFlakeGenerator implements IdentifierGenerator {
         return generateRandflake();
     }
 
-    public synchronized String generateRandflake() {
+    // Deliberately not synchronized. This generator holds no shared mutable state - it has no
+    // instance fields, both constants are static final primitives, ThreadLocalRandom is
+    // thread-confined, and every other value here is a local. A lock would protect nothing while
+    // serializing every entity insert in the application, since this is the IdentifierGenerator
+    // behind @RandFlakeId on BaseEntity. Note that a lock never contributed to id uniqueness
+    // either: the low bits are random, not a sequence counter, so same-millisecond collisions
+    // were always possible at the same probability. If mutable state (a sequence counter, a
+    // last-timestamp field) is ever added here, revisit this.
+    public String generateRandflake() {
         long timestamp = Instant.now().toEpochMilli() - CUSTOM_EPOCH;
         long randomBits = ThreadLocalRandom.current().nextLong(1L << RANDOM_BITS);
 
