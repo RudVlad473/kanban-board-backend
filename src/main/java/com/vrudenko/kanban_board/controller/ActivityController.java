@@ -25,6 +25,17 @@ public class ActivityController {
 
     // Page size is already clamped by spring.data.web.pageable.max-page-size
     // (application.properties), so no per-endpoint size guard is needed here.
+    //
+    // This is the first paginated endpoint in the codebase, so the response shape used here is a
+    // deliberate, tracked convention future paginated endpoints should copy: it returns the raw
+    // Spring Data `Page<T>` (serialized as `PageImpl`) rather than wrapping it in
+    // `org.springframework.data.web.PagedModel`. Spring Data documents the `PageImpl` shape as not
+    // guaranteed to be stable across versions and logs a startup warning to that effect;
+    // `PagedModel` would give a documented, versioned contract instead, at the cost of changing
+    // every existing consumer's parsing (top-level `content`/`totalElements`/`totalPages` become
+    // nested under `page`). That tradeoff has not been made yet -- if it ever is, it should be
+    // applied consistently to every paginated endpoint at once, not silently drift endpoint by
+    // endpoint.
     @GetMapping
     public ResponseEntity<Page<ActivityLogResponseDTO>> findAllByBoardId(
             @CurrentUserId String userId,
