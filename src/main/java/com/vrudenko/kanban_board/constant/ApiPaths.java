@@ -17,6 +17,8 @@ public final class ApiPaths {
     public static final String SUBTASKS = "/subtasks";
     public static final String SUBTASK_ID = "/{subtaskId}";
 
+    public static final String ACTIVITY = "/activity";
+
     public static final String SIGNIN = "/signin";
     public static final String SIGNUP = "/signup";
     public static final String LOGOUT = "/logout";
