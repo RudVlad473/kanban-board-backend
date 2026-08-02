@@ -3,6 +3,7 @@ package com.vrudenko.kanban_board.security;
 import com.vrudenko.kanban_board.AbstractAppE2ETest;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
+import java.util.Set;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -166,6 +167,60 @@ public class SessionPersistenceE2ETest extends AbstractAppE2ETest {
 
             var decoded = new String(attributeBytes, StandardCharsets.ISO_8859_1);
             Assertions.assertThat(decoded).doesNotContain(BCRYPT_HASH_MARKER);
+        }
+    }
+
+    @Nested
+    class ConcurrentSessionCeiling {
+
+        /**
+         * Characterises current behaviour -- it does not endorse it. {@code
+         * SecurityConfiguration:61-67} configures {@code
+         * maximumSessions(2).maxSessionsPreventsLogin(true)}, but that ceiling is enforced by
+         * {@code ConcurrentSessionControlAuthenticationStrategy}, which runs inside an
+         * authentication filter. This application authenticates through {@code
+         * AuthenticationController.signin}, which calls {@code
+         * authenticationManager.authenticate(token)} directly, and Spring Security 6 no longer
+         * installs {@code SessionManagementFilter} on the default chain either -- so nothing on
+         * this path ever invokes the strategy. No session is ever registered against the principal,
+         * and the ceiling is never checked. See the todo filed alongside this test: {@code
+         * .planning/todos/pending/2026-08-02-wire-session-authentication-strategy-into-custom-signin.md}.
+         *
+         * <p>This is a tripwire, not a spec: the day someone wires the strategy correctly into the
+         * custom signin path, THIS TEST goes RED. At that point the todo above is done, and this
+         * test (plus its Javadoc, plus the corresponding CLAUDE.md entry corrected in this same
+         * plan's Task 3) must be updated to assert the ceiling instead of its absence -- that
+         * break-on-fix is the entire point of keeping this test rather than deleting it.
+         */
+        @Test
+        void
+                shouldAllowThreeConcurrentSessions_whenMaxSessionsIsConfiguredButNoAuthenticationStrategyRuns() {
+            // arrange
+            var countBefore =
+                    jdbcTemplate.queryForObject(
+                            "SELECT COUNT(*) FROM SPRING_SESSION", Integer.class);
+
+            // act
+            var firstCookie = signin();
+            var secondCookie = signin();
+            var thirdCookie = signin();
+
+            // assert: three live sessions for one principal, one more than the configured
+            // ceiling of two -- proving the ceiling is not enforced on this authentication path
+            Assertions.assertThat(firstCookie.getSecond()).isNotNull();
+            Assertions.assertThat(secondCookie.getSecond()).isNotNull();
+            Assertions.assertThat(thirdCookie.getSecond()).isNotNull();
+            Assertions.assertThat(
+                            Set.of(
+                                    firstCookie.getSecond(),
+                                    secondCookie.getSecond(),
+                                    thirdCookie.getSecond()))
+                    .hasSize(3);
+
+            var countAfter =
+                    jdbcTemplate.queryForObject(
+                            "SELECT COUNT(*) FROM SPRING_SESSION", Integer.class);
+            Assertions.assertThat(countAfter - countBefore).isEqualTo(3);
         }
     }
 }
