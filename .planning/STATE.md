@@ -5,15 +5,15 @@ milestone_name: Kafka Activity Feed
 current_phase: 03
 current_phase_name: activity-log-consumer-reliability-read-api
 status: executing
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-08-02T13:09:38.657Z"
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-08-02T14:38:37.756Z"
 last_activity: 2026-08-02
 last_activity_desc: Phase 03 execution started
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 6
-  completed_plans: 4
+  completed_plans: 5
   percent: 33
 ---
 
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-08-01)
 ## Current Position
 
 Phase: 03 (activity-log-consumer-reliability-read-api) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-08-02 — Phase 03 execution started
 
-Progress: [███████░░░] 67%
+Progress: [████████░░] 83%
 
 ## Performance Metrics
 
@@ -67,6 +67,7 @@ Progress: [███████░░░] 67%
 | Phase 02 P01 | 14min | 2 tasks | 13 files |
 | Phase 2 P3 | 70min | 2 tasks | 6 files |
 | Phase 03 P01 | 25min | 2 tasks | 16 files |
+| Phase 03 P02 | 65min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -88,6 +89,8 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 3 Plan 01]: Fixed KafkaConsumerConfig.deadLetterKafkaTemplate silently suppressing Spring Boot's default KafkaTemplate bean (@ConditionalOnMissingBean(KafkaTemplate.class) is bare-type) — added an explicit @Primary kafkaTemplate bean sourced from the autoconfigured ProducerFactory; a real production bug, not just a test artifact
 - [Phase ?]: [Phase 3 Plan 01]: Pinned docker-java's negotiated Docker Engine API version to 1.44 in AbstractKafkaContainerTest (testcontainers-java#11212) to fix Docker Engine 29.x rejecting every Testcontainers transport on Windows — zero host-level Docker Desktop configuration required
 - [Phase ?]: [Phase 3 Plan 01]: Replaced an exact-nanosecond Instant equality assertion with AssertJ isCloseTo(within(1, MICROS)) — Kafka JSON serialization + JPA persistence round-trip loses sub-microsecond precision without a consistent truncate-vs-round direction
+- [Phase ?]: [Phase 3 Plan 02]: Fixed KafkaConsumerConfig.activityErrorHandler's ambiguous deadLetterKafkaTemplate parameter with @Qualifier - Spring's @Primary disambiguation runs before parameter-name matching, so the dead-letter path was silently using the wrong (JSON/base64-encoding) producer template
+- [Phase ?]: [Phase 3 Plan 02]: Replaced AbstractKafkaContainerTest's @Testcontainers/@Container lifecycle with an imperative kafka.start() static initializer - the JUnit5-extension-driven singleton container pattern did not reliably share one broker across three sibling E2E test classes in this environment
 
 ### Pending Todos
 
@@ -129,8 +132,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-02T13:09:38.635Z
-Stopped at: Completed 03-01-PLAN.md
+Last session: 2026-08-02T14:38:37.736Z
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

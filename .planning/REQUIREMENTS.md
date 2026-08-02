@@ -37,12 +37,12 @@ Requirements for this milestone. Each maps to roadmap phases.
 ### Reliability
 
 - [x] **RELY-01**: A dead-letter topic (`kanban.activity.dlt`) via `DefaultErrorHandler` + `DeadLetterPublishingRecoverer` isolates a poison message so it does not block the consumer from processing subsequent events
-- [ ] **RELY-02**: A test intentionally fails a message and asserts it lands on `kanban.activity.dlt` — the dead-letter path is proven, not just configured
+- [x] **RELY-02**: A test intentionally fails a message and asserts it lands on `kanban.activity.dlt` — the dead-letter path is proven, not just configured
 
 ### Testing
 
 - [x] **TEST-01**: A Testcontainers-based integration test publishes a `TaskMovedEvent` end-to-end through a real embedded Kafka broker and asserts the corresponding `ActivityLogEntity` row appears
-- [ ] **TEST-02**: A redelivery test publishes an event with the same `eventId` twice and asserts exactly one `ActivityLogEntity` row is created
+- [x] **TEST-02**: A redelivery test publishes an event with the same `eventId` twice and asserts exactly one `ActivityLogEntity` row is created
 
 ## v2 Requirements
 
@@ -90,9 +90,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | READ-01 | Phase 3 | Pending |
 | READ-02 | Phase 3 | Pending |
 | RELY-01 | Phase 3 | Complete |
-| RELY-02 | Phase 3 | Pending |
+| RELY-02 | Phase 3 | Complete |
 | TEST-01 | Phase 3 | Complete |
-| TEST-02 | Phase 3 | Pending |
+| TEST-02 | Phase 3 | Complete |
 
 **Coverage:**
 
