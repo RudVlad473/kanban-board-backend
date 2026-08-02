@@ -89,28 +89,34 @@ against the same daemon. This is a client-library/Desktop-version incompatibilit
 not a defect in the test code, and not something a `testcontainers`/`docker-java` version bump can
 always fix (this project's `build.gradle` is also not meant to be modified just to chase it).
 
-**Fix — expose the daemon over TCP instead of the named pipe:**
+**Tried and did NOT fully fix it on this machine — exposing the daemon over TCP:**
 
-1. Docker Desktop → **Settings → General** → enable *"Expose daemon on tcp://localhost:2375
-   without TLS"*.
-2. Run the tests with `DOCKER_HOST` pointed at that port:
-   ```bash
-   DOCKER_HOST=tcp://localhost:2375 ./gradlew test --tests '*ActivityLog*E2ETest'
-   ```
-   (PowerShell: `$env:DOCKER_HOST='tcp://localhost:2375'` first, then run gradle in the same shell.)
+Docker Desktop → **Settings → General** → enable *"Expose daemon on tcp://localhost:2375 without
+TLS"*, then point `DOCKER_HOST` at that port (`DOCKER_HOST=tcp://localhost:2375 ./gradlew test
+--tests '*ActivityLog*E2ETest'`; PowerShell: `$env:DOCKER_HOST='tcp://localhost:2375'` first).
+This gets `docker-java` past the named-pipe transport, but on at least one Docker Desktop
+4.71.0 + `docker-java` 3.4.2 combination it still fails — `docker-java`'s HTTP client gets a
+structured `400 BadRequestException` back from `/info` with every field zeroed except the real
+`Labels` entry, even though a plain `curl` against the identical `host:port` (with matched
+headers) returns a full `200` response. That shape doesn't match a simple API-version-floor
+rejection and isn't reproducible outside `docker-java` itself, so this looks like a genuine
+`docker-java`/Testcontainers-1.21.0-vs-this-Desktop-build incompatibility, not a config issue —
+**don't assume the TCP toggle alone will unblock you; verify it actually passes before relying on
+it.**
 
-**Security note:** this exposes the Docker daemon on an unauthenticated local TCP port. That's a
-commonly-accepted tradeoff for local dev on a single-user machine, but it is a real one — anything
-with access to `localhost:2375` gets root-equivalent control of your Docker daemon. Turn the
-setting back off if that's a concern on your machine.
+**Security note (if you try the TCP toggle anyway):** it exposes the Docker daemon on an
+unauthenticated local TCP port — a commonly-accepted tradeoff for local dev on a single-user
+machine, but a real one; anything with access to `localhost:2375` gets root-equivalent control of
+your Docker daemon. Turn the setting back off afterward if that's a concern.
 
-**Alternative — skip the Windows transport entirely:** run the tests from WSL2, where Docker
-Desktop communicates over a Unix socket rather than a Windows named pipe, and this issue doesn't
-come up.
+**More reliable alternative — skip the Windows transport entirely:** run the tests from WSL2,
+where Docker Desktop communicates over a Unix socket rather than a Windows named pipe. Not yet
+confirmed against this specific `docker-java`/Desktop combination, but it sidesteps the whole
+Windows-transport code path that both the npipe and TCP attempts hit.
 
-**Alternative — defer to CI:** this project's GitHub Actions runner is Linux and uses a Unix domain
-socket, so it won't hit this Windows-specific issue at all; the tests can be verified there as part
-of the PR instead of locally.
+**More reliable alternative — defer to CI:** this project's GitHub Actions runner is Linux and uses
+a Unix domain socket, so it won't hit this Windows-specific issue at all; the tests can be verified
+there as part of the PR instead of locally.
 
 ## What happens if Kafka is unreachable
 
