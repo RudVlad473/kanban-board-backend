@@ -71,6 +71,47 @@ and, per the resilience decisions below, non-fatal.
   both the database and the broker's log directory. Only use it when you actually want a clean
   slate.
 
+## Testcontainers-based tests on Windows
+
+The Testcontainers-based Kafka tests (`*E2ETest` classes under
+`src/test/java/com/vrudenko/kanban_board/activitylog/`) spin up their own broker in a container —
+separate from the `docker compose up` stack above — and on Windows this can fail even when Docker
+Desktop itself is completely healthy.
+
+**Symptom:** `docker version`, `docker info`, and `docker run --rm hello-world` all succeed from
+the CLI, but the Testcontainers-driven tests fail to start a container, with `docker-java` (the
+HTTP client Testcontainers uses) returning a `BadRequestException (Status 400)` with an empty body.
+
+**Root cause:** `docker-java`'s HTTP client can't reliably talk to Docker Desktop's Windows named
+pipe transport (`npipe:////./pipe/dockerDesktopLinuxEngine`) on some Desktop/client version
+combinations, even though the real Docker CLI — which uses a different transport — works fine
+against the same daemon. This is a client-library/Desktop-version incompatibility local to Windows,
+not a defect in the test code, and not something a `testcontainers`/`docker-java` version bump can
+always fix (this project's `build.gradle` is also not meant to be modified just to chase it).
+
+**Fix — expose the daemon over TCP instead of the named pipe:**
+
+1. Docker Desktop → **Settings → General** → enable *"Expose daemon on tcp://localhost:2375
+   without TLS"*.
+2. Run the tests with `DOCKER_HOST` pointed at that port:
+   ```bash
+   DOCKER_HOST=tcp://localhost:2375 ./gradlew test --tests '*ActivityLog*E2ETest'
+   ```
+   (PowerShell: `$env:DOCKER_HOST='tcp://localhost:2375'` first, then run gradle in the same shell.)
+
+**Security note:** this exposes the Docker daemon on an unauthenticated local TCP port. That's a
+commonly-accepted tradeoff for local dev on a single-user machine, but it is a real one — anything
+with access to `localhost:2375` gets root-equivalent control of your Docker daemon. Turn the
+setting back off if that's a concern on your machine.
+
+**Alternative — skip the Windows transport entirely:** run the tests from WSL2, where Docker
+Desktop communicates over a Unix socket rather than a Windows named pipe, and this issue doesn't
+come up.
+
+**Alternative — defer to CI:** this project's GitHub Actions runner is Linux and uses a Unix domain
+socket, so it won't hit this Windows-specific issue at all; the tests can be verified there as part
+of the PR instead of locally.
+
 ## What happens if Kafka is unreachable
 
 Task/Board/Column mutations never fail because Kafka is down — the write path to Postgres and the
