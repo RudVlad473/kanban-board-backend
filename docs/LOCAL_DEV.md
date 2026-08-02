@@ -75,44 +75,36 @@ and, per the resilience decisions below, non-fatal.
 
 The Testcontainers-based Kafka tests (`*E2ETest` classes under
 `src/test/java/com/vrudenko/kanban_board/activitylog/`) spin up their own broker in a container —
-separate from the `docker compose up` stack above — and on Windows this can fail even when Docker
-Desktop itself is completely healthy.
+separate from the `docker compose up` stack above. On a fresh Windows machine with Docker Desktop
+running, `./gradlew test` just works — no host configuration, no environment variables, nothing to
+click. If you previously hit `BadRequestException (Status 400)` / `Could not find a valid Docker
+environment` running these tests, that was a real, now-fixed incompatibility — see below, you don't
+need to do anything.
 
-**Symptom:** `docker version`, `docker info`, and `docker run --rm hello-world` all succeed from
-the CLI, but the Testcontainers-driven tests fail to start a container, with `docker-java` (the
-HTTP client Testcontainers uses) returning a `BadRequestException (Status 400)` with an empty body.
+**Root cause (already fixed in code — this section is background, not a setup step):**
+`docker-java` (bundled by Testcontainers 1.21.0) negotiates a Docker Engine API version that Docker
+Engine 29.x rejects with a malformed `400 Bad Request` — on every transport (named pipe and TCP
+alike), and confirmed unrelated to Windows specifically. This is
+[testcontainers-java#11212](https://github.com/testcontainers/testcontainers-java/issues/11212), a
+known Docker 29.x / testcontainers-java 1.21.0 incompatibility, fixed as the new default in
+testcontainers-java 2.x. `AbstractKafkaContainerTest` pins the client to API `1.44` (Docker's own
+confirmed-working floor for this Engine generation) via `System.setProperty("api.version", "1.44")`
+in a static initializer — see its Javadoc. Per
+[docs/CODE_STYLE.md rule 8](CODE_STYLE.md#8-test-setup-must-be-fully-automated--never-a-manual-step-for-the-developer),
+this lives in test code specifically so no developer has to discover or repeat a manual workaround.
 
-**Root cause:** `docker-java`'s HTTP client can't reliably talk to Docker Desktop's Windows named
-pipe transport (`npipe:////./pipe/dockerDesktopLinuxEngine`) on some Desktop/client version
-combinations, even though the real Docker CLI — which uses a different transport — works fine
-against the same daemon. This is a client-library/Desktop-version incompatibility local to Windows,
-not a defect in the test code, and not something a `testcontainers`/`docker-java` version bump can
-always fix (this project's `build.gradle` is also not meant to be modified just to chase it).
+**A related bug this surfaced, also fixed:** with the Docker connectivity issue in the way, a
+second, independent bug was masked — `KafkaConsumerConfig`'s dead-letter producer bean was
+accidentally suppressing Spring Boot's own default `KafkaTemplate` bean (Spring's
+`@ConditionalOnMissingBean(KafkaTemplate.class)` doesn't distinguish generic parameterizations), so
+every unqualified `@Autowired KafkaTemplate<String, Object>` — including the real event publisher —
+silently resolved to the DLT-flavored template instead, which never picked up a `@ServiceConnection`
+override. `KafkaConsumerConfig` now defines both templates explicitly, sharing one correctly-wired
+producer factory; see its Javadoc for the full explanation.
 
-**Tried and did NOT fully fix it on this machine — exposing the daemon over TCP:**
-
-Docker Desktop → **Settings → General** → enable *"Expose daemon on tcp://localhost:2375 without
-TLS"*, then point `DOCKER_HOST` at that port (`DOCKER_HOST=tcp://localhost:2375 ./gradlew test
---tests '*ActivityLog*E2ETest'`; PowerShell: `$env:DOCKER_HOST='tcp://localhost:2375'` first).
-This gets `docker-java` past the named-pipe transport, but on at least one Docker Desktop
-4.71.0 + `docker-java` 3.4.2 combination it still fails — `docker-java`'s HTTP client gets a
-structured `400 BadRequestException` back from `/info` with every field zeroed except the real
-`Labels` entry, even though a plain `curl` against the identical `host:port` (with matched
-headers) returns a full `200` response. That shape doesn't match a simple API-version-floor
-rejection and isn't reproducible outside `docker-java` itself, so this looks like a genuine
-`docker-java`/Testcontainers-1.21.0-vs-this-Desktop-build incompatibility, not a config issue —
-**don't assume the TCP toggle alone will unblock you; verify it actually passes before relying on
-it.**
-
-**Security note (if you try the TCP toggle anyway):** it exposes the Docker daemon on an
-unauthenticated local TCP port — a commonly-accepted tradeoff for local dev on a single-user
-machine, but a real one; anything with access to `localhost:2375` gets root-equivalent control of
-your Docker daemon. Turn the setting back off afterward if that's a concern.
-
-**More reliable alternative — skip the Windows transport entirely:** run the tests from WSL2,
-where Docker Desktop communicates over a Unix socket rather than a Windows named pipe. Not yet
-confirmed against this specific `docker-java`/Desktop combination, but it sidesteps the whole
-Windows-transport code path that both the npipe and TCP attempts hit.
+If you ever hit a *new* Docker/Testcontainers connectivity failure on Windows in the future, the
+right move is the same as it was here: encode the fix in the codebase (a system property, a config
+file in version control), not a runbook — see CODE_STYLE.md rule 8.
 
 **More reliable alternative — defer to CI:** this project's GitHub Actions runner is Linux and uses
 a Unix domain socket, so it won't hit this Windows-specific issue at all; the tests can be verified
