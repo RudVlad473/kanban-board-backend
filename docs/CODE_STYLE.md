@@ -262,6 +262,40 @@ public Pair<UserEntity, BoardEntity> verifyOwnershipOfBoard(String userId, Strin
 
 `OwnershipVerifierService.verifyOwnershipOfBoard` is the reference — it chains exactly this shape three times in one flat sequence (user, board, ownership) rather than nesting.
 
+### 8. Test setup must be fully automated — never a manual step for the developer
+
+Running the test suite must never depend on a developer performing a manual, host-level setup step first (flipping an application GUI setting, hand-editing a config file outside version control, running a one-off command before `./gradlew test` will work). If a test needs specific environment/tooling behavior to run correctly, that behavior must be configured from within the codebase itself — a system property set in test code, a project-local config file that ships in version control, a Gradle task — so that `./gradlew test` (or the equivalent single command) is sufficient on a clean checkout. When a failure turns out to be caused by a missing environment quirk (a client/tooling version incompatibility, a platform-specific default), fix it by encoding the workaround in the codebase, not by writing runbook instructions for a human to follow by hand.
+
+**Why:** a manual setup step is a step every new environment forgets — a fresh clone, a new contributor's machine, a CI runner — and it turns "run the tests" into "run the tests, but first go read the docs and remember to do this one fiddly thing," which reliably doesn't happen. A one-time automated fix in the codebase benefits every future run and every future machine; a documented manual workaround has to be rediscovered and repeated by everyone who hits it.
+
+Discouraged:
+
+```markdown
+<!-- docs/LOCAL_DEV.md -->
+## Running the Kafka Testcontainers tests on Windows
+
+Docker Desktop → Settings → General → enable "Expose daemon on tcp://localhost:2375
+without TLS", then run:
+DOCKER_HOST=tcp://localhost:2375 ./gradlew test --tests '*ActivityLog*E2ETest'
+```
+
+Preferred:
+
+```java
+// AbstractKafkaContainerTest.java
+public abstract class AbstractKafkaContainerTest {
+    // docker-java (bundled by Testcontainers 1.21.0) negotiates a Docker Engine API
+    // version that Docker Engine 29.x rejects (testcontainers-java#11212). Pinning the
+    // client to API 1.44 fixes it with zero host-level configuration.
+    static {
+        System.setProperty("api.version", "1.44");
+    }
+    // ...
+}
+```
+
+`AbstractKafkaContainerTest`'s `api.version` pin is the reference: the actual fix for a real Docker/Testcontainers incompatibility encountered on Windows lives in test code, not in a runbook telling a developer what to click.
+
 ## Adding a rule
 
 New rules are appended as a new `###` section under `## Rules`, numbered with the next integer. Each rule must carry the same three parts: a rule statement, a bolded **Why** line, and a bad-vs-good code example.
