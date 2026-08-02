@@ -10,6 +10,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -37,8 +38,10 @@ import org.springframework.util.backoff.FixedBackOff;
  * malformed payload fails inside the poll loop before this handler ever sees the record.
  */
 @Configuration
-public class KafkaConsumerConfig {
+public class KafkaConsumerConfig implements DisposableBean {
     private static final Logger log = LoggerFactory.getLogger(KafkaConsumerConfig.class);
+
+    private DefaultKafkaProducerFactory<String, Object> deadLetterProducerFactory;
 
     @Bean
     public NewTopic activityTopic() {
@@ -101,6 +104,18 @@ public class KafkaConsumerConfig {
      * {@code HashMap} iteration order. A {@link LinkedHashMap} makes the more-specific {@code
      * byte[].class} entry always win over the catch-all {@code Object.class} entry, regardless of
      * hashing.
+     *
+     * <p>{@code producerFactory} is intentionally not declared as its own {@code @Bean}: {@code
+     * KafkaAutoConfiguration.kafkaProducerFactory()} is guarded by a bare-type
+     * {@code @ConditionalOnMissingBean(ProducerFactory.class)}, so a second {@code @Bean} of that
+     * type anywhere in the app -- regardless of its generic parameterisation -- would silently
+     * suppress the autoconfigured producer factory (and, with it, its {@code
+     * KafkaConnectionDetails} override), exactly the landmine {@link #kafkaTemplate}'s Javadoc
+     * documents for {@code KafkaTemplate} itself. Instead, the reference is kept on this
+     * {@code @Configuration} instance (itself a plain, non-{@code ProducerFactory}-typed bean) and
+     * closed from {@link #destroy()} on context shutdown, so the extra producer this template opens
+     * does not leak its connections and buffers without ever becoming a discoverable {@code
+     * ProducerFactory} bean.
      */
     @Bean
     public KafkaTemplate<String, Object> deadLetterKafkaTemplate(
@@ -109,12 +124,24 @@ public class KafkaConsumerConfig {
         delegates.put(byte[].class, new ByteArraySerializer());
         delegates.put(Object.class, new JsonSerializer<>());
 
-        var producerFactory =
-                new DefaultKafkaProducerFactory<String, Object>(
+        this.deadLetterProducerFactory =
+                new DefaultKafkaProducerFactory<>(
                         kafkaProducerFactory.getConfigurationProperties(),
                         new StringSerializer(),
                         new DelegatingByTypeSerializer(delegates, true));
-        return new KafkaTemplate<>(producerFactory);
+        return new KafkaTemplate<>(this.deadLetterProducerFactory);
+    }
+
+    /**
+     * Closes {@link #deadLetterProducerFactory} on context shutdown. See {@link
+     * #deadLetterKafkaTemplate} for why this producer factory is closed here instead of being
+     * registered as its own {@code @Bean}.
+     */
+    @Override
+    public void destroy() {
+        if (deadLetterProducerFactory != null) {
+            deadLetterProducerFactory.destroy();
+        }
     }
 
     /**
