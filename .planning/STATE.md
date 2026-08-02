@@ -8,7 +8,7 @@ status: verifying
 stopped_at: Completed 03-03-PLAN.md (Phase 3 complete)
 last_updated: "2026-08-02T14:54:40.197Z"
 last_activity: 2026-08-02
-last_activity_desc: Completed quick task 260802-pw0 (git hooksPath auto-config)
+last_activity_desc: Completed quick task 260802-q6n (ArchUnit layering enforcement)
 progress:
   total_phases: 3
   completed_phases: 2
@@ -93,6 +93,7 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 3 Plan 02]: Fixed KafkaConsumerConfig.activityErrorHandler's ambiguous deadLetterKafkaTemplate parameter with @Qualifier - Spring's @Primary disambiguation runs before parameter-name matching, so the dead-letter path was silently using the wrong (JSON/base64-encoding) producer template
 - [Phase ?]: [Phase 3 Plan 02]: Replaced AbstractKafkaContainerTest's @Testcontainers/@Container lifecycle with an imperative kafka.start() static initializer - the JUnit5-extension-driven singleton container pattern did not reliably share one broker across three sibling E2E test classes in this environment
 - [Phase ?]: [Phase 3 Plan 03]: Service always discards any caller-supplied Pageable sort and substitutes a service-owned two-key Sort (createdAt desc, id desc) - the ULID id tiebreak makes offset pagination a genuine total order instead of merely newest-first
+- [Quick/260802-q6n]: Adding ArchUnit's rule-2 layering test surfaced a genuine, previously-unenforced CODE_STYLE.md violation — `SubtaskService.findById(String)` loaded a `SubtaskEntity` via a direct, unverified `subtaskRepository.findById(id)` call with zero production callers. Removed rather than exempted, so the new rule ships at full strength.
 
 ### Pending Todos
 
@@ -101,7 +102,6 @@ Recent decisions affecting current work:
 - [minor] Account for schema evolution risk when changing ActivityEvent shapes — a rolling deploy that renames/retypes an event field while old-shape messages are still unconsumed can dead-letter valid (non-poison) messages; Kafka itself enforces no schema. See `.planning/todos/pending/2026-08-01-account-for-schema-evolution-risk-when-changing-activityeven.md`.
 - [minor] Enable virtual threads in Spring Boot config (`spring.threads.virtual.enabled=true`) — evaluate JDBC/Hibernate and Spring Session JDBC blocking-call pinning risk first. See `.planning/todos/pending/2026-08-02-enable-virtual-threads-in-spring-boot-config.md`.
 - [minor] Add ErrorProne (`net.ltgt.errorprone`) for compile-time bug detection — blocked on `build.gradle` unlock post-Phase-3. See `.planning/todos/pending/2026-08-02-add-errorprone-for-compile-time-bug-detection.md`.
-- [minor] Add ArchUnit to enforce documented layering and ownership-verification rules — blocked on `build.gradle` unlock post-Phase-3. See `.planning/todos/pending/2026-08-02-add-archunit-to-enforce-documented-layering-and-ownership-ve.md`.
 - [minor] Use a Snowflake ID generator for activity log events (`eventId`) instead of UUID — for index locality and time-ordering; see also the general note about adopting this as the project's default ID-generation strategy. See `.planning/todos/pending/2026-08-02-use-snowflake-id-generator-for-activity-log-events.md`.
 
 ### Blockers/Concerns
@@ -121,6 +121,7 @@ Carried from research (address during Phase 2/3 planning):
 | 260801-gib | Append rules 2-7 to docs/CODE_STYLE.md (ownership-verified loading, AssertJ/catchException, no-mocks, @Nested/AAA, Update*RequestDTO shape, Optional isEmpty()-guard) and fix bare-int HTTP status literals in TaskLockingE2ETest/ColumnLockingE2ETest to use HttpStatus enum constants | 2026-08-01 | 85ed93f | [260801-gib-survey-the-repo-for-existing-code-conven](./quick/260801-gib-survey-the-repo-for-existing-code-conven/) |
 | 260801-k93 | Reword hiring-context language ("interview-defensible", "interview prep" headings, etc.) out of 17 git-tracked docs to neutral technical phrasing, preserving meaning | 2026-08-01 | 1bdfb79 | [260801-k93-remove-interview-related-language-from-d](./quick/260801-k93-remove-interview-related-language-from-d/) |
 | 260802-pw0 | Auto-configure git core.hooksPath so the pre-commit hook needs no manual per-clone step | 2026-08-02 | ea64adc | [260802-pw0-auto-configure-git-core-hookspath-so-the](./quick/260802-pw0-auto-configure-git-core-hookspath-so-the/) |
+| 260802-q6n | Add ArchUnit to enforce documented layering and ownership-verification rules (also fixed a genuine pre-existing CODE_STYLE rule-2 violation in SubtaskService) | 2026-08-02 | c3780d7 | [260802-q6n-add-archunit-to-enforce-documented-layer](./quick/260802-q6n-add-archunit-to-enforce-documented-layer/) |
 
 ## Deferred Items
 
