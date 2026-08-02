@@ -10,11 +10,12 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.core.ProducerFactory;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.listener.RetryListener;
@@ -55,22 +56,47 @@ public class KafkaConsumerConfig {
     }
 
     /**
+     * Any {@code @Bean} of type {@code KafkaTemplate} anywhere in the app disables Spring Boot's
+     * autoconfigured {@code KafkaAutoConfiguration.kafkaTemplate()} bean outright — it is guarded
+     * by a bare-type {@code @ConditionalOnMissingBean(KafkaTemplate.class)}, which does not
+     * distinguish between generic parameterisations, so {@link #deadLetterKafkaTemplate} alone was
+     * enough to suppress it. Every unqualified {@code @Autowired KafkaTemplate<String, Object>} in
+     * the app (including {@link KafkaEventPublisher}) then silently resolved to the DLT-flavoured
+     * template instead — which, before this bean existed, built its own producer properties
+     * directly from {@code KafkaProperties} rather than the autoconfigured {@code ProducerFactory},
+     * so it never picked up a {@code KafkaConnectionDetails} override (e.g. Testcontainers'
+     * {@code @ServiceConnection}) the way the real default template does. This bean restores an
+     * explicit, {@code @Primary} default template so unqualified injection sites get the correct
+     * one again; {@link #deadLetterKafkaTemplate} remains reachable only by its bean name /
+     * {@code @Qualifier}.
+     */
+    @Bean
+    @Primary
+    public KafkaTemplate<String, Object> kafkaTemplate(
+            ProducerFactory<String, Object> kafkaProducerFactory) {
+        return new KafkaTemplate<>(kafkaProducerFactory);
+    }
+
+    /**
      * A dead-lettered deserialization failure carries the raw {@code byte[]} as its record value.
      * Routing it through the application's own JSON-valued producer template would base64-encode
      * those bytes, destroying the one artefact an operator actually needs to inspect — so this
-     * template gets its own byte-preserving delegating serializer instead. Producer bounds are
-     * sourced from {@link KafkaProperties} so this template inherits the same bootstrap servers and
-     * timeouts as the application's existing producer rather than hard-coding a second copy.
+     * template gets its own byte-preserving delegating serializer instead. Its producer properties
+     * are read from the autoconfigured {@code kafkaProducerFactory} bean (not rebuilt from {@code
+     * KafkaProperties} directly) so this template inherits the same bootstrap servers — including
+     * any {@code KafkaConnectionDetails} override — and timeouts as {@link #kafkaTemplate}, rather
+     * than hard-coding a second, ConnectionDetails-blind copy.
      */
     @Bean
-    public KafkaTemplate<String, Object> deadLetterKafkaTemplate(KafkaProperties kafkaProperties) {
+    public KafkaTemplate<String, Object> deadLetterKafkaTemplate(
+            ProducerFactory<Object, Object> kafkaProducerFactory) {
         var delegates = new HashMap<Class<?>, Serializer<?>>();
         delegates.put(byte[].class, new ByteArraySerializer());
         delegates.put(Object.class, new JsonSerializer<>());
 
         var producerFactory =
                 new DefaultKafkaProducerFactory<String, Object>(
-                        kafkaProperties.buildProducerProperties(),
+                        kafkaProducerFactory.getConfigurationProperties(),
                         new StringSerializer(),
                         new DelegatingByTypeSerializer(delegates, true));
         return new KafkaTemplate<>(producerFactory);
