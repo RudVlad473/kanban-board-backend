@@ -89,3 +89,45 @@ dependencies {
 tasks.named('test') {
     useJUnitPlatform()
 }
+
+// --- Git hooks bootstrap ---------------------------------------------------
+// Points this clone at the version-controlled .githooks/ directory so the
+// pre-commit spotlessApply hook is armed on a fresh checkout with no manual
+// `git config` step (docs/CODE_STYLE.md rule 8: dev setup must be automated).
+//
+// Runs at configuration time so it fires on ANY ./gradlew command, not only on
+// builds that compile. Idempotent: it re-probes each configuration phase and
+// writes only when the effective value is missing or wrong, so the steady state
+// is one cheap process spawn and no output.
+//
+// Never fails the build: skipped entirely when there is no .git (exported source
+// tree), and any git failure (missing binary, unset key exiting 1) is swallowed.
+// providers.exec is used rather than ProcessBuilder/project.exec because it is
+// the configuration-cache-compatible way to run an external process here.
+def desiredHooksPath = '.githooks'
+def repoRoot = rootProject.projectDir
+
+if (rootProject.file('.git').exists()) {
+    try {
+        // Read the EFFECTIVE value (system/global/local merged) - that is what git
+        // will actually resolve hooks from.
+        def currentHooksPath = providers.exec {
+            commandLine 'git', 'config', '--get', 'core.hooksPath'
+            workingDir = repoRoot
+            ignoreExitValue = true
+        }.standardOutput.asText.get().trim()
+
+        if (currentHooksPath != desiredHooksPath) {
+            // Write LOCAL only - never touch the developer's global/system config.
+            providers.exec {
+                commandLine 'git', 'config', '--local', 'core.hooksPath', desiredHooksPath
+                workingDir = repoRoot
+                ignoreExitValue = true
+            }.result.get()
+            logger.lifecycle("Configured git core.hooksPath -> ${desiredHooksPath} (pre-commit hook armed)")
+        }
+    } catch (Exception ignored) {
+        // git unavailable or not a usable work tree: leave hooks unconfigured and
+        // carry on. A build must never fail because of hook wiring.
+    }
+}
