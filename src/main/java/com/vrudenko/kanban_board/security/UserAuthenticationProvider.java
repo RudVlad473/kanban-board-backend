@@ -32,9 +32,10 @@ public class UserAuthenticationProvider implements AuthenticationProvider {
 
         // Use a minimal principal (username only, no password hash) rather than the
         // full UserEntity returned by loadUserByUsername — the Authentication object
-        // is what Spring Session serializes into the JDBC-backed spring_session table
-        // on every request, so passing the entity directly would persist passwordHash
-        // to the database on every authenticated request.
+        // is what Spring Session serializes into the JDBC-backed spring_session_attributes
+        // table on session change (not on every request), so passing the entity directly
+        // would persist passwordHash to the database. Enforced by
+        // SessionPersistenceE2ETest.SigninPersistence#shouldNotPersistBcryptHash_whenSigninSucceeds.
         var principal = new User(userDetails.getUsername(), "", new ArrayList<>());
 
         return new UsernamePasswordAuthenticationToken(principal, null, new ArrayList<>());

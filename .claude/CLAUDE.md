@@ -302,10 +302,10 @@ A Spring Boot 3.5.0 / Java 21 REST API backend for a Kanban board application (u
 
 ### State Management
 
-- SecurityContext stored in PostgreSQL via spring_session table (application.properties line 23-24)
+- SecurityContext persisted via Spring Session JDBC (`spring.session.store-type=jdbc`) into the `spring_session_attributes` table; `spring_session` itself holds session metadata (id, timestamps, principal name), not the serialized context. Proven by `SessionPersistenceE2ETest`.
 - SessionCreationPolicy.IF_REQUIRED: session created only on login (line 66)
-- Maximum 2 concurrent sessions per user, maxSessionsPreventsLogin=true (line 63)
-- Session timeout: 1 minute at servlet level, 180 minutes at Spring Session level (application.properties lines 22, 27)
+- `maximumSessions(2)` / `maxSessionsPreventsLogin=true` are configured in `SecurityConfiguration` but NOT enforced: both are applied by a `SessionAuthenticationStrategy`, which only runs inside an authentication filter, and the custom `AuthenticationController` signin path authenticates directly (`authenticationManager.authenticate(token)`) without ever invoking one. A single user can hold more than 2 concurrent sessions today — proven by `SessionPersistenceE2ETest.ConcurrentSessionCeiling`. Tracked in `.planning/todos/pending/2026-08-02-wire-session-authentication-strategy-into-custom-signin.md`.
+- Session timeout: `spring.session.timeout=180m` takes precedence over `server.servlet.session.timeout=1m` now that Spring Session JDBC is on the classpath, so the effective server-side idle timeout is 180 minutes (previously 1 minute, before that dependency was wired). `server.servlet.session.cookie.max-age=600` independently caps the cookie itself at 10 minutes, so the client-side and server-side lifetimes differ by design.
 - Every resource (Board, Column, Task, Subtask) traces back to UserEntity via foreign keys
 - OwnershipVerifierService chains verification: Subtask → Task → Column → Board → User
 - Ownership checks happen at service layer before any modification
@@ -355,7 +355,7 @@ A Spring Boot 3.5.0 / Java 21 REST API backend for a Kanban board application (u
 - **Threading:** Single-threaded per request (standard servlet model). EntityManager, SecurityContext are thread-local.
 - **Global state:** PasswordEncoder bean singleton, AuthenticationManager bean singleton, SecurityContextRepository bean singleton. No module-level mutable static state.
 - **Circular imports:** Potential: UserService → BoardService → ColumnService → TaskService → SubtaskService → OwnershipVerifierService → UserRepository. No actual circular dependency because all use constructor/field injection with @Autowired (lazy initialization).
-- **Session persistence:** All sessions stored in PostgreSQL spring_session table, not in memory. Allows horizontal scaling.
+- **Session persistence:** All sessions stored in PostgreSQL `spring_session`/`spring_session_attributes` tables via Spring Session JDBC, not in memory — a restart or a second instance no longer discards logins. This does not mean every session-related guarantee holds across instances: the concurrent-session ceiling (`maximumSessions(2)`) is unenforced regardless of instance count (see the State Management note above), so "allows horizontal scaling" should be read as "session state itself is shared," not as a blanket guarantee that every session control behaves identically at scale.
 - **Transactional cascade:** Ownership verification and delete cascades must happen within same @Transactional method to ensure consistency.
 - **Lazy loading risk:** JPA entities lazy-load relationships. Any access to entity.getColumn() outside transaction can throw LazyInitializationException. Services avoid this by using repository queries that fetch complete graphs.
 
