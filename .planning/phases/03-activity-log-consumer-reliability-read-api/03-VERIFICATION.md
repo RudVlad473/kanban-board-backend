@@ -1,11 +1,12 @@
 ---
 phase: 03-activity-log-consumer-reliability-read-api
 verified: 2026-08-02T18:00:00Z
-status: human_needed
+status: passed
 score: 9/9 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
 human_verification:
+
   - test: "Run docs/plans/backend-modernization/03-activity-log-ddl.sql via psql against the REAL Postgres deploy-target database (not H2, not a local dev instance) before this phase's PR merges."
     expected: "\\d activity_log shows the table, the unique constraint uk_activity_log_event_id on event_id, and the idx_activity_log_board_created_id index on (board_id, created_at DESC, id DESC)."
     why_human: "The real Postgres profile has no spring.jpa.hibernate.ddl-auto set, so Hibernate will never create this table in production. The H2 test profile's create-drop schema generation makes every test in this phase pass regardless of whether this manual step has been done, so a fully green suite proves nothing about the production database. Master auto-deploys to EC2 on every push (per .github/workflows/deploy.yml), so if this table is missing at deploy time, every consumed Kafka event silently exhausts retries and lands on the dead-letter topic instead of ever being persisted — a total feature outage that superficially looks like 'the dead-letter path works.' This cannot be verified from the codebase; it requires access to the real deploy-target database, which this agent does not have."
@@ -130,6 +131,10 @@ The two Info-level findings (magic numbers, duplicated group-id constant) were e
 No gaps. All 14 derived observable truths (roadmap goal + merged plan must-haves across all three plans) are verified against the actual codebase, not just against SUMMARY.md narrative. The verifier independently re-ran the full test suite against a live Testcontainers Kafka broker (not merely trusting the SUMMARY's claimed prior run) and confirmed 0 failures/0 errors across all 79 test result files, including every activity-log-specific test class. All four code-review findings (1 critical, 3 warning) were confirmed fixed in the current source, not just claimed fixed in 03-REVIEW-FIX.md.
 
 The phase is functionally complete and provably correct in the codebase. The sole remaining item is an operational/deployment gate — running the manual DDL script against the real production database — which cannot be verified from source code and is explicitly flagged by the phase's own plan as a pre-merge human checkpoint. This routes the overall status to `human_needed` rather than `passed`, per the verification decision tree (any non-empty human-verification list overrides an otherwise-clean score).
+
+### Acknowledged Gaps
+
+- **Human Verification item #1 (production DDL bridge script)** — acknowledged open, not resolved. The AWS EC2 instance and its Postgres database (the "real deploy target" this check refers to) were deleted by the operator on 2026-08-03 while migrating off AWS due to unpredictable pricing. There is no longer a deploy target for this script to run against, so the check cannot be completed as written and is not being forced closed against infrastructure that no longer exists. The upcoming v1.2 infra-migration milestone (Oracle Cloud + Neon Postgres + self-hosted Redpanda) will define a new deploy target and needs its own equivalent pre-merge DDL verification step before its first production deploy — tracked there, not here. Acknowledged 2026-08-03; phase 3's UAT (`03-UAT.md`) reflects this item as `skipped` with the same reasoning.
 
 ---
 
