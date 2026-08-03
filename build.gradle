@@ -143,28 +143,19 @@ tasks.register('fastTest', Test) {
 // can act on a finding in.
 //
 // Gate strength was chosen from a MEASURED run against this codebase (quick task
-// 260802-qr8, Task 1), not assumed: 5 main-source findings (3 UnusedVariable, 1
-// StringCaseLocaleUsage, 1 FutureReturnValueIgnored) and 27 test-source findings
-// (18 FutureReturnValueIgnored - overwhelmingly unchecked Testcontainers Kafka test
-// sends, plus StringCaseLocaleUsage/MissingOverride/NotJavadoc/DefaultCharset noise).
-// Per the plan's decision ladder this is rung 4: main sources are clean of anything
-// that survives triage and are hard-gated; test sources are lopsided with low-value
-// noise dominated by one check on throwaway test assertions, so they stay in
-// warning-only mode below rather than paying a 27-finding triage bill for a quick
-// task. The 5 main findings were fixed in source, not suppressed.
+// 260802-qr8, Task 1): 5 main-source findings (3 UnusedVariable, 1
+// StringCaseLocaleUsage, 1 FutureReturnValueIgnored), all fixed in source, not
+// suppressed. Test sources carried a 27-finding backlog at that time
+// (FutureReturnValueIgnored/StringCaseLocaleUsage/MissingOverride/NotJavadoc/
+// DefaultCharset); quick task 260803-v23 triaged every one of those 27 to zero --
+// each was either fixed in source or dropped with a written reason at its call
+// site -- and severity demotion was removed from compileTestJava below, so test
+// sources are held to the same compile-time standard as main sources.
 tasks.withType(JavaCompile).configureEach {
     options.errorprone {
         disableWarningsInGeneratedCode = true
         excludedPaths = '.*[/\\\\]build[/\\\\]generated[/\\\\].*'
     }
-}
-
-// compileJava is intentionally NOT demoted above: ERROR-severity findings fail the
-// build there, which is the hard gate. compileTestJava alone is kept non-blocking
-// because of the measured 27-finding test-source count above - re-tighten this once
-// that backlog is triaged.
-tasks.named('compileTestJava') {
-    options.errorprone.allErrorsAsWarnings = true
 }
 
 // --- Git hooks bootstrap ---------------------------------------------------

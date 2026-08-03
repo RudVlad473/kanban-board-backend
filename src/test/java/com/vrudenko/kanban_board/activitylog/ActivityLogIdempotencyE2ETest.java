@@ -5,6 +5,7 @@ import com.vrudenko.kanban_board.entity.ActivityAction;
 import com.vrudenko.kanban_board.entity.ActivityLogEntity;
 import com.vrudenko.kanban_board.event.TaskMovedEvent;
 import com.vrudenko.kanban_board.repository.ActivityLogRepository;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -178,7 +179,15 @@ class ActivityLogIdempotencyE2ETest extends AbstractKafkaContainerTest {
                             // TombstoneTest) -- it can never carry this eventId, so it is
                             // filtered out rather than decoded.
                             .filter(Objects::nonNull)
-                            .filter(value -> new String(value).contains(eventId.toString()))
+                            // The producer writes activity events as UTF-8 JSON, so the decode
+                            // charset here is a known property of the data, not a guess -- a
+                            // platform-default decode would silently mis-match on a non-UTF-8
+                            // default locale/charset (windows-1252 locally, UTF-8 on CI) and let
+                            // this negative assertion pass for the wrong reason.
+                            .filter(
+                                    value ->
+                                            new String(value, StandardCharsets.UTF_8)
+                                                    .contains(eventId.toString()))
                             .toList();
             Assertions.assertThat(matchingEventId).isEmpty();
         }
