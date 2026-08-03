@@ -6,9 +6,9 @@ current_phase: 03
 current_phase_name: activity-log-consumer-reliability-read-api
 status: verifying
 stopped_at: Completed 03-03-PLAN.md (Phase 3 complete)
-last_updated: "2026-08-02T14:54:40.197Z"
-last_activity: 2026-08-02
-last_activity_desc: Completed quick task 260802-tbj (removed dead synchronized lock)
+last_updated: "2026-08-03T15:38:59.000Z"
+last_activity: 2026-08-03
+last_activity_desc: Completed quick task 260803-l6f (added UserPersistenceE2ETest proving signup persists a real bcrypt hash and signup-then-signin round-trips; filed deferred security todo for dead UserMapper overload + nullable passwordHash)
 progress:
   total_phases: 3
   completed_phases: 2
@@ -130,6 +130,7 @@ Carried from research (address during Phase 2/3 planning):
 | 260802-qr8 | Add ErrorProne for compile-time bug detection — measured 5 main / 27 test findings, hard-gated compileJava (main sources), warn-only on compileTestJava | 2026-08-02 | 46f4d80 | [260802-qr8-add-errorprone-for-compile-time-bug-dete](./quick/260802-qr8-add-errorprone-for-compile-time-bug-dete/) |
 | 260802-shl | Fix the dead Spring Session JDBC configuration — wired spring-session-jdbc for real (sessions now persist to Postgres, surviving redeploys); discovered and documented that the concurrent-session ceiling is also unenforced | 2026-08-02 | 500fde5 | [260802-shl-fix-the-dead-spring-session-jdbc-configu](./quick/260802-shl-fix-the-dead-spring-session-jdbc-configu/) |
 | 260802-tbj | Remove the pointless synchronized modifier from RandFlakeGenerator.generateRandflake (guarded no shared state) | 2026-08-02 | 501b53f | [260802-tbj-remove-the-pointless-synchronized-modifi](./quick/260802-tbj-remove-the-pointless-synchronized-modifi/) |
+| 260803-l6f | Add UserPersistenceE2ETest proving HTTP signup persists a real bcrypt hash to USERS.PASSWORD_HASH and signup-then-signin round-trips; filed a security-marked deferred todo for a dead hash-less UserMapper overload and the nullable passwordHash column | 2026-08-03 | fb186df,19dfb14 | [260803-l6f-add-a-test-proving-password-hash-is-pers](./quick/260803-l6f-add-a-test-proving-password-hash-is-pers/) |
 
 ## Deferred Items
 
