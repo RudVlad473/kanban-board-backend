@@ -1,7 +1,14 @@
 package com.vrudenko.kanban_board.activitylog;
 
+import com.vrudenko.kanban_board.constant.KafkaTopics;
+import com.vrudenko.kanban_board.event.ActivityEvent;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.utility.DockerImageName;
@@ -61,7 +68,7 @@ import org.testcontainers.utility.DockerImageName;
             "spring.kafka.producer.properties.delivery.timeout.ms=30000"
         })
 public abstract class AbstractKafkaContainerTest {
-    /**
+    /*
      * docker-java (bundled by Testcontainers 1.21.0) negotiates a Docker Engine API version that
      * Docker Engine 29.x rejects with a malformed {@code 400 Bad Request} on every transport (named
      * pipe and TCP alike) — {@code docker-java} issue matching testcontainers-java#11212. Pinning
@@ -84,7 +91,26 @@ public abstract class AbstractKafkaContainerTest {
         kafka.start();
     }
 
+    @Autowired protected KafkaTemplate<String, Object> kafkaTemplate;
+
     protected String getBootstrapServers() {
         return kafka.getBootstrapServers();
+    }
+
+    /**
+     * Publishes {@code event} to {@link KafkaTopics#ACTIVITY}, keyed by its own {@code eventId},
+     * and blocks until the broker acknowledges the send, timing out at 30 seconds -- the same bound
+     * this class's {@code @TestPropertySource} already applies to the producer's {@code
+     * max.block.ms}/{@code request.timeout.ms}/{@code delivery.timeout.ms}. Every call site pairs
+     * this with an Awaitility poll for the consumer's persisted effect; awaiting the ack here means
+     * a broker-side send rejection surfaces immediately as this method's own exception instead of
+     * as a misleading 30-second Awaitility timeout that would blame the consumer for a problem that
+     * was actually the producer's.
+     */
+    protected void sendAndAwaitAck(ActivityEvent event)
+            throws InterruptedException, ExecutionException, TimeoutException {
+        kafkaTemplate
+                .send(KafkaTopics.ACTIVITY, event.eventId().toString(), event)
+                .get(30, TimeUnit.SECONDS);
     }
 }

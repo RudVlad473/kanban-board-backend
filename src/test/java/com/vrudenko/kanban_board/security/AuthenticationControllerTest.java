@@ -32,6 +32,7 @@ public class AuthenticationControllerTest extends AbstractAppTest {
     @Value("${server.servlet.context-path}")
     private String CONTEXT_PATH;
 
+    @Override
     @BeforeEach
     protected void setup() {
         super.setup();

@@ -16,6 +16,7 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -27,7 +28,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.kafka.core.KafkaTemplate;
 
 /**
  * Real-broker proof that a redelivered {@code eventId} produces exactly one {@code activity_log}
@@ -41,7 +41,6 @@ import org.springframework.kafka.core.KafkaTemplate;
 @SpringBootTest
 class ActivityLogIdempotencyE2ETest extends AbstractKafkaContainerTest {
 
-    @Autowired private KafkaTemplate<String, Object> kafkaTemplate;
     @Autowired private ActivityLogRepository activityLogRepository;
     @Autowired private ActivityLogRecorder activityLogRecorder;
 
@@ -68,9 +67,9 @@ class ActivityLogIdempotencyE2ETest extends AbstractKafkaContainerTest {
      * {@code event} -- the settle signal that makes a subsequent negative assertion ("exactly one
      * row", "no dead-letter record") safe instead of a race against an unprocessed duplicate.
      */
-    private void publishTwiceThenAwaitSettle(TaskMovedEvent event) {
-        kafkaTemplate.send(KafkaTopics.ACTIVITY, event.eventId().toString(), event);
-        kafkaTemplate.send(KafkaTopics.ACTIVITY, event.eventId().toString(), event);
+    private void publishTwiceThenAwaitSettle(TaskMovedEvent event) throws Exception {
+        sendAndAwaitAck(event);
+        sendAndAwaitAck(event);
 
         Awaitility.await()
                 .atMost(Duration.ofSeconds(30))
@@ -85,7 +84,7 @@ class ActivityLogIdempotencyE2ETest extends AbstractKafkaContainerTest {
                         randomId(),
                         randomId(),
                         Instant.now());
-        kafkaTemplate.send(KafkaTopics.ACTIVITY, sentinel.eventId().toString(), sentinel);
+        sendAndAwaitAck(sentinel);
         Awaitility.await()
                 .atMost(Duration.ofSeconds(30))
                 .until(() -> activityLogRepository.existsByEventId(sentinel.eventId()));
@@ -126,7 +125,7 @@ class ActivityLogIdempotencyE2ETest extends AbstractKafkaContainerTest {
     class RedeliveryTest {
 
         @Test
-        void shouldPersistExactlyOneRow_whenEventRedeliveredThroughRealBroker() {
+        void shouldPersistExactlyOneRow_whenEventRedeliveredThroughRealBroker() throws Exception {
             // arrange
             var eventId = UUID.randomUUID();
             var event =
@@ -152,7 +151,7 @@ class ActivityLogIdempotencyE2ETest extends AbstractKafkaContainerTest {
         }
 
         @Test
-        void shouldLeaveDeadLetterTopicEmpty_whenEventIsRedeliveredNotPoison() {
+        void shouldLeaveDeadLetterTopicEmpty_whenEventIsRedeliveredNotPoison() throws Exception {
             // arrange
             var eventId = UUID.randomUUID();
             var event =
@@ -216,24 +215,37 @@ class ActivityLogIdempotencyE2ETest extends AbstractKafkaContainerTest {
 
             // act
             try {
-                executor.submit(
-                        () -> {
-                            try {
-                                startGate.await();
-                                activityLogRecorder.record(firstEntity);
-                            } catch (Throwable t) {
-                                firstFailure.set(t);
-                            }
-                        });
-                executor.submit(
-                        () -> {
-                            try {
-                                startGate.await();
-                                activityLogRecorder.record(secondEntity);
-                            } catch (Throwable t) {
-                                secondFailure.set(t);
-                            }
-                        });
+                // The returned Future is deliberately dropped, not awaited: awaiting it here
+                // would serialize the two submissions and destroy the race window this test
+                // exists to open. The failure channel FutureReturnValueIgnored protects is
+                // already covered more strongly below -- each lambda catches Throwable into
+                // firstFailure/secondFailure, asserted non-null after awaitTermination. Each
+                // submit is scoped to its own block so both locals can share the name `unused`
+                // that ErrorProne's suggested fix expects, without a duplicate-variable clash.
+                {
+                    Future<?> unused =
+                            executor.submit(
+                                    () -> {
+                                        try {
+                                            startGate.await();
+                                            activityLogRecorder.record(firstEntity);
+                                        } catch (Throwable t) {
+                                            firstFailure.set(t);
+                                        }
+                                    });
+                }
+                {
+                    Future<?> unused =
+                            executor.submit(
+                                    () -> {
+                                        try {
+                                            startGate.await();
+                                            activityLogRecorder.record(secondEntity);
+                                        } catch (Throwable t) {
+                                            secondFailure.set(t);
+                                        }
+                                    });
+                }
 
                 startGate.countDown();
                 executor.shutdown();

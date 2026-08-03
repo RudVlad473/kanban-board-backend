@@ -23,6 +23,7 @@ public abstract class AbstractAppE2ETest extends AbstractAppTest {
 
     /***/
 
+    @Override
     @BeforeEach
     protected void setup() {
         super.setup();

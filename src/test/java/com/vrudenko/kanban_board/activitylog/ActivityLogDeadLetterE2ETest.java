@@ -25,7 +25,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.kafka.core.KafkaTemplate;
 
 /**
  * Real-broker proof of the dead-letter path's routing, payload fidelity and non-blocking behaviour
@@ -36,7 +35,6 @@ import org.springframework.kafka.core.KafkaTemplate;
 @SpringBootTest
 class ActivityLogDeadLetterE2ETest extends AbstractKafkaContainerTest {
 
-    @Autowired private KafkaTemplate<String, Object> kafkaTemplate;
     @Autowired private ActivityLogRepository activityLogRepository;
 
     private String randomId() {
@@ -171,8 +169,7 @@ class ActivityLogDeadLetterE2ETest extends AbstractKafkaContainerTest {
                             randomId(),
                             randomId(),
                             Instant.now());
-            kafkaTemplate.send(
-                    KafkaTopics.ACTIVITY, wellFormedEvent.eventId().toString(), wellFormedEvent);
+            sendAndAwaitAck(wellFormedEvent);
 
             // assert
             Awaitility.await()
@@ -210,8 +207,7 @@ class ActivityLogDeadLetterE2ETest extends AbstractKafkaContainerTest {
                             randomId(),
                             randomId(),
                             Instant.now());
-            kafkaTemplate.send(
-                    KafkaTopics.ACTIVITY, sentinelEvent.eventId().toString(), sentinelEvent);
+            sendAndAwaitAck(sentinelEvent);
 
             // assert
             Awaitility.await()

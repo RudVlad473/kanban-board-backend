@@ -4,6 +4,7 @@ import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.user_dto.SignupRequestDTO;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
+import java.util.Locale;
 import java.util.Map;
 import org.assertj.core.api.Assertions;
 import org.fluttercode.datafactory.impl.DataFactory;
@@ -16,11 +17,15 @@ public class SignupRequestDTOTest {
 
     private final String validEmail = dataFactory.getEmailAddress();
     private final String validDisplayName = dataFactory.getName();
+    // Locale.ROOT pinned explicitly: under a Turkish default locale, toLowerCase/toUpperCase
+    // apply the dotted/dotless-I mapping, which would corrupt these password fixtures and
+    // produce spurious failures in the "no uppercase char"/"no lowercase char" validation cases
+    // below that depend on them.
     private final String validPassword =
             dataFactory
                     .getRandomWord(ValidationConstants.MIN_PASSWORD_LENGTH)
-                    .toLowerCase()
-                    .concat(String.valueOf(dataFactory.getRandomWord(1)).toUpperCase())
+                    .toLowerCase(Locale.ROOT)
+                    .concat(String.valueOf(dataFactory.getRandomWord(1)).toUpperCase(Locale.ROOT))
                     .concat(String.valueOf(dataFactory.getNumberBetween(0, 9)))
                     .concat("$");
     private SignupRequestDTO validDTO;
@@ -155,8 +160,10 @@ public class SignupRequestDTOTest {
                                         .concat(
                                                 dataFactory.getRandomWord(
                                                         ValidationConstants.MIN_PASSWORD_LENGTH))),
-                        Map.entry("noLowercaseCharPassword", validPassword.toUpperCase()),
-                        Map.entry("noUppercaseCharPassword", validPassword.toLowerCase()),
+                        Map.entry(
+                                "noLowercaseCharPassword", validPassword.toUpperCase(Locale.ROOT)),
+                        Map.entry(
+                                "noUppercaseCharPassword", validPassword.toLowerCase(Locale.ROOT)),
                         Map.entry(
                                 "shortPassword",
                                 new StringBuilder(validPassword)

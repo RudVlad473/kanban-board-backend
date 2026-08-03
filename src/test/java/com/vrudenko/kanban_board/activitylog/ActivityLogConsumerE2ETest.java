@@ -1,6 +1,5 @@
 package com.vrudenko.kanban_board.activitylog;
 
-import com.vrudenko.kanban_board.constant.KafkaTopics;
 import com.vrudenko.kanban_board.entity.ActivityAction;
 import com.vrudenko.kanban_board.entity.ActivityLogEntity;
 import com.vrudenko.kanban_board.event.BoardCreatedEvent;
@@ -19,7 +18,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.kafka.core.KafkaTemplate;
 
 /**
  * Real-broker proof that {@link ActivityLogConsumer#onActivityEvent} turns a published event into a
@@ -31,7 +29,6 @@ import org.springframework.kafka.core.KafkaTemplate;
 @SpringBootTest
 class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
 
-    @Autowired private KafkaTemplate<String, Object> kafkaTemplate;
     @Autowired private ActivityLogRepository activityLogRepository;
 
     private String randomId() {
@@ -42,7 +39,8 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
     class OnActivityEventTest {
 
         @Test
-        void shouldPersistExactlyOneRow_whenTaskMovedEventPublishedThroughRealBroker() {
+        void shouldPersistExactlyOneRow_whenTaskMovedEventPublishedThroughRealBroker()
+                throws Exception {
             // arrange
             var eventId = UUID.randomUUID();
             var userId = randomId();
@@ -58,7 +56,7 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
                             Instant.now());
 
             // act
-            kafkaTemplate.send(KafkaTopics.ACTIVITY, event.eventId().toString(), event);
+            sendAndAwaitAck(event);
 
             // assert
             Awaitility.await()
@@ -74,7 +72,7 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
         }
 
         @Test
-        void shouldPersistTaskCreated_withColumnIdThenTaskIdDetail() {
+        void shouldPersistTaskCreated_withColumnIdThenTaskIdDetail() throws Exception {
             // arrange
             var eventId = UUID.randomUUID();
             var columnId = randomId();
@@ -84,7 +82,7 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
                             eventId, randomId(), randomId(), columnId, taskId, Instant.now());
 
             // act
-            kafkaTemplate.send(KafkaTopics.ACTIVITY, event.eventId().toString(), event);
+            sendAndAwaitAck(event);
 
             // assert
             Awaitility.await()
@@ -105,7 +103,8 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
         }
 
         @Test
-        void shouldPersistTaskMoved_withTaskIdSourceColumnIdTargetColumnIdDetail() {
+        void shouldPersistTaskMoved_withTaskIdSourceColumnIdTargetColumnIdDetail()
+                throws Exception {
             // arrange
             var eventId = UUID.randomUUID();
             var taskId = randomId();
@@ -122,7 +121,7 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
                             Instant.now());
 
             // act
-            kafkaTemplate.send(KafkaTopics.ACTIVITY, event.eventId().toString(), event);
+            sendAndAwaitAck(event);
 
             // assert
             Awaitility.await()
@@ -145,7 +144,7 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
         }
 
         @Test
-        void shouldPersistTaskDeleted_withColumnIdThenTaskIdDetail() {
+        void shouldPersistTaskDeleted_withColumnIdThenTaskIdDetail() throws Exception {
             // arrange
             var eventId = UUID.randomUUID();
             var columnId = randomId();
@@ -155,7 +154,7 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
                             eventId, randomId(), randomId(), columnId, taskId, Instant.now());
 
             // act
-            kafkaTemplate.send(KafkaTopics.ACTIVITY, event.eventId().toString(), event);
+            sendAndAwaitAck(event);
 
             // assert
             Awaitility.await()
@@ -176,13 +175,13 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
         }
 
         @Test
-        void shouldPersistBoardCreated_withEmptyDetail() {
+        void shouldPersistBoardCreated_withEmptyDetail() throws Exception {
             // arrange
             var eventId = UUID.randomUUID();
             var event = new BoardCreatedEvent(eventId, randomId(), randomId(), Instant.now());
 
             // act
-            kafkaTemplate.send(KafkaTopics.ACTIVITY, event.eventId().toString(), event);
+            sendAndAwaitAck(event);
 
             // assert
             Awaitility.await()
@@ -197,7 +196,7 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
         }
 
         @Test
-        void shouldPersistColumnCreated_withColumnIdDetail() {
+        void shouldPersistColumnCreated_withColumnIdDetail() throws Exception {
             // arrange
             var eventId = UUID.randomUUID();
             var columnId = randomId();
@@ -206,7 +205,7 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
                             eventId, randomId(), randomId(), columnId, Instant.now());
 
             // act
-            kafkaTemplate.send(KafkaTopics.ACTIVITY, event.eventId().toString(), event);
+            sendAndAwaitAck(event);
 
             // assert
             Awaitility.await()
@@ -222,7 +221,7 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
         }
 
         @Test
-        void shouldProduceIdenticalDetail_whenTwoTaskMovedEventsShareSameIds() {
+        void shouldProduceIdenticalDetail_whenTwoTaskMovedEventsShareSameIds() throws Exception {
             // arrange
             var taskId = randomId();
             var sourceColumnId = randomId();
@@ -249,8 +248,8 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
                             Instant.now());
 
             // act
-            kafkaTemplate.send(KafkaTopics.ACTIVITY, firstEvent.eventId().toString(), firstEvent);
-            kafkaTemplate.send(KafkaTopics.ACTIVITY, secondEvent.eventId().toString(), secondEvent);
+            sendAndAwaitAck(firstEvent);
+            sendAndAwaitAck(secondEvent);
 
             // assert
             Awaitility.await()
@@ -265,7 +264,8 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
         }
 
         @Test
-        void shouldProduceTwoRows_whenTwoEventsShareSameBoardUserAndInstantButDifferentEventIds() {
+        void shouldProduceTwoRows_whenTwoEventsShareSameBoardUserAndInstantButDifferentEventIds()
+                throws Exception {
             // arrange
             var boardId = randomId();
             var userId = randomId();
@@ -280,8 +280,8 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
                             secondEventId, userId, boardId, randomId(), sharedInstant);
 
             // act
-            kafkaTemplate.send(KafkaTopics.ACTIVITY, firstEvent.eventId().toString(), firstEvent);
-            kafkaTemplate.send(KafkaTopics.ACTIVITY, secondEvent.eventId().toString(), secondEvent);
+            sendAndAwaitAck(firstEvent);
+            sendAndAwaitAck(secondEvent);
 
             // assert
             Awaitility.await()
@@ -297,7 +297,7 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
         }
 
         @Test
-        void shouldPopulateAllColumns_whenBoardCreatedEventIsSparsest() {
+        void shouldPopulateAllColumns_whenBoardCreatedEventIsSparsest() throws Exception {
             // arrange
             var eventId = UUID.randomUUID();
             var userId = randomId();
@@ -306,7 +306,7 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
             var event = new BoardCreatedEvent(eventId, userId, boardId, timestamp);
 
             // act
-            kafkaTemplate.send(KafkaTopics.ACTIVITY, event.eventId().toString(), event);
+            sendAndAwaitAck(event);
 
             // assert
             Awaitility.await()

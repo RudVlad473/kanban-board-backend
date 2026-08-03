@@ -25,6 +25,7 @@ public class UserServiceTest extends AbstractAppTest {
 
     List<UserResponseDTO> mockUsers = new ArrayList<>();
 
+    @Override
     @BeforeEach
     protected void setup() {
         super.setup();

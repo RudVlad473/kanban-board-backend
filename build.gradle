@@ -158,6 +158,27 @@ tasks.withType(JavaCompile).configureEach {
     }
 }
 
+// compileTestJava is deliberately made STRICTER than compileJava on exactly the five
+// checks quick task 260803-v23 triaged the 27-finding test backlog against
+// (FutureReturnValueIgnored, StringCaseLocaleUsage, MissingOverride, NotJavadoc,
+// DefaultCharset): reintroducing any of the five now fails the build instead of only
+// warning. The promotion is scoped to these five named checks, not a blanket
+// all-warnings-are-errors flip, so a future error_prone_core version bump cannot red
+// the build on its own by introducing an unrelated new check -- the same
+// version-pinning rationale documented above for the check set as a whole. This
+// asymmetry is an intentional, narrower gate on test sources, not an oversight:
+// compileJava carries no equivalent promotion and still has an unfixed
+// warning-severity EscapedEntity finding at UserMapper.java:23 that this change does
+// not address (a main-source finding, out of this task's test-source scope).
+tasks.named('compileTestJava') {
+    options.errorprone.error(
+            'FutureReturnValueIgnored',
+            'StringCaseLocaleUsage',
+            'MissingOverride',
+            'NotJavadoc',
+            'DefaultCharset')
+}
+
 // --- Git hooks bootstrap ---------------------------------------------------
 // Points this clone at the version-controlled .githooks/ directory so the
 // pre-commit spotlessApply hook is armed on a fresh checkout with no manual
