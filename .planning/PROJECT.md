@@ -8,6 +8,18 @@ A Spring Boot 3.5.0 / Java 21 REST API backend for a Kanban board application (u
 
 v1.0 and v1.1 shipped the backend-depth showcase (JPA/Hibernate optimistic locking, Kafka event sourcing with dead-letter reliability, idempotent consumption — all proven against real Postgres/Kafka, not mocks). With the AWS EC2/RDS deploy target deleted (2026-08-03, cost-risk driven), the next priority is making the project reachable and cheaply/reliably deployable again — Oracle Cloud + Neon + self-hosted Redpanda — without diluting the backend-depth narrative that is this project's actual differentiator.
 
+## Current Milestone: v1.2 Infra Migration & Schema Registry
+
+**Goal:** Redeploy the app on a cost-guarded, always-free/near-free stack after the AWS EC2/RDS deployment was deleted, and add a Schema Registry (Avro/Protobuf) in front of the Kafka activity-log pipeline to close the schema-evolution risk flagged during v1.1.
+
+**Target features:**
+- App redeployed on Oracle Cloud Always Free (A1 Flex VM) via Docker
+- Neon serverless Postgres (scale-to-zero) replacing the deleted RDS/EC2-hosted Postgres — no JPA/Hibernate code changes
+- Self-hosted single-node Redpanda broker replacing local-only Kafka for the deploy target — Kafka-protocol-compatible, no producer/consumer/DLQ code changes
+- GitHub Actions CI/CD pipeline for automated deploy
+- A new pre-merge DDL verification step against the new deploy target (the old one, against the deleted AWS Postgres instance, was acknowledged as superseded at v1.1 close)
+- Schema Registry (Confluent or Redpanda's built-in) with Avro/Protobuf schemas for the 5 `ActivityEvent` record types, replacing convention-based `JsonSerializer`/`JsonDeserializer` agreement (promoted from SEED-001, planted during v1.1 Phase 3)
+
 ## Requirements
 
 ### Validated
@@ -92,4 +104,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-03 after v1.1 milestone completion*
+*Last updated: 2026-08-03 after starting v1.2 milestone*

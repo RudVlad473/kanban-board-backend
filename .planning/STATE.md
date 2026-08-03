@@ -1,20 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Kafka Activity Feed
-status: Awaiting next milestone
-stopped_at: Completed quick task 260803-v23 (hard-gate compileTestJava Error Prone findings)
-last_updated: "2026-08-03T21:26:33.911Z"
+milestone: v1.2
+milestone_name: Infra Migration & Schema Registry
+status: planning
+last_updated: "2026-08-03T21:34:26.815Z"
 last_activity: 2026-08-03
-last_activity_desc: Milestone v1.1 completed and archived
 progress:
-  total_phases: 3
-  completed_phases: 2
-  total_plans: 6
-  completed_plans: 6
-  percent: 67
-current_phase: 03
-current_phase_name: activity-log-consumer-reliability-read-api
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -28,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-08-01)
 
 ## Current Position
 
-Phase: Milestone v1.1 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-08-03 — Milestone v1.1 completed and archived
+Status: Defining requirements
+Last activity: 2026-08-03 — Milestone v1.2 started
 
 ## Performance Metrics
 
