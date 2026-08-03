@@ -109,6 +109,10 @@ Recent decisions affecting current work:
 - [minor] Account for schema evolution risk when changing ActivityEvent shapes — a rolling deploy that renames/retypes an event field while old-shape messages are still unconsumed can dead-letter valid (non-poison) messages; Kafka itself enforces no schema. See `.planning/todos/pending/2026-08-01-account-for-schema-evolution-risk-when-changing-activityeven.md`.
 - [minor] Enable virtual threads in Spring Boot config (`spring.threads.virtual.enabled=true`) — evaluate JDBC/Hibernate and Spring Session JDBC blocking-call pinning risk first. See `.planning/todos/pending/2026-08-02-enable-virtual-threads-in-spring-boot-config.md`.
 - [minor] Use a Snowflake ID generator for activity log events (`eventId`) instead of UUID — for index locality and time-ordering; see also the general note about adopting this as the project's default ID-generation strategy. See `.planning/todos/pending/2026-08-02-use-snowflake-id-generator-for-activity-log-events.md`.
+- [major] Hard-gate `compileTestJava` Error Prone findings — currently warning-only via `allErrorsAsWarnings = true`, with a measured 27-finding backlog documented in `build.gradle`. See `.planning/todos/pending/2026-08-03-hard-gate-compiletestjava-error-prone-findings.md`.
+- [major] Make the pre-commit hook gate on tests, not just formatting — `.githooks/pre-commit` only runs `spotlessApply`, so Error Prone/ArchUnit violations aren't caught until CI. See `.planning/todos/pending/2026-08-03-make-pre-commit-hook-gate-on-tests-not-just-formatting.md`.
+- [minor] Add a dependency vulnerability scan (OWASP dependency-check or similar) — no scan exists today despite several manually-pinned third-party libs. See `.planning/todos/pending/2026-08-03-add-dependency-vulnerability-scan.md`.
+- [minor] Evaluate PMD/Checkstyle/SpotBugs — likely redundant given Error Prone + ArchUnit + `docs/CODE_STYLE.md`; only revisit if a concrete gap surfaces. See `.planning/todos/pending/2026-08-03-evaluate-pmd-checkstyle-spotbugs.md`.
 
 ### Blockers/Concerns
 
