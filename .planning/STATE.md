@@ -5,10 +5,10 @@ milestone_name: Kafka Activity Feed
 current_phase: 03
 current_phase_name: activity-log-consumer-reliability-read-api
 status: verifying
-stopped_at: Completed 03-03-PLAN.md (Phase 3 complete)
-last_updated: "2026-08-03T17:20:00.000Z"
+stopped_at: Completed quick task 260803-v23 (hard-gate compileTestJava Error Prone findings)
+last_updated: "2026-08-03T21:00:23.422Z"
 last_activity: 2026-08-03
-last_activity_desc: Completed quick task 260803-ns9 (deleted the two dead UserMapper entity-to-request-DTO methods that copied the bcrypt hash into a password-named DTO field via MapStruct name matching; removed the now-dead SigninRequestDTO import; added a class Javadoc invariant note; closed the source todo)
+last_activity_desc: Completed quick task 260803-v23 (drove all 27 test-source Error Prone findings to zero -- 25 fixed in source, 2 deliberately dropped with written reasons; added AbstractKafkaContainerTest.sendAndAwaitAck to fix 16 FutureReturnValueIgnored Kafka-send findings; promoted 5 triaged checks to ERROR severity on compileTestJava, teeth-checked by a reintroduce-and-revert probe; closed the source todo with its incorrect premise corrected)
 progress:
   total_phases: 3
   completed_phases: 2
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-08-01)
 Phase: 03 (activity-log-consumer-reliability-read-api) — EXECUTING
 Plan: 3 of 3
 Status: Phase complete — ready for verification
-Last activity: 2026-08-02 — Phase 03 execution started
+Last activity: 2026-08-03 — Completed quick task 260803-v23 (hard-gate compileTestJava Error Prone findings)
 
 Progress: [██████████] 100%
 
@@ -69,6 +69,7 @@ Progress: [██████████] 100%
 | Phase 03 P01 | 25min | 2 tasks | 16 files |
 | Phase 03 P02 | 65min | 2 tasks | 4 files |
 | Phase 03 P03 | 20min | 2 tasks | 6 files |
+| Phase quick-260803-v23 P01 | 45min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -102,6 +103,7 @@ Recent decisions affecting current work:
 - [Quick/260803-m3i]: Deleted the two dead, hash-less `UserMapper` overloads (`fromSigninRequestDTO`, and `fromSignupRequestDTO(SigninRequestDTO)`) — re-verified zero callers by fresh grep before deleting. Tightened `UserEntity.passwordHash` to `@Column(nullable = false)` and delivered a guarded production DDL bridge (`docs/plans/backend-modernization/04-password-hash-not-null-ddl.sql`). Falsified by hand: temporarily reverted the column to nullable, confirmed the full test suite stayed green (proving the suite is silent on this property), then restored non-nullable and reran `spotlessCheck`/`test` green. **The production database migration is NOT applied** — only the codebase half shipped; running the DDL script via psql against the real Postgres instance, immediately before merge/deploy, remains an outstanding human pre-merge action (RO-4). Discovered while re-verifying callers: `UserMapper`'s two entity-to-request-DTO methods (`toSigninRequestDTO`, `toSignupRequestDTO`) are also uncalled and copy the bcrypt hash into a `password`-named DTO field via MapStruct name matching — filed as a new security-marked todo rather than fixed, since this task's scope was locked to the two named overloads.
 - [Quick/260803-ns9]: Deleted both `UserMapper` entity-to-request-DTO methods (`toSigninRequestDTO`, `toSignupRequestDTO`) rather than exempting them with `@Mapping(ignore = true)` — operator's decision, and consistent with `260803-m3i`'s disposition of the sibling hash-less overloads in the same file. Zero callers were re-verified by fresh grep immediately before deleting, not inherited from the prior task's claim. The class Javadoc now carries a forward-looking invariant note (naming neither deleted method) so an equivalent mapping cannot regrow unnoticed. Critically: nothing leaked — there were no callers, so this closes a latent vector, not a live breach.
 - [Fast/2026-08-03]: `.githooks/pre-commit` now runs `./gradlew test --exclude-tests '*E2ETest'` after `spotlessApply`, blocking the commit on failure — resolves the open trade-off in the "gate on tests" todo (full suite too slow vs. compile-only missing ArchUnit) by running everything except the Testcontainers-backed E2E classes, hook-scoped only. `build.gradle`'s default `test` task is untouched, so CI and direct `./gradlew test` still run the full suite including E2E.
+- [Phase ?]: [Quick/260803-v23]: D-01 resolved as promote-five (Approach B) — removing compileTestJava's Error Prone severity demotion alone was a measured no-op against the 27-finding test-source backlog (all WARNING severity by default), so the five triaged checks (FutureReturnValueIgnored, StringCaseLocaleUsage, MissingOverride, NotJavadoc, DefaultCharset) were additionally promoted to ERROR, scoped by name so a future error_prone_core version bump cannot red the build on its own. Added a shared AbstractKafkaContainerTest.sendAndAwaitAck helper to fix 16 FutureReturnValueIgnored Kafka-send findings; deliberately left 2 executor.submit futures in a concurrency race test fire-and-forget (blocking would destroy the race window). Teeth-checked the promotion by reintroducing and reverting one finding. Full ./gradlew test runtime unaffected by ack-checked sends (208s vs 210s baseline, within noise). Closed the source todo with its incorrect premise corrected.
 
 ### Pending Todos
 
@@ -110,7 +112,6 @@ Recent decisions affecting current work:
 - [minor] Account for schema evolution risk when changing ActivityEvent shapes — a rolling deploy that renames/retypes an event field while old-shape messages are still unconsumed can dead-letter valid (non-poison) messages; Kafka itself enforces no schema. See `.planning/todos/pending/2026-08-01-account-for-schema-evolution-risk-when-changing-activityeven.md`.
 - [minor] Enable virtual threads in Spring Boot config (`spring.threads.virtual.enabled=true`) — evaluate JDBC/Hibernate and Spring Session JDBC blocking-call pinning risk first. See `.planning/todos/pending/2026-08-02-enable-virtual-threads-in-spring-boot-config.md`.
 - [minor] Use a Snowflake ID generator for activity log events (`eventId`) instead of UUID — for index locality and time-ordering; see also the general note about adopting this as the project's default ID-generation strategy. See `.planning/todos/pending/2026-08-02-use-snowflake-id-generator-for-activity-log-events.md`.
-- [major] Hard-gate `compileTestJava` Error Prone findings — currently warning-only via `allErrorsAsWarnings = true`, with a measured 27-finding backlog documented in `build.gradle`. See `.planning/todos/pending/2026-08-03-hard-gate-compiletestjava-error-prone-findings.md`.
 - [minor] Add a dependency vulnerability scan (OWASP dependency-check or similar) — no scan exists today despite several manually-pinned third-party libs. See `.planning/todos/pending/2026-08-03-add-dependency-vulnerability-scan.md`.
 - [minor] Evaluate PMD/Checkstyle/SpotBugs — likely redundant given Error Prone + ArchUnit + `docs/CODE_STYLE.md`; only revisit if a concrete gap surfaces. See `.planning/todos/pending/2026-08-03-evaluate-pmd-checkstyle-spotbugs.md`.
 
@@ -139,6 +140,7 @@ Carried from research (address during Phase 2/3 planning):
 | 260803-m2z | Wire a SessionAuthenticationStrategy into AuthenticationController.authenticate — the concurrent-session ceiling (maximumSessions(2)) and session-fixation protection now actually run on both signin and signup, proven by SessionPersistenceE2ETest.ConcurrentSessionCeiling (rewritten from tripwire to spec) and a new SessionFixation test; corrected both CLAUDE.md claims and closed the source todo | 2026-08-03 | 0260df7,a09c7e3,6747117 | [260803-m2z-wire-a-sessionauthenticationstrategy-int](./quick/260803-m2z-wire-a-sessionauthenticationstrategy-int/) |
 | 260803-m3i | Deleted the two dead hash-less UserMapper overloads (re-verified zero callers by fresh grep); tightened UserEntity.passwordHash to non-nullable with a guarded production DDL bridge script (04-password-hash-not-null-ddl.sql, NOT executed against any database); falsified the new constraint by hand (reverted, confirmed suite silent, restored); closed the source todo; filed a new security-marked todo for the entity-to-request-DTO hash-leak found while re-verifying | 2026-08-03 | c9615a3,baab313 | [260803-m3i-delete-the-dead-hash-less-usermapper-ove](./quick/260803-m3i-delete-the-dead-hash-less-usermapper-ove/) |
 | 260803-ns9 | Deleted UserMapper.toSigninRequestDTO(UserEntity) and toSignupRequestDTO(UserEntity), both uncalled and both compiled by MapStruct into dto.setPassword(entity.getPassword()); removed the now-dead SigninRequestDTO import; added a class Javadoc invariant naming neither deleted method; closed the source todo | 2026-08-03 | e500858 | [260803-ns9-delete-dead-usermapper-entity-to-request](./quick/260803-ns9-delete-dead-usermapper-entity-to-request/) |
+| 260803-v23 | Hard-gated compileTestJava on Error Prone: drove all 27 test-source findings to zero (25 fixed in source, 2 deliberately dropped with written reasons), added AbstractKafkaContainerTest.sendAndAwaitAck to fix 16 Kafka-send findings, promoted 5 triaged checks to ERROR severity (teeth-checked), closed the source todo with corrected premise | 2026-08-03 | c5bc467,d7bf17b | [260803-v23-hard-gate-compiletestjava-error-prone-fi](./quick/260803-v23-hard-gate-compiletestjava-error-prone-fi/) |
 
 ## Deferred Items
 
@@ -153,8 +155,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-02T14:54:40.173Z
-Stopped at: Completed 03-03-PLAN.md (Phase 3 complete)
+Last session: 2026-08-03T21:00:14.792Z
+Stopped at: Completed quick task 260803-v23 (hard-gate compileTestJava Error Prone findings)
 Resume file: None
 
 ## Operator Next Steps
