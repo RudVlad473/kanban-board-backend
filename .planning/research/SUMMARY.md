@@ -1,141 +1,144 @@
 # Project Research Summary
 
-**Project:** kanban-board-backend — v1.1 Kafka event-driven activity feed (Epic 1 of backend modernization plan)
-**Domain:** Event-driven audit/activity log grafted onto an existing layered Spring Boot 3.5 / Java 21 REST API
-**Researched:** 2026-08-01
+**Project:** Kanban Board Backend v1.2 — Infra Migration & Schema Registry
+**Domain:** Self-hosted infra migration (Oracle Cloud A1 Flex + Redpanda + Neon serverless Postgres + GitHub Actions CI/CD) combined with Kafka Schema Registry (Avro) adoption on an existing Spring Boot 3.5.0 / Java 21 backend
+**Researched:** 2026-08-03
 **Confidence:** MEDIUM
 
 ## Executive Summary
 
-This milestone adds a Kafka-backed activity feed to an already-mature, ownership-scoped Spring Boot Kanban API. Experts build this kind of feature as a **parallel vertical slice**, not a new layer bolted into the request path: existing services (`TaskService`/`BoardService`/`ColumnService`) gain one new collaborator (`KafkaTemplate`) and publish a domain event at the tail of already-`@Transactional` mutating methods, while a brand-new `activitylog` package (consumer -> entity -> repository -> service -> controller) mirrors the existing Board/Column/Task/Subtask vertical-slice pattern exactly. The one genuinely new piece of business logic is `PATCH /tasks/{taskId}/move`, a real missing CRUD capability that also happens to produce the feed's first demoable event.
+This milestone bolts two largely independent workstreams onto an already-shipped, working system: (1) replacing the deleted AWS EC2/RDS deploy target with a free-tier Oracle Cloud A1 Flex VM running self-hosted Redpanda and Neon serverless Postgres, redeployed via GitHub Actions, and (2) introducing a Kafka Schema Registry (Avro) in front of the existing 5-event-type activity-log pipeline, closing the "convention-based agreement" risk flagged in v1.1. Neither area requires new application frameworks or touches the controller/service/repository stack; Redpanda is Kafka-wire-protocol-compatible (zero producer/consumer code changes) and Neon is wire-compatible Postgres (zero JPA/Hibernate code changes). The real work is concentrated in configuration, deployment topology, and — for the schema registry specifically — a genuinely new mapping layer between the project's deliberately plain `ActivityEvent` sealed records and Avro's schema-first, codegen-based serialization model.
 
-The recommended approach is deliberately scoped down from "correct distributed systems" to "correct enough for a portfolio-quality, single-EC2, single-consumer deployment, with the tradeoffs explicitly documented": `spring-kafka` 3.3.6 (BOM-managed, no explicit version pin) for producer/consumer, `apache/kafka-native` in KRaft mode (no Zookeeper) for local dev via a new `docker-compose.yml`, and `org.testcontainers:kafka` + `spring-boot-testcontainers` `@ServiceConnection` for a real end-to-end integration test. Five typed domain event records feed a single `kanban.activity` topic and a single `ActivityLogConsumer`, which persists idempotently (UUID `eventId` + DB-level unique constraint) into a new `activity_log` table, exposed read-side via `GET /boards/{boardId}/activity`, reusing `OwnershipVerifierService` unmodified.
+The recommended approach is Schema Registry first, Infra Migration second, because ~95% of the schema-registry work (5 `.avsc` schemas, Gradle Avro codegen, producer/consumer mapping layers, DLT-under-Avro re-verification) can be built and fully verified against the existing local docker-compose stack with no dependency on the OCI VM, Neon, or GitHub Actions changes existing yet. This ordering also cleanly separates an app-logic-adjacent phase (new mapping code, real architectural decisions about domain-event vs. wire-format boundaries) from a pure-ops phase (VM provisioning, Redpanda compose swap, Neon connection config, CI/CD retargeting), matching the project's existing one-epic-per-PR review discipline.
 
-The dominant risk across all four research files is the **dual-write gap**: `kafkaTemplate.send()` is not part of the JDBC transaction, so a plain publish-inside-`@Transactional` call can either ghost-publish (DB rolls back after the event already fired) or silently drop the event (DB commits, Kafka send fails, nobody notices). The recommended mitigation — `ApplicationEventPublisher` + `@TransactionalEventListener(phase = AFTER_COMMIT)` — is a right-sized fix that avoids a full transactional-outbox table while still guaranteeing publish-only-after-commit. Equally important: idempotency must be enforced by a **DB-level unique constraint** on `eventId`, not just an application-level `existsByEventId` check (which has a real check-then-act race under redelivery/rebalance), and the `docker-compose.yml` used for local dev must not be reused unmodified as the EC2 deploy artifact without a review pass for state persistence (named volume) and port exposure.
+The two biggest risk clusters are resource contention on a shrunk, shared 2 OCPU/12 GB VM (Redpanda's default memory/CPU auto-detection assumes it owns the whole box, and will starve the co-resident JVM app if left untuned) and correctness regressions specific to the Avro cutover (the DLT's proven JSON byte-fidelity guarantee does not automatically carry over to Avro poison messages, and Avro's strict field-default model can silently break implicit JSON permissiveness the 5 event types currently rely on). Both are addressable with known, documented mitigations (explicit `--overprovisioned`/`--memory`/`--smp` caps; a byte-array serializer dedicated to the DLT path; per-field classification against real historical event shapes) — the risk is in forgetting to apply them under the "no code changes needed" framing, not in the mitigations being unknown.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The stack addition is small and BOM-managed: declare `spring-kafka`, `org.testcontainers:kafka`, `org.testcontainers:junit-jupiter`, and `org.springframework.boot:spring-boot-testcontainers` with **no explicit version strings**, letting Spring Boot 3.5.0's own dependency-management BOM resolve tested-together versions (`spring-kafka` 3.3.6, `kafka-clients` 3.9.1, Testcontainers 1.21.0 — verified directly against the pinned `spring-boot-dependencies` build file at the `v3.5.0` tag). Local dev runs on `apache/kafka-native` (GraalVM AOT KRaft image, single-node, no Zookeeper) via a new root-level `docker-compose.yml`, following official single-node KRaft compose examples rather than hand-assembling listener config (a common footgun).
+The stack additions are narrowly scoped: Oracle Cloud A1 Flex (2 OCPU/12 GB Always Free, post-June-2026 halving) replaces the deleted EC2 instance; Redpanda v26.2.x (Kafka-wire-compatible, ships Schema Registry built into the broker binary) replaces `apache/kafka-native` in the deploy target only (local dev can keep the existing image); Neon serverless Postgres (wire-compatible, scale-to-zero) replaces RDS; Confluent's `kafka-avro-serializer` + Apache Avro + `gradle-avro-plugin` provide Avro schema authoring, codegen, and (de)serialization against Redpanda's Confluent-API-compatible built-in registry. Caddy is recommended over Nginx for reverse-proxy/auto-TLS given the single-domain, single-service scale. Everything already validated in v1.1 (Spring Boot 3.5.0, Java 21, JPA/Hibernate, Spring Security/Session, MapStruct, springdoc-openapi, Lombok, ULID Creator, Vavr, Guava, REST Assured, H2) is explicitly unchanged.
 
 **Core technologies:**
-- `spring-kafka` (BOM-managed) — producer (`KafkaTemplate`) / consumer (`@KafkaListener`) abstraction over the raw Kafka client — matches Boot 3.5.0's tested dependency set, same no-version-string convention already used for other starters in this codebase
-- `apache/kafka-native` (Docker, KRaft mode) — single-node local broker, explicitly required by the epic spec, faster/lighter than the JVM image
-- `org.testcontainers:kafka` + `spring-boot-testcontainers` (`@ServiceConnection`) — real containerized broker for integration tests with zero manual `@DynamicPropertySource` wiring, the idiomatic Boot 3.1+ pattern
+- Oracle Cloud A1 Flex VM (2 OCPU/12 GB) — compute host — only remaining zero-cost ARM compute tier after Oracle's undocumented free-tier halving; must be re-verified against the actual tenancy before finalizing resource budgets
+- Redpanda v26.2.x — Kafka broker + built-in Schema Registry — wire-compatible with existing spring-kafka code, avoids standing up a separate registry container on a resource-constrained VM
+- Neon serverless Postgres — production DB — wire-compatible Postgres, only connection string/SSL config changes, not JPA/Hibernate code
+- Confluent `kafka-avro-serializer` + Apache Avro + `gradle-avro-plugin` — schema definition, codegen, Avro (de)serialization — works unmodified against Redpanda's Confluent-API-compatible registry
+- Caddy — reverse proxy + automatic HTTPS — right-sized for a single-VM, single-domain deployment versus Nginx+Certbot's manual cert-renewal maintenance
 
 ### Expected Features
 
-**Must have (table stakes):** per-board activity feed, newest-first; human-readable action descriptions; ownership-scoped access via existing `OwnershipVerifierService`; pagination; full coverage of the five spec'd mutation types (Task create/move/delete, Board create, Column create); at-least-once delivery with no visible duplicate rows; poison-message isolation via DLT.
+For a portfolio-reviewer audience, "done" means externally verifiable: real HTTPS (not bare HTTP/IP), automated CI/CD redeploy (not manual SSH), basic reachability monitoring, and — for the schema registry specifically — explicitly registered/versioned schemas with a deliberately chosen (not default) compatibility mode covering all 5 existing event types without silently dropping any.
 
-**Should have (differentiators):** the event-driven (Kafka) write path itself as the demonstrable "legitimate reason for Kafka to exist in a CRUD app"; a redelivery test proving idempotency, not just claiming it; a dead-letter topic with a proving test; `PATCH /tasks/{taskId}/move` as independently useful even absent Kafka; cursor/keyset pagination if Spring Data on this Boot version supports it cleanly (worth a quick spike, offset `Pageable` is an acceptable fallback).
+**Must have (table stakes):**
+- Public HTTPS endpoint via Caddy with correct DNS + both OCI firewall layers opened
+- App + Redpanda `restart: unless-stopped` with basic healthchecks
+- Automated GitHub Actions redeploy on merge (new secrets, not reused AWS ones)
+- Log rotation on the VM (unbounded logs will fill the free-tier disk)
+- Explicit, versioned schema registration with an enforced (not default) compatibility mode
+- All 5 existing event types represented in Avro without silently dropping any
 
-**Defer (v2+):** field-level diff logging, a separately deployable consumer microservice, DLT replay/reprocessing tooling, real-time push (WebSocket/SSE), retention/archival policy — all explicitly out of scope per PROJECT.md and disproportionate to this epic's stated goals.
+**Should have (competitive/differentiator):**
+- Documented compatibility-mode rationale (why BACKWARD or FULL, not just "the default")
+- Redpanda's built-in Schema Registry instead of a separate Confluent container (lower footprint, consistent with the self-hosted-Redpanda decision)
+- A pre-merge schema-compatibility CI check, mirroring the already-planned pre-merge DDL verification step
+
+**Defer (v2+):**
+- Full observability stack (Prometheus/Grafana) — disproportionate to actual traffic
+- Multi-broker Redpanda / true HA — meaningless on a single VM
+- True zero-downtime blue-green deploys — resource cost outweighs benefit at this scale
+- Long-lived dual-format (JSON+Avro) topic migration tooling — not applicable given the single-deployable producer/consumer topology
 
 ### Architecture Approach
 
-The feature is a producer append (one new `KafkaTemplate` dependency + one publish call per mutating service method) plus an independent consumer vertical slice (`activitylog` package: consumer -> `ActivityLogEntity` -> `ActivityLogRepository` -> `ActivityLogService` -> `ActivityController`) that mirrors the existing Board/Column/Task/Subtask package shape exactly, so it reads as a fifth domain entity to any reviewer already familiar with the codebase, not as new infrastructure bolted on.
+The controller → service → repository → entity stack is entirely unchanged. The three architectural deltas are: the Postgres datasource moves off-box and gains a TLS/cold-start dimension (Neon), the Kafka broker becomes Redpanda in the deploy target only (different docker-compose configuration surface — `KAFKA_*` env vars vs. `rpk`/`redpanda start` CLI flags, not a like-for-like swap), and a Schema Registry client threads into the existing `KafkaEventPublisher`/`KafkaConsumerConfig`/`ActivityLogConsumer` touchpoints via configuration only — except for one genuinely new piece of code: a mapping layer between the plain, dependency-free `ActivityEvent` sealed records and Avro-generated `SpecificRecord` classes, needed because Avro's Java tooling has no push-button path from a Java sealed interface to a schema.
 
 **Major components:**
-1. `event/` package (5 typed records: `TaskCreatedEvent`, `TaskMovedEvent`, `TaskDeletedEvent`, `BoardCreatedEvent`, `ColumnCreatedEvent`) — plain, dependency-free wire contracts between producer and consumer
-2. `TaskService`/`BoardService`/`ColumnService` (modified) + new `TaskService.moveToColumn` — publish one event per successful mutation, publish-after-persist inside the same transaction (via `@TransactionalEventListener(AFTER_COMMIT)`, not a raw inline call)
-3. `activitylog` package (`ActivityLogConsumer`, `ActivityLogEntity`, `ActivityLogRepository`, `ActivityLogService`, `ActivityController`) — idempotent persistence and ownership-verified paginated read, isolated from producer thread-context assumptions (no `SecurityContext` on the consumer thread)
+1. New Avro schema files (5 `.avsc`, one per event type) + Gradle-generated Java classes — new, checked into `build/generated` like MapStruct output
+2. Mapping layer (Avro DTO ↔ domain `ActivityEvent`) at the publish and consume boundaries — new code, the single largest net-new application-code piece in this milestone
+3. `docker-compose.yml` Redpanda service block — replaced wholesale (different config vocabulary from `apache/kafka-native`), not edited in place
+4. `application.properties` datasource block — modified (explicit `sslmode=require`, Hikari pool re-derived for Neon's pooled topology)
+5. GitHub Actions `deploy.yml` — modified (new secrets for OCI VM, new pre-merge DDL verification step against Neon)
 
 ### Critical Pitfalls
 
-1. **Dual-write / ghost events from publishing inside `@Transactional`** — publish via `ApplicationEventPublisher` + `@TransactionalEventListener(phase = AFTER_COMMIT)`, not a raw `kafkaTemplate.send()` statement inside the mutating method.
-2. **Idempotency check-then-act race** — a DB-level `UNIQUE` constraint on `eventId` is the actual correctness guarantee; `existsByEventId` alone is only a fast-path optimization, not safe under concurrent redelivery.
-3. **Silently swallowed `KafkaTemplate.send()` failures** — always attach a `.whenComplete`/failure callback; fire-and-forget with no callback makes a broker outage invisible.
-4. **DLT configured but never verified** — must have a bounded retry/backoff before dead-lettering and a test that intentionally fails a message and asserts it lands on `kanban.activity.dlt`; "topic exists and compiles" is not "verified."
-5. **Dev `docker-compose.yml` reused unmodified as the EC2 deploy artifact** — needs a named volume for Kafka's log dir (state loss on redeploy) and a reviewed port-exposure story (host-exposed `PLAINTEXT` listener reaching the public internet).
+1. **Redpanda's default memory/CPU auto-detection assumes it owns the whole VM** — set `--overprovisioned` and explicit `--memory`/`--smp` caps plus cgroup limits on both containers before first deploy; un-tuned defaults will OOM-kill the co-resident JVM app under real traffic, not just at scale.
+2. **HikariCP tuned for always-on RDS breaks against Neon's scale-to-zero cold start** — use Neon's pooled (`-pooler`) connection string for the app's runtime datasource, widen `connectionTimeout` with real margin, and reserve the direct connection string only for the DDL-verification step.
+3. **The DLT's proven JSON byte-fidelity guarantee does not automatically carry over to Avro** — re-using the main pipeline's Avro-aware serializer for the DLT-publishing path will itself throw on poison messages; configure `DeadLetterPublishingRecoverer` with a raw byte-array serializer and write a new Avro-specific poison-message test.
+4. **Avro's strict field-default model can silently break implicit JSON permissiveness** — classify every field of all 5 event types (required-with-no-default vs. optional-with-explicit-default) against real historical event shapes before writing schemas, rather than mechanically converting the Java record field list.
+5. **OCI's three additive network layers (Security List + NSG + OS firewall) mean "I opened the port" doesn't guarantee reachability or safety** — audit all three layers together and verify externally (port scan/curl from outside), especially to ensure Redpanda's 9092 listener is never publicly reachable.
 
 ## Implications for Roadmap
 
 Based on research, suggested phase structure:
 
-### Phase 1: Local Kafka infrastructure
-**Rationale:** Zero code dependencies, unblocks all local development and later Testcontainers work — architecture research's own "Suggested Build Order" puts this first.
-**Delivers:** `docker-compose.yml` (postgres + `apache/kafka-native` KRaft + app), `spring-kafka`/Testcontainers dependencies added to `build.gradle`, `application.properties` Kafka block.
-**Addresses:** table-stakes infrastructure prerequisite for every other feature in this milestone.
-**Avoids:** Pitfall 6 (state loss / broker exposure) — build the named volume and internal-vs-external listener split in from the start rather than retrofitting.
+### Phase 1: Schema Registry (local dev only)
+**Rationale:** ~95% of this work can be built and fully verified against the existing local docker-compose stack with zero dependency on the OCI VM, Neon, or GitHub Actions — no reason to block it on infra provisioning, and it's the more code-heavy, more interesting/reviewable phase.
+**Delivers:** 5 `.avsc` schemas + Gradle Avro codegen wiring, producer-side and consumer-side mapping layers (Avro DTO ↔ `ActivityEvent`), updated serializer/deserializer config, compatibility mode explicitly chosen and documented per subject, DLT re-verified with a raw byte-array serializer and a new Avro-poison-message test, historical-data compatibility rehearsal (sample real topic data through the new schemas before any cutover).
+**Addresses:** Explicit versioned schema registration, enforced compatibility mode, all 5 event types represented without loss (table stakes); documented compatibility rationale, Redpanda-built-in-registry framing (differentiators).
+**Avoids:** Pitfalls 9 (unexamined default compatibility mode), 10 (Avro strict-field-default breakage), 11 (DLT byte-fidelity regression), 12 (hard cutover against real historical data without rehearsal).
 
-### Phase 2: Domain events + producer wiring + move endpoint
-**Rationale:** Pure data (event records) has no dependencies on anything else new and can be unit-tested with a mocked `KafkaTemplate` before the consumer exists.
-**Delivers:** `event/` package (5 records), `KafkaTemplate` wired into `TaskService`/`BoardService`/`ColumnService` via `ApplicationEventPublisher` + `@TransactionalEventListener(AFTER_COMMIT)`, `TaskService.moveToColumn` + `PATCH /tasks/{taskId}/move` (reusing the existing `@Version` optimistic-locking convention).
-**Addresses:** FEATURES.md table-stakes "coverage of core mutation types" and the differentiator "real missing feature, not manufactured Kafka-bait."
-**Avoids:** Pitfall 1 (dual-write/ghost events) and Pitfall 3 (silently swallowed publish failures) — both are producer-phase design decisions, not retrofits.
-
-### Phase 3: Consumer, idempotency, and dead-letter handling
-**Rationale:** Needs both an entity to write to (from Phase 2's design) and events to consume; this is the first point a real end-to-end flow exists.
-**Delivers:** `ActivityLogEntity` (with unique `eventId` constraint) + `ActivityLogRepository`, `ActivityLogConsumer` (`@KafkaListener`, `existsByEventId` pre-check + unique-constraint dedup, explicit `AckMode` not auto-commit), `DefaultErrorHandler` + `DeadLetterPublishingRecoverer` -> `kanban.activity.dlt`.
-**Uses:** Stack elements — `spring-kafka` error-handling APIs, DB-backed idempotency per STACK.md's "Stack Patterns by Variant."
-**Implements:** Architecture Pattern 3 (idempotent consumer) and Pattern 4 (single topic, typed event dispatch).
-**Avoids:** Pitfall 2 (idempotency race), Pitfall 4 (unverified DLT), Pitfall 5 (rebalance-driven duplicate amplification).
-
-### Phase 4: Read path — activity feed endpoint
-**Rationale:** Depends only on Phase 3's entity existing with data in it; can be built/tested against directly-inserted rows even before producer/consumer are fully wired, per architecture research's build order.
-**Delivers:** `ActivityLogService` (reusing `OwnershipVerifierService.verifyOwnershipOfBoard` unmodified) + `ActivityController` + `GET /boards/{boardId}/activity`, paginated.
-**Addresses:** FEATURES.md table-stakes (per-board feed, ownership-scoped, paginated, human-readable descriptions) and the P2 pagination-strategy decision (offset vs. cursor/keyset — decide deliberately here).
-
-### Phase 5: End-to-end integration testing
-**Rationale:** Genuinely end-to-end and necessarily comes last — it's the test that catches any mismatch between the producer (Phase 2) and consumer (Phase 3) that mocked unit tests would miss.
-**Delivers:** Testcontainers-based Kafka integration test (publish `TaskMovedEvent` through a real broker -> assert `ActivityLogEntity` row appears, via polling/Awaitility, not immediate assertion), plus an explicit duplicate-redelivery test (publish same `eventId` twice, assert one row).
-**Avoids:** the "Testcontainers assertion timing flakiness" pitfall and closes out the "Looks Done But Isn't" checklist items from PITFALLS.md.
+### Phase 2: Infra Migration (Oracle Cloud + Redpanda + Neon + CI/CD)
+**Rationale:** Pure ops/infrastructure work, independent of the schema-registry app-logic changes; landing it second avoids conflating an app-logic-adjacent phase with a pure-ops phase in one PR, matching the project's one-epic-per-PR discipline. The only schema-registry task that lands here is the last-mile cutover: repoint `schema.registry.url` from the local/standalone registry to Redpanda's built-in registry on the OCI VM and re-run Phase 1's verification suite against the real target.
+**Delivers:** Oracle Cloud VM provisioned (with tenancy resource shape re-verified in-console first), Redpanda docker-compose service block authored with explicit `--overprovisioned`/`--memory`/`--smp` caps, Neon wired via pooled connection string with re-derived HikariCP sizing and `sslmode=require`, Caddy reverse proxy with automatic HTTPS, GitHub Actions retargeted with locally-generated SSH keys and pinned `known_hosts`, new pre-merge DDL verification step against Neon's direct connection string, log rotation configured, restart policies and healthchecks on app + Redpanda, OCI Security List + NSG + OS firewall audited and externally verified.
+**Uses:** Oracle Cloud A1 Flex, Redpanda v26.2.x, Neon serverless Postgres, Caddy, GitHub Actions (`appleboy/ssh-action`, `docker/build-push-action`).
+**Implements:** Replaced `docker-compose.yml` Redpanda service block; modified `application.properties` datasource block; modified `deploy.yml`.
 
 ### Phase Ordering Rationale
 
-- Infrastructure-first (Phase 1) matches dependency reality: nothing else can be built or tested locally without a running broker.
-- Producer before consumer (Phase 2 -> 3) lets each side be unit-tested independently with mocks before requiring the other to exist, per architecture research's explicit build order.
-- Read path (Phase 4) is deliberately sequenced after the consumer/entity exists so it can be tested against real (or seeded) rows rather than stubbed data.
-- Integration testing last (Phase 5) is the only phase that requires the full pipeline, matching the epic's own framing of the Testcontainers test as validating already-built pieces end-to-end.
-- This ordering also naturally staggers pitfall-avoidance: transactional-boundary and callback discipline get built in at the point they're introduced (Phase 2), idempotency/DLT correctness gets built in at the point the consumer is introduced (Phase 3), rather than being retrofitted after a "looks done" happy path ships.
+- Schema Registry work has zero dependency on the new deploy target and is the higher-risk, more code-heavy area (new mapping layer, real architectural decision) — sequencing it first means it gets full attention and isolated review before infra-provisioning noise is introduced.
+- Infra Migration is entirely ops/config and benefits from Schema Registry being already proven locally, so the only cross-phase task is a narrow, well-scoped cutover step (repoint one URL, re-run one verification suite).
+- This ordering directly avoids Pitfall 12's highest-cost failure mode (hard cutover against already-shipped historical data without rehearsal) by forcing the historical-data rehearsal to happen against the stable local stack before any production deploy-target risk is introduced.
+- Both phases share a "config change, not code change" temptation (per PROJECT.md's framing) that research flags repeatedly as a place real work gets skipped — each phase's plan should explicitly call out the config-only changes that are nonetheless mandatory (Neon SSL/pool sizing, Redpanda resource caps, DLT serializer).
 
 ### Research Flags
 
 Phases likely needing deeper research during planning:
-- **Phase 1 (Kafka infra):** exact KRaft env-var set and internal-vs-external listener config for `apache/kafka-native` was only web-search-sourced (LOW confidence in ARCHITECTURE.md/STACK.md) — pull the actual reference compose YAML from `apache/kafka`'s own repo before finalizing, per STACK.md's explicit recommendation.
-- **Phase 3 (consumer/DLT):** `DefaultErrorHandler`/`DeadLetterPublishingRecoverer` retry-before-DLT tuning and non-retryable exception classification is thinly sourced (LOW-MEDIUM); worth a `--research-phase` pass to avoid copying stale `SeekToCurrentErrorHandler`-era tutorials.
-- **Phase 4 (pagination decision):** whether Spring Data JPA on this Boot version cleanly supports `ScrollPosition`/keyset pagination is an open question flagged directly in FEATURES.md and STACK.md — needs a quick spike before committing.
+- **Phase 1 (Schema Registry):** The Avro/sealed-interface mapping layer has no ready-made tooling shortcut (confirmed — no Baeldung/Apache Avro doc generates Avro schemas directly from a Java sealed interface + records); this design decision (mapper vs. `@Union` reflection-based serialization) needs its own research/design pass at phase-planning time.
+- **Phase 2 (Infra Migration):** Redpanda resource budgeting on the actual (possibly-changed) OCI tenancy shape needs to be verified against the real, current allocation before finalizing `--memory`/`--smp` values — do not plan purely against the publicly-reported 2 OCPU/12 GB figure without an in-console check first.
 
 Phases with standard patterns (skip research-phase):
-- **Phase 2 (producer wiring):** `ApplicationEventPublisher` + `@TransactionalEventListener(AFTER_COMMIT)` is a well-documented, standard Spring pattern; `PATCH /tasks/{taskId}/move` directly reuses the codebase's own existing `@Version` convention — HIGH confidence from direct codebase inspection.
-- **Phase 5 (integration test):** `@ServiceConnection` + Testcontainers Kafka is the idiomatic Boot 3.1+ pattern, directly named by the epic spec.
+- **Phase 2 (Infra Migration) — Caddy/GitHub Actions/SSH deploy mechanics specifically:** Well-documented, standard patterns (official docs for `appleboy/ssh-action`, Caddy auto-TLS, Docker restart policies) with no project-specific ambiguity once the security hardening steps (locally-generated keys, pinned `known_hosts`) are applied.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | MEDIUM | Version numbers verified directly against the pinned `spring-boot-dependencies` BOM at the `v3.5.0` tag (a primary source), but Docker/KRaft env-var details are web-search-only |
-| Features | MEDIUM | Table-stakes/differentiator framing is well-reasoned and cross-checked across multiple sources, but public documentation of Trello/Jira's actual per-card activity feed mechanics is thin (noted gap) |
-| Architecture | MEDIUM (HIGH for project-specific integration reasoning) | Codebase integration points (service structure, ownership reuse, injection convention) are HIGH confidence from direct file reads; generic Spring Kafka/Testcontainers/Docker facts are LOW-confidence single-source web search |
-| Pitfalls | LOW-MEDIUM | General web sources, not cross-verified against a second independent source per claim, except where explicitly Spring/Confluent/Docker official docs |
+| Stack | MEDIUM-HIGH | Official docs confirmed for Redpanda/Neon/Confluent client mechanics; Oracle's free-tier limit change is confirmed by multiple independent outlets but never officially published by Oracle |
+| Features | MEDIUM | Cross-checked across official Confluent/Redpanda/Oracle/Neon docs; the JSON→Avro gradual-migration pattern and sealed-interface→Avro mapping specifics are LOW confidence — no authoritative source addresses this project's exact shape |
+| Architecture | MEDIUM | Cross-checked against Neon/Redpanda/Spring Kafka official docs and multiple independent sources; no first-party benchmark was run against the actual OCI A1 Flex target |
+| Pitfalls | LOW-MEDIUM | General web sources plus official vendor docs, not independently cross-verified per individual claim; the Oracle free-tier reduction is corroborated across three independent tech-press sources plus a primary user report, raising that specific claim to MEDIUM |
 
 **Overall confidence:** MEDIUM
 
 ### Gaps to Address
 
-- **Production Kafka scope:** not yet decided whether v1.1 stands up Kafka in production (EC2) or is local/dev-only — affects `KAFKA_BOOTSTRAP_SERVERS` wiring and the compose-file security review; flag for Phase 1 scoping during roadmap creation.
-- **Dead-letter topic naming/auto-creation:** epic spec names `kanban.activity.dlt` explicitly (vs. Spring's default `{topic}.DLT` suffix) — needs a custom destination resolver; also decide `NewTopic` `@Bean`s vs. broker auto-create during Phase 3 planning.
-- **Cross-board move handling:** `PATCH /tasks/{taskId}/move` — whether moving a task to a column on a *different* board should be rejected or explicitly allowed is unresolved in research; needs a decision during Phase 2 planning.
-- **Cursor vs. offset pagination:** genuinely underspecified in the epic; needs a quick Spring Data version spike before Phase 4 planning locks in the repository query shape (expensive to change after the endpoint ships with real data).
-- **Exact KRaft compose YAML:** the specific env-var combination for `apache/kafka-native` should be pulled directly from `apache/kafka`'s own `docker/examples/docker-compose-files/single-node/` rather than hand-assembled, per STACK.md's own caveat.
+- **Oracle A1 Flex tenancy shape:** Confirm the actual current OCPU/RAM allocation for this specific tenancy in-console before finalizing Redpanda resource budgets — the publicly reported 2 OCPU/12 GB figure may not apply uniformly (some tenancies may be grandfathered, others may still be affected retroactively).
+- **Avro mapping-layer design:** No existing tooling or pattern found for mapping a Java sealed interface + records directly to Avro; the choice between hand-authored mapper classes (MapStruct-style, matching existing Entity↔DTO convention) vs. `@org.apache.avro.reflect.Union` reflection-based serialization needs its own design pass at Phase 1 planning time.
+- **Exact Confluent serializer patch version:** `io.confluent:kafka-avro-serializer` should be re-verified against Confluent's published interoperability matrix at merge time (the ~7.7.x/7.8.x line is a best estimate, not a locked version, given Confluent ships new patches frequently).
+- **Confluent client vs. Redpanda registry edge cases:** Two open GitHub issues note incompatibilities between Confluent's Java client and Redpanda's Schema Registry for Protobuf schemas with map fields and Avro namespace-tag handling — not directly relevant since this project uses Avro without map-field Protobuf, but worth a smoke test against the real Redpanda registry (not just Confluent's) before committing.
+- **Compatibility mode decision (BACKWARD vs. FULL):** FEATURES.md recommends BACKWARD as the standard default matching this project's single-deployable topology; PITFALLS.md argues FULL may actually be safer/affordable given producer and consumer are the same app process redeployed together. This is a real, unresolved tension between the two research files — Phase 1 planning must make and document an explicit choice rather than defaulting to either recommendation unreviewed.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- GitHub raw `build.gradle` at `spring-projects/spring-boot` tag `v3.5.0` — pinned `kafka-clients`/`spring-kafka`/`testcontainers` versions
-- Existing codebase (read directly): `TaskService.java`, `TaskEntity.java`, `OwnershipVerifierService.java`, `TaskController.java`, `BaseEntity.java`, `build.gradle`, `application.properties`, `docs/codebase/ARCHITECTURE.md`
-- `docs/plans/backend-modernization/01-kafka-activity-feed.md` (epic spec) and `.planning/PROJECT.md` — authoritative for this milestone's scope
+- Redpanda Requirements and Recommendations, Sizing Guidelines, Schema Registry overview (official docs, docs.redpanda.com) — broker/registry mechanics, ARM64 support, sizing
+- Neon: Connection pooling, Choosing your connection method, Connect securely, Connection latency (official docs, neon.com/docs) — pooled vs. direct connection guidance, cold-start latency numbers, SSL requirements
+- Confluent: Schema Evolution & Compatibility Types, Apache Avro for Kafka serdes (official docs, docs.confluent.io) — compatibility modes, Avro serdes mechanics
+- Oracle Cloud Free Tier, Always Free Resources, Security Lists, Network Security Groups (official docs, docs.oracle.com) — networking model, free-tier terms
+- davidmc24/gradle-avro-plugin, appleboy/ssh-action (official GitHub repos) — build tooling, CI/CD deploy mechanics
+- GitHub Docs: Managing deploy keys, Using secrets in GitHub Actions — SSH deploy key hygiene
 
 ### Secondary (MEDIUM confidence)
-- docs.spring.io official Spring Kafka reference (error handling, `DeadLetterPublishingRecoverer`, testing) — official framework docs
-- Apache Kafka / Docker official docs (image names, KRaft docker guide, Confluent delivery-semantics docs)
-- Practitioner sources cross-checked across multiple independent posts (Lydtech Consulting on idempotent consumers/dedup patterns, Baeldung on Kafka+Spring Boot testing)
+- InfoQ, heise online: Oracle Quietly Halves Free Tier Ampere A1 Compute Limits — cross-corroborated Oracle free-tier reduction (June 2026, undocumented by Oracle itself)
+- Redpanda GitHub issues #5771, #11912; TSB-2025-18 (official support advisory) — Confluent client vs. Redpanda registry edge cases (Protobuf map fields, Avro namespace tags)
+- Redpanda blog: Solving OOM Killer events, Need for speed performance tips — resource-tuning vendor guidance
 
 ### Tertiary (LOW confidence)
-- General web search results on KRaft env-var sets, DLT retry/backoff tuning, consumer rebalance behavior, and partition-key ordering — not cross-verified against a second independent source; flagged throughout PITFALLS.md and ARCHITECTURE.md as needing a doc-check at implementation time
-- Public documentation of Jira/Trello's actual activity-feed implementation details (delivery model, pagination mechanism) — largely undocumented publicly, inference-based
+- TerminalBytes: Oracle Cloud free tier 2026 changes — specific 4→2 OCPU / 24→12 GB numbers, cross-checked against tech press but not vendor-confirmed
+- Community setup guides for Oracle Cloud + Docker networking, HikariCP tuning blogs, Java virtual-threads pinning writeups — individually LOW confidence, used only where independently converged on the same finding (e.g., the two-layer OCI firewall gotcha)
+- Baeldung "Generate Avro Schema From Certain Java Class" — confirms no tooling generates Avro schemas directly from a sealed interface; needs validation during Phase 1 design
 
 ---
-*Research completed: 2026-08-01*
+*Research completed: 2026-08-03*
 *Ready for roadmap: yes*

@@ -1,10 +1,10 @@
 # Stack Research
 
-**Domain:** Kafka-based event-driven activity log, added to an existing Spring Boot 3.5.0 / Java 21 REST API
-**Researched:** 2026-08-01
-**Confidence:** MEDIUM (version numbers verified directly against the pinned `spring-boot-dependencies` BOM at the `v3.5.0` git tag — a primary source — but the fetch tooling available this session classifies as LOW-tier by default; cross-check before merging if in doubt. See Sources.)
+**Domain:** Infra migration (Oracle Cloud A1 Flex + self-hosted Redpanda + Neon serverless Postgres + GitHub Actions CI/CD) and Kafka Schema Registry (Avro) added to an existing Spring Boot 3.5.0 / Java 21 backend
+**Researched:** 2026-08-03
+**Confidence:** MEDIUM-HIGH (official docs confirmed for Redpanda/Neon/Confluent client mechanics; Oracle's free-tier limit change is confirmed by multiple independent outlets but Oracle itself never published a changelog, so treat the exact numbers as "current best evidence, cross-checked," not vendor-guaranteed)
 
-This file covers ONLY the NEW additions needed for the v1.1 Kafka activity-feed milestone (Epic 1 of the backend modernization plan). Everything already validated and in `build.gradle` (Spring Boot 3.5.0, Java 21, Spring Data JPA, Spring Security, MapStruct, springdoc-openapi, Lombok, ULID Creator, Vavr, Guava, REST Assured, H2, `@Version` optimistic locking) is out of scope — already shipped in v1.0, do not re-research or re-version. The prior milestone's JPA/Hibernate stack research that previously lived in this file has been superseded; it's preserved in git history and in `PROJECT.md`'s Validated section / `docs/plans/backend-modernization/STATUS.md`.
+This file covers ONLY the NEW additions needed for the v1.2 infra-migration + schema-registry milestone. It supersedes the prior v1.1-scoped content that lived in this file (Kafka producer/consumer foundation — spring-kafka, Testcontainers, `apache/kafka-native` for local dev), which is preserved in git history and remains valid/unchanged; that stack is NOT re-researched here. Also out of scope (already validated, no changes): Spring Boot 3.5.0, Java 21, Spring Data JPA/Hibernate, Spring Security + Spring Session JDBC, `@Version` optimistic locking, MapStruct, springdoc-openapi, Lombok, ULID Creator, Vavr, Guava, REST Assured, H2.
 
 ## Recommended Stack
 
@@ -12,108 +12,134 @@ This file covers ONLY the NEW additions needed for the v1.1 Kafka activity-feed 
 
 | Technology | Version | Purpose | Why Recommended |
 |------------|---------|---------|-----------------|
-| `spring-kafka` | **3.3.6** (BOM-managed — do not pin explicitly) | Producer/consumer abstraction (`KafkaTemplate`, `@KafkaListener`, `DefaultErrorHandler`) over the raw Kafka client | This is the exact version Spring Boot 3.5.0's own `spring-boot-dependencies` BOM pins (verified by reading the `build.gradle` of the `spring-boot` repo at the `v3.5.0` git tag directly — a primary source, not a blog post). The project already applies `io.spring.dependency-management` (line 4 of `build.gradle`), so declaring `implementation 'org.springframework.kafka:spring-kafka'` with **no version string** — same pattern already used for `spring-boot-starter-security`, `spring-boot-starter-web`, etc. — resolves the correct, tested-together version automatically. |
-| `org.apache.kafka:kafka-clients` | **3.9.1** (transitive via `spring-kafka`, do not declare directly) | Underlying Kafka wire-protocol client | Pulled in transitively by `spring-kafka`; only add directly if you need a client-only feature `spring-kafka` doesn't expose (not the case here). |
-| `apache/kafka-native` (Docker image) | Track `:latest` or pin to a current 4.x tag (e.g. `4.1.2`) | Single-node KRaft (no Zookeeper) local broker for `docker-compose.yml` | Epic spec explicitly calls for the native KRaft image, no separate Zookeeper service. `apache/kafka-native` is the GraalVM ahead-of-time-compiled variant of the official `apache/kafka` image — same env-var config surface, faster cold start and lower memory, which matters for the `docker compose up` inner-dev-loop. Client/broker version skew (broker on Kafka 4.x, client lib on 3.9.x wire protocol) is a non-issue: Kafka brokers are backward compatible with older client protocol versions. |
+| Oracle Cloud VM.Standard.A1.Flex | 2 OCPU / 12 GB RAM (Always Free, post-June-15-2026 halving) | Compute host replacing the deleted AWS EC2 instance | Only remaining zero-cost ARM compute tier after Oracle silently cut the prior 4 OCPU/24 GB allocation in half; confirmed current by InfoQ, Linuxiac, heise.de, and TerminalBytes independently (Oracle itself published no changelog/announcement — documentation was simply updated, and some users report existing instances being reclaimed without notice). New signups for Always Free remain open as of this research date. |
+| Ubuntu 22.04 LTS (or newer LTS) | latest point release | VM OS image | Default `ubuntu` user (vs. Oracle Linux's `opc`), and the broadest community documentation for Docker-on-OCI setup specifically for this pairing |
+| Docker Engine + Compose v2 plugin (installed from Docker's official apt repo, NOT Ubuntu's `docker.io` package) | current stable | Container runtime, matches the existing `docker-compose.yml` conventions | Ubuntu's distro-packaged `docker.io` is older and lacks the `docker compose` v2 subcommand this project's tooling assumes; Docker's own apt repo must be added |
+| Redpanda | v26.2.x (latest stable line, released July 2026, supported to July 2027) | Kafka-protocol-compatible broker replacing local-only `apache/kafka-native` for the deploy target | Kafka-wire-protocol compatible — the existing spring-kafka producer/consumer/DLQ code needs zero changes. Ships Schema Registry, HTTP proxy, and admin API built into the same broker binary, so the schema-registry goal needs no extra service to stand up |
+| Neon serverless Postgres | current Neon platform (Postgres 16/17-compatible) | Production DB replacing the deleted RDS/EC2-hosted Postgres | Scale-to-zero fits a near-zero-cost personal project; the standard `org.postgresql:postgresql` JDBC driver already in `build.gradle` plus Spring Data JPA/Hibernate work completely unmodified — Neon is wire-compatible Postgres, not a proprietary API |
+| Confluent `kafka-avro-serializer` + Apache Avro + `gradle-avro-plugin` | serializer in the ~7.7.x/7.8.x line (tracks Confluent Platform; verify exact patch against Confluent's published interoperability matrix at merge time); `org.apache.avro:avro` latest 1.12.x; plugin `com.github.davidmc24.gradle.plugin.avro` ~1.9.1 | Avro schema definition, codegen, and wire-format (de)serialization against a Confluent-API-compatible schema registry | Redpanda's built-in Schema Registry is explicitly documented as API-compatible with Confluent's Schema Registry — Confluent's own serializer/deserializer classes work against it with zero code changes, so there is no reason to introduce a separate, non-Confluent client library |
 
 ### Supporting Libraries
 
 | Library | Version | Purpose | When to Use |
 |---------|---------|---------|-------------|
-| `org.testcontainers:kafka` | BOM-managed → **1.21.0** (do not pin explicitly) | Spins up a real containerized Kafka broker for integration tests | Add as `testImplementation`, no version string — same BOM-managed convention already used for `com.h2database:h2`. This is the artifact the epic spec names explicitly. Note: a separately-versioned `org.testcontainers:testcontainers-kafka` module (2.x line, part of a Testcontainers-Java 2.0 rebrand) exists in the wider ecosystem, but Spring Boot 3.5.0 does **not** manage that line — use the classic `org.testcontainers:kafka` coordinate so it resolves cleanly off the BOM already in play. |
-| `org.testcontainers:junit-jupiter` | BOM-managed | JUnit 5 integration (`@Testcontainers`, `@Container`) for the Kafka container lifecycle | Needed alongside `org.testcontainers:kafka` for the integration test the epic calls for (publish `TaskMovedEvent` end-to-end through a real broker, assert `ActivityLogEntity` row appears). |
-| `org.springframework.boot:spring-boot-testcontainers` | BOM-managed | Enables `@ServiceConnection` on a `KafkaContainer` bean | Lets Spring Boot auto-wire `spring.kafka.bootstrap-servers` (and related `spring.kafka.*` connection props) from the running Testcontainers Kafka instance with **zero manual `@DynamicPropertySource` wiring** — one annotation on a `@TestConfiguration`-declared container bean. This is the idiomatic Spring Boot 3.1+ pattern and keeps the new test config terse and consistent with how clean the rest of this codebase's tests are. |
-
-### Development Tools
-
-| Tool | Purpose | Notes |
-|------|---------|-------|
-| `docker-compose.yml` (new, repo root) | Full local dev environment: `postgres` + `kafka` (native KRaft) + the app | Currently absent from the repo — only a `Dockerfile` exists. Single-node KRaft combined mode (broker+controller in one process) needs: `KAFKA_NODE_ID`, `KAFKA_PROCESS_ROLES=broker,controller`, `KAFKA_LISTENERS` (a `PLAINTEXT` listener for clients + a `CONTROLLER` listener), `KAFKA_ADVERTISED_LISTENERS`, `KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER`, `KAFKA_LISTENER_SECURITY_PROTOCOL_MAP`, `KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:9093`, and — specifically for single-node — `KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1` (the internal `__consumer_offsets` topic defaults to replication factor 3 and will fail to come up with only one broker otherwise). Official reference compose files live in `apache/kafka`'s own repo under `docker/examples/docker-compose-files/single-node/` — pull the exact YAML from there rather than hand-assembling it, to avoid a subtly wrong listener/advertised-listener combination (a very common Kraft-in-Docker footgun). |
-| Kafka UI (optional, e.g. `provectuslabs/kafka-ui` or Redpanda Console) | Ad-hoc topic/message inspection during local dev | Not required by the epic spec. A cheap add (one more `docker-compose.yml` service, zero app code) if you want to visually confirm message shape and DLT routing while building the consumer — mention as optional, skip if you want to keep the compose file minimal and reviewable. |
+| Caddy | current stable (v2.x) | Reverse proxy + automatic HTTPS (Let's Encrypt) in front of the app on the Oracle VM | Use instead of Nginx for this project — a portfolio/personal deployment doesn't need Nginx's advanced routing, and Caddy's one-line-per-domain Caddyfile with zero-config auto-TLS is meaningfully less operational surface for a single-service VM |
+| `appleboy/ssh-action` (GitHub Action) | latest | Executes remote SSH commands (`docker compose pull && up`) from a GitHub Actions job | Deploy step of the CI/CD pipeline — see GitHub Actions notes below |
+| `docker/build-push-action` + `docker/login-action` (GitHub Actions) | latest | Build the existing `Dockerfile` image and push it to GHCR | Build step; GHCR auth uses the auto-issued `GITHUB_TOKEN`, no manual PAT needed for same-repo pushes |
+| Redpanda Console (`redpandadata/console`) | current stable | Optional web UI for browsing topics/schemas | Nice-to-have only — see "Stack Patterns by Variant" for when to skip it given the tight 12 GB budget |
 
 ## Installation
 
-```bash
-# build.gradle additions (Gradle/Groovy DSL, matching existing file style)
+### Gradle additions (`build.gradle`)
 
-# Core — versions omitted deliberately; resolved via Spring Boot's
-# io.spring.dependency-management BOM (already applied, line 4 of build.gradle)
-implementation 'org.springframework.kafka:spring-kafka'
+```gradle
+plugins {
+    id 'com.github.davidmc24.gradle.plugin.avro' version '1.9.1'
+}
 
-# Testing — same BOM-managed convention already used for com.h2database:h2
-testImplementation 'org.testcontainers:kafka'
-testImplementation 'org.testcontainers:junit-jupiter'
-testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+repositories {
+    mavenCentral()
+    maven {
+        url 'https://packages.confluent.io/maven/'
+    }
+}
+
+dependencies {
+    implementation 'org.apache.avro:avro:1.12.0'
+    // Verify exact patch against Confluent's published Kafka-client interoperability
+    // matrix before merge -- Spring Boot 3.5.0 manages kafka-clients 3.8.1 via
+    // spring-kafka 3.3.x, which lines up with the Confluent Platform ~7.7.x/7.8.x line.
+    implementation 'io.confluent:kafka-avro-serializer:7.7.1'
+}
 ```
 
-No `npm`/lockfile step — this is a Gradle project; the four lines above are the complete dependency-side change. Run `./gradlew build` once added to confirm resolution. No version bump to `io.spring.dependency-management` (currently 1.1.6) is needed.
+`.avsc` schema files go in `src/main/avro/`; the plugin generates Java classes into `build/generated-main-avro-java` at compile time. Extend this project's existing ErrorProne `excludedPaths` regex (currently scoped to MapStruct's `build/generated/**` output — see `build.gradle`) to also cover the Avro codegen output, since neither is hand-written code.
 
-### `application.properties` additions
+### Deploy-target `docker-compose.yml` changes (conceptual — the full compose file gets authored during phase planning, not here)
 
-```properties
-# === Kafka ===
-spring.kafka.bootstrap-servers=${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
-spring.kafka.producer.key-serializer=org.apache.kafka.common.serialization.StringSerializer
-spring.kafka.producer.value-serializer=org.springframework.kafka.support.serializer.JsonSerializer
-spring.kafka.consumer.group-id=kanban-activity-log
-spring.kafka.consumer.key-deserializer=org.apache.kafka.common.serialization.StringDeserializer
-spring.kafka.consumer.value-deserializer=org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
-spring.kafka.consumer.properties.spring.deserializer.value.delegate.class=org.springframework.kafka.support.serializer.JsonDeserializer
-spring.kafka.consumer.properties.spring.json.trusted.packages=com.vrudenko.kanban_board.event
+```yaml
+services:
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v26.2.x   # pin exact patch, do not float :latest
+    command:
+      - redpanda start
+      - --smp 1
+      - --memory 1G
+      - --overprovisioned          # required: broker does not get dedicated cores on this shared VM
+      - --schema-registry-addr 0.0.0.0:8081
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://<VM_PUBLIC_HOST>:19092
+    restart: unless-stopped
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data   # same named-volume pattern as the existing kafka-data volume
 ```
 
-Follows the existing file's `# === section ===` comment convention (see `spring.datasource.*`, `spring.jpa.*` blocks already there). `KAFKA_BOOTSTRAP_SERVERS` should join `DB_HOST`/`DB_NAME`/`DB_USER`/`DB_PASS` as an env var supplied both by the new `docker-compose.yml` (pointing at the `kafka` service, e.g. `kafka:9092`) and by whatever mechanism supplies the Postgres env vars in the EC2 deploy today (needs a decision: does v1.1 also stand up Kafka in production, or is the Kafka activity feed local/dev-only for now? — flagged as an open question below). `ErrorHandlingDeserializer` wrapping `JsonDeserializer` is what lets a malformed/poison message be handed to `DefaultErrorHandler` → `DeadLetterPublishingRecoverer` instead of killing the listener container outright — this directly enables the epic's dead-letter-topic requirement.
+No Postgres container is needed in the deploy target — Neon replaces it entirely; only the app's `DB_HOST`/JDBC URL and credentials change to point at Neon.
 
 ## Alternatives Considered
 
 | Recommended | Alternative | When to Use Alternative |
 |-------------|-------------|--------------------------|
-| `org.testcontainers:kafka` (real containerized broker) | Spring's `@EmbeddedKafka` / `spring-kafka-test` (in-JVM fake broker) | `@EmbeddedKafka` boots faster and is fine for pure unit-level producer/consumer wiring tests, but doesn't exercise real broker partition/offset/redelivery semantics as faithfully — which is exactly what's needed to credibly demonstrate idempotent-consumption and dead-letter-topic behavior. The epic spec already names Testcontainers directly; that choice is correct as scoped. Reach for `@EmbeddedKafka` instead only if the test suite later grows many more fast unit-style Kafka tests and Testcontainers startup cost becomes a CI bottleneck. |
-| `apache/kafka-native` (native KRaft image) | `apache/kafka` (JVM KRaft image), or `confluentinc/cp-kafka` / Bitnami Kafka images | Plain `apache/kafka` (JVM) is a safe fallback if the native image has a compatibility hiccup locally — same env-var contract, just slower cold start. `confluentinc/cp-kafka` / Bitnami are heavier, bring Confluent-specific tooling/licensing surface not needed for a local dev broker, and aren't what the epic spec asks for — skip them. |
-| No explicit version on `spring-kafka` / `org.testcontainers:kafka` (BOM-managed) | Pinning explicit versions | Only pin explicitly if there's a specific documented reason to diverge from Boot's tested-together dependency set (e.g. a CVE fix not yet in the BOM) — and if so, override via the `kafka.version` / `spring-kafka.version` / `testcontainers.version` Gradle properties Spring's dependency-management plugin exposes, not a bare version string on the dependency line, so the override stays visible and centralized. |
+| Redpanda (self-hosted, single-node) | Confluent Cloud / Aiven Kafka (managed) | If the "self-hosted" constraint is dropped and a small recurring cost is acceptable — removes broker-ops burden entirely, but this milestone's stated goal is a cost-guarded self-hosted stack |
+| Direct (unpooled) Neon connection string with HikariCP | Pooled (`-pooler`) Neon connection string | Only if running many short-lived app instances/serverless functions each opening fresh connections — not this project's shape (one long-running Spring Boot process already pooling via HikariCP) |
+| Confluent `kafka-avro-serializer` against Redpanda's built-in registry | Apicurio Registry + its Confluent-compatible Java Serde | Only if pluggable storage/multi-format governance beyond this project's needs mattered, or avoiding Confluent's non-Maven-Central repository was a hard requirement — not a real constraint here |
+| Avro (schema files + codegen) | Protobuf (`.proto` + protoc) | If cross-language consumers were planned, or minimizing the Gradle-plugin surface mattered more than schema readability — this project is Java-only, and Avro's schema-first workflow maps closely onto the existing sealed `ActivityEvent` record pattern |
+| GitHub Actions: GitHub-hosted runner builds, SSH-pushes/pulls to the VM | Self-hosted GitHub Actions runner installed on the Oracle VM itself | Rejected here: doubles resource contention on an already resource-constrained 12 GB VM, and runs arbitrary workflow code directly on a public-facing box — worse security posture for a personal project with no other reason to need it |
+| Caddy reverse proxy | Nginx | If finer-grained routing/rewrite rules become necessary later — not needed for a single backend service today |
 
 ## What NOT to Use
 
 | Avoid | Why | Use Instead |
-|-------|-----|--------------|
-| Zookeeper-based Kafka setup (`wurstmeister/kafka`, `confluentinc/cp-zookeeper` + `cp-kafka` pair, etc.) | Zookeeper mode is legacy for new Kafka deployments; adds an extra container and moving part for zero benefit on a single-node local dev broker | KRaft mode, single combined broker+controller process, via `apache/kafka-native` — explicitly what the epic spec calls for |
-| Manually pinning `kafka-clients` / `spring-kafka` versions independent of the Spring Boot BOM | Easy path to a version-skew bug (e.g. a `spring-kafka` version expecting client APIs not present in a manually-pinned `kafka-clients`) that Boot's own compatibility testing doesn't cover | Let `io.spring.dependency-management` resolve both from the Boot 3.5.0 BOM (already applied to this project); omit version strings entirely, exactly as done for `spring-boot-starter-*` today |
-| `@DynamicPropertySource` + manually constructed `KafkaContainer` property wiring for the integration test | More boilerplate than necessary; this project doesn't use this pattern anywhere today, so introducing it here would be inconsistent with the rest of the test suite | `@ServiceConnection` on a Testcontainers `KafkaContainer` bean (via `spring-boot-testcontainers`) — one annotation, matches the "as clean and reviewable as the rest of the modernization plan" bar set in `PROJECT.md` |
-| A full microservice extraction of the activity-log consumer | Explicitly out of scope per `PROJECT.md` ("Full microservice extraction of the activity-log consumer... not this one") | In-process `@KafkaListener` in the same Spring Boot app, in a new `com.vrudenko.kanban_board.activitylog` package |
-| Kafka Streams / ksqlDB | No stream-processing requirement here — this is a single producer to single consumer to DB-write pipeline, not a topology | Plain `spring-kafka` producer (`KafkaTemplate`) + `@KafkaListener` consumer, as scoped |
+|-------|-----|-------------|
+| Running `apache/kafka-native` alongside or instead of Redpanda in the deploy target | The whole point of this milestone is replacing it there; keeping both wastes the already-scarce 12 GB budget | Redpanda only, in the deploy target compose file (local dev compose can keep `apache/kafka-native` if desired — it's unaffected by this milestone) |
+| Floating `:latest` tags for Redpanda or the app's GHCR image in the deploy compose file | Non-reproducible deploys; a broker version bump could silently change behavior on the next `docker compose pull` | Pin exact version tags/digests — consistent with this project's existing pinning discipline (ErrorProne, `apache/kafka-native:4.3.1`) |
+| Neon's pooled (`-pooler`) connection string with HikariCP | PgBouncer transaction-mode pooling underneath the pooled endpoint doesn't reliably support session-level features/prepared-statement lifecycles; stacking two pool layers (HikariCP + PgBouncer) for a single always-on process adds risk with no benefit | Neon's direct/unpooled connection string, with a tuned (small) HikariCP pool size |
+| AWS OIDC / IAM role-assumption patterns in the GitHub Actions workflow | Not applicable — Oracle Cloud is not AWS; there is no equivalent identity federation in play | A plain SSH key stored as a GitHub Actions repo secret, used via `appleboy/ssh-action` |
+| Assuming the OCI Security List alone opens external access | Oracle's Ubuntu images additionally ship a default-deny VM-level `iptables` ruleset (via `netfilter-persistent`/oci-utils) that still blocks inbound traffic even after the cloud-level Security List/NSG is opened — the single most commonly hit gotcha across every Oracle-Cloud-Docker setup guide surveyed | Open ports at BOTH layers: the OCI Security List/NSG ingress rules (TCP 22/80/443, `0.0.0.0/0`) AND the VM's own `iptables`/`ufw` rules |
+| Treating Oracle's Always Free A1 allocation as contractually guaranteed to stay at 2 OCPU/12 GB | Oracle changed this once already (4 OCPU/24 GB → 2 OCPU/12 GB, June 2026) with zero announcement; some users reported instances reclaimed/disabled without warning | Design the deploy footprint with headroom margin, and treat any further reduction as a known operational risk to monitor going forward, not something to architect defensively around right now |
 
 ## Stack Patterns by Variant
 
-**If the dead-letter topic needs a fixed, predictable name (`kanban.activity.dlt`, per the epic spec) rather than Spring's default `{topic}.DLT` suffix:**
-- Supply a custom destination resolver (a `BiFunction<ConsumerRecord<?, ?>, Exception, TopicPartition>`) to the `DeadLetterPublishingRecoverer` constructor instead of the default single-arg form
-- Because the epic spec explicitly names `kafka.activity.dlt` as the target, not Spring's default `kanban.activity.DLT`
+**If RAM headroom is tight after app + Redpanda + Neon-client overhead on the 12 GB VM:**
+- Skip Redpanda Console (the optional web UI, `redpandadata/console`) — it is not required for the schema-registry or Kafka pipeline to function, only for humans browsing topics/schemas
+- Because Console adds roughly 200-300 MB RAM on top of an already resource-constrained shared VM, and `rpk` (Redpanda's CLI, bundled in the broker image) covers the same inspection needs from an SSH session
 
-**If idempotent consumption needs to survive consumer restarts/rebalances, not just in-memory dedup:**
-- Use `ActivityLogRepository.existsByEventId(...)` as a DB-backed idempotency check (as the epic spec already specifies) rather than an in-memory `Set<UUID>` or Kafka-native exactly-once semantics (transactional producer/consumer)
-- Because DB-backed dedup survives process restarts and is simpler to reason about than configuring end-to-end Kafka transactions for a feature this scoped; exactly-once semantics would be a large scope increase not justified by the epic's stated goals
+**If the schema-registry migration needs to be gradual (avoid a hard cutover on the 5 `ActivityEvent` types):**
+- Register Avro schemas and switch the producer first, but keep the consumer able to handle both JSON (in-flight/older messages) and Avro (new messages) during a transition window
+- Because a hard flag-day cutover risks the DLQ or dedup consumer choking on a wire format it wasn't built to parse if any messages are still in-flight during the deploy
 
 ## Version Compatibility
 
 | Package A | Compatible With | Notes |
 |-----------|------------------|-------|
-| `spring-boot` 3.5.0 | `spring-kafka` 3.3.6 (BOM-managed) | Verified directly against `spring-boot-dependencies`' `build.gradle` at the `v3.5.0` git tag — the exact pinned version, not inferred from release notes |
-| `spring-boot` 3.5.0 | `org.apache.kafka:kafka-clients` 3.9.1 (transitive via `spring-kafka`) | Same source as above |
-| `spring-boot` 3.5.0 | `org.testcontainers` BOM 1.21.0 | Same source as above; use the classic `org.testcontainers:kafka` module coordinate at this version line, not the newer `testcontainers-kafka` 2.x rebrand, which Boot 3.5.0 does not manage |
-| `kafka-clients` 3.9.x (app-side client) | `apache/kafka-native` broker 4.x (local dev image) | Kafka brokers are wire-protocol backward compatible with older client versions; a 3.9.x client against a 4.x broker is a normal, supported combination — differing version numbers across the client/broker boundary are expected, not a bug |
-| `io.spring.dependency-management` 1.1.6 (already in `build.gradle`) | All of the above | No plugin version bump required; it just needs to import the Boot 3.5.0 BOM, which it already does via the `org.springframework.boot` plugin block |
-
-## Open Questions for Roadmap / Phase Planning
-
-- **Production Kafka:** `PROJECT.md` and the epic spec both frame this primarily as a local-dev/portfolio-demonstration feature (`docker-compose.yml` for local dev). It's not yet decided whether v1.1 also stands up a managed Kafka broker in production (EC2 deploy target) or whether the activity-feed feature is dev/demo-only until a later milestone. This affects whether `KAFKA_BOOTSTRAP_SERVERS` needs a production value wired into the deploy pipeline now or can default to `localhost:9092` safely for this milestone. Flag for roadmap phase-1 scoping.
-- **Dead-letter topic auto-creation:** confirm whether `kanban.activity` and `kanban.activity.dlt` topics should be auto-created (`spring.kafka.template.default-topic` + broker `auto.create.topics.enable=true`, the KRaft image's default) or explicitly declared via `NewTopic` `@Bean`s (more explicit, more reviewable, catches partition-count/replication-factor decisions at code-review time rather than implicitly at runtime). Recommend explicit `NewTopic` beans for a portfolio-quality diff — call out during phase planning.
+| Spring Boot 3.5.0 → spring-kafka 3.3.x | kafka-clients 3.8.1 (managed) | Confirmed via Spring for Apache Kafka's own compatibility notes; this project should NOT need to override Boot's managed kafka-clients version for Redpanda compatibility, since Redpanda targets standard Kafka wire-protocol versions |
+| `io.confluent:kafka-avro-serializer` ~7.7.x/7.8.x | kafka-clients ~3.7-3.8 | Roughly aligns with Spring Boot 3.5.0's managed kafka-clients 3.8.1; re-verify the exact patch against Confluent's published interoperability matrix (`docs.confluent.io/platform/current/installation/versions-interoperability.html`) when the schema-registry phase is actually planned, since Confluent ships new patches frequently |
+| Redpanda v26.2.x Schema Registry | Confluent Schema Registry REST API (wire-compatible) | Documented directly by Redpanda — no Redpanda-specific client library needed; Confluent's `KafkaAvroSerializer`/`KafkaAvroDeserializer` work unmodified |
+| Neon Postgres | `org.postgresql:postgresql` driver (already in `build.gradle`), Spring Data JPA/Hibernate (unchanged) | Standard Postgres wire protocol; only the JDBC URL/credentials change, plus a mandatory `sslmode=require` |
 
 ## Sources
 
-- GitHub raw `build.gradle` at `spring-projects/spring-boot` tag `v3.5.0` (`spring-boot-project/spring-boot-dependencies/build.gradle`) — direct read of the pinned `kafka` (3.9.1), `spring-kafka` (3.3.6), and `testcontainers` (1.21.0) version properties. This is a primary source (the actual tagged release's build file), so treat the version numbers above as reliable even though the generic tooling classification for this fetch method defaults to LOW confidence this session — cross-checked, not guessed.
-- [docs.spring.io — Handling Exceptions (Spring for Apache Kafka reference)](https://docs.spring.io/spring-kafka/reference/kafka/annotation-error-handling.html) — `DefaultErrorHandler` / `DeadLetterPublishingRecoverer` pattern, default `{topic}.DLT` naming, custom destination resolver — MEDIUM confidence (official framework reference docs)
-- [Apache Kafka docs — Docker](https://kafka.apache.org/41/getting-started/docker/) and [apache/kafka `docker/examples/README.md`](https://github.com/apache/kafka/blob/trunk/docker/examples/README.md) — official image names/tags (`apache/kafka`, `apache/kafka-native`, current release line 4.1.x) and pointer to the official single-node KRaft compose examples — LOW-MEDIUM confidence (official project docs, but the exact compose YAML itself was not directly retrieved this session — pull the actual file from `docker/examples/docker-compose-files/single-node/` in the `apache/kafka` repo before finalizing the project's `docker-compose.yml`)
-- General web search (built-in `WebSearch` tool) corroborating the KRaft single-node env-var set (`KAFKA_NODE_ID`, `KAFKA_PROCESS_ROLES`, `KAFKA_CONTROLLER_QUORUM_VOTERS`, `KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR`) and the Testcontainers-vs-`@EmbeddedKafka` / `@ServiceConnection` patterns — LOW confidence per this session's tooling tier (no MCP-backed search/docs provider — Context7, Exa, Brave, Tavily, Firecrawl — was available; all reported unavailable via the research-plan seam, so `WebSearch`/`WebFetch` fallback was used throughout). Cross-check the exact compose file and error-handling code against current official docs before merging.
+- [Redpanda Requirements and Recommendations (official docs)](https://docs.redpanda.com/current/deploy/deployment-option/self-hosted/manual/production/requirements) — HIGH, official
+- [Start a Single Redpanda Broker with Redpanda Console in Docker — Redpanda Labs (official)](https://docs.redpanda.com/labs/docker-compose/single-broker/) — HIGH
+- [Redpanda Schema Registry overview (official docs)](https://docs.redpanda.com/current/manage/schema-reg/schema-reg-overview/) — HIGH, confirms API-compatibility with Confluent clients
+- [Redpanda Release Notes (official)](https://docs.redpanda.com/current/reference/releases/) — HIGH, confirms v26.2 is current stable as of July 2026
+- [Neon: Connection pooling (official docs)](https://neon.com/docs/connect/connection-pooling) — HIGH
+- [Neon: Choosing your connection method (official docs)](https://neon.com/docs/connect/choose-connection) — HIGH, source for pooled-vs-direct/HikariCP guidance
+- [Neon: Connect securely / SSL requirements (official docs)](https://neon.com/docs/connect/connect-securely) — HIGH
+- [Neon: Connection latency and timeouts (official docs)](https://neon.com/docs/connect/connection-latency) — HIGH, source for the sub-second cold-start claim
+- [Confluent: Schema Evolution & Compatibility Types (official docs)](https://docs.confluent.io/platform/current/schema-registry/fundamentals/schema-evolution.html) — HIGH
+- [Confluent: Apache Avro for Kafka serdes (official docs)](https://docs.confluent.io/platform/current/schema-registry/fundamentals/serdes-develop/serdes-avro.html) — HIGH
+- [davidmc24/gradle-avro-plugin (official GitHub repo)](https://github.com/davidmc24/gradle-avro-plugin) — HIGH
+- [appleboy/ssh-action (official GitHub Action repo)](https://github.com/appleboy/ssh-action) — HIGH
+- [Oracle Cloud Free Tier official page](https://www.oracle.com/cloud/free/) — HIGH, confirms Always Free is still open for new signups
+- [Redpanda: Produce and consume Avro Messages with Redpanda schema registry (official blog)](https://www.redpanda.com/blog/produce-consume-apache-avro-tutorial) — HIGH
+- [InfoQ: Oracle Quietly Halves Free Tier Ampere A1 Compute Limits](https://www.infoq.com/news/2026/07/oracle-cloud-free-tier-limits/) — MEDIUM (reputable tech press, independently corroborated)
+- [Linuxiac: Oracle Quietly Cuts Free Tier Ampere A1 Resources in Half](https://linuxiac.com/oracle-quietly-cuts-free-tier-ampere-a1-resources-in-half/) — MEDIUM, corroborating
+- [heise online: Oracle halves free cloud resources](https://www.heise.de/en/news/Oracle-halves-free-cloud-resources-11334516.html) — MEDIUM, corroborating
+- [TerminalBytes: Oracle Cloud free tier 2026 changes](https://terminalbytes.com/oracle-cloud-free-tier-changes-2026/) — the specific 4→2 OCPU / 24→12 GB numbers, independent blog but cross-checked against the three sources above — treated as verified via cross-checking, not a single-source claim
+- [AutoMQ: Which Kafka Schema Registry is Right for Your Architecture in 2026?](https://www.automq.com/blog/kafka-schema-registry-confluent-aws-glue-redpanda-apicurio-2025) — MEDIUM (vendor blog, used only for Apicurio-as-alternative framing)
+- Community setup guides for Oracle Cloud + Docker networking (oneuptime.com, syncbricks.com, angelosantarella.gitlab.io) — LOW-MEDIUM individually, but converged independently on the same "Security List + VM-level iptables both required" finding, which raises confidence in that specific claim despite no single official Oracle doc stating it plainly
 
 ---
-*Stack research for: Kafka event-driven activity feed (v1.1 milestone, Epic 1 of backend modernization plan)*
-*Researched: 2026-08-01*
+*Stack research for: Kanban Board Backend v1.2 (Infra Migration & Schema Registry)*
+*Researched: 2026-08-03*
