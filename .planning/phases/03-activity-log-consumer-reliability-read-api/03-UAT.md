@@ -1,9 +1,9 @@
 ---
-status: partial
+status: complete
 phase: 03-activity-log-consumer-reliability-read-api
 source: [03-VERIFICATION.md]
 started: 2026-08-02T15:31:38Z
-updated: 2026-08-03T00:00:00Z
+updated: 2026-08-03T21:15:00Z
 ---
 
 ## Current Test
@@ -22,9 +22,8 @@ expected: |
   retries and lands on the dead-letter topic instead of ever being persisted — a total feature
   outage that superficially looks like "the dead-letter path works." This cannot be verified from
   the codebase; it requires access to the real deploy-target database.
-result: blocked
-blocked_by: other
-reason: "User does not have access to the production Postgres deploy-target database"
+result: skipped
+reason: "Superseded: the AWS EC2/RDS deploy target this test referenced was deleted by the operator (moving off AWS due to pricing risk). A v1.2 infra-migration milestone is replacing it with Oracle Cloud + Neon Postgres, which will need its own equivalent pre-merge DDL verification against the new deploy target. Tracking this as a fresh check in that milestone rather than resolving it against a database that no longer exists."
 
 ## Summary
 
@@ -32,7 +31,7 @@ total: 1
 passed: 0
 issues: 0
 pending: 0
-skipped: 0
-blocked: 1
+skipped: 1
+blocked: 0
 
 ## Gaps
