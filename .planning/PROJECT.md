@@ -2,24 +2,11 @@
 
 ## What This Is
 
-A Spring Boot 3.5.0 / Java 21 REST API backend for a Kanban board application (users → boards → columns → tasks → subtasks), with session-based authentication and ownership-based access control. This GSD project scopes specifically to finishing **Epic 2** of the existing [backend modernization plan](../docs/plans/backend-modernization/README.md): closing out the JPA/Hibernate depth work (N+1 fixes, optimistic locking) that was partially completed in a prior session.
+A Spring Boot 3.5.0 / Java 21 REST API backend for a Kanban board application (users → boards → columns → tasks → subtasks), with session-based authentication, ownership-based access control, optimistic locking on concurrent edits, and a Kafka-backed, event-driven per-board activity log. Originally scoped to finish **Epic 2** of the [backend modernization plan](../docs/plans/backend-modernization/README.md) (v1.0); v1.1 additionally delivered Epic 1 (the activity feed). The project is a personal/portfolio showcase, and its next milestone shifts focus from feature epics to deployment infrastructure.
 
 ## Core Value
 
-Ship optimistic locking on concurrent edits as clean, independently reviewable, technically defensible work that matches the standard already set by the completed part of Epic 2. (The "get full board" endpoint was narrowed out to v2 during requirements definition — see Out of Scope.)
-
-## Current Milestone: v1.1 Kafka Activity Feed
-
-**Goal:** Deliver a real, event-driven per-board activity log (Kafka + consumer + idempotent persistence), plus the genuinely-missing "move task between columns" endpoint, as Epic 1 of the backend modernization plan.
-
-**Target features:**
-- `docker-compose.yml` (postgres + kafka via native KRaft image + app) for a full local dev environment
-- `spring-kafka` dependency; domain events published from Task/Board/Column services after mutations
-- New `PATCH /tasks/{taskId}/move` endpoint
-- `@KafkaListener`-based `ActivityLogConsumer` persisting to a new `ActivityLogEntity`
-- `GET /boards/{boardId}/activity`, paginated, ownership-verified
-- Idempotent consumption (UUID `eventId`) and a dead-letter topic
-- Testcontainers-based Kafka integration test
+v1.0 and v1.1 shipped the backend-depth showcase (JPA/Hibernate optimistic locking, Kafka event sourcing with dead-letter reliability, idempotent consumption — all proven against real Postgres/Kafka, not mocks). With the AWS EC2/RDS deploy target deleted (2026-08-03, cost-risk driven), the next priority is making the project reachable and cheaply/reliably deployable again — Oracle Cloud + Neon + self-hosted Redpanda — without diluting the backend-depth narrative that is this project's actual differentiator.
 
 ## Requirements
 
@@ -33,10 +20,15 @@ Ship optimistic locking on concurrent edits as clean, independently reviewable, 
 - ✓ Confirmed non-issue: `OwnershipVerifierService` chain already resolves in 1 query via EAGER joins (Finding 1) — no code change needed
 - ✓ Optimistic locking on `TaskEntity` and `ColumnEntity` (`@Version`), required client-supplied version checked explicitly before mutation on both `TaskService.updateById` and the new `ColumnService.updateById`, `GlobalExceptionHandler`'s 423→409 fix, and a Lombok equals/hashCode exclusion on `ColumnEntity.version` — Phase 1, done 2026-08-01. Proven end-to-end by real HTTP E2E tests (`TaskLockingE2ETest`, `ColumnLockingE2ETest`).
 - ✓ New `PUT /boards/{boardId}/columns/{columnId}` endpoint — Phase 1, done 2026-08-01 (previously missing; added so `ColumnEntity`'s `@Version` is reachable/testable via the API)
+- ✓ Local Kafka dev stack (`docker-compose.yml`: postgres + KRaft-mode `apache/kafka-native` + app, health-gated) — v1.1 Phase 2, done 2026-08-01
+- ✓ `PATCH /tasks/{taskId}/move` endpoint reusing the Phase 1 explicit-version-compare convention (409 stale version, 400 cross-board) — v1.1 Phase 2, done 2026-08-01
+- ✓ All 5 domain mutation types (task create/move/delete, board create, column create) publish typed, sealed `ActivityEvent` records via `KafkaEventPublisher` only after transaction commit — v1.1 Phase 2, done 2026-08-01. Proven live by killing the Kafka broker mid-request and confirming mutations still succeed with the failure logged, never swallowed.
+- ✓ Idempotent, deduplicated activity-log consumer (`ActivityLogConsumer`/`ActivityLogRecorder`) with a database-unique-constraint-backed dedup and a dead-letter topic (byte-fidelity preserved) for poison messages — v1.1 Phase 3, done 2026-08-02. Proven against a real Testcontainers Kafka broker, not mocks.
+- ✓ `GET /boards/{boardId}/activity` — paginated, ownership-verified, deterministic newest-first read endpoint — v1.1 Phase 3, done 2026-08-02
 
 ### Active
 
-- Kafka + event-driven activity log (Epic 1 of the backend modernization plan) — v1.1, scoping in progress
+(None yet — next milestone's scope not yet defined.)
 
 ### Out of Scope
 
@@ -45,17 +37,20 @@ Ship optimistic locking on concurrent edits as clean, independently reviewable, 
 - Re-fixing `OwnershipVerifierService`'s chain of `findById()` calls (Finding 1) — measured and confirmed non-issue; already resolves in 1 query via EAGER join chain, no work needed
 - Full microservice extraction of the activity-log consumer into a separate deployable service — the in-process `@KafkaListener` already demonstrates the event-driven pattern; a possible later epic, not this one
 - GraphQL, Elasticsearch, WebFlux/reactive, Kotlin, Oracle/PL-SQL, Angular — explicitly excluded by the modernization plan as niche/low-ROI for this project's scope
+- Cursor/keyset pagination on the activity feed (PAGE-V2-01) — offset `Pageable` shipped in v1.1 for API consistency; revisit only if activity-log scale becomes a real concern
+- Field-level diff logging, DLT replay/reprocessing admin tooling, real-time push (WebSocket/SSE) of activity updates, retention/archival policy, generic/pluggable event schema — all explicitly excluded from v1.1's scope per REQUIREMENTS.md's Out of Scope table; reasons still valid, no signal any of these are needed yet
 
 ## Context
 
-- This is a personal/portfolio project; the modernization plan's stated purpose is closing real technology gaps in the backend stack (see [README.md](../docs/plans/backend-modernization/README.md)), but this specific GSD project is scoped purely to the remaining Epic 2 technical work.
-- Full epic spec: [02-n-plus-one-optimistic-locking.md](../docs/plans/backend-modernization/02-n-plus-one-optimistic-locking.md).
+- This is a personal/portfolio project; the modernization plan's stated purpose is closing real technology gaps in the backend stack (see [README.md](../docs/plans/backend-modernization/README.md)).
+- Full epic specs: [02-n-plus-one-optimistic-locking.md](../docs/plans/backend-modernization/02-n-plus-one-optimistic-locking.md) (v1.0), Epic 1 Kafka activity feed (v1.1, archived requirements at `.planning/milestones/v1.1-REQUIREMENTS.md`).
 - Progress notes and gotchas already hit during the completed portion of Epic 2 are logged in [STATUS.md](../docs/plans/backend-modernization/STATUS.md) — includes a real gotcha about mixing derived `deleteAllByXIn` (fetch-then-remove) with bulk JPQL deletes causing FK violations, and stale persistence-context entities requiring `flush()`/`clear()`.
 - Codebase map available at `.planning/codebase/` (ARCHITECTURE.md, STACK.md, CONVENTIONS.md, TESTING.md, INTEGRATIONS.md, CONCERNS.md, STRUCTURE.md) — read before planning.
 - Existing convention: services use `@Autowired` field injection (not constructor) to sidestep circular bean dependencies between Board/Column/Task/Subtask/Ownership services.
-- Existing convention: DTOs are flat (no nested entity graphs) specifically to avoid `LazyInitializationException` — the new `/full` endpoint DTO will need deliberate nested structure, a departure from this pattern that should be justified explicitly.
-- **Outstanding manual step (Phase 1):** `docs/plans/backend-modernization/02-optimistic-locking-ddl.sql` has NOT been run against the real Postgres database yet. Since `master` auto-deploys to EC2 on every push, this script must be run manually right before this phase's PR merges/deploys, or every Task/Column request will 500 in production on a missing `version` column.
+- Existing convention: DTOs are flat (no nested entity graphs) specifically to avoid `LazyInitializationException` — the deferred `/full` endpoint DTO will need deliberate nested structure, a departure from this pattern that should be justified explicitly.
 - Phase 1's required auth-path fix (`UserAuthenticationProvider` propagating the actual authenticated principal instead of a broken bare-userId string) initially introduced a real security regression — the full `UserEntity` (with bcrypt `passwordHash`) flowing into the JDBC-backed session table. Caught by code review, fixed same-session (commit `c5fb656`) by using a minimal Spring Security `User` principal instead.
+- **Infrastructure change (2026-08-03):** The operator deleted the project's AWS EC2 instance and its Postgres database, moving off AWS due to unpredictable pricing risk. This makes the "run the DDL bridge script against the real Postgres deploy target" human-verification step from v1.1 Phase 3 permanently moot — there is no longer a deploy target for it to run against (acknowledged in `03-VERIFICATION.md`'s Acknowledged Gaps and `03-UAT.md`). A v1.2 infra-migration milestone is next: Oracle Cloud Always Free (compute) + Neon (serverless Postgres, scale-to-zero, zero JPA/Hibernate code changes needed) + a self-hosted single-node Redpanda broker (Kafka-protocol-compatible, zero producer/consumer/DLQ code changes needed) + GitHub Actions CI/CD. That milestone will need its own equivalent pre-merge DDL verification step against the new deploy target.
+- Phase 2 (Kafka Foundation, Domain Events & Move Endpoint) was executed successfully but its verification step was never run at the time — discovered during the pre-close audit for v1.1. Retroactively verified 2026-08-03: 15/15 must-haves passed against a live Docker Compose stack, no regressions to Phase 3.
 
 ## Constraints
 
@@ -72,7 +67,12 @@ Ship optimistic locking on concurrent edits as clean, independently reviewable, 
 | Treat Finding 1 (ownership chain) as closed, no further code change | Already measured and confirmed as 1 query via EAGER join chain; re-opening would be wasted effort | ✓ Good |
 | Narrow v1 to optimistic locking only; defer `/full` endpoint to v2 | User confirmed this narrower scope during requirements definition, after research showed both were independent, separately-sized pieces of work | ✓ Good |
 | Client-supplied `version` required + explicitly compared server-side, not just relying on Hibernate's automatic `@Version` dirty-check | This codebase's update flow loads-then-saves fresh within one transaction, so the automatic check alone would never catch a stale-read conflict across separate requests — the explicit check is what actually delivers the phase's goal | ✓ Good |
-| Manual DDL now, not deferred to Epic 3/Flyway | Deferring would leave production broken between merge and Epic 3 landing, since master auto-deploys on push | ✓ Good — script delivered; live-DB run still outstanding (see Context) |
+| Manual DDL now, not deferred to Epic 3/Flyway | Deferring would leave production broken between merge and Epic 3 landing, since master auto-deploys on push | ✓ Good — script delivered; live-DB run superseded by AWS deletion, moved to v1.2 (see Context) |
+| Continue phase numbering across milestones (v1.1 starts at Phase 2, not Phase 1) | Keeps a single, continuous phase history across the whole modernization plan rather than resetting per milestone | ✓ Good — though it produced a tooling false-positive at v1.1 close (a phase-completeness checker misread the already-shipped, archived Phase 1 as "unstarted"); required `--force` after manual verification, not a real gap |
+| Split v1.1 into 2 coarse phases (producer, then consumer) instead of research's suggested 5 | Producer side is independently buildable/testable with a mocked `KafkaTemplate`; consumer side depends on producer's event contracts and needs a running pipeline | ✓ Good |
+| Retroactively verify Phase 2 before v1.1 close, rather than skip it | Phase 2 had zero verification artifacts (executed but the verifier step never ran) — a real gap in project history, not acceptable to paper over | ✓ Good — 15/15 must-haves passed |
+| Resolve the stale Phase 3 UAT blocker (prod DDL check) as superseded rather than force-passing it | The AWS deploy target it referenced was deleted; forcing it to "pass" would misrepresent what was actually verified | ✓ Good |
+| Error Prone landed at "hard-gate main and test" (`allErrorsAsWarnings` removed, 5 checks promoted to ERROR on `compileTestJava`) rather than the todo's literal "just remove the demotion" | Measured that removing the demotion alone was a no-op (all 27 test findings were WARNING severity); promotion is what makes "hard-gate" true | ✓ Good — teeth-checked by reintroduce-and-revert |
 
 ## Evolution
 
@@ -92,4 +92,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-01 after starting v1.1 milestone*
+*Last updated: 2026-08-03 after v1.1 milestone completion*

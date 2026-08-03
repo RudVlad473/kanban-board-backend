@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Kafka Activity Feed
-current_phase: 03
-current_phase_name: activity-log-consumer-reliability-read-api
-status: verifying
+status: Awaiting next milestone
 stopped_at: Completed quick task 260803-v23 (hard-gate compileTestJava Error Prone findings)
-last_updated: "2026-08-03T21:00:23.422Z"
+last_updated: "2026-08-03T21:26:33.911Z"
 last_activity: 2026-08-03
-last_activity_desc: Completed quick task 260803-v23 (drove all 27 test-source Error Prone findings to zero -- 25 fixed in source, 2 deliberately dropped with written reasons; added AbstractKafkaContainerTest.sendAndAwaitAck to fix 16 FutureReturnValueIgnored Kafka-send findings; promoted 5 triaged checks to ERROR severity on compileTestJava, teeth-checked by a reintroduce-and-revert probe; closed the source todo with its incorrect premise corrected)
+last_activity_desc: Milestone v1.1 completed and archived
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 6
   completed_plans: 6
   percent: 67
+current_phase: 03
+current_phase_name: activity-log-consumer-reliability-read-api
 ---
 
 # Project State
@@ -28,12 +28,10 @@ See: .planning/PROJECT.md (updated 2026-08-01)
 
 ## Current Position
 
-Phase: 03 (activity-log-consumer-reliability-read-api) — EXECUTING
-Plan: 3 of 3
-Status: Phase complete — ready for verification
-Last activity: 2026-08-03 — Completed quick task 260803-v23 (hard-gate compileTestJava Error Prone findings)
-
-Progress: [██████████] 100%
+Phase: Milestone v1.1 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-08-03 — Milestone v1.1 completed and archived
 
 ## Performance Metrics
 
@@ -169,4 +167,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Run `/gsd-plan-phase 2` to plan Kafka Foundation, Domain Events & Move Endpoint
+- Start the next milestone with /gsd-new-milestone

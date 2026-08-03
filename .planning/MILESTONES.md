@@ -1,5 +1,18 @@
 # Milestones
 
+## v1.1 Kafka Activity Feed (Shipped: 2026-08-03)
+
+**Phases completed:** 2 phases, 6 plans, 6 tasks
+
+**Key accomplishments:**
+
+- The full vertical slice — Gradle dependencies, Kafka producer configuration
+- `TaskCreatedEvent`/`TaskDeletedEvent` records, widened `ActivityEvent` permits clause,
+- `docker-compose.yml` at the repo root with `postgres:16`, `apache/kafka-native:4.3.1`
+- 1. [Rule 1 - Bug, production-relevant] `KafkaConsumerConfig.deadLetterKafkaTemplate` silently suppressed Spring Boot's default `KafkaTemplate` bean
+
+---
+
 ## v1.0 Optimistic Locking (Shipped: 2026-08-01)
 
 **Phases completed:** 1 phases, 3 plans, 7 tasks
