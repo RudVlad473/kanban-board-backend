@@ -15,3 +15,16 @@ for file in $stagedFiles; do
     git add $file
   fi
 done
+
+# Part 4 Run the fast local test gate: the `fastTest` Gradle task (build.gradle)
+# runs everything except the Testcontainers-backed E2E suite (every E2E class is
+# suffixed E2ETest). The default `test` task is untouched, so `./gradlew test` run
+# directly (and in CI) still executes everything, E2E included. Still runs
+# ArchUnit's LayeringArchTest plus all unit/service tests, so ownership-layering
+# and Error Prone regressions are caught before the commit lands, not first in CI.
+echo "Running fast test suite (excluding E2E tests)..."
+./gradlew fastTest
+if [ $? -ne 0 ]; then
+  echo "Tests failed. Commit aborted."
+  exit 1
+fi
