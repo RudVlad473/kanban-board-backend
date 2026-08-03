@@ -17,6 +17,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.context.SecurityContextHolderStrategy;
+import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,6 +34,7 @@ public class AuthenticationController {
     private final SecurityContextHolderStrategy securityContextHolderStrategy =
             SecurityContextHolder.getContextHolderStrategy();
     private final SecurityContextRepository securityContextRepository;
+    private final SessionAuthenticationStrategy sessionAuthenticationStrategy;
 
     @Autowired private UserService userService;
 
@@ -92,6 +94,18 @@ public class AuthenticationController {
         return Try.of(() -> authenticationManager.authenticate(token))
                 .mapTry(
                         authentication -> {
+                            // Enforces the concurrent-session ceiling and rotates the session id
+                            // on the privilege transition (D-01). Shared by both signin and
+                            // signup, since both go through this helper -- intended, because
+                            // signup auto-authenticates the account it just created, and the
+                            // ceiling can never reject a signup since a brand-new principal has
+                            // zero live sessions. A rejection throws
+                            // SessionAuthenticationException,
+                            // which the Try below collapses to false, then the caller's blanket
+                            // catch turns into a 401.
+                            sessionAuthenticationStrategy.onAuthentication(
+                                    authentication, request, response);
+
                             // get user credential for wrapped to token
                             var context = securityContextHolderStrategy.createEmptyContext();
 

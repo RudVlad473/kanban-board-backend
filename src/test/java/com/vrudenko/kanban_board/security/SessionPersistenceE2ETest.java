@@ -1,15 +1,20 @@
 package com.vrudenko.kanban_board.security;
 
+import static io.restassured.RestAssured.given;
+
 import com.vrudenko.kanban_board.AbstractAppE2ETest;
+import com.vrudenko.kanban_board.constant.ApiPaths;
+import com.vrudenko.kanban_board.dto.user_dto.SigninRequestDTO;
+import io.restassured.http.ContentType;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
-import java.util.Set;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.util.Pair;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
@@ -174,53 +179,66 @@ public class SessionPersistenceE2ETest extends AbstractAppE2ETest {
     class ConcurrentSessionCeiling {
 
         /**
-         * Characterises current behaviour -- it does not endorse it. {@code
-         * SecurityConfiguration:61-67} configures {@code
-         * maximumSessions(2).maxSessionsPreventsLogin(true)}, but that ceiling is enforced by
-         * {@code ConcurrentSessionControlAuthenticationStrategy}, which runs inside an
-         * authentication filter. This application authenticates through {@code
-         * AuthenticationController.signin}, which calls {@code
-         * authenticationManager.authenticate(token)} directly, and Spring Security 6 no longer
-         * installs {@code SessionManagementFilter} on the default chain either -- so nothing on
-         * this path ever invokes the strategy. No session is ever registered against the principal,
-         * and the ceiling is never checked. See the todo filed alongside this test: {@code
-         * .planning/todos/pending/2026-08-02-wire-session-authentication-strategy-into-custom-signin.md}.
+         * Specifies enforced behaviour, not a tripwire. {@code SecurityConfiguration:61-67}
+         * declares {@code maximumSessions(2).maxSessionsPreventsLogin(true)}; enforcement comes
+         * from the {@code sessionAuthenticationStrategy} bean -- a {@code
+         * CompositeSessionAuthenticationStrategy} composing {@code
+         * ConcurrentSessionControlAuthenticationStrategy} (backed by a {@code
+         * SpringSessionBackedSessionRegistry}, so the count is a live read of {@code
+         * SPRING_SESSION.PRINCIPAL_NAME}) and {@code ChangeSessionIdAuthenticationStrategy} --
+         * invoked explicitly from {@code AuthenticationController.authenticate}'s {@code mapTry}
+         * lambda, before the {@code SecurityContext} is saved. The same call site is shared by
+         * {@code signup}, so the ceiling and id rotation apply there too.
          *
-         * <p>This is a tripwire, not a spec: the day someone wires the strategy correctly into the
-         * custom signin path, THIS TEST goes RED. At that point the todo above is done, and this
-         * test (plus its Javadoc, plus the corresponding CLAUDE.md entry corrected in this same
-         * plan's Task 3) must be updated to assert the ceiling instead of its absence -- that
-         * break-on-fix is the entire point of keeping this test rather than deleting it.
+         * <p>The rejection surfaces as {@code 401 Invalid username or password} --
+         * indistinguishable from a wrong password. This is deliberate, not an oversight: the {@code
+         * SessionAuthenticationException} thrown by the strategy is collapsed by the Vavr {@code
+         * Try} in {@code authenticate}, then by that method's blanket {@code catch}, into a {@code
+         * BadCredentialsException}. Distinguishing the two responses would hand an attacker an
+         * oracle for "these credentials are valid, this account just has sessions open"; the
+         * usability cost -- a real user hitting the ceiling learns nothing about why -- is accepted
+         * and recorded here, not silently swallowed. Do not "fix" this by adding a dedicated
+         * exception handler for {@code SessionAuthenticationException}.
          */
         @Test
-        void
-                shouldAllowThreeConcurrentSessions_whenMaxSessionsIsConfiguredButNoAuthenticationStrategyRuns() {
+        void shouldRejectThirdSignin_whenConcurrentSessionCeilingIsReached() {
             // arrange
             var countBefore =
                     jdbcTemplate.queryForObject(
                             "SELECT COUNT(*) FROM SPRING_SESSION", Integer.class);
 
-            // act
+            // act: two signins succeed; signin() cannot express a rejection (it extracts only a
+            // cookie and asserts no status), so the third is issued inline to capture the status
             var firstCookie = signin();
             var secondCookie = signin();
-            var thirdCookie = signin();
+            var thirdResponse =
+                    given().contentType(ContentType.JSON)
+                            .body(
+                                    SigninRequestDTO.builder()
+                                            .email(getOwningUser().getEmail())
+                                            .password(getOwningUserPassword())
+                                            .build())
+                            .when()
+                            .post(ApiPaths.SIGNIN)
+                            .then()
+                            .extract();
 
-            // assert: three live sessions for one principal, one more than the configured
-            // ceiling of two -- proving the ceiling is not enforced on this authentication path
+            // assert: the first two signins succeed with two distinct session cookies
             Assertions.assertThat(firstCookie.getSecond()).isNotNull();
             Assertions.assertThat(secondCookie.getSecond()).isNotNull();
-            Assertions.assertThat(thirdCookie.getSecond()).isNotNull();
-            Assertions.assertThat(
-                            Set.of(
-                                    firstCookie.getSecond(),
-                                    secondCookie.getSecond(),
-                                    thirdCookie.getSecond()))
-                    .hasSize(3);
+            Assertions.assertThat(firstCookie.getSecond()).isNotEqualTo(secondCookie.getSecond());
 
+            // assert: the third is rejected over HTTP and yields no session cookie
+            Assertions.assertThat(thirdResponse.statusCode())
+                    .isEqualTo(HttpStatus.UNAUTHORIZED.value());
+            Assertions.assertThat(thirdResponse.cookie(COOKIE_NAME)).isNull();
+
+            // assert: exactly two SPRING_SESSION rows were created across all three attempts --
+            // the rejected third signin creates none
             var countAfter =
                     jdbcTemplate.queryForObject(
                             "SELECT COUNT(*) FROM SPRING_SESSION", Integer.class);
-            Assertions.assertThat(countAfter - countBefore).isEqualTo(3);
+            Assertions.assertThat(countAfter - countBefore).isEqualTo(2);
         }
     }
 }
