@@ -241,4 +241,55 @@ public class SessionPersistenceE2ETest extends AbstractAppE2ETest {
             Assertions.assertThat(countAfter - countBefore).isEqualTo(2);
         }
     }
+
+    @Nested
+    class SessionFixation {
+
+        /**
+         * Proves the session id is rotated across the pre-auth -> post-auth privilege transition
+         * (closes {@code T-shl-01}). {@code ChangeSessionIdAuthenticationStrategy} -- the second
+         * delegate in {@code sessionAuthenticationStrategy} -- only rotates an id when {@code
+         * request.getSession(false)} is non-null; a signin with no cookie attached has nothing to
+         * rotate and would pass vacuously without proving anything. Presenting the first signin's
+         * cookie on the second request is what makes the pre-existing session real and the rotation
+         * observable.
+         *
+         * <p>Cookie values are Base64-encoded by {@code DefaultCookieSerializer}, so they are
+         * compared to each other here, never to a {@code SPRING_SESSION.SESSION_ID} column value.
+         */
+        @Test
+        void shouldRotateSessionId_whenSigninPresentsAnExistingSession() {
+            // arrange
+            var countBefore =
+                    jdbcTemplate.queryForObject(
+                            "SELECT COUNT(*) FROM SPRING_SESSION", Integer.class);
+            var firstCookie = signin();
+
+            // act: re-signin, presenting the live cookie the first signin returned
+            var secondResponse =
+                    given().contentType(ContentType.JSON)
+                            .cookie(firstCookie.getFirst(), firstCookie.getSecond())
+                            .body(
+                                    SigninRequestDTO.builder()
+                                            .email(getOwningUser().getEmail())
+                                            .password(getOwningUserPassword())
+                                            .build())
+                            .when()
+                            .post(ApiPaths.SIGNIN)
+                            .then()
+                            .extract();
+
+            // assert: a fresh, different cookie value comes back -- the id was rotated, not reused
+            var secondCookieValue = secondResponse.cookie(COOKIE_NAME);
+            Assertions.assertThat(secondCookieValue).isNotNull();
+            Assertions.assertThat(secondCookieValue).isNotEqualTo(firstCookie.getSecond());
+
+            // assert: rotation deletes the old row and re-saves under the fresh id, so the two
+            // signins together leave exactly one new SPRING_SESSION row, not two
+            var countAfter =
+                    jdbcTemplate.queryForObject(
+                            "SELECT COUNT(*) FROM SPRING_SESSION", Integer.class);
+            Assertions.assertThat(countAfter - countBefore).isEqualTo(1);
+        }
+    }
 }
