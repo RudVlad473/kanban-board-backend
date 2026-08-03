@@ -6,9 +6,9 @@ current_phase: 03
 current_phase_name: activity-log-consumer-reliability-read-api
 status: verifying
 stopped_at: Completed 03-03-PLAN.md (Phase 3 complete)
-last_updated: "2026-08-03T15:38:59.000Z"
+last_updated: "2026-08-03T16:22:00.000Z"
 last_activity: 2026-08-03
-last_activity_desc: Completed quick task 260803-l6f (added UserPersistenceE2ETest proving signup persists a real bcrypt hash and signup-then-signin round-trips; filed deferred security todo for dead UserMapper overload + nullable passwordHash)
+last_activity_desc: Completed quick task 260803-m2z (wired a SessionAuthenticationStrategy into AuthenticationController.authenticate so the concurrent-session ceiling and session-fixation protection are now enforced on both signin and signup, proven by test; corrected both CLAUDE.md claims that documented them as inert; closed the source todo)
 progress:
   total_phases: 3
   completed_phases: 2
@@ -130,6 +130,7 @@ Carried from research (address during Phase 2/3 planning):
 | 260802-shl | Fix the dead Spring Session JDBC configuration — wired spring-session-jdbc for real (sessions now persist to Postgres, surviving redeploys); discovered and documented that the concurrent-session ceiling is also unenforced | 2026-08-02 | 500fde5 | [260802-shl-fix-the-dead-spring-session-jdbc-configu](./quick/260802-shl-fix-the-dead-spring-session-jdbc-configu/) |
 | 260802-tbj | Remove the pointless synchronized modifier from RandFlakeGenerator.generateRandflake (guarded no shared state) | 2026-08-02 | 501b53f | [260802-tbj-remove-the-pointless-synchronized-modifi](./quick/260802-tbj-remove-the-pointless-synchronized-modifi/) |
 | 260803-l6f | Add UserPersistenceE2ETest proving HTTP signup persists a real bcrypt hash to USERS.PASSWORD_HASH and signup-then-signin round-trips; filed a security-marked deferred todo for a dead hash-less UserMapper overload and the nullable passwordHash column | 2026-08-03 | fb186df,19dfb14 | [260803-l6f-add-a-test-proving-password-hash-is-pers](./quick/260803-l6f-add-a-test-proving-password-hash-is-pers/) |
+| 260803-m2z | Wire a SessionAuthenticationStrategy into AuthenticationController.authenticate — the concurrent-session ceiling (maximumSessions(2)) and session-fixation protection now actually run on both signin and signup, proven by SessionPersistenceE2ETest.ConcurrentSessionCeiling (rewritten from tripwire to spec) and a new SessionFixation test; corrected both CLAUDE.md claims and closed the source todo | 2026-08-03 | 0260df7,a09c7e3,6747117 | [260803-m2z-wire-a-sessionauthenticationstrategy-int](./quick/260803-m2z-wire-a-sessionauthenticationstrategy-int/) |
 
 ## Deferred Items
 
