@@ -152,6 +152,14 @@ Items acknowledged and carried forward:
 | Epics | Modernization Epics 3–7 (Flyway/OpenAPI, Redis, Testcontainers project-wide, Observability, K8s) | Deferred to future milestones | 2026-07-31 |
 | Kafka | Production (EC2) Kafka deployment (KAFKA-V2-01) | Deferred to v2 | 2026-08-01 |
 | Kafka | Cursor/keyset pagination on activity feed (PAGE-V2-01) | Deferred to v2 | 2026-08-01 |
+| UAT | Phase 3 human-verification item (production DDL bridge script) | Superseded — deploy target deleted, moved to v1.2 | 2026-08-03 |
+| Quick task | 260801-p03-add-explicit-comments-to-taskservice-upd (missing summary) | Acknowledged at v1.1 close | 2026-08-03 |
+| Quick task | 260802-rq5-bump-java-version-from-21-to-25-current- (research-only, no summary artifact) | Acknowledged at v1.1 close | 2026-08-03 |
+| Quick task | 260802-ryf-enable-virtual-threads-in-spring-boot-co (research-only, no summary artifact) | Acknowledged at v1.1 close | 2026-08-03 |
+| Todo | 5 pending todos (schema evolution risk, Java 25 bump, sequence diagram, virtual threads, Snowflake IDs) | Acknowledged at v1.1 close — remain in `.planning/todos/pending/` | 2026-08-03 |
+| Seed | SEED-001 Confluent Schema Registry (Avro/Protobuf) | Acknowledged at v1.1 close — remains dormant in `.planning/seeds/` | 2026-08-03 |
+
+**Known verification overrides: 9 (see above)**
 
 ## Session Continuity
 
