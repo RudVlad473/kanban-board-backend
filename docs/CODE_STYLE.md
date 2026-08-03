@@ -298,6 +298,34 @@ public abstract class AbstractKafkaContainerTest {
 
 `AbstractKafkaContainerTest`'s `api.version` pin is the reference: the actual fix for a real Docker/Testcontainers incompatibility encountered on Windows lives in test code, not in a runbook telling a developer what to click.
 
+### 9. Use `var` only when the RHS already makes the type obvious
+
+For local variable declarations, `var` is preferred only when the right-hand side already makes the type visually obvious at the call site — a constructor call (`var user = new UserEntity();`), a well-known factory/builder call (`var id = UlidCreator.getUlid();`, `var dto = TaskResponseDTO.builder()...build();`), or a loop variable over a collection whose element type was just declared. Keep the explicit type when the RHS is a call whose return type isn't obvious without checking the method signature — a service/repository/mapper method call, a generic collection assembled through a stream or factory method, or any expression a reader would have to look up elsewhere to resolve. `var` is a Java local-variable-only feature — it cannot appear on fields, method parameters, or return types — so this rule only ever applies to local variable declarations, never anywhere else.
+
+**Why:** this codebase (and an AI agent editing it) is read top-to-bottom without an IDE's inline type hints, so the type has to come from either the keyword or the RHS; when the RHS already spells out the type, `var` removes true redundancy, but when it doesn't, `var` forces a detour to a method signature just to know what a variable supports — which is friction the explicit-type form never asks for.
+
+Discouraged:
+
+```java
+public TaskResponseDTO updateById(String userId, String taskId, UpdateTaskRequestDTO dto) {
+    var task = findById(userId, taskId);
+    var siblingTasks = taskRepository.findAllByColumnId(task.getColumn().getId());
+    var response = taskMapper.toDto(task);
+    return response;
+}
+```
+
+Preferred:
+
+```java
+public TaskResponseDTO updateById(String userId, String taskId, UpdateTaskRequestDTO dto) {
+    TaskEntity task = findById(userId, taskId);
+    List<TaskEntity> siblingTasks = taskRepository.findAllByColumnId(task.getColumn().getId());
+    var id = UlidCreator.getUlid();
+    return taskMapper.toDto(task);
+}
+```
+
 ## Adding a rule
 
 New rules are appended as a new `###` section under `## Rules`, numbered with the next integer. Each rule must carry the same three parts: a rule statement, a bolded **Why** line, and a bad-vs-good code example.
