@@ -60,3 +60,21 @@ Tracker for [the backend modernization plan](README.md). Update as epics are sta
   right before merge, was chosen instead. **Epic 3 must not silently re-apply or lose this step**
   — when Flyway migration tooling is introduced, this manual change needs to be reflected in
   migration history (e.g. as an already-applied/baseline migration), not re-run or forgotten.
+- **2026-08-03 — Quick task `260803-m3i`: `UserEntity.passwordHash` tightened to non-nullable,
+  production DDL bridge delivered.** Added
+  [`04-password-hash-not-null-ddl.sql`](04-password-hash-not-null-ddl.sql): a guarded
+  `DO $$ ... $$;` block that counts existing `users` rows with a null `password_hash`, aborts with
+  a `RAISE EXCEPTION` naming the row count if any exist, and otherwise runs
+  `ALTER TABLE users ALTER COLUMN password_hash SET NOT NULL;`. Must be run manually via psql
+  against the real database before merging/deploying this PR, same mechanism as the two precedent
+  scripts — `ddl-auto` is unset in the real Postgres profile, so the entity annotation alone does
+  not touch the production schema. The pre-flight null check exists because `SET NOT NULL`, unlike
+  Epic 2's `ADD COLUMN ... DEFAULT 0`, can fail outright against existing data — there is no
+  default to backfill missing values with. **Backfilling nulls to a sentinel hash (approach C) was
+  considered and explicitly rejected**: it would manufacture permanently-unauthenticatable accounts
+  — the exact defect this change closes — while destroying the evidence that anything was wrong
+  upstream. Unlike the Epic 2 bridge, this one is safe in either merge order (the constraint is
+  additive and the app already only ever writes non-null hashes), so the pressure to run it before
+  merge is "don't lose this," not "production breaks at merge." **Epic 3 must not silently re-apply
+  or lose this step either** — same requirement as the two precedent scripts, reflected in Flyway
+  migration history as an already-applied baseline when Epic 3 lands.

@@ -34,9 +34,14 @@ public class UserEntity extends BaseEntity implements BaseUser, UserDetails {
     @OneToMany(mappedBy = "user")
     private List<BoardEntity> boards;
 
-    // since we may have other kinds of authentication that may not require
-    // password, it can be null
-    @Column(nullable = true)
+    // No authentication method other than password exists today. A null hash here is not a
+    // forward-looking allowance -- it is an account that can never authenticate, because
+    // passwordEncoder.matches(plaintext, null) is permanently false. The database now rejects
+    // that write instead of silently accepting it. See
+    // docs/plans/backend-modernization/04-password-hash-not-null-ddl.sql for the production-side
+    // half of this change; ddl-auto is unset in the real Postgres profile, so this annotation
+    // alone does not touch the production schema.
+    @Column(nullable = false)
     @JsonIgnore
     private String passwordHash;
 

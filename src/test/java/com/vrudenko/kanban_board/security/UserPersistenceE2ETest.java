@@ -139,11 +139,12 @@ public class UserPersistenceE2ETest extends AbstractAppE2ETest {
 
             // Never assert a specific hash value: BCrypt salts every encode, so the same
             // password yields a different hash each run. Assert the marker prefix plus
-            // inequality/non-containment against the plaintext instead. Also: do not assert a
-            // DB-level NOT NULL constraint on PASSWORD_HASH -- UserEntity declares
-            // @Column(nullable = true) deliberately (future non-password auth methods), and
-            // Hibernate builds the H2 schema from that annotation, so a constraint assertion
-            // would fail today. This test observes what the column actually holds.
+            // inequality/non-containment against the plaintext instead. As of quick task
+            // 260803-m3i, UserEntity declares @Column(nullable = false) on PASSWORD_HASH, so
+            // Hibernate's H2 schema does now enforce a DB-level NOT NULL constraint -- but no
+            // assertion in this class was changed by that task, and this class deliberately still
+            // asserts what the column actually holds rather than what the schema forbids; a
+            // schema-constraint assertion belongs alongside the entity, not here.
             Assertions.assertThat(persistedHash).isNotNull();
             Assertions.assertThat(persistedHash).startsWith(BCRYPT_HASH_MARKER);
             Assertions.assertThat(persistedHash).isNotEqualTo(plaintextPassword);
