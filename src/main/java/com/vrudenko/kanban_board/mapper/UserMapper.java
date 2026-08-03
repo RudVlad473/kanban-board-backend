@@ -24,10 +24,6 @@ public abstract class UserMapper {
 
     public abstract UserResponseDTO toResponseDTO(UserEntity entity);
 
-    public abstract UserEntity fromSigninRequestDTO(SigninRequestDTO dto);
-
-    public abstract UserEntity fromSignupRequestDTO(SigninRequestDTO dto);
-
     public abstract List<UserResponseDTO> toResponseDTOList(List<UserEntity> entities);
 
     public abstract SigninRequestDTO toSigninRequestDTO(UserEntity entity);
