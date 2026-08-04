@@ -59,27 +59,27 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SCHEMA-01 | TBD | Pending |
-| SCHEMA-02 | TBD | Pending |
-| SCHEMA-03 | TBD | Pending |
-| SCHEMA-04 | TBD | Pending |
-| SCHEMA-05 | TBD | Pending |
-| SCHEMA-06 | TBD | Pending |
-| INFRA-01 | TBD | Pending |
-| INFRA-02 | TBD | Pending |
-| INFRA-03 | TBD | Pending |
-| INFRA-04 | TBD | Pending |
-| INFRA-05 | TBD | Pending |
-| INFRA-06 | TBD | Pending |
-| INFRA-07 | TBD | Pending |
-| INFRA-08 | TBD | Pending |
+| SCHEMA-01 | Phase 4 | Pending |
+| SCHEMA-02 | Phase 4 | Pending |
+| SCHEMA-03 | Phase 4 | Pending |
+| SCHEMA-04 | Phase 4 | Pending |
+| SCHEMA-05 | Phase 4 | Pending |
+| SCHEMA-06 | Phase 4 | Pending |
+| INFRA-01 | Phase 5 | Pending |
+| INFRA-02 | Phase 5 | Pending |
+| INFRA-03 | Phase 5 | Pending |
+| INFRA-04 | Phase 5 | Pending |
+| INFRA-05 | Phase 5 | Pending |
+| INFRA-06 | Phase 5 | Pending |
+| INFRA-07 | Phase 5 | Pending |
+| INFRA-08 | Phase 5 | Pending |
 
 **Coverage:**
 - v1 requirements: 14 total
-- Mapped to phases: 0 (roadmap not yet created)
-- Unmapped: 14 ⚠️ (expected — filled in by roadmapper)
+- Mapped to phases: 14 (Phase 4: 6, Phase 5: 8)
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-08-03*
-*Last updated: 2026-08-03 after requirements definition*
+*Last updated: 2026-08-04 after roadmap creation (v1.2: Phase 4 Schema Registry, Phase 5 Infra Migration)*
 </content>

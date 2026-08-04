@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Infra Migration & Schema Registry
 status: planning
-last_updated: "2026-08-03T21:34:26.815Z"
-last_activity: 2026-08-03
+last_updated: "2026-08-04T00:00:00.000Z"
+last_activity: 2026-08-04
 progress:
-  total_phases: 0
+  total_phases: 2
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,17 +17,19 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-08-01)
+See: .planning/PROJECT.md (updated 2026-08-03)
 
-**Core value:** Deliver a real, event-driven per-board activity log (Kafka + consumer + idempotent persistence), plus the genuinely-missing "move task between columns" endpoint, as Epic 1 of the backend modernization plan.
-**Current focus:** Phase 03 — activity-log-consumer-reliability-read-api
+**Core value:** Redeploy the app on a cost-guarded, always-free/near-free stack (Oracle Cloud + Neon + self-hosted Redpanda) after the AWS EC2/RDS deletion, and add a Schema Registry (Avro) in front of the Kafka activity-log pipeline to close the schema-evolution risk flagged during v1.1.
+**Current focus:** Phase 4 — Schema Registry
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-08-03 — Milestone v1.2 started
+Phase: 4 of 5 (Schema Registry)
+Plan: — (not yet planned)
+Status: Roadmap created — ready to plan Phase 4
+Last activity: 2026-08-04 — Roadmap created for v1.2 (Phase 4: Schema Registry, Phase 5: Infra Migration)
+
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
@@ -44,6 +46,8 @@ Last activity: 2026-08-03 — Milestone v1.2 started
 | 1 | 3 | 95min | 32min |
 | 2 | TBD | - | - |
 | 3 | TBD | - | - |
+| 4 | TBD | - | - |
+| 5 | TBD | - | - |
 
 **Recent Trend:**
 
@@ -72,6 +76,8 @@ Last activity: 2026-08-03 — Milestone v1.2 started
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Roadmap/v1.2]: Continued phase numbering from v1.1 — this milestone starts at Phase 4, not Phase 1. Split 14 requirements into 2 phases (coarse granularity, matching research's recommendation): Phase 4 = Schema Registry (SCHEMA-01..06 — buildable/verifiable entirely against the local docker-compose stack, no dependency on the new deploy target; the higher-risk, more code-heavy phase since the Avro/sealed-interface mapping layer has no ready-made pattern to copy), Phase 5 = Infra Migration (INFRA-01..08 — pure ops/config, benefits from Schema Registry already being proven locally).
+- [Roadmap/v1.2]: Phase 5 explicitly depends on Phase 4 for one narrow cross-phase task — the final cutover step repoints `schema.registry.url` from wherever Phase 4 verified against (local Redpanda or a standalone registry container) to the production Redpanda instance's built-in registry on the Oracle VM, then re-runs Phase 4's verification suite against the real target.
 - [Roadmap/v1.1]: Continued phase numbering from v1.0 — this milestone starts at Phase 2, not Phase 1.
 - [Roadmap/v1.1]: Split 16 requirements into 2 phases (coarse granularity): Phase 2 = producer side (Kafka infra, domain events, move endpoint), Phase 3 = consumer side (activity log, idempotency, DLT, read API, e2e verification). Research's 5-phase suggestion was compressed to match coarse granularity — TEST-01/02 folded into Phase 3 as additional success criteria rather than a standalone verification-only phase.
 - [Roadmap/v1.1]: Phase 2 explicitly depends on Phase 1 — `PATCH /tasks/{taskId}/move` (MOVE-02) reuses the exact explicit `@Version` compare-before-mutate convention delivered in Phase 1, not a new locking path.
@@ -103,7 +109,7 @@ Recent decisions affecting current work:
 
 - [minor] Create a sequence diagram documenting the full system flow — deferred until all functional epics of the backend modernization plan are complete and the project is ready for frontend hand-off. See `.planning/todos/pending/2026-08-01-create-sequence-diagram-documenting-full-system-flow-for-fro.md`.
 - [minor] Bump Java version from 21 to 25 (current LTS) — build.gradle toolchain, Dockerfile (both stages), and CI `java-version` all pinned to 21; not urgent (21 LTS supported until ~2028), but worth doing proactively. See `.planning/todos/pending/2026-08-01-bump-java-version-from-21-to-25-current-lts.md`.
-- [minor] Account for schema evolution risk when changing ActivityEvent shapes — a rolling deploy that renames/retypes an event field while old-shape messages are still unconsumed can dead-letter valid (non-poison) messages; Kafka itself enforces no schema. See `.planning/todos/pending/2026-08-01-account-for-schema-evolution-risk-when-changing-activityeven.md`.
+- [minor] Account for schema evolution risk when changing ActivityEvent shapes — a rolling deploy that renames/retypes an event field while old-shape messages are still unconsumed can dead-letter valid (non-poison) messages; Kafka itself enforces no schema. Directly addressed by v1.2 Phase 4 (Schema Registry) — expect this todo to close at that phase's transition. See `.planning/todos/pending/2026-08-01-account-for-schema-evolution-risk-when-changing-activityeven.md`.
 - [minor] Enable virtual threads in Spring Boot config (`spring.threads.virtual.enabled=true`) — evaluate JDBC/Hibernate and Spring Session JDBC blocking-call pinning risk first. See `.planning/todos/pending/2026-08-02-enable-virtual-threads-in-spring-boot-config.md`.
 - [minor] Use a Snowflake ID generator for activity log events (`eventId`) instead of UUID — for index locality and time-ordering; see also the general note about adopting this as the project's default ID-generation strategy. See `.planning/todos/pending/2026-08-02-use-snowflake-id-generator-for-activity-log-events.md`.
 - [minor] Add a dependency vulnerability scan (OWASP dependency-check or similar) — no scan exists today despite several manually-pinned third-party libs. See `.planning/todos/pending/2026-08-03-add-dependency-vulnerability-scan.md`.
@@ -111,12 +117,13 @@ Recent decisions affecting current work:
 
 ### Blockers/Concerns
 
-Carried from research (address during Phase 2/3 planning):
+Carried from research (address during Phase 4/5 planning):
 
-- Exact KRaft env-var set and internal-vs-external listener config for `apache/kafka-native` was only web-search-sourced (LOW confidence) — pull the reference compose YAML from `apache/kafka`'s own repo before finalizing Phase 2 planning.
-- `DefaultErrorHandler`/`DeadLetterPublishingRecoverer` retry-before-DLT tuning is thinly sourced (LOW-MEDIUM) — worth a research pass during Phase 3 planning to avoid stale `SeekToCurrentErrorHandler`-era tutorials.
-- Cursor vs. offset pagination for `GET /boards/{boardId}/activity` is underspecified by the epic; this milestone ships offset `Pageable` per REQUIREMENTS.md (PAGE-V2-01 defers keyset pagination to v2) — confirm during Phase 3 planning before the repository query shape is locked in.
-- Production (EC2) Kafka deployment is explicitly out of scope for v1.1 (KAFKA-V2-01) — the dev `docker-compose.yml` must not be reused unmodified as a deploy artifact without a review pass.
+- Oracle A1 Flex tenancy shape (OCPU/RAM) must be re-verified in-console before finalizing Redpanda `--memory`/`--smp` resource caps — the publicly reported 2 OCPU/12 GB post-halving figure is MEDIUM confidence, not vendor-confirmed for this specific tenancy.
+- Avro/sealed-interface mapping-layer design (hand-authored mapper vs. `@org.apache.avro.reflect.Union` reflection) has no ready-made tooling shortcut — needs its own design pass at Phase 4 planning time, not a mechanical conversion.
+- Compatibility mode choice (BACKWARD vs. FULL) is a genuine unresolved tension between research's two source files (FEATURES.md recommends BACKWARD as the topology-matching default; PITFALLS.md argues FULL may be safer given producer/consumer are the same redeployed app) — Phase 4 planning must make and document an explicit choice, not default to either unreviewed.
+- Confluent `kafka-avro-serializer` exact patch version and Confluent-client-vs-Redpanda-registry edge cases (map-field Protobuf, Avro namespace-tag handling per GH issues #5771/#11912) should be smoke-tested against the real Redpanda registry before committing, even though this project's Avro usage (no map fields) is not directly implicated.
+- Production (deploy-target) Kafka/Redpanda config is new for this milestone — the existing dev `docker-compose.yml` Kafka block is being replaced wholesale for Phase 5, not edited in place; do not reuse it unmodified as a deploy artifact.
 
 ### Quick Tasks Completed
 
@@ -146,21 +153,24 @@ Items acknowledged and carried forward:
 | Epics | Modernization Epics 3–7 (Flyway/OpenAPI, Redis, Testcontainers project-wide, Observability, K8s) | Deferred to future milestones | 2026-07-31 |
 | Kafka | Production (EC2) Kafka deployment (KAFKA-V2-01) | Deferred to v2 | 2026-08-01 |
 | Kafka | Cursor/keyset pagination on activity feed (PAGE-V2-01) | Deferred to v2 | 2026-08-01 |
-| UAT | Phase 3 human-verification item (production DDL bridge script) | Superseded — deploy target deleted, moved to v1.2 | 2026-08-03 |
+| UAT | Phase 3 human-verification item (production DDL bridge script) | Superseded — deploy target deleted, addressed by v1.2 Phase 5 (INFRA-06) | 2026-08-03 |
 | Quick task | 260801-p03-add-explicit-comments-to-taskservice-upd (missing summary) | Acknowledged at v1.1 close | 2026-08-03 |
 | Quick task | 260802-rq5-bump-java-version-from-21-to-25-current- (research-only, no summary artifact) | Acknowledged at v1.1 close | 2026-08-03 |
 | Quick task | 260802-ryf-enable-virtual-threads-in-spring-boot-co (research-only, no summary artifact) | Acknowledged at v1.1 close | 2026-08-03 |
-| Todo | 5 pending todos (schema evolution risk, Java 25 bump, sequence diagram, virtual threads, Snowflake IDs) | Acknowledged at v1.1 close — remain in `.planning/todos/pending/` | 2026-08-03 |
-| Seed | SEED-001 Confluent Schema Registry (Avro/Protobuf) | Acknowledged at v1.1 close — remains dormant in `.planning/seeds/` | 2026-08-03 |
+| Todo | 5 pending todos (schema evolution risk, Java 25 bump, sequence diagram, virtual threads, Snowflake IDs) | Acknowledged at v1.1 close — remain in `.planning/todos/pending/`; schema-evolution-risk todo now targeted by v1.2 Phase 4 | 2026-08-03 |
+| Seed | SEED-001 Confluent Schema Registry (Avro/Protobuf) | Promoted into v1.2 scope (Phase 4: SCHEMA-01..06) | 2026-08-04 |
+| Infra Polish | INFRA-V2-01..03 (full observability stack, blue-green deploys, multi-broker Redpanda HA) | Deferred to v2 per v1.2 REQUIREMENTS.md | 2026-08-03 |
+| Schema Registry Polish | SCHEMA-V2-01..02 (pre-merge schema-compatibility CI check, documented compatibility-mode rationale) | Deferred to v2 per v1.2 REQUIREMENTS.md | 2026-08-03 |
 
 **Known verification overrides: 9 (see above)**
 
 ## Session Continuity
 
-Last session: 2026-08-03T21:00:14.792Z
-Stopped at: Completed quick task 260803-v23 (hard-gate compileTestJava Error Prone findings)
+Last session: 2026-08-04T00:00:00.000Z
+Stopped at: Created v1.2 ROADMAP.md (Phase 4: Schema Registry, Phase 5: Infra Migration) — 14/14 requirements mapped, no orphans
 Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Review and approve the roadmap, then run `/gsd-plan-phase 4` to start planning Schema Registry
+</content>
