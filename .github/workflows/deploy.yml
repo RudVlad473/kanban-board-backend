@@ -71,10 +71,21 @@ jobs:
       - name: Push Docker image
         run: docker push ${{ steps.set_full_image_name.outputs.actual_image_name }}
 
+  # DISABLED for the v1.2 "Infra Migration & Schema Registry" milestone.
+  # The AWS EC2 host this job SSHes into has been deleted (moving off AWS
+  # on cost grounds), so every push to master would otherwise fail here
+  # trying to reach an unreachable host.
+  # Tests and the Docker build/push above are deliberately unaffected and
+  # still run on every push.
+  # Phase 5 (Infra Migration, INFRA-01..INFRA-08) replaces the deploy
+  # target with an Oracle Cloud VM and requires newly-generated SSH
+  # credentials per INFRA-05 -- REWRITE this job, do not just flip
+  # `if: false` back to re-enable it.
+  # Tracking: .planning/todos/pending/2026-08-04-re-enable-and-rewrite-the-disabled-deploy-job-after-phase-5.md
   deploy-to-ec2:
     needs: build-and-push-docker-image
     runs-on: ubuntu-latest
-    if: success()
+    if: false
     steps:
       - name: Set up SSH
         run: |
