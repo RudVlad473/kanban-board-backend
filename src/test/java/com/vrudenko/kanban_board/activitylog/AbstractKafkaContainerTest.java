@@ -1,7 +1,9 @@
 package com.vrudenko.kanban_board.activitylog;
 
+import com.vrudenko.kanban_board.config.AvroSchemaRegistrar;
 import com.vrudenko.kanban_board.constant.KafkaTopics;
 import com.vrudenko.kanban_board.event.ActivityEvent;
+import com.vrudenko.kanban_board.event.avro.ActivityEventAvroMapper;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -9,14 +11,23 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.TestPropertySource;
-import org.testcontainers.kafka.KafkaContainer;
+import org.testcontainers.redpanda.RedpandaContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * Shared real-broker harness for the {@code activitylog} package's integration tests. Starts one
- * {@code apache/kafka-native:4.3.1} container per test class -- the same image tag {@code
- * docker-compose.yml} pins, so local, CI and test all exercise the same broker family.
+ * Shared real-broker-and-registry harness for the {@code activitylog} package's integration tests.
+ * Starts one {@code docker.redpanda.com/redpandadata/redpanda:v26.2.1} container per test class --
+ * one container exposing both a Kafka-protocol-compatible broker and a Confluent-API-compatible
+ * Schema Registry (Phase 4, Schema Registry), replacing the previous {@code
+ * apache/kafka-native:4.3.1} broker-only image. Migrating this shared base class in place (rather
+ * than adding a second, Avro-specific harness) was the deliberate choice: the three pre-existing
+ * {@code activitylog} E2E classes never touch a registry at all, so they compile and pass unchanged
+ * against Redpanda purely because it is a Kafka-protocol superset of what they already exercised --
+ * see this plan's design_alternatives for the full comparison against standing up a second,
+ * standalone Confluent registry container.
  *
  * <p>Raises the test profile's producer bounds ({@code max.block.ms}, {@code request.timeout.ms},
  * {@code delivery.timeout.ms}) to 30 seconds for this context only. The test profile ({@code
@@ -59,6 +70,15 @@ import org.testcontainers.utility.DockerImageName;
  * to run exactly once per classloader, independent of any JUnit extension's lifecycle bookkeeping,
  * which is the standard Testcontainers "singleton container" recommendation for containers meant to
  * be shared across multiple test classes in one JVM.
+ *
+ * <p>{@code @ServiceConnection} on {@code kafka} still wires {@code spring.kafka.bootstrap-servers}
+ * automatically -- Spring Boot 3.5.0 ships a dedicated {@code
+ * RedpandaContainerConnectionDetailsFactory} for exactly this container type. No equivalent
+ * connection-details mechanism exists for the Schema Registry (it is a Confluent/Avro concern, not
+ * something Spring Boot's Kafka autoconfiguration knows about), so {@code schema.registry.url} is
+ * wired explicitly below via {@code @DynamicPropertySource} instead of folded into the
+ * {@code @TestPropertySource} block above it -- an annotation attribute must be a compile-time
+ * constant, and the registry's mapped port is only known once the container has actually started.
  */
 @SpringBootTest
 @TestPropertySource(
@@ -82,19 +102,40 @@ public abstract class AbstractKafkaContainerTest {
     }
 
     @ServiceConnection
-    static final KafkaContainer kafka =
-            new KafkaContainer(DockerImageName.parse("apache/kafka-native:4.3.1"));
+    static final RedpandaContainer kafka =
+            new RedpandaContainer(
+                    DockerImageName.parse("docker.redpanda.com/redpandadata/redpanda:v26.2.1"));
 
     // Imperative, exactly-once start -- see the class Javadoc for why this replaces the
-    // @Testcontainers/@Container-driven lifecycle.
+    // @Testcontainers/@Container-driven lifecycle. Schema registration happens here too, right
+    // after the container is up: this is the same AvroSchemaRegistrar.registerAll() the
+    // registerSchemas Gradle task invokes for build/CI, so this is what makes
+    // auto.register.schemas=false workable in tests with zero manual setup step
+    // (docs/CODE_STYLE.md rule 8), not a second, drifting registration path.
     static {
         kafka.start();
+        AvroSchemaRegistrar.registerAll(kafka.getSchemaRegistryAddress());
+    }
+
+    @DynamicPropertySource
+    static void registerSchemaRegistryProperties(DynamicPropertyRegistry registry) {
+        registry.add(
+                "spring.kafka.producer.properties.schema.registry.url",
+                kafka::getSchemaRegistryAddress);
+        registry.add(
+                "spring.kafka.consumer.properties.schema.registry.url",
+                kafka::getSchemaRegistryAddress);
     }
 
     @Autowired protected KafkaTemplate<String, Object> kafkaTemplate;
+    @Autowired protected ActivityEventAvroMapper activityEventAvroMapper;
 
     protected String getBootstrapServers() {
         return kafka.getBootstrapServers();
+    }
+
+    protected String getSchemaRegistryAddress() {
+        return kafka.getSchemaRegistryAddress();
     }
 
     /**
@@ -106,11 +147,20 @@ public abstract class AbstractKafkaContainerTest {
      * a broker-side send rejection surfaces immediately as this method's own exception instead of
      * as a misleading 30-second Awaitility timeout that would blame the consumer for a problem that
      * was actually the producer's.
+     *
+     * <p>Maps {@code event} through {@link ActivityEventAvroMapper} before sending -- the wire
+     * format is Avro (Phase 4), not the plain domain record -- so this is the one internal change
+     * that keeps all three pre-existing {@code activitylog} E2E classes compiling and passing with
+     * zero edits to their own source: they hand this helper domain events, and it is this helper's
+     * job, not theirs, to know the wire format.
      */
     protected void sendAndAwaitAck(ActivityEvent event)
             throws InterruptedException, ExecutionException, TimeoutException {
         kafkaTemplate
-                .send(KafkaTopics.ACTIVITY, event.eventId().toString(), event)
+                .send(
+                        KafkaTopics.ACTIVITY,
+                        event.eventId().toString(),
+                        activityEventAvroMapper.toAvro(event))
                 .get(30, TimeUnit.SECONDS);
     }
 }

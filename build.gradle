@@ -171,6 +171,25 @@ tasks.register('fastTest', Test) {
     }
 }
 
+// --- Schema Registry registration (SCHEMA-01) ---------------------------------
+// Build/CI-invocable counterpart to the producer, which only ever looks schemas up
+// (auto.register.schemas=false in application.properties) -- this task is the sole
+// sanctioned writer of schemas. AbstractKafkaContainerTest's static initializer calls
+// the same AvroSchemaRegistrar.registerAll() this task invokes, so test-time and
+// build-time registration cannot drift apart (docs/CODE_STYLE.md rule 8).
+tasks.register('registerSchemas', JavaExec) {
+    description = 'Registers all 5 Avro schemas against the Schema Registry with BACKWARD ' +
+            'compatibility (SCHEMA-01, SCHEMA-04, D-02).'
+    group = 'kafka'
+    dependsOn classes
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.vrudenko.kanban_board.config.AvroSchemaRegistrar'
+    def registryUrl = project.findProperty('schemaRegistryUrl')
+            ?: System.getenv('SCHEMA_REGISTRY_URL')
+            ?: 'http://localhost:8081'
+    args(registryUrl)
+}
+
 // --- ErrorProne ---------------------------------------------------------------
 // Compile-time bug detection (null derefs, ignored return values, self-assignment,
 // misused APIs) that Spotless cannot see, since Spotless only enforces formatting.
