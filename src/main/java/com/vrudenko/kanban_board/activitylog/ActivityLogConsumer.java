@@ -10,7 +10,9 @@ import com.vrudenko.kanban_board.event.ColumnCreatedEvent;
 import com.vrudenko.kanban_board.event.TaskCreatedEvent;
 import com.vrudenko.kanban_board.event.TaskDeletedEvent;
 import com.vrudenko.kanban_board.event.TaskMovedEvent;
+import com.vrudenko.kanban_board.event.avro.ActivityEventAvroMapper;
 import java.util.LinkedHashMap;
+import org.apache.avro.specific.SpecificRecord;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -25,6 +27,11 @@ import org.springframework.stereotype.Component;
  * ActivityLogRecorder} and a plain {@link ObjectMapper}: it never loads a task, column, board or
  * user, and never reads a field a user typed by hand (D-01) — only the server-derived identifiers
  * each event already carries.
+ *
+ * <p>Since Phase 4 (Schema Registry), events arrive Avro-encoded: the listener receives the
+ * generated {@link SpecificRecord} payload directly and maps it back to the domain {@link
+ * ActivityEvent} via {@link ActivityEventAvroMapper} before anything below this class's exhaustive
+ * switch runs (SCHEMA-02) — that switch, {@link #deriveActionAndDetailIds}, is otherwise unchanged.
  */
 @Component
 public class ActivityLogConsumer {
@@ -32,9 +39,11 @@ public class ActivityLogConsumer {
 
     @Autowired private ActivityLogRecorder activityLogRecorder;
     @Autowired private ObjectMapper objectMapper;
+    @Autowired private ActivityEventAvroMapper activityEventAvroMapper;
 
     @KafkaListener(topics = KafkaTopics.ACTIVITY, groupId = ActivityLogConsumer.GROUP_ID)
-    public void onActivityEvent(ActivityEvent event) {
+    public void onActivityEvent(SpecificRecord avroRecord) {
+        ActivityEvent event = activityEventAvroMapper.toDomain(avroRecord);
         var mapped = deriveActionAndDetailIds(event);
 
         String detail;

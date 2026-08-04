@@ -321,26 +321,22 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
                                 Assertions.assertThat(row.getEventId()).isNotNull();
                                 Assertions.assertThat(row.getCreatedAt()).isNotNull();
                                 Assertions.assertThat(row.getDetail()).isEqualTo("{}");
-                                // Postgres timestamp(6) columns (see 03-activity-log-ddl.sql) and
-                                // the H2 test profile alike only preserve microsecond precision,
-                                // so an Instant.now() value carrying JVM nanosecond precision
-                                // loses its sub-microsecond digits somewhere on its round trip
-                                // through Kafka JSON serialization and JPA persistence. That loss
-                                // is not a plain truncation, though: the observed delta can land
-                                // on either side of the original value (e.g. 801499900ns
-                                // round-tripping to 801500us, one microsecond *above* a truncated
-                                // 801499us), consistent with the pipeline's JSON layer carrying
-                                // the instant as a double-precision epoch-seconds value, whose
-                                // ~15-16 significant decimal digits run out of headroom below
-                                // microsecond resolution for a 10-digit epoch-seconds value and
-                                // round rather than truncate. Asserting exact equality at
-                                // nanosecond precision is therefore inherently flaky regardless of
-                                // rounding direction; comparing within a one-microsecond tolerance
-                                // instead reflects the pipeline's actual precision floor without
-                                // assuming which direction it rounds.
+                                // Since Phase 4 (Schema Registry), the wire-format precision floor
+                                // is coarser than it used to be: `timestamp` is carried as Avro's
+                                // timestamp-millis logical type (see AvroBoardCreatedEvent.avsc),
+                                // whose generated accessor truncates to millisecond precision by
+                                // design (confirmed by direct inspection of the generated code,
+                                // 04-01-SUMMARY.md) -- not a bug, and not the same failure mode the
+                                // original 1-microsecond tolerance here was written to absorb (the
+                                // JSON pipeline's double-precision epoch-seconds encoding, which
+                                // lost only sub-microsecond digits). An Instant.now() value
+                                // carrying
+                                // JVM nanosecond precision can now lose up to just under a full
+                                // millisecond on its round trip through Avro encoding and JPA
+                                // persistence, so the tolerance widens to match that floor.
                                 Assertions.assertThat(row.getCreatedAt())
                                         .isCloseTo(
-                                                timestamp, Assertions.within(1, ChronoUnit.MICROS));
+                                                timestamp, Assertions.within(1, ChronoUnit.MILLIS));
                             });
         }
 

@@ -85,7 +85,18 @@ import org.testcontainers.utility.DockerImageName;
         properties = {
             "spring.kafka.producer.properties.max.block.ms=30000",
             "spring.kafka.producer.properties.request.timeout.ms=30000",
-            "spring.kafka.producer.properties.delivery.timeout.ms=30000"
+            "spring.kafka.producer.properties.delivery.timeout.ms=30000",
+            // application-test.properties bounds the Confluent registry REST client's own
+            // retry/timeout config down to fail-fast values (max.retries=0, 50ms timeouts) --
+            // correct for the 17 fixture-heavy classes whose registry address has nothing
+            // listening, wrong here: this harness's registry is real and responds, so those tight
+            // bounds would turn an occasional slow-but-real lookup into a flaky failure instead of
+            // a passing test. Raised back up, mirroring the same override this block already does
+            // for the Kafka producer bounds above.
+            "spring.kafka.producer.properties.max.retries=3",
+            "spring.kafka.producer.properties.retries.wait.ms=1000",
+            "spring.kafka.producer.properties.http.connect.timeout.ms=30000",
+            "spring.kafka.producer.properties.http.read.timeout.ms=30000"
         })
 public abstract class AbstractKafkaContainerTest {
     /*

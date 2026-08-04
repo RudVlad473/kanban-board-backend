@@ -2,6 +2,7 @@ package com.vrudenko.kanban_board.config;
 
 import com.vrudenko.kanban_board.constant.KafkaTopics;
 import com.vrudenko.kanban_board.event.ActivityEvent;
+import com.vrudenko.kanban_board.event.avro.ActivityEventAvroMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,12 +27,20 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * fixture-setup thread in tests — would still stall for that bound on every mutation. Running
  * off-thread means neither production requests nor test fixture creation ever wait on Kafka
  * reachability at all.
+ *
+ * <p>Since Phase 4 (Schema Registry), the event is mapped to its Avro {@code SpecificRecord} via
+ * {@link ActivityEventAvroMapper} before being sent. No try/catch wraps that mapping or the send:
+ * per D-01, a registry-down or schema-rejected failure is the same failure class as a broker-down
+ * failure, and Confluent's serializer wraps both kinds of failure in a Kafka {@code
+ * SerializationException} that becomes a failed future rather than a synchronous throw — so the
+ * existing {@code whenComplete} callback below already catches it with zero new code.
  */
 @Component
 public class KafkaEventPublisher {
     private static final Logger log = LoggerFactory.getLogger(KafkaEventPublisher.class);
 
     @Autowired private KafkaTemplate<String, Object> kafkaTemplate;
+    @Autowired private ActivityEventAvroMapper activityEventAvroMapper;
 
     // @Async fixes a real 20-25min full-suite hang (see class Javadoc): without it this method
     // blocks its caller inside KafkaTemplate.send() regardless of the bounded producer timeout.
@@ -44,7 +53,10 @@ public class KafkaEventPublisher {
         // it to `unused` documents that intent to ErrorProne's FutureReturnValueIgnored check.
         var unused =
                 kafkaTemplate
-                        .send(KafkaTopics.ACTIVITY, event.eventId().toString(), event)
+                        .send(
+                                KafkaTopics.ACTIVITY,
+                                event.eventId().toString(),
+                                activityEventAvroMapper.toAvro(event))
                         .whenComplete(
                                 (result, ex) -> {
                                     if (ex != null) {
