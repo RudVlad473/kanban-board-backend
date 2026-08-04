@@ -10,41 +10,44 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
 
-  kafka:
-    image: apache/kafka-native:4.3.1
-    hostname: kafka
-    user: root # the named volume's mountpoint is created root-owned by the Docker volume driver on
-    # first use since apache/kafka-native does not pre-create /var/lib/kafka/data in the image
-    # (verified: `docker run --entrypoint sh apache/kafka-native:4.3.1 -c 'ls /var/lib/kafka'` ->
-    # No such file or directory), while the image's entrypoint otherwise runs as uid 1000 (appuser)
-    # — without this override the broker fails at startup with
-    # `AccessDeniedException: /var/lib/kafka/data/bootstrap.checkpoint.tmp`. Local-dev-only scope.
-    environment:
-      KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: 'broker,controller'
-      KAFKA_LISTENERS: 'CONTROLLER://:29093,PLAINTEXT_HOST://:9092,PLAINTEXT://:19092'
-      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT_HOST://localhost:9092,PLAINTEXT://kafka:19092'
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
-      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
-      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
-      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_LOG_DIRS: '/var/lib/kafka/data'
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v26.2.1
+    hostname: redpanda
+    # Single-node broker + built-in Schema Registry (Phase 4, Schema Registry) -- replaces the
+    # previous broker image, which carried no registry at all. Two Kafka listeners, mirroring the
+    # previous kafka service's exact port numbering: 9092 external/host-exposed (unchanged, so
+    # existing host tooling such as a Kafka UI needs no reconfiguration), 19092 internal-only for
+    # the app container. The schema registry needs no such internal/external split -- it is a
+    # plain REST server, not a client protocol requiring advertised-address negotiation -- so one
+    # listener on 8081 serves both the app (via the `redpanda` hostname) and the host (via the
+    # port mapping below), matching the address the human-check step below curls directly.
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:19092,external://0.0.0.0:9092
+      - --advertise-kafka-addr internal://redpanda:19092,external://localhost:9092
+      - --schema-registry-addr 0.0.0.0:8081
+      - --rpc-addr redpanda:33145
+      - --advertise-rpc-addr redpanda:33145
+      - --mode dev-container
+      - --smp 1
+      - --default-log-level=info
     ports:
-      - "9092:9092" # host-exposed, local-dev-only listener (for tooling such as a Kafka UI)
+      - "9092:9092" # host-exposed, local-dev-only Kafka listener (for tooling such as a Kafka UI)
+      - "8081:8081" # host-exposed schema registry, e.g. `curl http://localhost:8081/subjects`
     volumes:
-      - kafka-data:/var/lib/kafka/data # named volume so `down`/`up` does not wipe broker state
+      - redpanda-data:/var/lib/redpanda/data # named volume so `down`/`up` does not wipe broker
+      # state. This is a new volume name, not a reuse of the old kafka-data volume: Redpanda's
+      # data directory format differs from the previous broker image's, so an existing local
+      # checkout's broker state is discarded on the first `up` after this change. That is
+      # expected and acceptable -- this is disposable local-dev state -- worth this note so
+      # nobody debugs an empty topic as a bug.
     healthcheck:
-      # apache/kafka-native ships no JVM and no bin/*.sh admin-script tree (its runtime layer is
-      # bare alpine) — any Kafka admin-command-based probe fails every attempt with a
-      # file-not-found error. A bare TCP-connect against the internal broker listener is the only
-      # mechanism guaranteed to work against this specific image. Known limitation: an open socket
-      # proves the listener accepts connections, not that KRaft controller election has settled —
-      # start_period plus multiple retries compensates for that startup window.
-      test: [ "CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/19092' || exit 1" ]
+      # Redpanda ships rpk, a real admin CLI -- unlike the previous broker image's bare-alpine
+      # runtime, which had no admin-script tree at all and forced a bare TCP-connect fallback (an
+      # open socket proves a listener accepts connections, not that the cluster is actually
+      # healthy). `rpk cluster health` gives a genuine readiness signal instead.
+      test: [ "CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1" ]
       interval: 5s
       timeout: 5s
       retries: 8
@@ -53,7 +56,7 @@ services:
   app:
     build: .
     depends_on:
-      kafka:
+      redpanda:
         condition: service_healthy
       postgres:
         condition: service_started
@@ -62,11 +65,17 @@ services:
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASS: ${DB_PASS}
-      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:19092
+      SCHEMA_REGISTRY_URL: http://redpanda:8081
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
     ports:
       - "8080:8080"
+    # Before this service can publish, the registry must be populated: run
+    # `./gradlew registerSchemas -PschemaRegistryUrl=http://localhost:8081` after `docker compose
+    # up`. This is the same build/CI-invocable step SCHEMA-01 requires -- not a local-dev-only
+    # workaround; the producer's auto.register.schemas=false means it can only ever look schemas
+    # up, never register them itself.
 
 volumes:
   postgres-data:
-  kafka-data:
+  redpanda-data:
