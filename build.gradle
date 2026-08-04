@@ -4,6 +4,13 @@ plugins {
     id 'io.spring.dependency-management' version '1.1.6'
     id 'com.diffplug.spotless' version '7.0.2'
     id 'net.ltgt.errorprone' version '5.1.0'
+
+    // Compiles src/main/avro/*.avsc into generated SpecificRecord classes at build time
+    // (Phase 4, Schema Registry). Pinned exactly: the project was archived by its owner on
+    // 2026-12-28 and donated to the Apache Avro project, so 1.9.1 is its final, permanent
+    // release -- no future patch is coming. It remains functionally complete for plain
+    // .avsc-based codegen with built-in logical types, which is all this project needs.
+    id 'com.github.davidmc24.gradle.plugin.avro' version '1.9.1'
 }
 
 group = 'com.vrudenko'
@@ -31,6 +38,10 @@ test {
 
 repositories {
     mavenCentral()
+
+    // io.confluent artifacts (kafka-avro-serializer and its transitive schema-registry
+    // client) are not published to Maven Central -- Confluent publishes only to its own repo.
+    maven { url 'https://packages.confluent.io/maven/' }
 }
 
 dependencies {
@@ -94,6 +105,31 @@ dependencies {
     testImplementation 'org.testcontainers:junit-jupiter'
     testImplementation 'org.springframework.boot:spring-boot-testcontainers'
 
+    // Avro core: schema model, binary encoder/decoder, SpecificRecord/SpecificRecordBase
+    // runtime support -- required at runtime by every class the avro plugin generates.
+    implementation 'org.apache.avro:avro:1.12.1'
+
+    // Confluent's KafkaAvroSerializer/KafkaAvroDeserializer + Schema Registry REST client.
+    // The kafka-clients exclude exists so Spring Boot's BOM-managed kafka-clients (already
+    // pulled in via spring-kafka above) stays the single resolved version on the classpath --
+    // without it, Confluent's own transitive kafka-clients could fork the dependency tree.
+    implementation('io.confluent:kafka-avro-serializer:7.8.9') {
+        exclude group: 'org.apache.kafka', module: 'kafka-clients'
+    }
+
+    // RedpandaContainer exposes both getBootstrapServers() and getSchemaRegistryAddress()
+    // from a single container -- no explicit version, deferring to Spring Boot's managed
+    // testcontainers BOM, matching org.testcontainers:kafka above. Resolved version recorded
+    // in 04-01-SUMMARY.md for Plan 02.
+    testImplementation 'org.testcontainers:redpanda'
+
+    // gradle-avro-plugin 1.9.1 + Avro 1.12.1 codegen observation (Task 1 probe, this session):
+    // for AvroTaskMovedEvent (fields declared with the "uuid" and "timestamp-millis" logical
+    // types), getEventId() returns java.util.UUID and getTimestamp() returns java.time.Instant
+    // natively -- both logical-type-to-Java-type conversions are built in, no manual
+    // UUID.fromString()/Instant.ofEpochMilli() conversion needed anywhere in the mapper.
+    // See ActivityEventAvroMapper (Task 3).
+
     // https://mvnrepository.com/artifact/com.tngtech.archunit/archunit-junit5
     testImplementation 'com.tngtech.archunit:archunit-junit5:1.4.2'
 
@@ -140,7 +176,10 @@ tasks.register('fastTest', Test) {
 // `build/generated/**` (MapStruct's generated `*Impl.java` mappers) is excluded via
 // a path regex, and `disableWarningsInGeneratedCode` additionally suppresses
 // warnings on annotation-processor output - neither is hand-written code a developer
-// can act on a finding in.
+// can act on a finding in. `build/generated-main-avro-java/**` (gradle-avro-plugin's
+// codegen output, Phase 4) joins MapStruct's as generated, non-actionable code -- the
+// regex below uses explicit alternation, not a looser glob, so it matches both
+// directories precisely rather than every possible `build/generated*` name.
 //
 // Gate strength was chosen from a MEASURED run against this codebase (quick task
 // 260802-qr8, Task 1): 5 main-source findings (3 UnusedVariable, 1
@@ -154,7 +193,7 @@ tasks.register('fastTest', Test) {
 tasks.withType(JavaCompile).configureEach {
     options.errorprone {
         disableWarningsInGeneratedCode = true
-        excludedPaths = '.*[/\\\\]build[/\\\\]generated[/\\\\].*'
+        excludedPaths = '.*[/\\\\]build[/\\\\](generated|generated-main-avro-java)[/\\\\].*'
     }
 }
 
