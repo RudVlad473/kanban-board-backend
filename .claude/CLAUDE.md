@@ -414,6 +414,7 @@ Do not make direct repo edits outside a GSD workflow unless the user explicitly 
   2. Output a 3-column Trade-off Matrix: [Approach | Pros/Cons | Why Picked].
   3. Detail any non-obvious performance, memory, or security trade-offs (time complexity, state invalidation risks, etc.).
 - NEVER auto-execute code blocks without explaining the core data-flow mechanism in 3 sentences or less.
+- Operational lessons from past GSD sessions — git hygiene during phase execution — are recorded in [`docs/SESSION_LESSONS.md`](../docs/SESSION_LESSONS.md); read it before starting or resuming a phase-execution session.
 
 <!-- GSD:profile-start -->
 
