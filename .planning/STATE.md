@@ -5,15 +5,15 @@ milestone_name: Infra Migration & Schema Registry
 current_phase: 04
 current_phase_name: schema-registry
 status: executing
-stopped_at: Completed 04-01-PLAN.md
-last_updated: "2026-08-04T12:19:40.158Z"
+stopped_at: Completed 04-02-PLAN.md
+last_updated: "2026-08-04T13:27:22.080Z"
 last_activity: 2026-08-04
 last_activity_desc: Phase 04 execution started
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 4
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-08-03)
 ## Current Position
 
 Phase: 04 (schema-registry) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-08-04 — Phase 04 execution started
 
-Progress: [███░░░░░░░] 25%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
@@ -73,6 +73,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 03 P03 | 20min | 2 tasks | 6 files |
 | Phase quick-260803-v23 P01 | 45min | 3 tasks | 10 files |
 | Phase 04 P01 | 40min | 3 tasks | 8 files |
+| Phase 04 P02 | 70min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -111,6 +112,9 @@ Recent decisions affecting current work:
 - [Phase ?]: [Quick/260803-v23]: D-01 resolved as promote-five (Approach B) — removing compileTestJava's Error Prone severity demotion alone was a measured no-op against the 27-finding test-source backlog (all WARNING severity by default), so the five triaged checks (FutureReturnValueIgnored, StringCaseLocaleUsage, MissingOverride, NotJavadoc, DefaultCharset) were additionally promoted to ERROR, scoped by name so a future error_prone_core version bump cannot red the build on its own. Added a shared AbstractKafkaContainerTest.sendAndAwaitAck helper to fix 16 FutureReturnValueIgnored Kafka-send findings; deliberately left 2 executor.submit futures in a concurrency race test fire-and-forget (blocking would destroy the race window). Teeth-checked the promotion by reintroducing and reverting one finding. Full ./gradlew test runtime unaffected by ack-checked sends (208s vs 210s baseline, within noise). Closed the source todo with its incorrect premise corrected.
 - [Phase ?]: [Phase 04 Plan 01]: Both uuid and timestamp-millis Avro logical types produce native UUID/Instant accessors under gradle-avro-plugin 1.9.1 + Avro 1.12.1 -- no manual conversion code needed in the mapper
 - [Phase ?]: [Phase 04 Plan 01]: Bumped commons-lang3 test pin from 3.0 to 3.18.0 -- Spring Boot's dependency-management plugin was forcing the ancient pin project-wide, and org.apache.avro's transitive commons-compress needed ArrayFill (3.11+), breaking 3 Testcontainers Kafka E2E tests
+- [Phase ?]: [Phase 4 Plan 02]: Spring Boot 3.5.0 ships a RedpandaContainerConnectionDetailsFactory (wires Kafka bootstrap-servers via @ServiceConnection) but no equivalent ConnectionDetails type for a schema registry -- schema.registry.url wired via @DynamicPropertySource instead
+- [Phase ?]: [Phase 4 Plan 02]: Measured, not assumed: bounding CachedSchemaRegistryClient's own retry/timeout defaults (independent of Kafka producer bounds) did not reduce full-suite wall-clock -- those registry-lookup retries run on the async kafkaPublishExecutor thread, off the critical path. Full suite measured 231-237s post-cutover vs ~208s pre-phase baseline, a real ~11% regression explained by the new tracer test class + one-time Redpanda startup, not the catastrophic unbounded-block failure mode the threat model worried about
+- [Phase ?]: [Phase 4 Plan 02]: ActivityLogConsumerE2ETest's timestamp tolerance widened from 1 microsecond to 1 millisecond -- Avro's timestamp-millis logical type truncates to millisecond precision by design, a real property of the schema already confirmed in Plan 01, not a regression
 
 ### Pending Todos
 
@@ -121,6 +125,8 @@ Recent decisions affecting current work:
 - [minor] Use a Snowflake ID generator for activity log events (`eventId`) instead of UUID — for index locality and time-ordering; see also the general note about adopting this as the project's default ID-generation strategy. See `.planning/todos/pending/2026-08-02-use-snowflake-id-generator-for-activity-log-events.md`.
 - [minor] Add a dependency vulnerability scan (OWASP dependency-check or similar) — no scan exists today despite several manually-pinned third-party libs. See `.planning/todos/pending/2026-08-03-add-dependency-vulnerability-scan.md`.
 - [minor] Evaluate PMD/Checkstyle/SpotBugs — likely redundant given Error Prone + ArchUnit + `docs/CODE_STYLE.md`; only revisit if a concrete gap surfaces. See `.planning/todos/pending/2026-08-03-evaluate-pmd-checkstyle-spotbugs.md`.
+- [minor] Create high-level infra architecture diagram before live infra onboarding — Mermaid C4-style diagram(s) of the Oracle VM boundary (app + Redpanda + Caddy) + Neon + GitHub Actions, optionally plus a Kafka/Schema-Registry data-flow diagram. Trigger: before Phase 5's actual live infra onboarding, not just planning it. See `.planning/todos/pending/2026-08-04-create-high-level-infra-architecture-diagram-before-live-inf.md`.
+- [minor] Explore an alert-service integration as a separate microservice — speculative/theoretical, not scoped; a genuine second consumer of `kanban.activity` if pursued, useful primarily as a technology-exploration vehicle (multi-consumer schema compatibility, service-to-service auth, alerting tech). Revisit only if there's a concrete reason to test one of those technologies. See `.planning/todos/pending/2026-08-04-explore-alert-service-as-a-separate-microservice-for-tech-ex.md`.
 
 ### Blockers/Concerns
 
@@ -173,8 +179,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-04T12:19:40.137Z
-Stopped at: Completed 04-01-PLAN.md
+Last session: 2026-08-04T13:27:22.059Z
+Stopped at: Completed 04-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
