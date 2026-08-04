@@ -117,6 +117,7 @@ A Spring Boot 3.5.0 / Java 21 REST API backend for a Kanban board application (u
 - Spotless with GoogleJavaFormat enforces consistent formatting
 - No separate linting tool configured; formatting rules are the linting standard
 - Judgement-level style rules (beyond what Spotless can check) are recorded in [`docs/CODE_STYLE.md`](../docs/CODE_STYLE.md) — consult it before writing or modifying Java code
+- Architecture diagrams should aim to snap to Kruchten's 4+1 view model (Logical, Process, Development, Physical/Deployment, Scenarios) rather than an ad hoc mix of styles — see [`docs/DIAGRAM_CONVENTIONS.md`](../docs/DIAGRAM_CONVENTIONS.md); consult it before authoring or updating any architecture diagram
 
 ## Import Organization
 
