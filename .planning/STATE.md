@@ -5,15 +5,15 @@ milestone_name: Infra Migration & Schema Registry
 current_phase: 04
 current_phase_name: schema-registry
 status: executing
-stopped_at: Completed 04-02-PLAN.md
-last_updated: "2026-08-04T13:27:22.080Z"
+stopped_at: Completed 04-03-PLAN.md
+last_updated: "2026-08-04T14:09:09.278Z"
 last_activity: 2026-08-04
 last_activity_desc: Phase 04 execution started
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 4
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-08-03)
 ## Current Position
 
 Phase: 04 (schema-registry) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-08-04 — Phase 04 execution started
 
-Progress: [█████░░░░░] 50%
+Progress: [████████░░] 75%
 
 ## Performance Metrics
 
@@ -74,6 +74,7 @@ Progress: [█████░░░░░] 50%
 | Phase quick-260803-v23 P01 | 45min | 3 tasks | 10 files |
 | Phase 04 P01 | 40min | 3 tasks | 8 files |
 | Phase 04 P02 | 70min | 3 tasks | 12 files |
+| Phase 04 P03 | 40min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -115,6 +116,8 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 4 Plan 02]: Spring Boot 3.5.0 ships a RedpandaContainerConnectionDetailsFactory (wires Kafka bootstrap-servers via @ServiceConnection) but no equivalent ConnectionDetails type for a schema registry -- schema.registry.url wired via @DynamicPropertySource instead
 - [Phase ?]: [Phase 4 Plan 02]: Measured, not assumed: bounding CachedSchemaRegistryClient's own retry/timeout defaults (independent of Kafka producer bounds) did not reduce full-suite wall-clock -- those registry-lookup retries run on the async kafkaPublishExecutor thread, off the critical path. Full suite measured 231-237s post-cutover vs ~208s pre-phase baseline, a real ~11% regression explained by the new tracer test class + one-time Redpanda startup, not the catastrophic unbounded-block failure mode the threat model worried about
 - [Phase ?]: [Phase 4 Plan 02]: ActivityLogConsumerE2ETest's timestamp tolerance widened from 1 microsecond to 1 millisecond -- Avro's timestamp-millis logical type truncates to millisecond precision by design, a real property of the schema already confirmed in Plan 01, not a regression
+- [Phase ?]: [Phase 4 Plan 03]: @DynamicPropertySource methods across a class hierarchy are discovered/invoked subclass-first, superclass-last (opposite of @BeforeAll) -- a subclass overriding the same property key as its superclass always loses; fixed via a documented, test-scoped mutable static override field with an @AfterAll reset instead
+- [Phase ?]: [Phase 4 Plan 03]: A schema-registry lookup failure during Avro serialization throws synchronously from KafkaTemplate.send() (before any delivery future exists), never reaching KafkaEventPublisher's whenComplete callback -- caught instead by Spring's default @Async uncaught-exception handler. D-01's user-facing guarantee still holds; documented as a finding, no production code changed
 
 ### Pending Todos
 
@@ -179,8 +182,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-04T13:27:22.059Z
-Stopped at: Completed 04-02-PLAN.md
+Last session: 2026-08-04T14:09:09.255Z
+Stopped at: Completed 04-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

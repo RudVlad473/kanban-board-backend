@@ -56,13 +56,13 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
   4. A poison message is dead-lettered with byte-fidelity intact under Avro, via a dedicated raw byte-array serializer kept separate from the Avro-aware main path, proven by a new automated test
   5. A sample of real historical activity-log events round-trips through the new Avro schemas without field-default/strictness errors, rehearsed before any production cutover is attempted
 
-**Plans**: 2/4 plans executed
+**Plans**: 3/4 plans executed
 
 Plans:
 
 - [x] 04-01-PLAN.md — Avro schema source of truth: 5 `.avsc` files, Gradle codegen, and the sealed-interface ↔ SpecificRecord mapper (wave 1)
 - [x] 04-02-PLAN.md — TRACER: registry-backed Avro cutover of producer and consumer, build/CI registration step, BACKWARD compatibility with a proven rejection, local compose stack with a registry (wave 2)
-- [ ] 04-03-PLAN.md — Failure paths under Avro: dead-letter byte fidelity for framing-level and registry-level poison, and a mutation surviving a registry outage (wave 3)
+- [x] 04-03-PLAN.md — Failure paths under Avro: dead-letter byte fidelity for framing-level and registry-level poison, and a mutation surviving a registry outage (wave 3)
 - [ ] 04-04-PLAN.md — Historical-data rehearsal: reconstruct real `activity_log` rows into events and round-trip them through the new schemas (wave 3)
 
 ### Phase 5: Infra Migration
@@ -87,6 +87,6 @@ Plans:
 | 1. Optimistic Locking | v1.0 | 3/3 | Complete | 2026-08-01 |
 | 2. Kafka Foundation, Domain Events & Move Endpoint | v1.1 | 3/3 | Complete | 2026-08-01 |
 | 3. Activity Log Consumer, Reliability & Read API | v1.1 | 3/3 | Complete | 2026-08-02 |
-| 4. Schema Registry | v1.2 | 2/4 | In Progress|  |
+| 4. Schema Registry | v1.2 | 3/4 | In Progress|  |
 | 5. Infra Migration | v1.2 | 0/TBD | Not started | - |
 </content>
