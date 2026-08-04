@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-08-03)
 Phase: 5 — Infra Migration
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-08-04 — Phase 04 complete, transitioned to Phase 5
+Last activity: 2026-08-04 — Completed quick task 260804-oq0 (gsd_run shim script)
 
 Progress: [██████████] 100%
 
@@ -163,6 +163,7 @@ Carried from research (address during Phase 4/5 planning):
 | 260803-ns9 | Deleted UserMapper.toSigninRequestDTO(UserEntity) and toSignupRequestDTO(UserEntity), both uncalled and both compiled by MapStruct into dto.setPassword(entity.getPassword()); removed the now-dead SigninRequestDTO import; added a class Javadoc invariant naming neither deleted method; closed the source todo | 2026-08-03 | e500858 | [260803-ns9-delete-dead-usermapper-entity-to-request](./quick/260803-ns9-delete-dead-usermapper-entity-to-request/) |
 | 260803-v23 | Hard-gated compileTestJava on Error Prone: drove all 27 test-source findings to zero (25 fixed in source, 2 deliberately dropped with written reasons), added AbstractKafkaContainerTest.sendAndAwaitAck to fix 16 Kafka-send findings, promoted 5 triaged checks to ERROR severity (teeth-checked), closed the source todo with corrected premise | 2026-08-03 | c5bc467,d7bf17b | [260803-v23-hard-gate-compiletestjava-error-prone-fi](./quick/260803-v23-hard-gate-compiletestjava-error-prone-fi/) |
 | 260804-nd3 | Remapped docker-compose Postgres to host port 5433 and parameterized the JDBC port (native Windows PostgreSQL 17 owned 5432, silently intercepting the container) — unblocked Phase 4 Plan 04-04's stalled human-check. Found the historical activity_log corpus was empty (destroyed by 04-04's own `docker compose down -v`); generated a real 6-row/5-action-type corpus by exercising the running local app, then reran `rehearseHistoricalSchemas` — BUILD SUCCESSFUL, zero errors, zero dead-lettered. Documented caveat: this corpus proves the reconstructor/round-trip, not compatibility with genuinely pre-cutover row shapes (none exist anymore in this environment) | 2026-08-04 | ffa5587 | [260804-nd3-remap-docker-compose-yml-postgres-host-p](./quick/260804-nd3-remap-docker-compose-yml-postgres-host-p/) |
+| 260804-oq0 | Added `.dev/gsd-run.sh`, a sourceable shim wrapping the GSD runtime resolver (20 candidate paths + PATH fallback) so bash blocks can `source .dev/gsd-run.sh` instead of re-pasting the full one-liner; sourced failure returns 1 without killing the caller shell, direct execution still exits 1. Documented in CLAUDE.md's GSD Execution Directives section (placed after the GSD:workflow-end marker so it survives regeneration) | 2026-08-04 | 272ff9a,b12d25e | [260804-oq0-add-a-committed-dev-gsd-run-sh-shim-scri](./quick/260804-oq0-add-a-committed-dev-gsd-run-sh-shim-scri/) |
 
 ## Deferred Items
 
