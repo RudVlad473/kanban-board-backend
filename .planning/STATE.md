@@ -4,17 +4,17 @@ milestone: v1.2
 milestone_name: Infra Migration & Schema Registry
 current_phase: 04
 current_phase_name: schema-registry
-status: executing
-stopped_at: Completed 04-03-PLAN.md
-last_updated: "2026-08-04T14:09:09.278Z"
+status: verifying
+stopped_at: Completed 04-04-PLAN.md
+last_updated: "2026-08-04T14:45:15.898Z"
 last_activity: 2026-08-04
 last_activity_desc: Phase 04 execution started
 progress:
   total_phases: 2
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
-  completed_plans: 3
-  percent: 0
+  completed_plans: 4
+  percent: 50
 ---
 
 # Project State
@@ -30,10 +30,10 @@ See: .planning/PROJECT.md (updated 2026-08-03)
 
 Phase: 04 (schema-registry) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-04 — Phase 04 execution started
 
-Progress: [████████░░] 75%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -75,6 +75,7 @@ Progress: [████████░░] 75%
 | Phase 04 P01 | 40min | 3 tasks | 8 files |
 | Phase 04 P02 | 70min | 3 tasks | 12 files |
 | Phase 04 P03 | 40min | 2 tasks | 3 files |
+| Phase 04 P04 | 130min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -118,6 +119,8 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 4 Plan 02]: ActivityLogConsumerE2ETest's timestamp tolerance widened from 1 microsecond to 1 millisecond -- Avro's timestamp-millis logical type truncates to millisecond precision by design, a real property of the schema already confirmed in Plan 01, not a regression
 - [Phase ?]: [Phase 4 Plan 03]: @DynamicPropertySource methods across a class hierarchy are discovered/invoked subclass-first, superclass-last (opposite of @BeforeAll) -- a subclass overriding the same property key as its superclass always loses; fixed via a documented, test-scoped mutable static override field with an @AfterAll reset instead
 - [Phase ?]: [Phase 4 Plan 03]: A schema-registry lookup failure during Avro serialization throws synchronously from KafkaTemplate.send() (before any delivery future exists), never reaching KafkaEventPublisher's whenComplete callback -- caught instead by Spring's default @Async uncaught-exception handler. D-01's user-facing guarantee still holds; documented as a finding, no production code changed
+- [Phase ?]: [Phase 4 Plan 04]: Rehearsal's JPA datasource is the app's default (non-test) config via DB_HOST/DB_NAME/DB_USER/DB_PASS rather than new wiring -- achieved by never setting spring.profiles.active=test on the rehearseHistoricalSchemas Gradle task
+- [Phase ?]: [Phase 4 Plan 04]: Per-row Avro round trip in step 2 calls KafkaAvroSerializer/Deserializer directly in-memory against the real registry rather than publishing every row through the topic, keeping the strictness gate at Avro's build() without per-row Kafka latency; only a small final sample goes through the real topic end-to-end
 
 ### Pending Todos
 
@@ -140,6 +143,7 @@ Carried from research (address during Phase 4/5 planning):
 - Compatibility mode choice (BACKWARD vs. FULL) is a genuine unresolved tension between research's two source files (FEATURES.md recommends BACKWARD as the topology-matching default; PITFALLS.md argues FULL may be safer given producer/consumer are the same redeployed app) — Phase 4 planning must make and document an explicit choice, not default to either unreviewed.
 - Confluent `kafka-avro-serializer` exact patch version and Confluent-client-vs-Redpanda-registry edge cases (map-field Protobuf, Avro namespace-tag handling per GH issues #5771/#11912) should be smoke-tested against the real Redpanda registry before committing, even though this project's Avro usage (no map fields) is not directly implicated.
 - Production (deploy-target) Kafka/Redpanda config is new for this milestone — the existing dev `docker-compose.yml` Kafka block is being replaced wholesale for Phase 5, not edited in place; do not reuse it unmodified as a deploy artifact.
+- [Phase 4 Plan 04]: SCHEMA-06's live rehearsal against real historical data was not run this session -- a pre-existing native Windows PostgreSQL 17 service on this sandbox machine already owns port 5432, intercepting connections meant for the docker-compose Postgres container, and admin privileges to stop it were unavailable. A human must run ./gradlew rehearseHistoricalSchemas once against a real local Postgres (in an environment without this port conflict) before Phase 5's cutover.
 
 ### Quick Tasks Completed
 
@@ -182,8 +186,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-04T14:09:09.255Z
-Stopped at: Completed 04-03-PLAN.md
+Last session: 2026-08-04T14:45:15.876Z
+Stopped at: Completed 04-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

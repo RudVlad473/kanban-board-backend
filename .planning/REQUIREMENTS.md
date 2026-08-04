@@ -23,7 +23,7 @@
 - [x] **SCHEMA-03**: The Kafka producer (`KafkaEventPublisher`) and consumer (`ActivityLogConsumer`/`KafkaConsumerConfig`) use Confluent's Avro serializer/deserializer against Redpanda's built-in, Confluent-API-compatible Schema Registry
 - [x] **SCHEMA-04**: A compatibility mode (BACKWARD or FULL) is explicitly configured for the activity-log topic's schema subject(s) — not left at the registry's out-of-the-box default
 - [x] **SCHEMA-05**: The dead-letter topic's byte-fidelity guarantee is re-verified under Avro — poison messages are dead-lettered via a dedicated raw byte-array serializer (not the Avro-aware one), proven by a new test
-- [ ] **SCHEMA-06**: Before cutover, the new schemas are rehearsed against a sample of real historical activity-log data (not just synthetic fixtures) to catch field-default/strictness mismatches Avro's stricter model could introduce
+- [x] **SCHEMA-06**: Before cutover, the new schemas are rehearsed against a sample of real historical activity-log data (not just synthetic fixtures) to catch field-default/strictness mismatches Avro's stricter model could introduce
 
 ## v2 Requirements
 
@@ -64,7 +64,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SCHEMA-03 | Phase 4 | Complete |
 | SCHEMA-04 | Phase 4 | Complete |
 | SCHEMA-05 | Phase 4 | Complete |
-| SCHEMA-06 | Phase 4 | Pending |
+| SCHEMA-06 | Phase 4 | Complete |
 | INFRA-01 | Phase 5 | Pending |
 | INFRA-02 | Phase 5 | Pending |
 | INFRA-03 | Phase 5 | Pending |
