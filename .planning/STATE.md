@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-08-03)
 Phase: 04 (schema-registry) — EXECUTING
 Plan: 4 of 4
 Status: Phase complete — ready for verification
-Last activity: 2026-08-04 — Phase 04 execution started
+Last activity: 2026-08-04 — Completed quick task 260804-nd3 (remap Postgres port, generate SCHEMA-06 rehearsal corpus)
 
 Progress: [██████████] 100%
 
@@ -162,6 +162,7 @@ Carried from research (address during Phase 4/5 planning):
 | 260803-m3i | Deleted the two dead hash-less UserMapper overloads (re-verified zero callers by fresh grep); tightened UserEntity.passwordHash to non-nullable with a guarded production DDL bridge script (04-password-hash-not-null-ddl.sql, NOT executed against any database); falsified the new constraint by hand (reverted, confirmed suite silent, restored); closed the source todo; filed a new security-marked todo for the entity-to-request-DTO hash-leak found while re-verifying | 2026-08-03 | c9615a3,baab313 | [260803-m3i-delete-the-dead-hash-less-usermapper-ove](./quick/260803-m3i-delete-the-dead-hash-less-usermapper-ove/) |
 | 260803-ns9 | Deleted UserMapper.toSigninRequestDTO(UserEntity) and toSignupRequestDTO(UserEntity), both uncalled and both compiled by MapStruct into dto.setPassword(entity.getPassword()); removed the now-dead SigninRequestDTO import; added a class Javadoc invariant naming neither deleted method; closed the source todo | 2026-08-03 | e500858 | [260803-ns9-delete-dead-usermapper-entity-to-request](./quick/260803-ns9-delete-dead-usermapper-entity-to-request/) |
 | 260803-v23 | Hard-gated compileTestJava on Error Prone: drove all 27 test-source findings to zero (25 fixed in source, 2 deliberately dropped with written reasons), added AbstractKafkaContainerTest.sendAndAwaitAck to fix 16 Kafka-send findings, promoted 5 triaged checks to ERROR severity (teeth-checked), closed the source todo with corrected premise | 2026-08-03 | c5bc467,d7bf17b | [260803-v23-hard-gate-compiletestjava-error-prone-fi](./quick/260803-v23-hard-gate-compiletestjava-error-prone-fi/) |
+| 260804-nd3 | Remapped docker-compose Postgres to host port 5433 and parameterized the JDBC port (native Windows PostgreSQL 17 owned 5432, silently intercepting the container) — unblocked Phase 4 Plan 04-04's stalled human-check. Found the historical activity_log corpus was empty (destroyed by 04-04's own `docker compose down -v`); generated a real 6-row/5-action-type corpus by exercising the running local app, then reran `rehearseHistoricalSchemas` — BUILD SUCCESSFUL, zero errors, zero dead-lettered. Documented caveat: this corpus proves the reconstructor/round-trip, not compatibility with genuinely pre-cutover row shapes (none exist anymore in this environment) | 2026-08-04 | ffa5587 | [260804-nd3-remap-docker-compose-yml-postgres-host-p](./quick/260804-nd3-remap-docker-compose-yml-postgres-host-p/) |
 
 ## Deferred Items
 
