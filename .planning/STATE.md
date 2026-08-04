@@ -5,8 +5,8 @@ milestone_name: Infra Migration & Schema Registry
 current_phase: 5
 current_phase_name: Infra Migration
 status: planning
-stopped_at: Completed 260804-p7a-PLAN.md (disable deploy-to-ec2 CI job)
-last_updated: "2026-08-04T16:20:49.754Z"
+stopped_at: Phase 5 context gathered
+last_updated: "2026-08-04T16:54:14.992Z"
 last_activity: 2026-08-04
 last_activity_desc: Completed quick task 260804-oy8 (docs/SESSION_LESSONS.md)
 progress:
@@ -192,9 +192,9 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-04T16:20:49.733Z
-Stopped at: Completed 260804-p7a-PLAN.md (disable deploy-to-ec2 CI job)
-Resume file: None
+Last session: 2026-08-04T16:54:14.971Z
+Stopped at: Phase 5 context gathered
+Resume file: .planning/phases/05-infra-migration/05-CONTEXT.md
 
 ## Operator Next Steps
 
