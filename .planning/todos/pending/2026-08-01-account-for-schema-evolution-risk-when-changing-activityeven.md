@@ -3,6 +3,7 @@ created: 2026-08-01T21:57:47.852Z
 title: Account for schema evolution risk when changing ActivityEvent shapes
 area: backend
 severity: minor
+resolves_phase: 4
 files:
   - src/main/java/com/vrudenko/kanban_board/event/ActivityEvent.java
   - src/main/java/com/vrudenko/kanban_board/event/TaskCreatedEvent.java
