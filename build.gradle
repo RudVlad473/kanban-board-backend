@@ -147,8 +147,17 @@ dependencies {
     errorprone 'com.google.errorprone:error_prone_core:2.50.0'
 }
 
+// The `rehearsal` tag (HistoricalSchemaRehearsalE2ETest, SCHEMA-06) is excluded here: the H2 test
+// database backing every other test class is created fresh on every run and is empty by
+// construction, so folding this rehearsal into `test` would guarantee either a permanent failure
+// (its corpus-empty gate firing on every single run) or, if that gate were ever weakened, a
+// permanently vacuous pass -- neither answers what SCHEMA-06 needs answered. See
+// rehearseHistoricalSchemas below for the dedicated, build/CI-invocable task this rehearsal
+// actually runs under, against a real historical Postgres instance.
 tasks.named('test') {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        excludeTags 'rehearsal'
+    }
 }
 
 // Pre-commit-hook-only fast test gate. `test` itself is untouched above -- CI and
@@ -188,6 +197,33 @@ tasks.register('registerSchemas', JavaExec) {
             ?: System.getenv('SCHEMA_REGISTRY_URL')
             ?: 'http://localhost:8081'
     args(registryUrl)
+}
+
+// --- Historical schema rehearsal (SCHEMA-06) -----------------------------------
+// Build-step-only rehearsal of the new Avro schemas against real historical activity_log rows,
+// tagged 'rehearsal' (HistoricalSchemaRehearsalE2ETest) and excluded from the default `test` task
+// above for the same reason documented there. Filtered by tag rather than by class name, mirroring
+// fastTest's precedent of keeping this kind of filter in the build script -- Gradle's `test` task
+// offers inclusion via `--tests` on the CLI but no declarative exclusion, so the filter has to live
+// here either way.
+//
+// Deliberately does NOT set systemProperty "spring.profiles.active", "test" -- unlike `test` and
+// `fastTest` above. Spring therefore resolves application.properties' default datasource, which
+// already points at a real Postgres instance via the DB_HOST/DB_NAME/DB_USER/DB_PASS environment
+// variables the running application already uses (see HistoricalSchemaRehearsalE2ETest's Javadoc
+// for the full reasoning) -- exactly what lets this task read genuine historical rows instead of an
+// empty, freshly-created H2 database.
+tasks.register('rehearseHistoricalSchemas', Test) {
+    description = 'Rehearses the new Avro schemas against real historical activity_log rows ' +
+            '(SCHEMA-06). Requires DB_HOST/DB_NAME/DB_USER/DB_PASS pointed at a real Postgres ' +
+            'instance holding historical activity_log data, and Docker for the Testcontainers ' +
+            'Redpanda broker/registry.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'rehearsal'
+    }
 }
 
 // --- ErrorProne ---------------------------------------------------------------
