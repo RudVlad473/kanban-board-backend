@@ -38,7 +38,7 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 
 **Milestone Goal:** Redeploy the app on a cost-guarded, always-free/near-free stack (Oracle Cloud + Neon + self-hosted Redpanda) after the AWS EC2/RDS deletion, and close the schema-evolution risk flagged during v1.1 (SEED-001) with a Kafka Schema Registry (Avro) in front of the activity-log pipeline.
 
-- [ ] **Phase 4: Schema Registry** - Avro schemas, mapping layer, enforced compatibility mode, and DLT/historical-data re-verification, built and proven entirely against the local docker-compose stack
+- [x] **Phase 4: Schema Registry** - Avro schemas, mapping layer, enforced compatibility mode, and DLT/historical-data re-verification, built and proven entirely against the local docker-compose stack (completed 2026-08-04)
 - [ ] **Phase 5: Infra Migration** - Oracle Cloud VM + Neon + Redpanda + Caddy + GitHub Actions CI/CD, with Phase 4's Schema Registry cutover to the production target
 
 ## Phase Details
@@ -87,6 +87,6 @@ Plans:
 | 1. Optimistic Locking | v1.0 | 3/3 | Complete | 2026-08-01 |
 | 2. Kafka Foundation, Domain Events & Move Endpoint | v1.1 | 3/3 | Complete | 2026-08-01 |
 | 3. Activity Log Consumer, Reliability & Read API | v1.1 | 3/3 | Complete | 2026-08-02 |
-| 4. Schema Registry | v1.2 | 4/4 | In Progress|  |
+| 4. Schema Registry | v1.2 | 4/4 | Complete    | 2026-08-04 |
 | 5. Infra Migration | v1.2 | 0/TBD | Not started | - |
 </content>

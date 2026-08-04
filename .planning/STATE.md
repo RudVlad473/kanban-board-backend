@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Infra Migration & Schema Registry
-current_phase: 04
-current_phase_name: schema-registry
-status: verifying
+current_phase: 5
+current_phase_name: Infra Migration
+status: planning
 stopped_at: Completed 04-04-PLAN.md
-last_updated: "2026-08-04T14:45:15.898Z"
+last_updated: "2026-08-04T15:39:15.094Z"
 last_activity: 2026-08-04
-last_activity_desc: Phase 04 execution started
+last_activity_desc: Phase 04 complete, transitioned to Phase 5
 progress:
   total_phases: 2
   completed_phases: 1
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-08-03)
 
 ## Current Position
 
-Phase: 04 (schema-registry) — EXECUTING
-Plan: 4 of 4
-Status: Phase complete — ready for verification
-Last activity: 2026-08-04 — Completed quick task 260804-nd3 (remap Postgres port, generate SCHEMA-06 rehearsal corpus)
+Phase: 5 — Infra Migration
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-08-04 — Phase 04 complete, transitioned to Phase 5
 
 Progress: [██████████] 100%
 
@@ -39,7 +39,7 @@ Progress: [██████████] 100%
 
 **Velocity:**
 
-- Total plans completed: 3
+- Total plans completed: 7
 - Average duration: 32 min
 - Total execution time: 1.6 hours
 
@@ -50,7 +50,7 @@ Progress: [██████████] 100%
 | 1 | 3 | 95min | 32min |
 | 2 | TBD | - | - |
 | 3 | TBD | - | - |
-| 4 | TBD | - | - |
+| 04 | 4 | - | - |
 | 5 | TBD | - | - |
 
 **Recent Trend:**
