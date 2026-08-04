@@ -5,10 +5,10 @@ milestone_name: Infra Migration & Schema Registry
 current_phase: 5
 current_phase_name: Infra Migration
 status: planning
-stopped_at: Completed 04-04-PLAN.md
-last_updated: "2026-08-04T15:39:15.094Z"
+stopped_at: Completed 260804-p7a-PLAN.md (disable deploy-to-ec2 CI job)
+last_updated: "2026-08-04T16:20:49.754Z"
 last_activity: 2026-08-04
-last_activity_desc: Phase 04 complete, transitioned to Phase 5
+last_activity_desc: Completed quick task 260804-oy8 (docs/SESSION_LESSONS.md)
 progress:
   total_phases: 2
   completed_phases: 1
@@ -76,6 +76,7 @@ Progress: [██████████] 100%
 | Phase 04 P02 | 70min | 3 tasks | 12 files |
 | Phase 04 P03 | 40min | 2 tasks | 3 files |
 | Phase 04 P04 | 130min | 2 tasks | 4 files |
+| Phase quick-260804-p7a P01 | 12min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -121,6 +122,7 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 4 Plan 03]: A schema-registry lookup failure during Avro serialization throws synchronously from KafkaTemplate.send() (before any delivery future exists), never reaching KafkaEventPublisher's whenComplete callback -- caught instead by Spring's default @Async uncaught-exception handler. D-01's user-facing guarantee still holds; documented as a finding, no production code changed
 - [Phase ?]: [Phase 4 Plan 04]: Rehearsal's JPA datasource is the app's default (non-test) config via DB_HOST/DB_NAME/DB_USER/DB_PASS rather than new wiring -- achieved by never setting spring.profiles.active=test on the rehearseHistoricalSchemas Gradle task
 - [Phase ?]: [Phase 4 Plan 04]: Per-row Avro round trip in step 2 calls KafkaAvroSerializer/Deserializer directly in-memory against the real registry rather than publishing every row through the topic, keeping the strictness gate at Avro's build() without per-row Kafka latency; only a small final sample goes through the real topic end-to-end
+- [Phase ?]: [Quick/260804-p7a]: Disabled deploy-to-ec2 CI job (if: false) — AWS EC2 host was deleted; picked comment+if:false over commenting out the block (breaks needs: chain), a repo-variable gate (unauditable), or deletion (loses reference material). Filed resolves_phase:5, severity:major todo tracking the rewrite plus two side-findings: Docker Hub tag accumulation (cleanup jobs also skip) and a pre-existing truncated curl -X DELETE in cleanup-unused-image.
 
 ### Pending Todos
 
@@ -165,6 +167,7 @@ Carried from research (address during Phase 4/5 planning):
 | 260804-nd3 | Remapped docker-compose Postgres to host port 5433 and parameterized the JDBC port (native Windows PostgreSQL 17 owned 5432, silently intercepting the container) — unblocked Phase 4 Plan 04-04's stalled human-check. Found the historical activity_log corpus was empty (destroyed by 04-04's own `docker compose down -v`); generated a real 6-row/5-action-type corpus by exercising the running local app, then reran `rehearseHistoricalSchemas` — BUILD SUCCESSFUL, zero errors, zero dead-lettered. Documented caveat: this corpus proves the reconstructor/round-trip, not compatibility with genuinely pre-cutover row shapes (none exist anymore in this environment) | 2026-08-04 | ffa5587 | [260804-nd3-remap-docker-compose-yml-postgres-host-p](./quick/260804-nd3-remap-docker-compose-yml-postgres-host-p/) |
 | 260804-oq0 | Added `.dev/gsd-run.sh`, a sourceable shim wrapping the GSD runtime resolver (20 candidate paths + PATH fallback) so bash blocks can `source .dev/gsd-run.sh` instead of re-pasting the full one-liner; sourced failure returns 1 without killing the caller shell, direct execution still exits 1. Documented in CLAUDE.md's GSD Execution Directives section (placed after the GSD:workflow-end marker so it survives regeneration) | 2026-08-04 | 272ff9a,b12d25e | [260804-oq0-add-a-committed-dev-gsd-run-sh-shim-scri](./quick/260804-oq0-add-a-committed-dev-gsd-run-sh-shim-scri/) |
 | 260804-oy8 | Added `docs/SESSION_LESSONS.md` capturing two git-hygiene lessons from today's Phase 4 execution session (push periodically to avoid worktree fork-base divergence disabling parallel execution; never git-commit on the main tree while a sequential executor is mid-task) so they're durable in git history, not just external agent memory. Pointed CLAUDE.md at the new doc | 2026-08-04 | 9348807,2aa28cb | [260804-oy8-create-docs-session-lessons-md-capturing](./quick/260804-oy8-create-docs-session-lessons-md-capturing/) |
+| 260804-p7a | Disabled deploy-to-ec2 CI job (if: false) with explanatory comment — AWS EC2 host was deleted, so pushes to master stop failing on it; tests and Docker build/push are unaffected. Filed a resolves_phase:5, severity:major todo tracking the Phase 5 rewrite, the Docker Hub tag-accumulation side effect, and a pre-existing truncated curl -X DELETE defect | 2026-08-04 | c350940,6ad98ae | [260804-p7a-disable-the-deploy-to-ec2-job-in-github-](./quick/260804-p7a-disable-the-deploy-to-ec2-job-in-github-/) |
 
 ## Deferred Items
 
@@ -189,8 +192,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-04T14:45:15.876Z
-Stopped at: Completed 04-04-PLAN.md
+Last session: 2026-08-04T16:20:49.733Z
+Stopped at: Completed 260804-p7a-PLAN.md (disable deploy-to-ec2 CI job)
 Resume file: None
 
 ## Operator Next Steps
