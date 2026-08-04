@@ -408,6 +408,7 @@ Do not make direct repo edits outside a GSD workflow unless the user explicitly 
 
 ## GSD Execution Directives
 
+- Source `.dev/gsd-run.sh` instead of re-pasting the runtime resolver in bash blocks: `. ./.dev/gsd-run.sh && gsd_run query ...`.
 - BEFORE creating or approving any PLAN.md:
   1. Document 2 alternate technical approaches considered.
   2. Output a 3-column Trade-off Matrix: [Approach | Pros/Cons | Why Picked].
