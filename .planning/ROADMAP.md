@@ -78,7 +78,15 @@ Plans:
   4. A push to `master` triggers an automated GitHub Actions build-and-deploy to the Oracle VM using freshly generated SSH credentials (not reused AWS-era secrets), gated by a pre-merge DDL verification step against Neon's direct connection string
   5. Only ports 80/443 are externally reachable — verified by an outside port scan/curl across all three OCI network layers (Security List, NSG, OS firewall); Redpanda's 9092 is never internet-facing; Docker log drivers are capped (`max-size`/`max-file`) so unbounded app/Redpanda logs cannot fill the free-tier disk
 
-**Plans**: TBD
+**Plans**: 6 plans (4 waves; D-03 sequencing — manual tracer deploy proven before CI/CD automation)
+
+Plans:
+- [ ] 05-01-PLAN.md — Production app configuration: Actuator health endpoint, Neon datasource + HikariCP sizing, baseline schema DDL (wave 1, autonomous)
+- [ ] 05-02-PLAN.md — Production deploy manifests: docker-compose.prod.yml, Caddyfile, infra architecture diagram (wave 1, autonomous)
+- [ ] 05-03-PLAN.md — Guided cloud provisioning: Oracle VM + Reserved IP, three-layer firewall, Neon project, free subdomain (wave 1, human checkpoints)
+- [ ] 05-04-PLAN.md — TRACER: manual end-to-end deploy on real Oracle infra + Schema Registry cutover + measured resource caps (wave 2, human checkpoints)
+- [ ] 05-05-PLAN.md — CI/CD pipeline rewrite + guided deploy secrets + DDL verification job (wave 3, human checkpoints)
+- [ ] 05-06-PLAN.md — Cutover verification & decommission: external network audit, log-rotation measurement, AWS-era secret revocation (wave 4, human checkpoints)
 
 ## Progress
 
