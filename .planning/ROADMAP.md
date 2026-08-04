@@ -53,7 +53,13 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
   3. The activity-log topic's schema subject(s) enforce an explicitly configured, documented compatibility mode (BACKWARD or FULL) rather than the registry's out-of-the-box default
   4. A poison message is dead-lettered with byte-fidelity intact under Avro, via a dedicated raw byte-array serializer kept separate from the Avro-aware main path, proven by a new automated test
   5. A sample of real historical activity-log events round-trips through the new Avro schemas without field-default/strictness errors, rehearsed before any production cutover is attempted
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 04-01-PLAN.md — Avro schema source of truth: 5 `.avsc` files, Gradle codegen, and the sealed-interface ↔ SpecificRecord mapper (wave 1)
+- [ ] 04-02-PLAN.md — TRACER: registry-backed Avro cutover of producer and consumer, build/CI registration step, BACKWARD compatibility with a proven rejection, local compose stack with a registry (wave 2)
+- [ ] 04-03-PLAN.md — Failure paths under Avro: dead-letter byte fidelity for framing-level and registry-level poison, and a mutation surviving a registry outage (wave 3)
+- [ ] 04-04-PLAN.md — Historical-data rehearsal: reconstruct real `activity_log` rows into events and round-trip them through the new schemas (wave 3)
 
 ### Phase 5: Infra Migration
 **Goal**: The app is redeployed on a cost-guarded, always-free/near-free stack — reachable over real HTTPS, backed by Neon and a resource-capped Redpanda broker, deployed automatically on merge to `master` — with Phase 4's Schema Registry repointed from local/standalone to the production Redpanda registry and re-verified against it.
@@ -74,6 +80,6 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 | 1. Optimistic Locking | v1.0 | 3/3 | Complete | 2026-08-01 |
 | 2. Kafka Foundation, Domain Events & Move Endpoint | v1.1 | 3/3 | Complete | 2026-08-01 |
 | 3. Activity Log Consumer, Reliability & Read API | v1.1 | 3/3 | Complete | 2026-08-02 |
-| 4. Schema Registry | v1.2 | 0/TBD | Not started | - |
+| 4. Schema Registry | v1.2 | 0/4 | Not started | - |
 | 5. Infra Migration | v1.2 | 0/TBD | Not started | - |
 </content>
