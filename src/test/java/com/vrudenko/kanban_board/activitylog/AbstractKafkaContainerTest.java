@@ -128,11 +128,38 @@ public abstract class AbstractKafkaContainerTest {
         AvroSchemaRegistrar.registerAll(kafka.getSchemaRegistryAddress());
     }
 
+    /**
+     * Producer-side registry URL resolves through this mutable, test-scoped hook instead of always
+     * resolving straight to the live container address. {@link
+     * com.vrudenko.kanban_board.activitylog.SchemaRegistryOutageE2ETest} (D-01's registry-outage
+     * resilience test) needs the producer -- and only the producer -- to see an unreachable
+     * registry while every other class in this package sees the real one.
+     *
+     * <p>A plain subclass-local {@code @DynamicPropertySource} method attempting to override the
+     * same property key does not work for this: Spring discovers {@code @DynamicPropertySource}
+     * methods across a class hierarchy and invokes all of them into one shared property source, but
+     * (confirmed empirically, not assumed) it discovers -- and therefore invokes -- subclass-local
+     * methods <em>before</em> superclass ones, the opposite of {@code @BeforeAll} semantics. Since
+     * every invocation writes into the same underlying map, the superclass's method here always
+     * runs last and silently overwrites whatever a subclass registered for this same key. This
+     * mutable field is the actual override point instead: it defaults to {@code null} (real
+     * container address), and the one test that needs it different sets it in a {@code static}
+     * initializer before its own tests run and resets it to {@code null} in an {@code @AfterAll},
+     * so every other class in this package -- built before, after, or never touching the override
+     * -- is unaffected. Test classes in this package always run sequentially within one JVM (no
+     * parallel test execution is configured anywhere in this project), so there is no window where
+     * two classes' contexts are built concurrently against a transiently wrong value.
+     */
+    protected static volatile String producerSchemaRegistryUrlOverride;
+
     @DynamicPropertySource
     static void registerSchemaRegistryProperties(DynamicPropertyRegistry registry) {
         registry.add(
                 "spring.kafka.producer.properties.schema.registry.url",
-                kafka::getSchemaRegistryAddress);
+                () ->
+                        producerSchemaRegistryUrlOverride != null
+                                ? producerSchemaRegistryUrlOverride
+                                : kafka.getSchemaRegistryAddress());
         registry.add(
                 "spring.kafka.consumer.properties.schema.registry.url",
                 kafka::getSchemaRegistryAddress);
