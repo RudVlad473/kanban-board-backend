@@ -45,7 +45,9 @@ cp .env.example .env
 docker compose up
 ```
 
-Brings up Postgres, a local Kafka broker, and the app together. See
+Brings up Postgres, a local Kafka broker, and the app together. Postgres is
+published on host port `5433` (not the default `5432`, to avoid conflicting
+with a native Postgres install some machines already have). See
 [docs/LOCAL_DEV.md](docs/LOCAL_DEV.md) for the full runbook, including why
 the app waits on Kafka's health check and this compose file's local-dev-only
 scope.

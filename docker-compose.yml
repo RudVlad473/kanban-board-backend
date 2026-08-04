@@ -5,8 +5,14 @@ services:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASS}
+    # Host side published as 5433, not the well-known 5432: on some developer machines a
+    # pre-existing native (non-Docker) PostgreSQL service already owns host port 5432 and
+    # silently answers connections meant for this container -- the symptom is an authentication
+    # failure, not a connection-refused, which is why it can cost hours to diagnose (see
+    # .planning/phases/04-schema-registry/04-04-SUMMARY.md). The container-internal port is
+    # unchanged, so the `app` service (DB_HOST: postgres, its default port) is unaffected.
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
 

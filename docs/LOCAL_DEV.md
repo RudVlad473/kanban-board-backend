@@ -37,6 +37,36 @@ That's it. Once everything is healthy:
 - App: `http://localhost:8080/api`
 - Swagger UI: `http://localhost:8080/api/swagger-ui/index.html`
 - Kafka's host-facing listener: `localhost:9092` (for local tooling such as a Kafka UI)
+- Postgres's host-facing port: `localhost:5433` (not the well-known 5432 — see "Why Postgres is on
+  a non-default host port" below)
+
+## Why Postgres is on a non-default host port
+
+The compose `postgres` service publishes host port **5433**, not the default 5432. On some
+developer machines, a pre-existing native (non-Docker) PostgreSQL install already owns host port
+5432 and silently answers connections meant for this container instead of refusing them outright.
+The symptom is not "connection refused" — it's `FATAL: password authentication failed`, because a
+different Postgres server with different credentials answered the connection. This cost a real
+diagnosis session two hours (`.planning/phases/04-schema-registry/04-04-SUMMARY.md`) before the
+root cause — a native `postgresql-x64-17` Windows service bound to 5432 — was found. Remapping the
+container off the contested port sidesteps the conflict entirely, for every developer, without
+needing administrator rights to stop or reconfigure the native service.
+
+The container-internal port is untouched: the `app` service reaches Postgres over the compose
+network at `postgres:5432` and needs no change.
+
+Any JVM you run **on the host** (outside `docker compose`) — most notably the
+`rehearseHistoricalSchemas` Gradle task, which deliberately resolves the app's real (non-test)
+datasource config instead of the test profile's H2 URL — must target the host-published port
+explicitly via `DB_PORT`:
+
+```bash
+DB_HOST=127.0.0.1 DB_PORT=5433 DB_NAME=kanban DB_USER=kanban DB_PASS=changeme \
+  ./gradlew rehearseHistoricalSchemas
+```
+
+`DB_PORT` defaults to 5432 when unset, so nothing else in this repo (the compose `app` service, CI,
+`.github/workflows/deploy.yml`) needs to know it exists.
 
 ## Why the app waits for Kafka
 
