@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Infra Migration & Schema Registry
-current_phase: 4
-current_phase_name: Schema Registry
-status: planning
-stopped_at: Phase 4 context gathered
-last_updated: "2026-08-04T10:42:28.424Z"
+current_phase: 04
+current_phase_name: schema-registry
+status: executing
+stopped_at: Completed 04-01-PLAN.md
+last_updated: "2026-08-04T12:19:40.158Z"
 last_activity: 2026-08-04
-last_activity_desc: "Roadmap created for v1.2 (Phase 4: Schema Registry, Phase 5: Infra Migration)"
+last_activity_desc: Phase 04 execution started
 progress:
   total_phases: 2
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 4
+  completed_plans: 1
   percent: 0
 ---
 
@@ -24,16 +24,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-03)
 
 **Core value:** Redeploy the app on a cost-guarded, always-free/near-free stack (Oracle Cloud + Neon + self-hosted Redpanda) after the AWS EC2/RDS deletion, and add a Schema Registry (Avro) in front of the Kafka activity-log pipeline to close the schema-evolution risk flagged during v1.1.
-**Current focus:** Phase 4 — Schema Registry
+**Current focus:** Phase 04 — schema-registry
 
 ## Current Position
 
-Phase: 4 of 5 (Schema Registry)
-Plan: — (not yet planned)
-Status: Roadmap created — ready to plan Phase 4
-Last activity: 2026-08-04 — Roadmap created for v1.2 (Phase 4: Schema Registry, Phase 5: Infra Migration)
+Phase: 04 (schema-registry) — EXECUTING
+Plan: 2 of 4
+Status: Ready to execute
+Last activity: 2026-08-04 — Phase 04 execution started
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [███░░░░░░░] 25%
 
 ## Performance Metrics
 
@@ -72,6 +72,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 03 P02 | 65min | 2 tasks | 4 files |
 | Phase 03 P03 | 20min | 2 tasks | 6 files |
 | Phase quick-260803-v23 P01 | 45min | 3 tasks | 10 files |
+| Phase 04 P01 | 40min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -108,6 +109,8 @@ Recent decisions affecting current work:
 - [Quick/260803-ns9]: Deleted both `UserMapper` entity-to-request-DTO methods (`toSigninRequestDTO`, `toSignupRequestDTO`) rather than exempting them with `@Mapping(ignore = true)` — operator's decision, and consistent with `260803-m3i`'s disposition of the sibling hash-less overloads in the same file. Zero callers were re-verified by fresh grep immediately before deleting, not inherited from the prior task's claim. The class Javadoc now carries a forward-looking invariant note (naming neither deleted method) so an equivalent mapping cannot regrow unnoticed. Critically: nothing leaked — there were no callers, so this closes a latent vector, not a live breach.
 - [Fast/2026-08-03]: `.githooks/pre-commit` now runs `./gradlew test --exclude-tests '*E2ETest'` after `spotlessApply`, blocking the commit on failure — resolves the open trade-off in the "gate on tests" todo (full suite too slow vs. compile-only missing ArchUnit) by running everything except the Testcontainers-backed E2E classes, hook-scoped only. `build.gradle`'s default `test` task is untouched, so CI and direct `./gradlew test` still run the full suite including E2E.
 - [Phase ?]: [Quick/260803-v23]: D-01 resolved as promote-five (Approach B) — removing compileTestJava's Error Prone severity demotion alone was a measured no-op against the 27-finding test-source backlog (all WARNING severity by default), so the five triaged checks (FutureReturnValueIgnored, StringCaseLocaleUsage, MissingOverride, NotJavadoc, DefaultCharset) were additionally promoted to ERROR, scoped by name so a future error_prone_core version bump cannot red the build on its own. Added a shared AbstractKafkaContainerTest.sendAndAwaitAck helper to fix 16 FutureReturnValueIgnored Kafka-send findings; deliberately left 2 executor.submit futures in a concurrency race test fire-and-forget (blocking would destroy the race window). Teeth-checked the promotion by reintroducing and reverting one finding. Full ./gradlew test runtime unaffected by ack-checked sends (208s vs 210s baseline, within noise). Closed the source todo with its incorrect premise corrected.
+- [Phase ?]: [Phase 04 Plan 01]: Both uuid and timestamp-millis Avro logical types produce native UUID/Instant accessors under gradle-avro-plugin 1.9.1 + Avro 1.12.1 -- no manual conversion code needed in the mapper
+- [Phase ?]: [Phase 04 Plan 01]: Bumped commons-lang3 test pin from 3.0 to 3.18.0 -- Spring Boot's dependency-management plugin was forcing the ancient pin project-wide, and org.apache.avro's transitive commons-compress needed ArrayFill (3.11+), breaking 3 Testcontainers Kafka E2E tests
 
 ### Pending Todos
 
@@ -170,9 +173,9 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-04T10:42:28.404Z
-Stopped at: Phase 4 context gathered
-Resume file: .planning/phases/04-schema-registry/04-CONTEXT.md
+Last session: 2026-08-04T12:19:40.137Z
+Stopped at: Completed 04-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 

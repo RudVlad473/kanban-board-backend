@@ -44,33 +44,40 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 ## Phase Details
 
 ### Phase 4: Schema Registry
+
 **Goal**: The activity-log pipeline's 5 event types are governed by explicit, versioned Avro schemas with an enforced (non-default) compatibility mode, verified end-to-end — including DLT poison-message handling and a real-data rehearsal — entirely against the local docker-compose stack. Closes the schema-evolution risk (SEED-001, planted during v1.1 Phase 3) with zero dependency on the new deploy target.
 **Depends on**: Phase 3 (existing Kafka producer/consumer pipeline — `KafkaEventPublisher`, `ActivityLogConsumer`, `KafkaConsumerConfig`)
 **Requirements**: SCHEMA-01, SCHEMA-02, SCHEMA-03, SCHEMA-04, SCHEMA-05, SCHEMA-06
 **Success Criteria** (what must be TRUE):
+
   1. Each of the 5 `ActivityEvent` types (`TaskCreatedEvent`, `TaskMovedEvent`, `TaskDeletedEvent`, `BoardCreatedEvent`, `ColumnCreatedEvent`) has an explicit, versioned Avro schema registered in the local Schema Registry via a build/CI step, not producer auto-registration
   2. The producer (`KafkaEventPublisher`) and consumer (`ActivityLogConsumer`/`KafkaConsumerConfig`) serialize/deserialize activity events as Avro `SpecificRecord`s via Confluent's Avro serde against the registry, through a mapping layer that leaves the existing sealed-interface/exhaustive-switch application code unchanged
   3. The activity-log topic's schema subject(s) enforce an explicitly configured, documented compatibility mode (BACKWARD or FULL) rather than the registry's out-of-the-box default
   4. A poison message is dead-lettered with byte-fidelity intact under Avro, via a dedicated raw byte-array serializer kept separate from the Avro-aware main path, proven by a new automated test
   5. A sample of real historical activity-log events round-trips through the new Avro schemas without field-default/strictness errors, rehearsed before any production cutover is attempted
-**Plans**: 4 plans
+
+**Plans**: 1/4 plans executed
 
 Plans:
-- [ ] 04-01-PLAN.md — Avro schema source of truth: 5 `.avsc` files, Gradle codegen, and the sealed-interface ↔ SpecificRecord mapper (wave 1)
+
+- [x] 04-01-PLAN.md — Avro schema source of truth: 5 `.avsc` files, Gradle codegen, and the sealed-interface ↔ SpecificRecord mapper (wave 1)
 - [ ] 04-02-PLAN.md — TRACER: registry-backed Avro cutover of producer and consumer, build/CI registration step, BACKWARD compatibility with a proven rejection, local compose stack with a registry (wave 2)
 - [ ] 04-03-PLAN.md — Failure paths under Avro: dead-letter byte fidelity for framing-level and registry-level poison, and a mutation surviving a registry outage (wave 3)
 - [ ] 04-04-PLAN.md — Historical-data rehearsal: reconstruct real `activity_log` rows into events and round-trip them through the new schemas (wave 3)
 
 ### Phase 5: Infra Migration
+
 **Goal**: The app is redeployed on a cost-guarded, always-free/near-free stack — reachable over real HTTPS, backed by Neon and a resource-capped Redpanda broker, deployed automatically on merge to `master` — with Phase 4's Schema Registry repointed from local/standalone to the production Redpanda registry and re-verified against it.
 **Depends on**: Phase 4 (final cutover step: repoint `schema.registry.url` from wherever Phase 4 verified against — local Redpanda or a standalone registry container — to the production Redpanda instance's built-in registry on the Oracle VM, then re-run Phase 4's verification suite against the real target)
 **Requirements**: INFRA-01, INFRA-02, INFRA-03, INFRA-04, INFRA-05, INFRA-06, INFRA-07, INFRA-08
 **Success Criteria** (what must be TRUE):
+
   1. The app is publicly reachable over real HTTPS (not bare HTTP/IP) on the Oracle Cloud Always Free A1 Flex VM, running in Docker with `restart: unless-stopped` and healthchecks on the app container
   2. The production database is Neon serverless Postgres via a pooled connection string (`sslmode=require`, HikariCP sized for Neon's cold-start/pooling behavior), with zero JPA/Hibernate code changes
   3. The deploy target's Kafka broker is a resource-capped (`--overprovisioned`/`--memory`/`--smp`), single-node Redpanda instance that cannot starve the co-resident app JVM, and Phase 4's Schema Registry verification suite is re-run and green against Redpanda's built-in registry on the VM
   4. A push to `master` triggers an automated GitHub Actions build-and-deploy to the Oracle VM using freshly generated SSH credentials (not reused AWS-era secrets), gated by a pre-merge DDL verification step against Neon's direct connection string
   5. Only ports 80/443 are externally reachable — verified by an outside port scan/curl across all three OCI network layers (Security List, NSG, OS firewall); Redpanda's 9092 is never internet-facing; Docker log drivers are capped (`max-size`/`max-file`) so unbounded app/Redpanda logs cannot fill the free-tier disk
+
 **Plans**: TBD
 
 ## Progress
@@ -80,6 +87,6 @@ Plans:
 | 1. Optimistic Locking | v1.0 | 3/3 | Complete | 2026-08-01 |
 | 2. Kafka Foundation, Domain Events & Move Endpoint | v1.1 | 3/3 | Complete | 2026-08-01 |
 | 3. Activity Log Consumer, Reliability & Read API | v1.1 | 3/3 | Complete | 2026-08-02 |
-| 4. Schema Registry | v1.2 | 0/4 | Not started | - |
+| 4. Schema Registry | v1.2 | 1/4 | In Progress|  |
 | 5. Infra Migration | v1.2 | 0/TBD | Not started | - |
 </content>
