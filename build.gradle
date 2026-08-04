@@ -79,7 +79,18 @@ dependencies {
     testImplementation 'com.h2database:h2'
 
     // https://mvnrepository.com/artifact/org.apache.commons/commons-lang3
-    testImplementation 'org.apache.commons:commons-lang3:3.0'
+    // Bumped from the previously-pinned 3.0 (Phase 4, Task 3 regression fix): Spring Boot's
+    // dependency-management plugin forces an explicitly-declared version project-wide, so the
+    // old 3.0 pin was silently downgrading every transitive commons-lang3 request -- including
+    // commons-compress 1.28.0's, newly pulled in by org.apache.avro:avro:1.12.1 -- to 3.0.
+    // commons-compress's TarArchiveOutputStream (used by Testcontainers to copy files into a
+    // container) calls commons-lang3's ArrayFill, added in 3.11, so the forced-down 3.0 broke
+    // container startup with a NoClassDefFoundError in 3 existing Kafka Testcontainers E2E
+    // tests (ActivityLogConsumerE2ETest, ActivityLogDeadLetterE2ETest,
+    // ActivityLogIdempotencyE2ETest) the moment the Avro dependency landed on the classpath.
+    // 3.18.0 matches the highest version already requested transitively, so it resolves cleanly
+    // against every other caller too.
+    testImplementation 'org.apache.commons:commons-lang3:3.18.0'
 
     // https://mvnrepository.com/artifact/org.fluttercode.datafactory/datafactory
     testImplementation 'org.fluttercode.datafactory:datafactory:0.8'
