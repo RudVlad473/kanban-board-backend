@@ -5,16 +5,16 @@ milestone_name: Infra Migration & Schema Registry
 current_phase: 5
 current_phase_name: Infra Migration
 status: executing
-stopped_at: Phase 5 context gathered
-last_updated: "2026-08-04T17:47:53.693Z"
+stopped_at: Phase 04.1 context gathered
+last_updated: "2026-08-05T10:50:09.389Z"
 last_activity: 2026-08-04
 last_activity_desc: Completed quick task 260804-oy8 (docs/SESSION_LESSONS.md)
 progress:
-  total_phases: 2
+  total_phases: 3
   completed_phases: 1
   total_plans: 10
   completed_plans: 4
-  percent: 50
+  percent: 33
 ---
 
 # Project State
@@ -169,6 +169,10 @@ Carried from research (address during Phase 4/5 planning):
 | 260804-oy8 | Added `docs/SESSION_LESSONS.md` capturing two git-hygiene lessons from today's Phase 4 execution session (push periodically to avoid worktree fork-base divergence disabling parallel execution; never git-commit on the main tree while a sequential executor is mid-task) so they're durable in git history, not just external agent memory. Pointed CLAUDE.md at the new doc | 2026-08-04 | 9348807,2aa28cb | [260804-oy8-create-docs-session-lessons-md-capturing](./quick/260804-oy8-create-docs-session-lessons-md-capturing/) |
 | 260804-p7a | Disabled deploy-to-ec2 CI job (if: false) with explanatory comment — AWS EC2 host was deleted, so pushes to master stop failing on it; tests and Docker build/push are unaffected. Filed a resolves_phase:5, severity:major todo tracking the Phase 5 rewrite, the Docker Hub tag-accumulation side effect, and a pre-existing truncated curl -X DELETE defect | 2026-08-04 | c350940,6ad98ae | [260804-p7a-disable-the-deploy-to-ec2-job-in-github-](./quick/260804-p7a-disable-the-deploy-to-ec2-job-in-github-/) |
 
+### Roadmap Evolution
+
+- Phase 04.1 inserted after Phase 4: Flyway database migration implementation - paused Phase 5 (Infra Migration) to deliver this for resume purposes (URGENT)
+
 ## Deferred Items
 
 Items acknowledged and carried forward:
@@ -192,9 +196,9 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-04T16:54:14.971Z
-Stopped at: Phase 5 context gathered
-Resume file: .planning/phases/05-infra-migration/05-CONTEXT.md
+Last session: 2026-08-05T10:50:09.356Z
+Stopped at: Phase 04.1 context gathered
+Resume file: .planning/phases/04.1-flyway-database-migration-implementation/04.1-CONTEXT.md
 
 ## Operator Next Steps
 
