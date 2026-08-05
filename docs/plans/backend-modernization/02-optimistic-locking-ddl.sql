@@ -1,3 +1,11 @@
+-- SUPERSEDED (GSD Phase 04.1, D-03): this script is historical reference
+-- material only. Do NOT run it by hand anymore. It has been folded into
+-- Flyway migration history as
+-- src/main/resources/db/migration/V2__add_optimistic_locking_version_columns.sql,
+-- which is now the sole owner of this schema change. The body below is kept
+-- verbatim as provenance for that migration's content and the schema
+-- decision it documents -- it is no longer executable guidance.
+--
 -- Epic 2 — Optimistic Locking: one-off manual DDL bridge
 --
 -- WHAT THIS IS

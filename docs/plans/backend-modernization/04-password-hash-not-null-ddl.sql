@@ -1,3 +1,14 @@
+-- SUPERSEDED (GSD Phase 04.1, D-03): this script is historical reference
+-- material only. Do NOT run it by hand anymore. It has been folded into
+-- Flyway migration history as
+-- src/main/resources/db/migration/V4__add_password_hash_not_null.sql, which
+-- is now the sole owner of this schema change (pre-flight NULL-count guard
+-- included). This closes the loop the "WHAT THIS IS NOT" section below
+-- opened: the manual step it asked to eventually be reflected in migration
+-- history, rather than lost, now is. The body below is kept verbatim as
+-- provenance for that migration's content and the schema decision it
+-- documents -- it is no longer executable guidance.
+--
 -- Quick task 260803-m3i -- passwordHash NOT NULL: one-off manual DDL bridge
 --
 -- The `04-` prefix here continues this directory's DDL-script sequence
