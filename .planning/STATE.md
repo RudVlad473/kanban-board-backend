@@ -6,7 +6,7 @@ current_phase: 05
 current_phase_name: Infra Migration
 status: planning
 stopped_at: Phase 04.1 complete (all 3 plans, checkpoint approved)
-last_updated: "2026-08-05T12:47:16.513Z"
+last_updated: "2026-08-05T22:50:18.847Z"
 last_activity: 2026-08-05
 last_activity_desc: Phase 04.1 complete, transitioned to Phase 05
 progress:
@@ -172,6 +172,7 @@ Carried from research (address during Phase 4/5 planning):
 | 260804-oq0 | Added `.dev/gsd-run.sh`, a sourceable shim wrapping the GSD runtime resolver (20 candidate paths + PATH fallback) so bash blocks can `source .dev/gsd-run.sh` instead of re-pasting the full one-liner; sourced failure returns 1 without killing the caller shell, direct execution still exits 1. Documented in CLAUDE.md's GSD Execution Directives section (placed after the GSD:workflow-end marker so it survives regeneration) | 2026-08-04 | 272ff9a,b12d25e | [260804-oq0-add-a-committed-dev-gsd-run-sh-shim-scri](./quick/260804-oq0-add-a-committed-dev-gsd-run-sh-shim-scri/) |
 | 260804-oy8 | Added `docs/SESSION_LESSONS.md` capturing two git-hygiene lessons from today's Phase 4 execution session (push periodically to avoid worktree fork-base divergence disabling parallel execution; never git-commit on the main tree while a sequential executor is mid-task) so they're durable in git history, not just external agent memory. Pointed CLAUDE.md at the new doc | 2026-08-04 | 9348807,2aa28cb | [260804-oy8-create-docs-session-lessons-md-capturing](./quick/260804-oy8-create-docs-session-lessons-md-capturing/) |
 | 260804-p7a | Disabled deploy-to-ec2 CI job (if: false) with explanatory comment — AWS EC2 host was deleted, so pushes to master stop failing on it; tests and Docker build/push are unaffected. Filed a resolves_phase:5, severity:major todo tracking the Phase 5 rewrite, the Docker Hub tag-accumulation side effect, and a pre-existing truncated curl -X DELETE defect | 2026-08-04 | c350940,6ad98ae | [260804-p7a-disable-the-deploy-to-ec2-job-in-github-](./quick/260804-p7a-disable-the-deploy-to-ec2-job-in-github-/) |
+| 18 | Retarget the settled PMD/Checkstyle/SpotBugs lint-gap todo to NullAway (null-safety dataflow), preserving the coverage-review reasoning as background | 2026-08-05 | fd50d69 | — |
 
 ### Roadmap Evolution
 
