@@ -4,11 +4,11 @@ milestone: v1.2
 milestone_name: Infra Migration & Schema Registry
 current_phase: 04.1
 current_phase_name: flyway-database-migration-implementation
-status: executing
-stopped_at: Phase 04.1 Plan 02 complete (V2-V4 migrations applied and proven)
-last_updated: "2026-08-05T14:05:00.000Z"
+status: blocked-on-checkpoint
+stopped_at: Phase 04.1 Plan 03 Tasks 1-2 complete (ddl-auto=validate cutover + superseded DDL headers); Task 3 blocking human-verify checkpoint reached
+last_updated: "2026-08-05T14:20:00.000Z"
 last_activity: 2026-08-05
-last_activity_desc: Completed Phase 04.1 Plan 02 (V2 optimistic-locking version columns, V3 activity_log, V4 guarded password_hash NOT NULL — all four migrations proven end-to-end against a wiped docker-compose Postgres volume)
+last_activity_desc: Completed Phase 04.1 Plan 03 Tasks 1-2 — spring.jpa.hibernate.ddl-auto=validate set in application.properties and aligned in docker-compose.yml's app service (resolving RESEARCH.md Open Question 1); the three manual DDL bridge scripts marked superseded with their replacement Flyway migrations named; epic doc (03-flyway-openapi.md) updated with a Flyway-half-complete status note carrying INFRA-06 and rehearseHistoricalSchemas heads-ups for Phase 5. Task 3 (clean-volume migration proof + full ./gradlew spotlessCheck test gate) is a blocking checkpoint:human-verify task, not run by the executor — awaiting operator confirmation to close out Phase 04.1
 progress:
   total_phases: 3
   completed_phases: 1
@@ -28,12 +28,12 @@ See: .planning/PROJECT.md (updated 2026-08-03)
 
 ## Current Position
 
-Phase: 04.1 (flyway-database-migration-implementation) — EXECUTING
-Plan: 2 of 3 complete
-Status: Plan 02 (V2-V4 migration expansion) complete — the ddl-auto=validate cutover (Plan 03) remains
-Last activity: 2026-08-05 — Completed Phase 04.1 Plan 02
+Phase: 04.1 (flyway-database-migration-implementation) — BLOCKED ON CHECKPOINT
+Plan: 3 of 3 — Tasks 1-2 complete, Task 3 (blocking human-verify checkpoint) reached
+Status: Plan 03's config cutover and superseded-DDL-header tasks are machine-verified and committed. Task 3 needs a human to run the clean-volume docker-compose proof and the full `./gradlew spotlessCheck test` gate locally, then confirm or report failure.
+Last activity: 2026-08-05 — Completed Phase 04.1 Plan 03 Tasks 1-2, reached Task 3 checkpoint
 
-Progress: [██████░░░░] 67%
+Progress: [█████████░] 92%
 
 ## Performance Metrics
 
@@ -198,12 +198,12 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-05T14:05:00.000Z
-Stopped at: Phase 04.1 Plan 02 complete (V2-V4 migrations applied and proven)
-Resume file: .planning/phases/04.1-flyway-database-migration-implementation/04.1-02-SUMMARY.md
+Last session: 2026-08-05T14:20:00.000Z
+Stopped at: Phase 04.1 Plan 03 Tasks 1-2 complete; Task 3 blocking human-verify checkpoint reached
+Resume file: .planning/phases/04.1-flyway-database-migration-implementation/04.1-03-SUMMARY.md
 
 ## Operator Next Steps
 
-- Plan/execute Phase 04.1 Plan 03: ddl-auto=validate cutover in application.properties and docker-compose.yml (resolving Open Question 1 — the app service's SPRING_JPA_HIBERNATE_DDL_AUTO: update override still outranks validate locally), clean-volume proof, and superseded-by headers on the three manual DDL scripts
+- **Human verification required (Phase 04.1 Plan 03, Task 3):** with Docker Desktop running and `.env` populated, run `docker compose down -v` then `docker compose up -d --build` from repo root; confirm the app logs `Started KanbanBoardApplication` after Flyway migrates to version 4 with no Hibernate schema-validation exception; confirm `flyway_schema_history` holds exactly 4 rows (versions 1-4, all `success=t`) via `docker compose exec -T postgres psql`; confirm `spring_session`/`spring_session_attributes` exist but are absent from Flyway's history; exercise the running app briefly (signup + Swagger UI); then run `./gradlew spotlessCheck` and `./gradlew test`, both must exit 0. Full command list and expected output are in `.planning/phases/04.1-flyway-database-migration-implementation/04.1-03-PLAN.md` Task 3's `<how-to-verify>` block. Once confirmed, Phase 04.1 closes out and Phase 5 (Infra Migration) can resume.
 
 </content>

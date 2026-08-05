@@ -84,7 +84,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 04.1-03-PLAN.md — `ddl-auto=validate` cutover in `application.properties` and `docker-compose.yml`, clean-volume proof, superseded-by headers on the three manual DDL scripts (wave 3, human-verify checkpoint)
+- [ ] 04.1-03-PLAN.md — `ddl-auto=validate` cutover in `application.properties` and `docker-compose.yml`, clean-volume proof, superseded-by headers on the three manual DDL scripts (wave 3, human-verify checkpoint) — Tasks 1-2 (config cutover, superseded headers) machine-verified and committed; Task 3 (clean-volume proof + full test gate) is the blocking human-verify checkpoint, awaiting operator confirmation
 
 ### Phase 5: Infra Migration
 
