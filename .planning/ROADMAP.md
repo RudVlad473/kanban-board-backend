@@ -80,7 +80,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 04.1-02-PLAN.md — Expand migration history: V2 optimistic-locking version columns, V3 `activity_log` + index, V4 guarded `password_hash NOT NULL` (wave 2, autonomous)
+- [x] 04.1-02-PLAN.md — Expand migration history: V2 optimistic-locking version columns, V3 `activity_log` + index, V4 guarded `password_hash NOT NULL` (wave 2, autonomous)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 

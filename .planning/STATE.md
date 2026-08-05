@@ -5,16 +5,16 @@ milestone_name: Infra Migration & Schema Registry
 current_phase: 04.1
 current_phase_name: flyway-database-migration-implementation
 status: executing
-stopped_at: Phase 04.1 Plan 01 complete (V1 tracer applied and proven)
-last_updated: "2026-08-05T11:52:00.000Z"
+stopped_at: Phase 04.1 Plan 02 complete (V2-V4 migrations applied and proven)
+last_updated: "2026-08-05T14:05:00.000Z"
 last_activity: 2026-08-05
-last_activity_desc: Completed Phase 04.1 Plan 01 (Flyway tracer slice — V1__init.sql applied to real Postgres, flyway_schema_history proven, H2 test suite unaffected)
+last_activity_desc: Completed Phase 04.1 Plan 02 (V2 optimistic-locking version columns, V3 activity_log, V4 guarded password_hash NOT NULL — all four migrations proven end-to-end against a wiped docker-compose Postgres volume)
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 13
-  completed_plans: 5
-  percent: 38
+  completed_plans: 6
+  percent: 46
 ---
 
 # Project State
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-08-03)
 ## Current Position
 
 Phase: 04.1 (flyway-database-migration-implementation) — EXECUTING
-Plan: 1 of 3 complete
-Status: Plan 01 (Flyway tracer slice) complete — V2/V3/V4 migrations and the ddl-auto=validate cutover remain
-Last activity: 2026-08-05 — Completed Phase 04.1 Plan 01
+Plan: 2 of 3 complete
+Status: Plan 02 (V2-V4 migration expansion) complete — the ddl-auto=validate cutover (Plan 03) remains
+Last activity: 2026-08-05 — Completed Phase 04.1 Plan 02
 
-Progress: [██████████] 100%
+Progress: [██████░░░░] 67%
 
 ## Performance Metrics
 
@@ -86,6 +86,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
 - [Phase 04.1 Plan 01]: Task 1 checkpoint resolved option-a — approved V1-V4 migration-history split exactly as researched (V1 pre-Epic-2 baseline, V2 optimistic-locking version columns, V3 activity_log, V4 password_hash NOT NULL), one migration per existing manual DDL script in real chronological order. V1__init.sql applied and proven against a genuinely empty docker-compose Postgres (flyway_schema_history: 1|V1__init.sql|t); entity cross-check confirmed exactly six @Entity classes with no uncovered schema delta.
+- [Phase 04.1 Plan 02]: Ported the three manual DDL bridge scripts into V2/V3/V4 Flyway migrations, content byte-faithful but with IF NOT EXISTS/idempotency framing stripped (flyway_schema_history now guarantees exactly-once application) — except V4's pre-flight NULL-count RAISE EXCEPTION guard, kept because it protects against data state Flyway's history table has no visibility into. Full V1-V4 history proven end-to-end via docker compose down -v && up --build: flyway_schema_history shows 4 rows (versions 1-4, all success=t), tasks.version/columns.version are bigint NOT NULL, users.password_hash is NOT NULL, activity_log plus idx_activity_log_board_created_id and uk_activity_log_event_id exist. docker-compose.yml's SPRING_JPA_HIBERNATE_DDL_AUTO: update override deliberately left untouched — that's Plan 03's job.
 - [Roadmap/v1.2]: Continued phase numbering from v1.1 — this milestone starts at Phase 4, not Phase 1. Split 14 requirements into 2 phases (coarse granularity, matching research's recommendation): Phase 4 = Schema Registry (SCHEMA-01..06 — buildable/verifiable entirely against the local docker-compose stack, no dependency on the new deploy target; the higher-risk, more code-heavy phase since the Avro/sealed-interface mapping layer has no ready-made pattern to copy), Phase 5 = Infra Migration (INFRA-01..08 — pure ops/config, benefits from Schema Registry already being proven locally).
 - [Roadmap/v1.2]: Phase 5 explicitly depends on Phase 4 for one narrow cross-phase task — the final cutover step repoints `schema.registry.url` from wherever Phase 4 verified against (local Redpanda or a standalone registry container) to the production Redpanda instance's built-in registry on the Oracle VM, then re-runs Phase 4's verification suite against the real target.
 - [Roadmap/v1.1]: Continued phase numbering from v1.0 — this milestone starts at Phase 2, not Phase 1.
@@ -197,12 +198,12 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-05T11:52:00.000Z
-Stopped at: Phase 04.1 Plan 01 complete (V1 tracer applied and proven)
-Resume file: .planning/phases/04.1-flyway-database-migration-implementation/04.1-01-SUMMARY.md
+Last session: 2026-08-05T14:05:00.000Z
+Stopped at: Phase 04.1 Plan 02 complete (V2-V4 migrations applied and proven)
+Resume file: .planning/phases/04.1-flyway-database-migration-implementation/04.1-02-SUMMARY.md
 
 ## Operator Next Steps
 
-- Plan/execute Phase 04.1 Plan 02/03 to add V2__add_optimistic_locking_version_columns.sql, V3__add_activity_log.sql, V4__add_password_hash_not_null.sql, and the ddl-auto=validate cutover (D-03)
+- Plan/execute Phase 04.1 Plan 03: ddl-auto=validate cutover in application.properties and docker-compose.yml (resolving Open Question 1 — the app service's SPRING_JPA_HIBERNATE_DDL_AUTO: update override still outranks validate locally), clean-volume proof, and superseded-by headers on the three manual DDL scripts
 
 </content>
