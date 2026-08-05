@@ -65,6 +65,27 @@ Plans:
 - [x] 04-03-PLAN.md — Failure paths under Avro: dead-letter byte fidelity for framing-level and registry-level poison, and a mutation surviving a registry outage (wave 3)
 - [x] 04-04-PLAN.md — Historical-data rehearsal: reconstruct real `activity_log` rows into events and round-trip them through the new schemas (wave 3)
 
+### Phase 04.1: Flyway database migration implementation (INSERTED)
+
+**Goal:** The app's own domain schema (`users`, `boards`, `columns`, `tasks`, `subtasks`, `activity_log`) is managed by versioned, checksummed Flyway migrations that reconstruct its real evolution rather than a flattened snapshot, and Hibernate can no longer create or alter schema outside the test profile — proven by V1–V4 applying cleanly to an empty local docker-compose Postgres followed by a passing `ddl-auto=validate` startup and a green full test suite.
+**Requirements**: None — inserted urgent phase with no REQ-IDs; scope is locked by `04.1-CONTEXT.md` decisions D-01 (incremental history, not a collapsed baseline), D-02 (Spring Session tables stay out of Flyway's scope), D-03 (`ddl-auto=validate` now, verified locally), D-04 (test profile stays on `create-drop`).
+**Depends on:** Phase 4
+**Plans:** 3 plans (3 waves — tracer, expansion, cutover)
+
+Plans:
+
+**Wave 1**
+
+- [ ] 04.1-01-PLAN.md — Flyway tracer: BOM-managed `flyway-core`/`flyway-database-postgresql`, `V1__init.sql` pre-Epic-2 baseline, H2 test-profile isolation, applied end-to-end against real Postgres (wave 1, blocking decision checkpoint)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 04.1-02-PLAN.md — Expand migration history: V2 optimistic-locking version columns, V3 `activity_log` + index, V4 guarded `password_hash NOT NULL` (wave 2, autonomous)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 04.1-03-PLAN.md — `ddl-auto=validate` cutover in `application.properties` and `docker-compose.yml`, clean-volume proof, superseded-by headers on the three manual DDL scripts (wave 3, human-verify checkpoint)
+
 ### Phase 5: Infra Migration
 
 **Goal**: The app is redeployed on a cost-guarded, always-free/near-free stack — reachable over real HTTPS, backed by Neon and a resource-capped Redpanda broker, deployed automatically on merge to `master` — with Phase 4's Schema Registry repointed from local/standalone to the production Redpanda registry and re-verified against it.
