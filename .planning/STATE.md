@@ -6,7 +6,7 @@ current_phase: 05
 current_phase_name: Infra Migration
 status: planning
 stopped_at: Phase 04.1 complete (all 3 plans, checkpoint approved)
-last_updated: "2026-08-05T22:50:18.847Z"
+last_updated: "2026-08-05T22:55:46.633Z"
 last_activity: 2026-08-05
 last_activity_desc: Phase 04.1 complete, transitioned to Phase 05
 progress:
@@ -173,6 +173,7 @@ Carried from research (address during Phase 4/5 planning):
 | 260804-oy8 | Added `docs/SESSION_LESSONS.md` capturing two git-hygiene lessons from today's Phase 4 execution session (push periodically to avoid worktree fork-base divergence disabling parallel execution; never git-commit on the main tree while a sequential executor is mid-task) so they're durable in git history, not just external agent memory. Pointed CLAUDE.md at the new doc | 2026-08-04 | 9348807,2aa28cb | [260804-oy8-create-docs-session-lessons-md-capturing](./quick/260804-oy8-create-docs-session-lessons-md-capturing/) |
 | 260804-p7a | Disabled deploy-to-ec2 CI job (if: false) with explanatory comment — AWS EC2 host was deleted, so pushes to master stop failing on it; tests and Docker build/push are unaffected. Filed a resolves_phase:5, severity:major todo tracking the Phase 5 rewrite, the Docker Hub tag-accumulation side effect, and a pre-existing truncated curl -X DELETE defect | 2026-08-04 | c350940,6ad98ae | [260804-p7a-disable-the-deploy-to-ec2-job-in-github-](./quick/260804-p7a-disable-the-deploy-to-ec2-job-in-github-/) |
 | 18 | Retarget the settled PMD/Checkstyle/SpotBugs lint-gap todo to NullAway (null-safety dataflow), preserving the coverage-review reasoning as background | 2026-08-05 | fd50d69 | — |
+| 19 | Verify and close the schema-evolution-risk todo against Phase 4's shipped registry work; file D-02's non-transitive-BACKWARD replay-from-zero rationale gap as a separate todo | 2026-08-05 | 61b11af | — |
 
 ### Roadmap Evolution
 
