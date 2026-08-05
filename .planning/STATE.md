@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Infra Migration & Schema Registry
-current_phase: 5
-current_phase_name: infra-migration
-status: executing
-stopped_at: Phase 04.1 complete (all 3 plans, checkpoint approved) — ready to resume Phase 5
-last_updated: "2026-08-05T14:35:00.000Z"
+current_phase: 05
+current_phase_name: Infra Migration
+status: planning
+stopped_at: Phase 04.1 complete (all 3 plans, checkpoint approved)
+last_updated: "2026-08-05T12:47:16.513Z"
 last_activity: 2026-08-05
-last_activity_desc: Completed Phase 04.1 Plan 03 in full, including its blocking human-verify checkpoint. Operator ran the clean-volume docker-compose proof and full test gate directly and approved: Flyway migrated V1-V4 sequentially against a wiped Postgres volume, app started clean with zero Hibernate DDL activity, flyway_schema_history shows 4/4 success, Spring Session's tables confirmed present and outside Flyway's history (D-02), a live POST /api/signup returned 201, and a forced-fresh ./gradlew spotlessCheck test --rerun-tasks passed in 2m52s. Phase 04.1 (flyway-database-migration-implementation) is now fully closed out. One out-of-scope observation recorded (GET /api/docs returns 500, springdoc/OpenAPI territory, deferred with the rest of Epic 3's OpenAPI half). Phase 5 (Infra Migration, previously paused for this insertion) is next.
+last_activity_desc: Phase 04.1 complete, transitioned to Phase 05
 progress:
   total_phases: 3
   completed_phases: 2
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-08-03)
 
 ## Current Position
 
-Phase: 04.1 (flyway-database-migration-implementation) — COMPLETE
-Plan: 3 of 3 complete, including the blocking Task 3 human-verify checkpoint (operator-approved)
-Status: Phase 04.1 fully closed out. All three plans (tracer, migration expansion, ddl-auto=validate cutover) delivered and verified end-to-end against a real docker-compose Postgres. Phase 5 (Infra Migration, paused to make room for this inserted phase) is next.
-Last activity: 2026-08-05 — Completed Phase 04.1 Plan 03 Task 3 checkpoint (operator-verified), closing out Phase 04.1
+Phase: 05 — Infra Migration
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-08-05 — Phase 04.1 complete, transitioned to Phase 05
 
 Progress: [██████████] 100% (Phase 04.1)
 
@@ -39,7 +39,7 @@ Progress: [██████████] 100% (Phase 04.1)
 
 **Velocity:**
 
-- Total plans completed: 7
+- Total plans completed: 10
 - Average duration: 32 min
 - Total execution time: 1.6 hours
 
@@ -52,6 +52,7 @@ Progress: [██████████] 100% (Phase 04.1)
 | 3 | TBD | - | - |
 | 04 | 4 | - | - |
 | 5 | TBD | - | - |
+| 04.1 | 3 | - | - |
 
 **Recent Trend:**
 

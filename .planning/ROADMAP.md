@@ -70,7 +70,7 @@ Plans:
 **Goal:** The app's own domain schema (`users`, `boards`, `columns`, `tasks`, `subtasks`, `activity_log`) is managed by versioned, checksummed Flyway migrations that reconstruct its real evolution rather than a flattened snapshot, and Hibernate can no longer create or alter schema outside the test profile — proven by V1–V4 applying cleanly to an empty local docker-compose Postgres followed by a passing `ddl-auto=validate` startup and a green full test suite.
 **Requirements**: None — inserted urgent phase with no REQ-IDs; scope is locked by `04.1-CONTEXT.md` decisions D-01 (incremental history, not a collapsed baseline), D-02 (Spring Session tables stay out of Flyway's scope), D-03 (`ddl-auto=validate` now, verified locally), D-04 (test profile stays on `create-drop`).
 **Depends on:** Phase 4
-**Plans:** 3 plans (3 waves — tracer, expansion, cutover)
+**Plans:** 3/3 plans complete
 
 Plans:
 
