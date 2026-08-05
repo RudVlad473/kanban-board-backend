@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Infra Migration & Schema Registry
-current_phase: 5
-current_phase_name: Infra Migration
+current_phase: 04.1
+current_phase_name: flyway-database-migration-implementation
 status: executing
-stopped_at: Phase 04.1 context gathered
-last_updated: "2026-08-05T11:27:50.231Z"
-last_activity: 2026-08-04
-last_activity_desc: Completed quick task 260804-oy8 (docs/SESSION_LESSONS.md)
+stopped_at: Phase 04.1 Plan 01 complete (V1 tracer applied and proven)
+last_updated: "2026-08-05T11:52:00.000Z"
+last_activity: 2026-08-05
+last_activity_desc: Completed Phase 04.1 Plan 01 (Flyway tracer slice — V1__init.sql applied to real Postgres, flyway_schema_history proven, H2 test suite unaffected)
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 13
-  completed_plans: 4
-  percent: 33
+  completed_plans: 5
+  percent: 38
 ---
 
 # Project State
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-03)
 
 **Core value:** Redeploy the app on a cost-guarded, always-free/near-free stack (Oracle Cloud + Neon + self-hosted Redpanda) after the AWS EC2/RDS deletion, and add a Schema Registry (Avro) in front of the Kafka activity-log pipeline to close the schema-evolution risk flagged during v1.1.
-**Current focus:** Phase 04 — schema-registry
+**Current focus:** Phase 04.1 — flyway-database-migration-implementation
 
 ## Current Position
 
-Phase: 5 — Infra Migration
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-08-04 — Completed quick task 260804-oy8 (docs/SESSION_LESSONS.md)
+Phase: 04.1 (flyway-database-migration-implementation) — EXECUTING
+Plan: 1 of 3 complete
+Status: Plan 01 (Flyway tracer slice) complete — V2/V3/V4 migrations and the ddl-auto=validate cutover remain
+Last activity: 2026-08-05 — Completed Phase 04.1 Plan 01
 
 Progress: [██████████] 100%
 
@@ -85,6 +85,7 @@ Progress: [██████████] 100%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- [Phase 04.1 Plan 01]: Task 1 checkpoint resolved option-a — approved V1-V4 migration-history split exactly as researched (V1 pre-Epic-2 baseline, V2 optimistic-locking version columns, V3 activity_log, V4 password_hash NOT NULL), one migration per existing manual DDL script in real chronological order. V1__init.sql applied and proven against a genuinely empty docker-compose Postgres (flyway_schema_history: 1|V1__init.sql|t); entity cross-check confirmed exactly six @Entity classes with no uncovered schema delta.
 - [Roadmap/v1.2]: Continued phase numbering from v1.1 — this milestone starts at Phase 4, not Phase 1. Split 14 requirements into 2 phases (coarse granularity, matching research's recommendation): Phase 4 = Schema Registry (SCHEMA-01..06 — buildable/verifiable entirely against the local docker-compose stack, no dependency on the new deploy target; the higher-risk, more code-heavy phase since the Avro/sealed-interface mapping layer has no ready-made pattern to copy), Phase 5 = Infra Migration (INFRA-01..08 — pure ops/config, benefits from Schema Registry already being proven locally).
 - [Roadmap/v1.2]: Phase 5 explicitly depends on Phase 4 for one narrow cross-phase task — the final cutover step repoints `schema.registry.url` from wherever Phase 4 verified against (local Redpanda or a standalone registry container) to the production Redpanda instance's built-in registry on the Oracle VM, then re-runs Phase 4's verification suite against the real target.
 - [Roadmap/v1.1]: Continued phase numbering from v1.0 — this milestone starts at Phase 2, not Phase 1.
@@ -196,12 +197,12 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-05T10:50:09.356Z
-Stopped at: Phase 04.1 context gathered
-Resume file: .planning/phases/04.1-flyway-database-migration-implementation/04.1-CONTEXT.md
+Last session: 2026-08-05T11:52:00.000Z
+Stopped at: Phase 04.1 Plan 01 complete (V1 tracer applied and proven)
+Resume file: .planning/phases/04.1-flyway-database-migration-implementation/04.1-01-SUMMARY.md
 
 ## Operator Next Steps
 
-- Review and approve the roadmap, then run `/gsd-plan-phase 4` to start planning Schema Registry
+- Plan/execute Phase 04.1 Plan 02/03 to add V2__add_optimistic_locking_version_columns.sql, V3__add_activity_log.sql, V4__add_password_hash_not_null.sql, and the ddl-auto=validate cutover (D-03)
 
 </content>

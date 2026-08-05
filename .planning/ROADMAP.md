@@ -76,7 +76,7 @@ Plans:
 
 **Wave 1**
 
-- [ ] 04.1-01-PLAN.md — Flyway tracer: BOM-managed `flyway-core`/`flyway-database-postgresql`, `V1__init.sql` pre-Epic-2 baseline, H2 test-profile isolation, applied end-to-end against real Postgres (wave 1, blocking decision checkpoint)
+- [x] 04.1-01-PLAN.md — Flyway tracer: BOM-managed `flyway-core`/`flyway-database-postgresql`, `V1__init.sql` pre-Epic-2 baseline, H2 test-profile isolation, applied end-to-end against real Postgres (wave 1, blocking decision checkpoint)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

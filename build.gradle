@@ -59,6 +59,13 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.postgresql:postgresql'
 
+    // Flyway version is BOM-managed by Spring Boot 3.5.0 (pinned to 11.7.2 in
+    // spring-boot-dependencies) -- deliberately left unversioned so a future Spring Boot
+    // bump moves both artifacts together, matching this project's existing precedent of
+    // leaving Spring-managed deps unversioned (spring-kafka, postgresql driver above).
+    implementation 'org.flywaydb:flyway-core'
+    implementation 'org.flywaydb:flyway-database-postgresql'
+
     // https://mvnrepository.com/artifact/org.springframework.boot/spring-boot-starter-security
     implementation 'org.springframework.boot:spring-boot-starter-security'
 
