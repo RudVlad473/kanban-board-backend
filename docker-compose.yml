@@ -73,7 +73,14 @@ services:
       DB_PASS: ${DB_PASS}
       KAFKA_BOOTSTRAP_SERVERS: redpanda:19092
       SCHEMA_REGISTRY_URL: http://redpanda:8081
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      # Kept explicit rather than deleted (this file's convention is to state non-obvious local
+      # config rather than rely on an invisible default). Value changed from `update` to `validate`
+      # (Flyway cutover, D-03): Spring Boot's environment-variable property source outranks
+      # application.properties, so leaving the old auto-alter value here would let Hibernate keep
+      # silently altering the schema on every local run -- masking exactly the Flyway/entity
+      # mismatch `validate` exists to catch, and making this local stack prove nothing about the
+      # behavior a real deploy would have.
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
     ports:
       - "8080:8080"
     # Before this service can publish, the registry must be populated: run
