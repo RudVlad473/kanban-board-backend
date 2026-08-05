@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Infra Migration & Schema Registry
-current_phase: 04.1
-current_phase_name: flyway-database-migration-implementation
-status: blocked-on-checkpoint
-stopped_at: Phase 04.1 Plan 03 Tasks 1-2 complete (ddl-auto=validate cutover + superseded DDL headers); Task 3 blocking human-verify checkpoint reached
-last_updated: "2026-08-05T14:20:00.000Z"
+current_phase: 5
+current_phase_name: infra-migration
+status: executing
+stopped_at: Phase 04.1 complete (all 3 plans, checkpoint approved) — ready to resume Phase 5
+last_updated: "2026-08-05T14:35:00.000Z"
 last_activity: 2026-08-05
-last_activity_desc: Completed Phase 04.1 Plan 03 Tasks 1-2 — spring.jpa.hibernate.ddl-auto=validate set in application.properties and aligned in docker-compose.yml's app service (resolving RESEARCH.md Open Question 1); the three manual DDL bridge scripts marked superseded with their replacement Flyway migrations named; epic doc (03-flyway-openapi.md) updated with a Flyway-half-complete status note carrying INFRA-06 and rehearseHistoricalSchemas heads-ups for Phase 5. Task 3 (clean-volume migration proof + full ./gradlew spotlessCheck test gate) is a blocking checkpoint:human-verify task, not run by the executor — awaiting operator confirmation to close out Phase 04.1
+last_activity_desc: Completed Phase 04.1 Plan 03 in full, including its blocking human-verify checkpoint. Operator ran the clean-volume docker-compose proof and full test gate directly and approved: Flyway migrated V1-V4 sequentially against a wiped Postgres volume, app started clean with zero Hibernate DDL activity, flyway_schema_history shows 4/4 success, Spring Session's tables confirmed present and outside Flyway's history (D-02), a live POST /api/signup returned 201, and a forced-fresh ./gradlew spotlessCheck test --rerun-tasks passed in 2m52s. Phase 04.1 (flyway-database-migration-implementation) is now fully closed out. One out-of-scope observation recorded (GET /api/docs returns 500, springdoc/OpenAPI territory, deferred with the rest of Epic 3's OpenAPI half). Phase 5 (Infra Migration, previously paused for this insertion) is next.
 progress:
   total_phases: 3
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 13
-  completed_plans: 6
-  percent: 46
+  completed_plans: 7
+  percent: 54
 ---
 
 # Project State
@@ -24,16 +24,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-03)
 
 **Core value:** Redeploy the app on a cost-guarded, always-free/near-free stack (Oracle Cloud + Neon + self-hosted Redpanda) after the AWS EC2/RDS deletion, and add a Schema Registry (Avro) in front of the Kafka activity-log pipeline to close the schema-evolution risk flagged during v1.1.
-**Current focus:** Phase 04.1 — flyway-database-migration-implementation
+**Current focus:** Phase 5 — infra-migration (Phase 04.1 complete; Phase 5 resumes next)
 
 ## Current Position
 
-Phase: 04.1 (flyway-database-migration-implementation) — BLOCKED ON CHECKPOINT
-Plan: 3 of 3 — Tasks 1-2 complete, Task 3 (blocking human-verify checkpoint) reached
-Status: Plan 03's config cutover and superseded-DDL-header tasks are machine-verified and committed. Task 3 needs a human to run the clean-volume docker-compose proof and the full `./gradlew spotlessCheck test` gate locally, then confirm or report failure.
-Last activity: 2026-08-05 — Completed Phase 04.1 Plan 03 Tasks 1-2, reached Task 3 checkpoint
+Phase: 04.1 (flyway-database-migration-implementation) — COMPLETE
+Plan: 3 of 3 complete, including the blocking Task 3 human-verify checkpoint (operator-approved)
+Status: Phase 04.1 fully closed out. All three plans (tracer, migration expansion, ddl-auto=validate cutover) delivered and verified end-to-end against a real docker-compose Postgres. Phase 5 (Infra Migration, paused to make room for this inserted phase) is next.
+Last activity: 2026-08-05 — Completed Phase 04.1 Plan 03 Task 3 checkpoint (operator-verified), closing out Phase 04.1
 
-Progress: [█████████░] 92%
+Progress: [██████████] 100% (Phase 04.1)
 
 ## Performance Metrics
 
@@ -128,6 +128,7 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
+- [minor] `GET /api/docs` returns HTTP 500 with no logged exception — observed by the operator during Phase 04.1 Plan 03's checkpoint verification run (2026-08-05), against the freshly migrated docker-compose stack. Springdoc/OpenAPI-path territory; every plan in Phase 04.1 explicitly left Epic 3's OpenAPI half untouched, so this was noted rather than fixed. Not yet filed as a dedicated todo file — worth investigating whenever Epic 3's OpenAPI half is picked up.
 - [minor] Create a sequence diagram documenting the full system flow — deferred until all functional epics of the backend modernization plan are complete and the project is ready for frontend hand-off. See `.planning/todos/pending/2026-08-01-create-sequence-diagram-documenting-full-system-flow-for-fro.md`.
 - [minor] Bump Java version from 21 to 25 (current LTS) — build.gradle toolchain, Dockerfile (both stages), and CI `java-version` all pinned to 21; not urgent (21 LTS supported until ~2028), but worth doing proactively. See `.planning/todos/pending/2026-08-01-bump-java-version-from-21-to-25-current-lts.md`.
 - [minor] Account for schema evolution risk when changing ActivityEvent shapes — a rolling deploy that renames/retypes an event field while old-shape messages are still unconsumed can dead-letter valid (non-poison) messages; Kafka itself enforces no schema. Directly addressed by v1.2 Phase 4 (Schema Registry) — expect this todo to close at that phase's transition. See `.planning/todos/pending/2026-08-01-account-for-schema-evolution-risk-when-changing-activityeven.md`.
@@ -198,12 +199,13 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-05T14:20:00.000Z
-Stopped at: Phase 04.1 Plan 03 Tasks 1-2 complete; Task 3 blocking human-verify checkpoint reached
+Last session: 2026-08-05T14:35:00.000Z
+Stopped at: Phase 04.1 complete (all 3 plans, checkpoint approved)
 Resume file: .planning/phases/04.1-flyway-database-migration-implementation/04.1-03-SUMMARY.md
 
 ## Operator Next Steps
 
-- **Human verification required (Phase 04.1 Plan 03, Task 3):** with Docker Desktop running and `.env` populated, run `docker compose down -v` then `docker compose up -d --build` from repo root; confirm the app logs `Started KanbanBoardApplication` after Flyway migrates to version 4 with no Hibernate schema-validation exception; confirm `flyway_schema_history` holds exactly 4 rows (versions 1-4, all `success=t`) via `docker compose exec -T postgres psql`; confirm `spring_session`/`spring_session_attributes` exist but are absent from Flyway's history; exercise the running app briefly (signup + Swagger UI); then run `./gradlew spotlessCheck` and `./gradlew test`, both must exit 0. Full command list and expected output are in `.planning/phases/04.1-flyway-database-migration-implementation/04.1-03-PLAN.md` Task 3's `<how-to-verify>` block. Once confirmed, Phase 04.1 closes out and Phase 5 (Infra Migration) can resume.
+- Resume Phase 5 (Infra Migration) — it was paused specifically to make room for Phase 04.1's insertion, and Phase 04.1 is now fully closed out with Flyway proven end-to-end (both automated migration application and a live HTTP request against the migrated schema).
+- Minor, out-of-scope: `GET /api/docs` returns HTTP 500 with no logged exception (observed during Phase 04.1 Plan 03's checkpoint run). Springdoc/OpenAPI-path territory, not investigated — see Pending Todos below.
 
 </content>

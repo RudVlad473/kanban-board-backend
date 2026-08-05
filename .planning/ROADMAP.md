@@ -84,7 +84,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 04.1-03-PLAN.md — `ddl-auto=validate` cutover in `application.properties` and `docker-compose.yml`, clean-volume proof, superseded-by headers on the three manual DDL scripts (wave 3, human-verify checkpoint) — Tasks 1-2 (config cutover, superseded headers) machine-verified and committed; Task 3 (clean-volume proof + full test gate) is the blocking human-verify checkpoint, awaiting operator confirmation
+- [x] 04.1-03-PLAN.md — `ddl-auto=validate` cutover in `application.properties` and `docker-compose.yml`, clean-volume proof, superseded-by headers on the three manual DDL scripts (wave 3, human-verify checkpoint) — complete; operator ran the clean-volume docker-compose proof and full `./gradlew spotlessCheck test` gate directly and approved (Flyway V1-V4 applied sequentially against a wiped volume, zero Hibernate DDL activity, flyway_schema_history 4/4 success, live POST /api/signup returned 201, forced-fresh test suite green in 2m52s)
 
 ### Phase 5: Infra Migration
 
