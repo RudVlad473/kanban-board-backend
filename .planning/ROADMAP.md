@@ -86,6 +86,24 @@ Plans:
 
 - [x] 04.1-03-PLAN.md — `ddl-auto=validate` cutover in `application.properties` and `docker-compose.yml`, clean-volume proof, superseded-by headers on the three manual DDL scripts (wave 3, human-verify checkpoint) — complete; operator ran the clean-volume docker-compose proof and full `./gradlew spotlessCheck test` gate directly and approved (Flyway V1-V4 applied sequentially against a wiped volume, zero Hibernate DDL activity, flyway_schema_history 4/4 success, live POST /api/signup returned 201, forced-fresh test suite green in 2m52s)
 
+### Phase 04.2: Testcontainers Postgres, drop H2 (INSERTED)
+
+**Goal:** The whole test suite runs against a real PostgreSQL container whose schema is built by the same Flyway V1–V4 migrations that run in production — with `com.h2database:h2`, `spring.flyway.enabled=false`, and `spring.jpa.hibernate.ddl-auto=create-drop` all gone from the build — proven by a green full suite showing zero Hibernate-generated DDL and a recorded suite-duration delta against the current ~232s H2 baseline.
+**Requirements**: None — inserted phase with no REQ-IDs. Source is modernization Epic 5 ([`docs/plans/backend-modernization/05-testcontainers.md`](../../docs/plans/backend-modernization/05-testcontainers.md)), previously deferred 2026-07-31 and pulled forward here.
+**Depends on:** Phase 04.1 — this phase's entire point is making the suite execute the V1–V4 migrations that 04.1 authored.
+**Blocks:** Phase 5. Those migrations are currently verified only by 04.1-03's manual clean-volume run against local docker-compose, never by CI. Phase 5 points production at a brand-new Neon database and adds a pre-merge DDL verification gate, so closing that gap first is what keeps the cutover from being the first real test of the migration history.
+**Scope decided at insertion** (to be firmed into decisions during discuss-phase):
+
+  - Full drop, not a hybrid — no H2 fallback profile retained, since two schema paths is exactly the drift [`docs/CODE_STYLE.md`](../../docs/CODE_STYLE.md) rule 8 exists to prevent
+  - Static Postgres container behind `AbstractAppTest`, mirroring the singleton pattern `AbstractKafkaContainerTest` already established (imperative `start()`, not `@Testcontainers`/`@Container` — that extension-driven lifecycle proved unreliable across sibling classes here)
+  - Carried risk: ~17 fixture-heavy test classes move off in-memory H2, and the pre-commit `fastTest` gate currently excludes only `*E2ETest`, so its cost profile changes too
+
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 04.2 to break down)
+
 ### Phase 5: Infra Migration
 
 **Goal**: The app is redeployed on a cost-guarded, always-free/near-free stack — reachable over real HTTPS, backed by Neon and a resource-capped Redpanda broker, deployed automatically on merge to `master` — with Phase 4's Schema Registry repointed from local/standalone to the production Redpanda registry and re-verified against it.
@@ -128,5 +146,7 @@ Plans:
 | 2. Kafka Foundation, Domain Events & Move Endpoint | v1.1 | 3/3 | Complete | 2026-08-01 |
 | 3. Activity Log Consumer, Reliability & Read API | v1.1 | 3/3 | Complete | 2026-08-02 |
 | 4. Schema Registry | v1.2 | 4/4 | Complete    | 2026-08-04 |
+| 04.1. Flyway database migration implementation (INSERTED) | v1.2 | 3/3 | Complete | 2026-08-05 |
+| 04.2. Testcontainers Postgres, drop H2 (INSERTED) | v1.2 | 0/TBD | Not planned | - |
 | 5. Infra Migration | v1.2 | 0/TBD | Not started | - |
 </content>

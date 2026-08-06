@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Infra Migration & Schema Registry
-current_phase: 05
-current_phase_name: Infra Migration
+current_phase: "04.2"
+current_phase_name: Testcontainers Postgres, drop H2
 status: planning
-stopped_at: Phase 04.1 complete (all 3 plans, checkpoint approved)
-last_updated: "2026-08-05T22:55:46.633Z"
-last_activity: 2026-08-05
-last_activity_desc: Phase 04.1 complete, transitioned to Phase 05
+stopped_at: Phase 04.2 inserted, not yet planned
+last_updated: "2026-08-06T15:45:50.590Z"
+last_activity: 2026-08-06
+last_activity_desc: Phase 04.2 inserted (Testcontainers Postgres, drop H2) ahead of Phase 5
 progress:
-  total_phases: 3
+  total_phases: 4
   completed_phases: 2
   total_plans: 13
   completed_plans: 7
-  percent: 54
+  percent: 50
 ---
 
 # Project State
@@ -24,16 +24,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-03)
 
 **Core value:** Redeploy the app on a cost-guarded, always-free/near-free stack (Oracle Cloud + Neon + self-hosted Redpanda) after the AWS EC2/RDS deletion, and add a Schema Registry (Avro) in front of the Kafka activity-log pipeline to close the schema-evolution risk flagged during v1.1.
-**Current focus:** Phase 5 — infra-migration (Phase 04.1 complete; Phase 5 resumes next)
+**Current focus:** Phase 04.2 — Testcontainers Postgres, drop H2 (inserted ahead of Phase 5 so the Flyway V1–V4 migrations are CI-exercised before the Neon cutover; Phase 5 resumes after)
 
 ## Current Position
 
-Phase: 05 — Infra Migration
+Phase: 04.2 — Testcontainers Postgres, drop H2 (INSERTED)
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-08-05 — Phase 04.1 complete, transitioned to Phase 05
+Last activity: 2026-08-06 — Phase 04.2 inserted after Phase 04.1
 
-Progress: [██████████] 100% (Phase 04.1)
+Progress: [░░░░░░░░░░] 0% (Phase 04.2)
 
 ## Performance Metrics
 
@@ -179,6 +179,7 @@ Carried from research (address during Phase 4/5 planning):
 ### Roadmap Evolution
 
 - Phase 04.1 inserted after Phase 4: Flyway database migration implementation - paused Phase 5 (Infra Migration) to deliver this for resume purposes (URGENT)
+- Phase 04.2 inserted after Phase 4: Testcontainers Postgres, drop H2 — modernization Epic 5 pulled forward ahead of Phase 5 so the Flyway V1-V4 migrations are CI-exercised before the Neon cutover (URGENT)
 
 ## Deferred Items
 
