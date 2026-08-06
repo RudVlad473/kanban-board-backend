@@ -20,8 +20,8 @@ published on host port **5433** so a pre-existing native install can't silently 
 meant for the container. Full runbook: [docs/LOCAL_DEV.md](docs/LOCAL_DEV.md).
 
 ```bash
-./gradlew test      # everything; E2E classes need Docker for Testcontainers
-./gradlew fastTest  # same suite minus the container-backed tests
+./gradlew test      # everything; Docker required — every test boots a Testcontainers Postgres
+./gradlew fastTest  # same suite minus the Kafka-backed *E2ETest classes; still needs Docker
 ```
 
 ## Engineering highlights
@@ -49,7 +49,7 @@ Detail and reasoning for each of these is in [docs/ARCHITECTURE.md](docs/ARCHITE
 |---|---|
 | Language / runtime | Java 21, Gradle 8.11.1 (wrapper) |
 | Framework | Spring Boot 3.5.0 — Web, Data JPA, Security, Validation |
-| Persistence | PostgreSQL + Hibernate; Flyway for schema history; H2 for the test profile |
+| Persistence | PostgreSQL + Hibernate; Flyway for schema history; Testcontainers PostgreSQL for the test profile |
 | Sessions | Spring Session JDBC (server-side session state in Postgres) |
 | Messaging | Spring Kafka against Redpanda; Apache Avro 1.12 + Confluent Schema Registry |
 | Mapping | MapStruct 1.5.3 (compile-time generated, no reflection) |
@@ -85,10 +85,12 @@ cascade is only reachable by deleting the board.
 
 ## Testing
 
-208 test methods across 31 classes: unit tests for services and DTO validation, REST Assured
+210 test methods across 33 classes: unit tests for services and DTO validation, REST Assured
 integration tests for controllers, Testcontainers-backed E2E tests for the Kafka pipeline and
-locking, and ArchUnit rules over the whole class graph. Entities and repositories are deliberately
-untested — they carry no custom logic. Full breakdown in
+locking, and ArchUnit rules over the whole class graph. Every test — not just the E2E classes —
+runs against a real PostgreSQL 16 instance via Testcontainers, whose schema is built by the same
+Flyway migrations production runs, so Docker is required for `./gradlew test`. Entities and
+repositories are deliberately untested — they carry no custom logic. Full breakdown in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#testing).
 
 ## Project status

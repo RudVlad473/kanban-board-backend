@@ -125,11 +125,15 @@ matches the real sequence.
 Outside the test profile, `spring.jpa.hibernate.ddl-auto=validate` — Hibernate is not allowed to
 create or alter anything. Flyway builds the schema, Hibernate only checks that the entity mappings
 agree with it, and a mismatch is a loud startup failure instead of a silent auto-alter. The test
-profile stays on `create-drop` against H2, with Flyway disabled.
+profile now runs the same V1–V4 migrations against a Testcontainers-managed PostgreSQL instance
+with `ddl-auto=validate` — the identical posture to production — so CI executes the full migration
+history on every run.
 
 ## Testing
 
-208 test methods across 31 classes, split by what each layer can actually prove:
+210 test methods across 33 classes, split by what each layer can actually prove. Every test — not
+just the E2E classes — runs against a real PostgreSQL 16 instance via Testcontainers, whose schema
+is built by the same Flyway migrations production runs, so Docker is required for `./gradlew test`:
 
 | Category | Scope | Why |
 |---|---|---|
@@ -167,9 +171,10 @@ distinction is what made the N+1 work measurable rather than speculative:
   sources are held *stricter* than main: five named checks are promoted to ERROR after a 27-finding
   backlog was triaged to zero. Both the plugin and analyzer are pinned exactly, so an upstream
   release can't red the build on its own.
-- **`fastTest`** — the full suite minus the Testcontainers-backed classes, so the pre-commit hook
-  gets a real gate (ArchUnit and every unit/service test) without paying container startup on each
-  commit. CI still runs everything.
+- **`fastTest`** — the full suite minus the `*E2ETest` classes (the Kafka/Redpanda-backed ones), so
+  the pre-commit hook gets a real gate (ArchUnit and every unit/service test) without paying the
+  Kafka broker's container startup on each commit. It still starts the shared PostgreSQL container,
+  measured at ~2.3s (see [LOCAL_DEV.md](LOCAL_DEV.md)). CI still runs everything.
 - **Git hooks bootstrap on clone** — `core.hooksPath` is wired to the version-controlled
   `.githooks/` at Gradle configuration time, so a fresh checkout is armed with no manual setup step.
   It never fails the build and writes only when the value is wrong.

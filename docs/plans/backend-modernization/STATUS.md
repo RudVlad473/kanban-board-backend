@@ -6,7 +6,7 @@ Tracker for [the backend modernization plan](README.md). Update as epics are sta
 - [ ] Epic 2 — N+1 fix + optimistic locking
 - [ ] Epic 3 — Flyway migrations + OpenAPI polish
 - [ ] Epic 4 — Redis (cache + rate limit)
-- [ ] Epic 5 — Testcontainers, drop H2
+- [x] Epic 5 — Testcontainers, drop H2
 - [ ] Epic 6 — Observability (Actuator + Micrometer + Prometheus)
 - [ ] Epic 7 — Kubernetes, local only (stretch)
 
@@ -78,3 +78,53 @@ Tracker for [the backend modernization plan](README.md). Update as epics are sta
   merge is "don't lose this," not "production breaks at merge." **Epic 3 must not silently re-apply
   or lose this step either** — same requirement as the two precedent scripts, reflected in Flyway
   migration history as an already-applied baseline when Epic 3 lands.
+- **2026-08-06 — Epic 5 delivered.** Pulled forward ahead of Phase 5 as its own GSD phase
+  (`.planning/phases/04.2-testcontainers-postgres-drop-h2/`) so the Flyway V1–V4 migration history
+  would be CI-exercised before the Neon cutover. The suite now boots against a single, shared
+  `postgres:16` Testcontainers instance (`AbstractPostgresContainerTest`), its schema built by
+  Flyway's V1–V4 with `spring.jpa.hibernate.ddl-auto=validate` — the identical posture to
+  production. `com.h2database:h2` is removed outright from `build.gradle`, with no fallback
+  profile of any kind (D-05).
+  - **Duration, measured same-machine/same-session:** pre-cutover H2 baseline 4m48s/199 tests →
+    post-tracer H2 (like-for-like basis) 5m10s/208 tests → post-cutover PostgreSQL 4m51s/210
+    tests, a **19s / 6.1% improvement**, not a regression. A final confirmation run on this same
+    machine reproduced it: 4m51s/210 tests, 0 failures. The likely mechanism (not independently
+    proven beyond these numbers): H2's `create-drop` rebuilt the schema from scratch on every one
+    of the ~30 per-test-class Spring context creations across the run, while Flyway now migrates
+    the schema exactly once against a container shared for the whole JVM lifetime — a single
+    migration plus per-test-method row cleanup came out cheaper than ~30 repeated in-memory DDL
+    rebuilds.
+  - **Query-count outcome: unchanged, nothing adjudicated** — not "a change was reviewed and
+    accepted." Both dialect-sensitive assertions
+    (`TaskServiceTest.DeleteAllByColumnIdQueryCountTest`,
+    `OwnershipVerifierServiceTest.QueryCountTest.verifyOwnershipOfSubtask_issuesOneQuery`) passed
+    against PostgreSQL with zero edits to either test file. No H2→PostgreSQL dialect difference
+    materialized in either guarded query shape.
+  - **`activity_log` needed an explicit cleanup call (D-02a).** `V3__add_activity_log.sql` gives
+    `activity_log` no foreign key back to `users`, so the existing cascade-from-`UserEntity`
+    cleanup path in `AbstractAppTest.cleanup()` could not reach it — masked under H2's per-context
+    `create-drop`, real under a schema that persists for the whole JVM run. Closed by adding a
+    second, explicit `activityLogRepository.deleteAll()` call to the same cleanup hook, guarded by
+    a dedicated `ActivityLogCleanupIsolationTest` whose falsification was verified by hand.
+  - **Testcontainers reuse evaluated, not enabled.** Measured: three `fastTest` runs at
+    232s/224s/242s against a ~2.29s container-start duration — roughly 1% of wall-clock, smaller
+    than the run-to-run variance itself, and structurally capped besides (D-01's one
+    static-container-per-JVM-run design means reuse could only ever help a second, separate
+    `./gradlew` invocation, never a single run). The standard opt-in
+    (`~/.testcontainers.properties`) also fails `docs/CODE_STYLE.md` rule 8 as a manual host-level
+    step. Full writeup and the condition for revisiting it: `docs/LOCAL_DEV.md`.
+  - **Two deliberate departures from this epic doc's task list above:**
+    1. The container lives in a new shared third ancestor, `AbstractPostgresContainerTest`, that
+       both `AbstractAppTest` and `AbstractKafkaContainerTest` extend — not "in `AbstractAppTest`
+       (or a new shared base config class)" alone, as the task list above suggests. Scouting found
+       `AbstractKafkaContainerTest` does not extend `AbstractAppTest`, yet its 9 subclasses persist
+       `ActivityLogEntity`, so a container reachable only from `AbstractAppTest` would have left
+       them without a datasource or forced a second container (D-01).
+    2. The container's lifecycle is an imperative `static { start(); }`, not the
+       `@Testcontainers`/`@Container` JUnit 5 extension the task list above names — that
+       extension-driven singleton was already found unreliable across sibling classes in this
+       environment for the Kafka container (Phase 3 Plan 02), and the same imperative pattern was
+       reused here rather than risk the same failure mode with Postgres.
+    Also: `@ServiceConnection` wired the datasource instead of the task list's suggested
+    `@DynamicPropertySource`, since Spring Boot 3.5.0 ships a connection-details factory for
+    `PostgreSQLContainer` that `@DynamicPropertySource` predates the need for.

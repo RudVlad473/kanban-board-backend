@@ -9,8 +9,8 @@ PR without the whole plan living in your head at once. See [STATUS.md](STATUS.md
 checklist.
 
 **Repo:** `RudVlad473/kanban-board-backend` — Spring Boot 3.5.0, Java 21, Gradle, PostgreSQL,
-Hibernate/JPA, Spring Security (session-based), MapStruct, springdoc-openapi, H2 for tests,
-single-EC2 Docker deploy via GitHub Actions.
+Hibernate/JPA, Spring Security (session-based), MapStruct, springdoc-openapi, Testcontainers
+PostgreSQL for tests (Epic 5, delivered — see below), single-EC2 Docker deploy via GitHub Actions.
 
 **Domain, confirmed from code:** `UserEntity → BoardEntity → ColumnEntity → TaskEntity →
 SubtaskEntity`, all child→parent `@ManyToOne`, ownership enforced by
@@ -43,7 +43,7 @@ Epic 3 as a ~1-hour polish item.
 | 2 | [Fix N+1 chain + optimistic locking](02-n-plus-one-optimistic-locking.md) | 3–5 days | Highest — directly answers the JPA-depth question |
 | 3 | [Flyway migrations + OpenAPI polish](03-flyway-openapi.md) | 1–2 days | High — cheap, expected, do it early |
 | 4 | [Redis: cache + rate limiting](04-redis.md) | 3–5 days | Medium-high |
-| 5 | [Testcontainers, drop H2](05-testcontainers.md) | 2–3 days | Medium — do once Epics 1 & 3 exist |
+| 5 | [Testcontainers, drop H2](05-testcontainers.md) — ✅ delivered (Phase 04.2) | 2–3 days | Medium — do once Epics 1 & 3 exist |
 | 6 | [Observability: Actuator + Micrometer + Prometheus](06-observability.md) | 2–3 days | Medium — cheap, often overlooked |
 | 7 | [Kubernetes, local only (stretch)](07-kubernetes-stretch.md) | 2–4 days | Low — scoped intentionally small |
 
