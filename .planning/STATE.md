@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Infra Migration & Schema Registry
-current_phase: "04.2"
+current_phase: 04.2
 current_phase_name: Testcontainers Postgres, drop H2
 status: planning
-stopped_at: Phase 04.2 inserted, not yet planned
-last_updated: "2026-08-06T15:45:50.590Z"
+stopped_at: Phase 04.2 context gathered
+last_updated: "2026-08-06T15:56:47.356Z"
 last_activity: 2026-08-06
-last_activity_desc: Phase 04.2 inserted (Testcontainers Postgres, drop H2) ahead of Phase 5
+last_activity_desc: Phase 04.2 inserted after Phase 04.1
 progress:
   total_phases: 4
   completed_phases: 2
@@ -204,9 +204,9 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-05T14:35:00.000Z
-Stopped at: Phase 04.1 complete (all 3 plans, checkpoint approved)
-Resume file: .planning/phases/04.1-flyway-database-migration-implementation/04.1-03-SUMMARY.md
+Last session: 2026-08-06T15:56:47.316Z
+Stopped at: Phase 04.2 context gathered
+Resume file: .planning/phases/04.2-testcontainers-postgres-drop-h2/04.2-CONTEXT.md
 
 ## Operator Next Steps
 
