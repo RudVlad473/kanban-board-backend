@@ -4,11 +4,11 @@ milestone: v1.2
 milestone_name: Infra Migration & Schema Registry
 current_phase: 04.2
 current_phase_name: Testcontainers Postgres, drop H2
-status: executing
-stopped_at: Completed 04.2-03-PLAN.md (Testcontainers reuse evaluated, all H2 claims corrected, phase closed)
-last_updated: "2026-08-06T20:56:27.459Z"
+status: complete
+stopped_at: Phase 04.2 complete and verified (17/17 must-haves against live codebase); rebased onto master, --ff-only ready, not yet merged
+last_updated: "2026-08-06T21:33:27.273Z"
 last_activity: 2026-08-06
-last_activity_desc: "Plan 01 (tracer: Postgres+Flyway+Hibernate+Spring-Session coexistence) complete"
+last_activity_desc: "Phase 04.2 complete — suite runs on Testcontainers Postgres with Flyway-built schema, H2 removed, verified 17/17"
 progress:
   total_phases: 4
   completed_phases: 3
