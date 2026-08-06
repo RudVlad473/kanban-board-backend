@@ -25,7 +25,21 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 
-public abstract class AbstractAppTest {
+/**
+ * Shared fixture base for ~19 service/controller/E2E test classes. Inherits the one shared
+ * PostgreSQL container from {@link AbstractPostgresContainerTest} (04.2, D-01) -- the schema its
+ * subclasses see is built by Flyway V1-V4, the same migrations production runs, not by Hibernate.
+ *
+ * <p>Per-test isolation is {@link #cleanup()}'s plain {@code @AfterEach} deletion (D-02), never
+ * test-managed {@code @Transactional} rollback. Rollback was considered and rejected on three
+ * verified grounds: it never delivers {@code @TransactionalEventListener(phase = AFTER_COMMIT)}
+ * events, since a rolled-back transaction never commits; it corrupts {@link
+ * #countQueries(Runnable)}'s {@code getPrepareStatementCount()} metric, since a shared persistence
+ * context across {@code @BeforeEach} and the act keeps fixtures in the first-level cache and hides
+ * {@code findById()} calls; and it gives {@code AbstractAppE2ETest}'s real, cross-thread HTTP
+ * round-trips no isolation at all, since the test thread's transaction never spans the request.
+ */
+public abstract class AbstractAppTest extends AbstractPostgresContainerTest {
     private @Autowired UserService userService;
     private @Autowired BoardService boardService;
     private @Autowired ColumnService columnService;

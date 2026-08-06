@@ -18,11 +18,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /**
- * No mocks, no container (CODE_STYLE rule 4 / plan Task 3): {@link ActivityEventAvroMapper} touches
- * neither Kafka nor a database, so a plain Spring context is sufficient to autowire it.
+ * No mocks (CODE_STYLE rule 4 / plan Task 3): {@link ActivityEventAvroMapper} touches neither Kafka
+ * nor a database, so a plain Spring context is sufficient to autowire it. Still extends {@link
+ * com.vrudenko.kanban_board.AbstractPostgresContainerTest} because the test profile no longer names
+ * a datasource (04.2, D-01) -- booting the full context requires a container even though this
+ * class's own assertions never touch it.
  */
 @SpringBootTest
-public class ActivityEventAvroMapperTest {
+public class ActivityEventAvroMapperTest
+        extends com.vrudenko.kanban_board.AbstractPostgresContainerTest {
 
     @Autowired private ActivityEventAvroMapper mapper;
 

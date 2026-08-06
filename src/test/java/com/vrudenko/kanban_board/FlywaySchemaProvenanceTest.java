@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.TestPropertySource;
 
 /**
  * Executable form of 04.2's actual success criterion (04.2-01-PLAN.md's {@code must_haves}): that
@@ -23,15 +22,12 @@ import org.springframework.test.context.TestPropertySource;
  * would pull in fixture creation against the wrong datasource entirely.
  */
 @SpringBootTest
-@TestPropertySource(
-        properties = {"spring.flyway.enabled=true", "spring.jpa.hibernate.ddl-auto=validate"})
-// TEMPORARY (04.2-01 only): application-test.properties still carries the opposite values
-// (spring.flyway.enabled=false, ddl-auto=create-drop) until 04.2-02 Task 1 flips them for every
-// class at once. These two overrides exist solely so this one tracer class can prove the
-// Postgres/Flyway/Hibernate/Spring-Session combination end-to-end without disturbing the ~25
-// existing H2-backed classes. 04.2-02 Task 1 deletes this @TestPropertySource block as part of
-// making the properties file itself carry these values -- do not treat this annotation as a
-// second, permanent schema-configuration path (D-05, docs/CODE_STYLE.md rule 8).
+// 04.2-02 Task 1: this class now asserts against the profile's own configuration, with no
+// overrides. application-test.properties itself carries spring.flyway.enabled at its default
+// (enabled) and spring.jpa.hibernate.ddl-auto=validate -- the temporary @TestPropertySource
+// this class carried in 04.2-01 (before the whole suite cut over) has been deleted, since
+// keeping it would be a second, driftable schema-configuration path (D-05, docs/CODE_STYLE.md
+// rule 8).
 class FlywaySchemaProvenanceTest extends AbstractPostgresContainerTest {
 
     @Autowired private JdbcTemplate jdbcTemplate;
