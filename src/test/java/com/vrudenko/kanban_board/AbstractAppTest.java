@@ -12,6 +12,7 @@ import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
 import com.vrudenko.kanban_board.dto.user_dto.SignupRequestDTO;
 import com.vrudenko.kanban_board.dto.user_dto.UserResponseDTO;
+import com.vrudenko.kanban_board.repository.ActivityLogRepository;
 import com.vrudenko.kanban_board.service.BoardService;
 import com.vrudenko.kanban_board.service.ColumnService;
 import com.vrudenko.kanban_board.service.TaskService;
@@ -44,6 +45,7 @@ public abstract class AbstractAppTest extends AbstractPostgresContainerTest {
     private @Autowired BoardService boardService;
     private @Autowired ColumnService columnService;
     private @Autowired TaskService taskService;
+    private @Autowired ActivityLogRepository activityLogRepository;
 
     private @Autowired EntityManagerFactory entityManagerFactory;
 
@@ -148,9 +150,22 @@ public abstract class AbstractAppTest extends AbstractPostgresContainerTest {
                                 .toList());
     }
 
+    /**
+     * {@code activity_log} is the only table in the schema whose rows are unreachable from {@link
+     * UserService#deleteAll()}'s cascade, because {@code V3__add_activity_log.sql} declares {@code
+     * board_id}/{@code user_id} as plain {@code NOT NULL} columns with no foreign key -- a
+     * deliberate entity-level design choice ({@link
+     * com.vrudenko.kanban_board.entity.ActivityLogEntity}'s Javadoc), not an oversight to be fixed
+     * with a migration. H2's per-context {@code create-drop} masked this gap (04.2, D-02a); a
+     * long-lived container does not, so the second call below closes it explicitly. This hook, not
+     * a test-managed {@code @Transactional} rollback, is this codebase's single isolation model
+     * (D-02) -- a future author should extend this method for a new FK-less table, not add a second
+     * isolation mechanism alongside it.
+     */
     @AfterEach
     void cleanup() {
         userService.deleteAll();
+        activityLogRepository.deleteAll();
     }
 
     protected UserResponseDTO createUser() {
