@@ -88,7 +88,7 @@ Plans:
 
 ### Phase 04.2: Testcontainers Postgres, drop H2 (INSERTED)
 
-**Goal:** The whole test suite runs against a real PostgreSQL container whose schema is built by the same Flyway V1–V4 migrations that run in production — with `com.h2database:h2`, `spring.flyway.enabled=false`, and `spring.jpa.hibernate.ddl-auto=create-drop` all gone from the build — proven by a green full suite showing zero Hibernate-generated DDL and a recorded suite-duration delta against the current ~232s H2 baseline.
+**Goal:** The whole test suite runs against a real PostgreSQL container whose schema is built by the same Flyway V1–V4 migrations that run in production — with `com.h2database:h2`, `spring.flyway.enabled=false`, and `spring.jpa.hibernate.ddl-auto=create-drop` all gone from the build — proven by a green full suite showing zero Hibernate-generated DDL and a recorded suite-duration delta against the same-machine, same-session H2 baseline (4m48s/199 tests, superseding the earlier ~232s figure measured in a different session).
 **Requirements**: None — inserted phase with no REQ-IDs. Source is modernization Epic 5, `docs/plans/backend-modernization/05-testcontainers.md`, previously deferred 2026-07-31 and pulled forward here.
 **Depends on:** Phase 04.1 — this phase's entire point is making the suite execute the V1–V4 migrations that 04.1 authored.
 **Blocks:** Phase 5. Those migrations are currently verified only by 04.1-03's manual clean-volume run against local docker-compose, never by CI. Phase 5 points production at a brand-new Neon database and adds a pre-merge DDL verification gate, so closing that gap first is what keeps the cutover from being the first real test of the migration history.
@@ -98,17 +98,15 @@ Plans:
   - D-01: one static Postgres container in a shared base that **both** `AbstractAppTest` and `AbstractKafkaContainerTest` inherit — not behind `AbstractAppTest` alone as Epic 5's doc says, because the Kafka base does not extend it while its 9 subclasses do persist entities. Imperative `start()`, not `@Testcontainers`/`@Container`, matching the precedent already set here
   - D-02: test isolation stays `@AfterEach deleteAll()`; test-managed `@Transactional` rollback was considered and rejected — it breaks `AFTER_COMMIT` event delivery, the `getPrepareStatementCount()` metric, and gives REST Assured E2E no isolation anyway
   - D-03/D-04: `fastTest` keeps its `*E2ETest` exclusion and now requires Docker; Spring Session tables stay out of Flyway per 04.1 D-02
-  - Carried risk: ~25 fixture-heavy test classes move off in-memory H2 against a ~232s full-suite baseline, and the pre-commit gate's container-free premise disappears
+  - Carried risk: ~25 fixture-heavy test classes move off in-memory H2 against a same-machine 4m48s/199-test full-suite baseline, and the pre-commit gate's container-free premise disappears
 
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete — delivered ~19s/6.1% FASTER than the like-for-like H2 baseline, not slower; Testcontainers reuse evaluated and deliberately not enabled (see 04.2-03-SUMMARY.md)
 
 Plans:
 
-- [x] 04.2-01-PLAN.md
-- [x] 04.2-02-PLAN.md
-- [ ] 04.2-03-PLAN.md
-
-- [ ] TBD (run /gsd-plan-phase 04.2 to break down)
+- [x] 04.2-01-PLAN.md — TRACER: `AbstractPostgresContainerTest` + `FlywaySchemaProvenanceTest` prove Flyway V1-V4 + Hibernate `ddl-auto=validate` + Spring Session JDBC coexist against one real Postgres container, H2 and the existing suite left untouched
+- [x] 04.2-02-PLAN.md — Cutover: both test hierarchies + two orphan `@SpringBootTest` classes moved onto the shared container, `com.h2database:h2` removed outright (D-05), `activity_log` cross-test isolation gap closed (D-02a), two H2-dialect-coupled assertions repaired — full suite 4m51s/210 tests, faster than the H2 baseline it replaced (blocking-human checkpoint, approved)
+- [x] 04.2-03-PLAN.md — Testcontainers reuse measured and NOT enabled (docs/LOCAL_DEV.md); every H2 claim in git-tracked docs, agent context, and the codebase map corrected; Epic 5 ticked in the modernization tracker; phase closed on a green `spotlessCheck` + `clean test` (210/0/0, 4m53s)
 
 ### Phase 5: Infra Migration
 
@@ -153,6 +151,6 @@ Plans:
 | 3. Activity Log Consumer, Reliability & Read API | v1.1 | 3/3 | Complete | 2026-08-02 |
 | 4. Schema Registry | v1.2 | 4/4 | Complete    | 2026-08-04 |
 | 04.1. Flyway database migration implementation (INSERTED) | v1.2 | 3/3 | Complete | 2026-08-05 |
-| 04.2. Testcontainers Postgres, drop H2 (INSERTED) | v1.2 | 2/3 | In Progress|  |
+| 04.2. Testcontainers Postgres, drop H2 (INSERTED) | v1.2 | 3/3 | Complete | 2026-08-06 |
 | 5. Infra Migration | v1.2 | 0/TBD | Not started | - |
 </content>

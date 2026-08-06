@@ -5,16 +5,16 @@ milestone_name: Infra Migration & Schema Registry
 current_phase: 04.2
 current_phase_name: Testcontainers Postgres, drop H2
 status: executing
-stopped_at: Completed 04.2-02-PLAN.md (cutover to Postgres, H2 removed)
-last_updated: "2026-08-06T20:07:57.458Z"
+stopped_at: Completed 04.2-03-PLAN.md (Testcontainers reuse evaluated, all H2 claims corrected, phase closed)
+last_updated: "2026-08-06T20:56:27.459Z"
 last_activity: 2026-08-06
 last_activity_desc: "Plan 01 (tracer: Postgres+Flyway+Hibernate+Spring-Session coexistence) complete"
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 16
-  completed_plans: 9
-  percent: 50
+  completed_plans: 10
+  percent: 63
 ---
 
 # Project State
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-08-03)
 ## Current Position
 
 Phase: 04.2 — Testcontainers Postgres, drop H2 (INSERTED)
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-08-06 — Plan 01 (tracer: Postgres+Flyway+Hibernate+Spring-Session coexistence) complete
 
-Progress: [██████░░░░] 56% (Phase 04.2)
+Progress: [██████░░░░] 63% (Phase 04.2)
 
 ## Performance Metrics
 
@@ -80,6 +80,7 @@ Progress: [██████░░░░] 56% (Phase 04.2)
 | Phase quick-260804-p7a P01 | 12min | 2 tasks | 2 files |
 | Phase 04.2 P01 | 50min | 2 tasks | 3 files |
 | Phase 04.2 P02 | 55min | 3 tasks | 10 files |
+| Phase 04.2 P03 | 50min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -130,6 +131,8 @@ Recent decisions affecting current work:
 - [Phase ?]: [Quick/260804-p7a]: Disabled deploy-to-ec2 CI job (if: false) — AWS EC2 host was deleted; picked comment+if:false over commenting out the block (breaks needs: chain), a repo-variable gate (unauditable), or deletion (loses reference material). Filed resolves_phase:5, severity:major todo tracking the rewrite plus two side-findings: Docker Hub tag accumulation (cleanup jobs also skip) and a pre-existing truncated curl -X DELETE in cleanup-unused-image.
 - [Phase ?]: [Phase 04.2 Plan 01]: Both SpringSessionCoexistence's MOCK-web-environment check and SchemaShape's nine-table assertion passed on the first tracer run against real Postgres -- neither of the plan's documented fallbacks (RANDOM_PORT switch, loosened table-set assertion) was needed. Pre-tracer H2 baseline recorded on this machine: 4m 48s / 199 tests (not the ~232s ROADMAP.md figure from a different session), post-tracer full suite 5m 10s / 208 tests, fastTest 3m 57s / 153 tests -- all green, H2 and existing test classes untouched.
 - [Phase ?]: [Phase 04.2 Plan 02]: Cutover to Postgres complete -- full suite green (210 tests, 0 failures, 4m51s), ~19s FASTER than the post-tracer H2 baseline it is compared against (5m10s/208 tests), flagged as a hypothesis (single Flyway migration vs. per-context H2 create-drop) for wave 3 to confirm, not a settled conclusion. Both dialect-sensitive query-count assertions (TaskServiceTest, OwnershipVerifierServiceTest) passed unchanged -- outcome is 'unchanged, nothing adjudicated', not 'a change was accepted'. com.h2database:h2 fully removed (D-05); activity_log cross-test isolation gap closed via a second AbstractAppTest.cleanup() call, guarded by a falsified tripwire test (D-02a); isolation remains @AfterEach deletion, no @Transactional introduced (D-02).
+- [Phase ?]: [Phase 04.2 Plan 03]: Testcontainers reuse evaluated and NOT enabled -- measured container-start (~2.29s) is ~1% of fastTest wall-clock (232s/224s/242s across three runs), smaller than run-to-run variance; D-01's one-container-per-JVM-run design caps any benefit to a separate ./gradlew invocation; no zero-manual-step opt-in satisfies docs/CODE_STYLE.md rule 8. Full writeup in docs/LOCAL_DEV.md.
+- [Phase ?]: [Phase 04.2 Plan 03]: Duration finding confirmed by a second run -- this plan's own clean test (295s/210 tests) reproduced 04.2-02's post-cutover figure (291s/210), supporting the ~19s/6.1% improvement over the like-for-like H2 baseline (310s/208) as real. Phase 04.2 closed: Epic 5 ticked in docs/plans/backend-modernization/STATUS.md, every H2 claim in git-tracked docs, agent context, and .planning/codebase/ corrected, final gate green (spotlessCheck + clean test 210/0/0 + FlywaySchemaProvenanceTest).
 
 ### Pending Todos
 
@@ -209,9 +212,9 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-06T20:07:57.429Z
-Stopped at: Completed 04.2-02-PLAN.md (cutover to Postgres, H2 removed)
-Resume file: .planning/phases/04.2-testcontainers-postgres-drop-h2/04.2-03-PLAN.md
+Last session: 2026-08-06T20:56:27.430Z
+Stopped at: Completed 04.2-03-PLAN.md (Testcontainers reuse evaluated, all H2 claims corrected, phase closed)
+Resume file: None
 
 ## Operator Next Steps
 
