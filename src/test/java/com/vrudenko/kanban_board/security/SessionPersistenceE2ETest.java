@@ -52,11 +52,11 @@ public class SessionPersistenceE2ETest extends AbstractAppE2ETest {
      * Signs in and returns the {@code PRIMARY_ID} of the {@code SPRING_SESSION} row the signin
      * created. {@code SPRING_SESSION} carries no foreign key to users, so {@code AbstractAppTest}'s
      * {@code @AfterEach userService.deleteAll()} never clears these rows and they accumulate across
-     * the whole suite run in the shared H2 context. Identifying the new row by set difference
-     * (rather than an absolute count or ordering) is what keeps this deterministic regardless of
-     * how many sessions earlier tests left behind. JUnit runs sequentially here (no {@code
-     * junit-platform.properties} declares parallelism), so exactly one new id is expected. Never
-     * compare the returned session cookie value to {@code SESSION_ID} -- {@code
+     * the whole suite run in the shared containerised Postgres database. Identifying the new row by
+     * set difference (rather than an absolute count or ordering) is what keeps this deterministic
+     * regardless of how many sessions earlier tests left behind. JUnit runs sequentially here (no
+     * {@code junit-platform.properties} declares parallelism), so exactly one new id is expected.
+     * Never compare the returned session cookie value to {@code SESSION_ID} -- {@code
      * DefaultCookieSerializer} Base64-encodes the cookie by default, so the two are not equal and
      * would fail an equality assertion for a reason unrelated to this fix.
      */
@@ -82,17 +82,21 @@ public class SessionPersistenceE2ETest extends AbstractAppE2ETest {
         @Test
         void shouldCreateSpringSessionTables_whenApplicationStarts() {
             // arrange
-            // act: table names are stored upper-case by H2 for unquoted identifiers, matching how
-            // Spring Session's schema-h2.sql creates them
+            // act: PostgreSQL folds unquoted identifiers to lower case, the opposite of H2. Spring
+            // Session's schema-postgresql.sql creates both tables unquoted, so the catalog holds
+            // lower-case names -- and the plain SELECT ... FROM statements elsewhere in this class
+            // still work unquoted, because the query's identifiers are folded the same way the
+            // DDL's
+            // were.
             var sessionTableCount =
                     jdbcTemplate.queryForObject(
-                            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME ="
-                                    + " 'SPRING_SESSION'",
+                            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema ="
+                                    + " 'public' AND table_name = 'spring_session'",
                             Integer.class);
             var attributesTableCount =
                     jdbcTemplate.queryForObject(
-                            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME ="
-                                    + " 'SPRING_SESSION_ATTRIBUTES'",
+                            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema ="
+                                    + " 'public' AND table_name = 'spring_session_attributes'",
                             Integer.class);
 
             // assert: registered in the schema metadata...

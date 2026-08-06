@@ -83,8 +83,6 @@ dependencies {
     implementation 'org.mapstruct:mapstruct:1.5.3.Final'
     annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.3.Final'
 
-    testImplementation 'com.h2database:h2'
-
     // https://mvnrepository.com/artifact/org.apache.commons/commons-lang3
     // Bumped from the previously-pinned 3.0 (Phase 4, Task 3 regression fix): Spring Boot's
     // dependency-management plugin forces an explicitly-declared version project-wide, so the
@@ -144,9 +142,9 @@ dependencies {
     // No explicit version -- BOM-managed by Spring Boot 3.5.0 exactly like the
     // org.testcontainers:kafka/redpanda/junit-jupiter lines above, resolving to the same
     // 1.21.0 release train those already use (04.2-RESEARCH.md, verified live via
-    // `./gradlew dependencies --configuration testRuntimeClasspath`). H2 (below) is
-    // deliberately NOT removed in this plan -- this tracer proves the Postgres substrate
-    // for one test class only; the full cutover that removes H2 is 04.2-02.
+    // `./gradlew dependencies --configuration testRuntimeClasspath`). 04.2-02 completes the
+    // cutover this tracer started: com.h2database:h2 is now removed entirely (D-05), so
+    // AbstractPostgresContainerTest's container is the only datasource left for the whole suite.
     testImplementation 'org.testcontainers:postgresql'
 
     // gradle-avro-plugin 1.9.1 + Avro 1.12.1 codegen observation (Task 1 probe, this session):
@@ -162,13 +160,13 @@ dependencies {
     errorprone 'com.google.errorprone:error_prone_core:2.50.0'
 }
 
-// The `rehearsal` tag (HistoricalSchemaRehearsalE2ETest, SCHEMA-06) is excluded here: the H2 test
-// database backing every other test class is created fresh on every run and is empty by
-// construction, so folding this rehearsal into `test` would guarantee either a permanent failure
-// (its corpus-empty gate firing on every single run) or, if that gate were ever weakened, a
-// permanently vacuous pass -- neither answers what SCHEMA-06 needs answered. See
-// rehearseHistoricalSchemas below for the dedicated, build/CI-invocable task this rehearsal
-// actually runs under, against a real historical Postgres instance.
+// The `rehearsal` tag (HistoricalSchemaRehearsalE2ETest, SCHEMA-06) is excluded here: the
+// per-run Testcontainers PostgreSQL database backing every other test class is created fresh on
+// every run and is empty by construction, so folding this rehearsal into `test` would guarantee
+// either a permanent failure (its corpus-empty gate firing on every single run) or, if that gate
+// were ever weakened, a permanently vacuous pass -- neither answers what SCHEMA-06 needs
+// answered. See rehearseHistoricalSchemas below for the dedicated, build/CI-invocable task this
+// rehearsal actually runs under, against a real historical Postgres instance.
 tasks.named('test') {
     useJUnitPlatform {
         excludeTags 'rehearsal'
@@ -226,8 +224,8 @@ tasks.register('registerSchemas', JavaExec) {
 // `fastTest` above. Spring therefore resolves application.properties' default datasource, which
 // already points at a real Postgres instance via the DB_HOST/DB_NAME/DB_USER/DB_PASS environment
 // variables the running application already uses (see HistoricalSchemaRehearsalE2ETest's Javadoc
-// for the full reasoning) -- exactly what lets this task read genuine historical rows instead of an
-// empty, freshly-created H2 database.
+// for the full reasoning) -- exactly what lets this task read genuine historical rows instead of
+// an empty, freshly-created per-run Testcontainers PostgreSQL database.
 tasks.register('rehearseHistoricalSchemas', Test) {
     description = 'Rehearses the new Avro schemas against real historical activity_log rows ' +
             '(SCHEMA-06). Requires DB_HOST/DB_NAME/DB_USER/DB_PASS pointed at a real Postgres ' +

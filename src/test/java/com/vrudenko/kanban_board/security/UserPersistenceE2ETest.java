@@ -119,10 +119,12 @@ public class UserPersistenceE2ETest extends AbstractAppE2ETest {
             var email = credentials[0];
             var plaintextPassword = credentials[1];
 
-            // act: raw SQL against the actual table, not through UserRepository -- H2
-            // upper-cases unquoted identifiers, and Hibernate creates this table unquoted under
-            // ddl-auto=create-drop, so the table is USERS and the columns are PASSWORD_HASH /
-            // EMAIL
+            // act: raw SQL against the actual table, not through UserRepository -- PostgreSQL
+            // folds these unquoted identifiers to lower case, and the table/columns queried below
+            // are the ones V1__init.sql creates (users / password_hash / email). The
+            // rows.get(0).get("PASSWORD_HASH") lookup below still works regardless of the actual
+            // catalog casing because Spring's ColumnMapRowMapper backs each row with a
+            // case-insensitive map.
             var rows =
                     jdbcTemplate.queryForList(
                             "SELECT PASSWORD_HASH FROM USERS WHERE EMAIL = ?", email);
@@ -140,10 +142,10 @@ public class UserPersistenceE2ETest extends AbstractAppE2ETest {
             // Never assert a specific hash value: BCrypt salts every encode, so the same
             // password yields a different hash each run. Assert the marker prefix plus
             // inequality/non-containment against the plaintext instead. As of quick task
-            // 260803-m3i, UserEntity declares @Column(nullable = false) on PASSWORD_HASH, so
-            // Hibernate's H2 schema does now enforce a DB-level NOT NULL constraint -- but no
-            // assertion in this class was changed by that task, and this class deliberately still
-            // asserts what the column actually holds rather than what the schema forbids; a
+            // 260803-m3i, UserEntity declares @Column(nullable = false) on PASSWORD_HASH, and
+            // V4__add_password_hash_not_null.sql enforces that same constraint at the DB level --
+            // but no assertion in this class was changed by that task, and this class deliberately
+            // still asserts what the column actually holds rather than what the schema forbids; a
             // schema-constraint assertion belongs alongside the entity, not here.
             Assertions.assertThat(persistedHash).isNotNull();
             Assertions.assertThat(persistedHash).startsWith(BCRYPT_HASH_MARKER);
