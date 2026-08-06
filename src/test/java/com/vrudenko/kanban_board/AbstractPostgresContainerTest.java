@@ -6,11 +6,15 @@ import org.testcontainers.utility.DockerImageName;
 
 /**
  * Shared, third ancestor providing exactly one real PostgreSQL container for the whole JVM run
- * (04.2, D-01). Neither {@link com.vrudenko.kanban_board.AbstractAppTest} nor {@link
- * com.vrudenko.kanban_board.activitylog.AbstractKafkaContainerTest} extends this class yet -- that
- * cutover is 04.2-02. This tracer plan proves the container/Flyway/Hibernate/Spring-Session
- * coexistence end-to-end through exactly one subclass, {@link
- * com.vrudenko.kanban_board.FlywaySchemaProvenanceTest}, before either existing hierarchy moves.
+ * (04.2, D-01). Both {@link com.vrudenko.kanban_board.AbstractAppTest} and {@link
+ * com.vrudenko.kanban_board.activitylog.AbstractKafkaContainerTest} extend this class, as do the
+ * two {@code @SpringBootTest} classes that extend neither hierarchy ({@code
+ * KanbanBoardApplicationTests} and {@code ActivityEventAvroMapperTest}) -- so every Spring test
+ * context in the repository boots against this one container. {@link
+ * com.vrudenko.kanban_board.FlywaySchemaProvenanceTest} is the standing proof of
+ * container/Flyway/Hibernate/Spring-Session coexistence: it asserts the schema carries Flyway-only
+ * artifacts Hibernate's naming strategy would never emit, so a silent regression to
+ * Hibernate-generated DDL fails the build rather than passing quietly.
  *
  * <p>This is a <em>third</em> shared ancestor rather than folding the container into {@code
  * AbstractAppTest} because {@code AbstractKafkaContainerTest} does not extend {@code
@@ -33,11 +37,10 @@ import org.testcontainers.utility.DockerImageName;
  *
  * <p>The {@code api.version} system property pin lives in <em>this</em> class rather than being
  * duplicated in (or left solely in) {@code AbstractKafkaContainerTest} because JVM
- * class-initialization runs a superclass's static initializers before a subclass's. Once {@code
- * AbstractKafkaContainerTest} extends this class (04.2-02), putting the pin here guarantees it
- * fires before EITHER container type starts, regardless of which concrete test class the JVM
- * happens to load first -- a guarantee two independent, class-local pins could not offer if load
- * order ever varied.
+ * class-initialization runs a superclass's static initializers before a subclass's. Since {@code
+ * AbstractKafkaContainerTest} extends this class, putting the pin here guarantees it fires before
+ * EITHER container type starts, regardless of which concrete test class the JVM happens to load
+ * first -- a guarantee two independent, class-local pins could not offer if load order ever varied.
  *
  * <p>{@code @ServiceConnection} on {@code postgres} is what supplies {@code
  * spring.datasource.url}/{@code username}/{@code password} to any Spring context built from a
@@ -60,7 +63,7 @@ public abstract class AbstractPostgresContainerTest {
      * floor for this Engine generation) resolves it with zero host-level Docker Desktop
      * configuration, so `./gradlew test` works out of the box on a fresh machine
      * (docs/CODE_STYLE.md rule 8). Moved up from AbstractKafkaContainerTest so this single pin
-     * covers both container types once 04.2-02 makes that class extend this one too.
+     * covers both container types, since that class now extends this one.
      */
     static {
         System.setProperty("api.version", "1.44");
