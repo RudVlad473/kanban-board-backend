@@ -141,6 +141,14 @@ dependencies {
     // in 04-01-SUMMARY.md for Plan 02.
     testImplementation 'org.testcontainers:redpanda'
 
+    // No explicit version -- BOM-managed by Spring Boot 3.5.0 exactly like the
+    // org.testcontainers:kafka/redpanda/junit-jupiter lines above, resolving to the same
+    // 1.21.0 release train those already use (04.2-RESEARCH.md, verified live via
+    // `./gradlew dependencies --configuration testRuntimeClasspath`). H2 (below) is
+    // deliberately NOT removed in this plan -- this tracer proves the Postgres substrate
+    // for one test class only; the full cutover that removes H2 is 04.2-02.
+    testImplementation 'org.testcontainers:postgresql'
+
     // gradle-avro-plugin 1.9.1 + Avro 1.12.1 codegen observation (Task 1 probe, this session):
     // for AvroTaskMovedEvent (fields declared with the "uuid" and "timestamp-millis" logical
     // types), getEventId() returns java.util.UUID and getTimestamp() returns java.time.Instant
