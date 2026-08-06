@@ -22,10 +22,10 @@
   - Port: Default 5432
   - Naming strategy: CamelCase to underscores conversion
 
-- **H2 Database** (testing only)
-  - Connection: In-memory `jdbc:h2:mem:testdb`
+- **PostgreSQL 16, via Testcontainers** (testing only)
+  - Connection: `@ServiceConnection`-wired, one static container shared for the whole JVM run
   - Mode: Test profile only (`application-test.properties`)
-  - Schema: Auto-created and dropped per test (`hibernate.ddl-auto=create-drop`)
+  - Schema: Built by Flyway V1-V4, Hibernate at `ddl-auto=validate` (creates nothing)
 
 **Session Storage:**
 - **JDBC-backed Sessions** (Spring Session)

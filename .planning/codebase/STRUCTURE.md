@@ -206,7 +206,7 @@ kanban-board-backend/
 
 **src/main/resources/**
 - Purpose: Runtime configuration files
-- Contains: application.properties (database URL, session store, Swagger docs path), application-test.properties (H2 in-memory DB for tests)
+- Contains: application.properties (database URL, session store, Swagger docs path), application-test.properties (Testcontainers-managed PostgreSQL for tests, Flyway-built schema)
 - Key files: `application.properties`
 
 **src/test/java/**

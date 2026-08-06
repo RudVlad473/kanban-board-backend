@@ -57,7 +57,8 @@
 
 **Infrastructure:**
 - PostgreSQL Driver - PostgreSQL database client (`org.postgresql:postgresql`)
-- H2 Database 1.4.200+ - In-memory database for testing (`com.h2database:h2`)
+- Testcontainers PostgreSQL 1.21.0 (BOM-managed via Spring Boot 3.5.0) - Real PostgreSQL 16
+  container backing every test (`org.testcontainers:postgresql`)
 
 **Utilities:**
 - Vavr 0.10.4 - Functional programming utilities
@@ -88,8 +89,8 @@
   - Session management: JDBC-backed with 180m timeout
   - Session cookies: HTTP-only, same-site strict, 1m server timeout
 - `src/main/resources/application-test.properties` - Test profile configuration
-  - Uses in-memory H2 database instead of PostgreSQL
-  - Hibernate DDL: `create-drop` (schema auto-created/dropped per test)
+  - Uses a Testcontainers-managed PostgreSQL 16 instance, schema built by Flyway V1-V4
+  - Hibernate DDL: `validate` (identical posture to production; Hibernate creates nothing)
 
 ## Platform Requirements
 

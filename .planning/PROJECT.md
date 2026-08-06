@@ -66,7 +66,7 @@ v1.0 and v1.1 shipped the backend-depth showcase (JPA/Hibernate optimistic locki
 
 ## Constraints
 
-- **Tech stack**: Spring Boot 3.5.0, Java 21, Spring Data JPA/Hibernate, PostgreSQL (H2 for tests) — no new frameworks introduced for this scope
+- **Tech stack**: Spring Boot 3.5.0, Java 21, Spring Data JPA/Hibernate, PostgreSQL for both production and tests (tests run against a Testcontainers-managed PostgreSQL instance executing the same Flyway migrations) — no new frameworks introduced for this scope
 - **Testing**: Match existing convention — unit tests for services/DTOs, integration tests (REST Assured) for controllers; query-count assertions via Hibernate `Statistics.getPrepareStatementCount()` (not `getQueryExecutionCount()`, which misses `findById()` calls)
 - **PR discipline**: This work should remain reviewable as its own unit, consistent with the modernization plan's one-epic-per-PR intent
 - **Format check**: `./gradlew spotlessCheck` and `./gradlew test` must pass (matches existing CI)

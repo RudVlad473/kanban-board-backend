@@ -146,7 +146,7 @@ given()
 - External HTTP calls: Use REST Assured in E2E tests (real HTTP against test server)
 
 **What NOT to Mock:**
-- Database: Real H2 database used (test profile)
+- Database: Real PostgreSQL 16, run via Testcontainers (test profile)
 - Service layer: Test services directly against real database
 - Repositories: Spring Data JPA repositories tested with real database
 - Entity relationships: Full entity graph validated through tests
@@ -212,7 +212,7 @@ protected TaskResponseDTO createTask() {
 - Scope: Controller + service + repository interaction
 - Approach: Use MockMvc to test HTTP layer with real services
 - Spring Boot context initialized: `@SpringBootTest`, `@AutoConfigureMockMvc`
-- Real H2 database transactions within test
+- Real PostgreSQL database transactions within test, via Testcontainers
 - Examples: `BoardControllerTest`, `TaskControllerTest`, `ColumnControllerTest`
 - File location: `src/test/java/com/vrudenko/kanban_board/controller/`
 
@@ -295,8 +295,12 @@ protected long countQueries(Runnable action) {
 
 **Test Data Isolation:**
 - Each test inherits from `AbstractAppTest` which creates fresh users/boards/tasks in `@BeforeEach`
-- `@AfterEach` calls `userService.deleteAll()` to clean up
-- H2 in-memory database (test profile) provides isolation between test runs
+- Isolation between test *methods* comes from `AbstractAppTest`'s `@AfterEach` cleanup, not from
+  the database being recreated: `userService.deleteAll()` (cascading to boards/columns/tasks/
+  subtasks) plus a second, explicit `activityLogRepository.deleteAll()` call — `activity_log` has
+  no FK back to `UserEntity` (`V3__add_activity_log.sql`), so the cascade alone cannot reach it.
+- Isolation between test *runs* comes from the shared PostgreSQL container being fresh (schema
+  rebuilt by Flyway from empty) once per JVM run, not per test.
 - No data factories needed for complex scenarios; services create realistic entity graphs
 
 **Test Dependencies:**
@@ -304,14 +308,14 @@ protected long countQueries(Runnable action) {
 - `org.springframework.security:spring-security-test` - MockMvc security support
 - `io.rest-assured:rest-assured:5.5.5` - HTTP request builder for E2E tests
 - `org.fluttercode.datafactory:datafactory:0.8` - Random test data generation
-- `org.apache.commons:commons-lang3:3.0` - String utilities
-- `com.h2database:h2` - In-memory test database
+- `org.apache.commons:commons-lang3:3.18.0` - String utilities
+- `org.testcontainers:postgresql` - Real PostgreSQL 16 container backing every test
 
 ## Test Configuration
 
 **Profile:** `application-test.properties` (test profile activated via build.gradle)
 
-**Database:** H2 in-memory (configured in test profile)
+**Database:** Testcontainers-managed PostgreSQL 16, schema built by Flyway V1-V4 (configured in test profile)
 
 **Server:** Random port assigned for E2E tests: `webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT`
 

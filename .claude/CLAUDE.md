@@ -10,7 +10,7 @@ A Spring Boot 3.5.0 / Java 21 REST API backend for a Kanban board application (u
 
 ### Constraints
 
-- **Tech stack**: Spring Boot 3.5.0, Java 21, Spring Data JPA/Hibernate, PostgreSQL (H2 for tests) — no new frameworks introduced for this scope
+- **Tech stack**: Spring Boot 3.5.0, Java 21, Spring Data JPA/Hibernate, PostgreSQL for both production and tests (tests run against a Testcontainers-managed PostgreSQL instance executing the same Flyway migrations) — no new frameworks introduced for this scope
 - **Testing**: Match existing convention — unit tests for services/DTOs, integration tests (REST Assured) for controllers; query-count assertions via Hibernate `Statistics.getPrepareStatementCount()` (not `getQueryExecutionCount()`, which misses `findById()` calls)
 - **PR discipline**: This work should remain reviewable as its own unit, consistent with the modernization plan's one-epic-per-PR intent
 - **Format check**: `./gradlew spotlessCheck` and `./gradlew test` must pass (matches existing CI)
@@ -52,7 +52,8 @@ A Spring Boot 3.5.0 / Java 21 REST API backend for a Kanban board application (u
 - Lombok 1.18.36 - Boilerplate reduction (annotations for getters, setters, constructors)
 - ULID Creator 5.2.0 - Unique ID generation (`com.github.f4b6a3:ulid-creator`)
 - PostgreSQL Driver - PostgreSQL database client (`org.postgresql:postgresql`)
-- H2 Database 1.4.200+ - In-memory database for testing (`com.h2database:h2`)
+- Testcontainers PostgreSQL 1.21.0 (BOM-managed via Spring Boot 3.5.0) - Real PostgreSQL 16
+  container backing every test (`org.testcontainers:postgresql`)
 - Vavr 0.10.4 - Functional programming utilities
 - Guava 32.0.1-android - Google collections and utilities
 - Apache Commons Lang 3 - String and utility functions (test dependency)
