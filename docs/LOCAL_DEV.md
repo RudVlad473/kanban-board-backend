@@ -57,8 +57,8 @@ network at `postgres:5432` and needs no change.
 
 Any JVM you run **on the host** (outside `docker compose`) — most notably the
 `rehearseHistoricalSchemas` Gradle task, which deliberately resolves the app's real (non-test)
-datasource config instead of the test profile's H2 URL — must target the host-published port
-explicitly via `DB_PORT`:
+datasource config instead of the test profile's Testcontainers-managed PostgreSQL URL — must
+target the host-published port explicitly via `DB_PORT`:
 
 ```bash
 DB_HOST=127.0.0.1 DB_PORT=5433 DB_NAME=kanban DB_USER=kanban DB_PASS=changeme \
@@ -103,13 +103,15 @@ and, per the resilience decisions below, non-fatal.
 
 ## Testcontainers-based tests on Windows
 
-The Testcontainers-based Kafka tests (`*E2ETest` classes under
-`src/test/java/com/vrudenko/kanban_board/activitylog/`) spin up their own broker in a container —
-separate from the `docker compose up` stack above. On a fresh Windows machine with Docker Desktop
-running, `./gradlew test` just works — no host configuration, no environment variables, nothing to
-click. If you previously hit `BadRequestException (Status 400)` / `Could not find a valid Docker
-environment` running these tests, that was a real, now-fixed incompatibility — see below, you don't
-need to do anything.
+Every `@SpringBootTest` class in this repository now starts a Testcontainers-managed container —
+the shared `postgres:16` instance via `AbstractPostgresContainerTest`, plus a Kafka broker for the
+`*E2ETest` classes under `src/test/java/com/vrudenko/kanban_board/activitylog/` via
+`AbstractKafkaContainerTest`. Docker is therefore required for `./gradlew test` and
+`./gradlew fastTest` alike — there is no container-free test path left in this repository. On a
+fresh Windows machine with Docker Desktop running, `./gradlew test` just works — no host
+configuration, no environment variables, nothing to click. If you previously hit
+`BadRequestException (Status 400)` / `Could not find a valid Docker environment` running these
+tests, that was a real, now-fixed incompatibility — see below, you don't need to do anything.
 
 **Root cause (already fixed in code — this section is background, not a setup step):**
 `docker-java` (bundled by Testcontainers 1.21.0) negotiates a Docker Engine API version that Docker
@@ -117,9 +119,11 @@ Engine 29.x rejects with a malformed `400 Bad Request` — on every transport (n
 alike), and confirmed unrelated to Windows specifically. This is
 [testcontainers-java#11212](https://github.com/testcontainers/testcontainers-java/issues/11212), a
 known Docker 29.x / testcontainers-java 1.21.0 incompatibility, fixed as the new default in
-testcontainers-java 2.x. `AbstractKafkaContainerTest` pins the client to API `1.44` (Docker's own
-confirmed-working floor for this Engine generation) via `System.setProperty("api.version", "1.44")`
-in a static initializer — see its Javadoc. Per
+testcontainers-java 2.x. The pin now lives in `AbstractPostgresContainerTest` — the shared
+container ancestor both `AbstractAppTest` and `AbstractKafkaContainerTest` extend — via
+`System.setProperty("api.version", "1.44")` (Docker's own confirmed-working floor for this Engine
+generation) in a static initializer, so it fires once, before either container type starts (JVM
+superclass-first static init order); see its Javadoc. Per
 [docs/CODE_STYLE.md rule 8](CODE_STYLE.md#8-test-setup-must-be-fully-automated--never-a-manual-step-for-the-developer),
 this lives in test code specifically so no developer has to discover or repeat a manual workaround.
 
@@ -139,6 +143,63 @@ file in version control), not a runbook — see CODE_STYLE.md rule 8.
 **More reliable alternative — defer to CI:** this project's GitHub Actions runner is Linux and uses
 a Unix domain socket, so it won't hit this Windows-specific issue at all; the tests can be verified
 there as part of the PR instead of locally.
+
+## Testcontainers reuse: evaluated, not enabled
+
+`fastTest` now requires Docker (see above), so Testcontainers reuse — keeping the PostgreSQL
+container alive across separate `./gradlew` invocations instead of starting and destroying it
+every run — was named as the mitigation to evaluate for local commit latency (decision D-03 in
+this phase's context record under `.planning/phases/`). Evaluated 2026-08-06, on Docker Server
+**29.4.1**:
+
+- Three consecutive `./gradlew fastTest --rerun-tasks` runs, same session, same machine, no
+  `clean` between runs: **232s, 224s, 242s** wall-clock (155 tests each, all green).
+- The PostgreSQL container's own start-duration, read from its Testcontainers log line
+  (`Container postgres:16 started in PT2.287909S`, captured via
+  `./gradlew test --tests FlywaySchemaProvenanceTest -i`): **~2.29s**. This is the honest upper
+  bound on what reuse could ever save per invocation — nothing more, since the container starts
+  only once per JVM run regardless (see below).
+
+**Decision: reuse is NOT enabled.**
+
+1. **Not a material fraction of the wall-clock.** ~2.29s against a ~230s run is roughly 1% — an
+   order of magnitude smaller than the 18-second run-to-run variance already visible across the
+   three timings above (224s-242s). There is no meaningful cost here for reuse to recover.
+2. **Structurally capped regardless of the number.** D-01 pins exactly one static PostgreSQL
+   container per JVM run (`AbstractPostgresContainerTest`'s imperative `static { start(); }`), so
+   startup inside a single `./gradlew` invocation is already paid exactly once, at the first
+   Spring context creation. Reuse can only ever help a *second, separate* `./gradlew` invocation —
+   it cannot make any one run faster than it already is.
+3. **No opt-in mechanism would satisfy rule 8 anyway.** The standard Testcontainers reuse opt-in
+   is a per-machine `~/.testcontainers.properties` file (`testcontainers.reuse.enable=true`) — a
+   hand-edited file living outside version control, which is exactly the manual host-level setup
+   step [`docs/CODE_STYLE.md` rule
+   8](CODE_STYLE.md#8-test-setup-must-be-fully-automated--never-a-manual-step-for-the-developer)
+   forbids. A `TESTCONTAINERS_REUSE_ENABLE` environment variable exists as a possible alternative,
+   but this project's own research flagged it at MEDIUM confidence (sourced from a doc summary,
+   not primary Testcontainers text), and nothing in this repository sets arbitrary environment
+   variables into a developer's shell before Gradle runs — the same manual-step problem would just
+   move one layer over.
+4. **A real correctness cost, independent of the above.** A reused container keeps its data
+   between separate `./gradlew` invocations. This phase's isolation model (D-02) is `@AfterEach`
+   row deletion in `AbstractAppTest.cleanup()` — it only cleans what it explicitly knows about
+   (users, cascading to boards/columns/tasks/subtasks, plus `activity_log` per D-02a). Anything it
+   doesn't know about — `spring_session` / `spring_session_attributes` rows in particular, since
+   Flyway deliberately does not own those tables (D-04) — would carry over from one invocation to
+   the next under reuse, turning a suite that is currently deterministic (fresh container, fresh
+   schema, every run) into one whose behavior depends on whether you happened to run it before.
+   That is a genuine argument against reuse on this codebase specifically, not a generic caution
+   copied from upstream docs.
+
+No `withReuse` call, `testcontainers.reuse.enable` property, or `TESTCONTAINERS_REUSE_ENABLE`
+reference exists anywhere in `build.gradle` or `src/test` as a result — no manual, host-level setup
+step was introduced by this phase.
+
+**Revisit if:** a future container image or startup dependency pushes the measured start duration
+into double-digit seconds *and* a version-controlled, zero-manual-step opt-in becomes available
+(for example, a Gradle-property-driven reuse toggle that doesn't require
+`~/.testcontainers.properties`). Until then, the numbers above are the reason this stays off, not
+an assumption.
 
 ## What happens if Kafka is unreachable
 
