@@ -37,6 +37,9 @@ v1.0 and v1.1 shipped the backend-depth showcase (JPA/Hibernate optimistic locki
 - ✓ All 5 domain mutation types (task create/move/delete, board create, column create) publish typed, sealed `ActivityEvent` records via `KafkaEventPublisher` only after transaction commit — v1.1 Phase 2, done 2026-08-01. Proven live by killing the Kafka broker mid-request and confirming mutations still succeed with the failure logged, never swallowed.
 - ✓ Idempotent, deduplicated activity-log consumer (`ActivityLogConsumer`/`ActivityLogRecorder`) with a database-unique-constraint-backed dedup and a dead-letter topic (byte-fidelity preserved) for poison messages — v1.1 Phase 3, done 2026-08-02. Proven against a real Testcontainers Kafka broker, not mocks.
 - ✓ `GET /boards/{boardId}/activity` — paginated, ownership-verified, deterministic newest-first read endpoint — v1.1 Phase 3, done 2026-08-02
+- ✓ Avro schemas for all 5 `ActivityEvent` types with enforced BACKWARD compatibility, build-time registration (not producer auto-registration), DLT byte-fidelity under Avro, and a real-historical-data rehearsal — v1.2 Phase 4, done 2026-08-04
+- ✓ Flyway-managed domain schema: V1–V4 reconstructing the schema's real evolution, `ddl-auto=validate` outside the test profile so Hibernate can no longer create or alter — v1.2 Phase 04.1, done 2026-08-05
+- ✓ Whole test suite runs against a Testcontainers PostgreSQL 16 instance whose schema is built by the same Flyway V1–V4 migrations production runs; `com.h2database:h2` removed outright with no fallback profile — v1.2 Phase 04.2, done 2026-08-06. Verified 17/17 must-haves against the live codebase; schema provenance is enforced by a standing test (`FlywaySchemaProvenanceTest`) asserting Flyway-only artifacts and zero Hibernate-generated constraint names, so a silent regression to Hibernate-built DDL fails the build. Measured ~19s/6.1% **faster** than the like-for-like H2 baseline, inverting the expected cost.
 
 ### Active
 
@@ -45,7 +48,7 @@ v1.0 and v1.1 shipped the backend-depth showcase (JPA/Hibernate optimistic locki
 ### Out of Scope
 
 - `GET /boards/{boardId}/full` (nested board→columns→tasks→subtasks endpoint) — deferred to v2 per REQUIREMENTS.md history; scoped out during v1.0's requirements definition, not permanently excluded
-- Epics 3–7 (Flyway/OpenAPI polish, Redis, Testcontainers as a project-wide migration, Observability, Kubernetes) — deferred to future milestones
+- Epics 4, 6, 7 (Redis, Observability, Kubernetes) — deferred to future milestones. Two of the originally-deferred epics have since been pulled forward and delivered as inserted v1.2 phases: Epic 3's Flyway half (Phase 04.1) and Epic 5 (Testcontainers, drop H2 — Phase 04.2). Epic 3's OpenAPI-polish half remains deferred and is the only part of Epic 3 still outstanding.
 - Re-fixing `OwnershipVerifierService`'s chain of `findById()` calls (Finding 1) — measured and confirmed non-issue; already resolves in 1 query via EAGER join chain, no work needed
 - Full microservice extraction of the activity-log consumer into a separate deployable service — the in-process `@KafkaListener` already demonstrates the event-driven pattern; a possible later epic, not this one
 - GraphQL, Elasticsearch, WebFlux/reactive, Kotlin, Oracle/PL-SQL, Angular — explicitly excluded by the modernization plan as niche/low-ROI for this project's scope
@@ -104,4 +107,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-03 after starting v1.2 milestone*
+*Last updated: 2026-08-06 after Phase 04.2 (Testcontainers Postgres, drop H2) completed and verified*
