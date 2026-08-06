@@ -100,12 +100,12 @@ Plans:
   - D-03/D-04: `fastTest` keeps its `*E2ETest` exclusion and now requires Docker; Spring Session tables stay out of Flyway per 04.1 D-02
   - Carried risk: ~25 fixture-heavy test classes move off in-memory H2 against a ~232s full-suite baseline, and the pre-commit gate's container-free premise disappears
 
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 
 Plans:
 
 - [x] 04.2-01-PLAN.md
-- [ ] 04.2-02-PLAN.md
+- [x] 04.2-02-PLAN.md
 - [ ] 04.2-03-PLAN.md
 
 - [ ] TBD (run /gsd-plan-phase 04.2 to break down)
@@ -153,6 +153,6 @@ Plans:
 | 3. Activity Log Consumer, Reliability & Read API | v1.1 | 3/3 | Complete | 2026-08-02 |
 | 4. Schema Registry | v1.2 | 4/4 | Complete    | 2026-08-04 |
 | 04.1. Flyway database migration implementation (INSERTED) | v1.2 | 3/3 | Complete | 2026-08-05 |
-| 04.2. Testcontainers Postgres, drop H2 (INSERTED) | v1.2 | 1/3 | In Progress|  |
+| 04.2. Testcontainers Postgres, drop H2 (INSERTED) | v1.2 | 2/3 | In Progress|  |
 | 5. Infra Migration | v1.2 | 0/TBD | Not started | - |
 </content>
