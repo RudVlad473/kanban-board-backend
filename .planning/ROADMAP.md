@@ -89,14 +89,16 @@ Plans:
 ### Phase 04.2: Testcontainers Postgres, drop H2 (INSERTED)
 
 **Goal:** The whole test suite runs against a real PostgreSQL container whose schema is built by the same Flyway V1–V4 migrations that run in production — with `com.h2database:h2`, `spring.flyway.enabled=false`, and `spring.jpa.hibernate.ddl-auto=create-drop` all gone from the build — proven by a green full suite showing zero Hibernate-generated DDL and a recorded suite-duration delta against the current ~232s H2 baseline.
-**Requirements**: None — inserted phase with no REQ-IDs. Source is modernization Epic 5 ([`docs/plans/backend-modernization/05-testcontainers.md`](../../docs/plans/backend-modernization/05-testcontainers.md)), previously deferred 2026-07-31 and pulled forward here.
+**Requirements**: None — inserted phase with no REQ-IDs. Source is modernization Epic 5, `docs/plans/backend-modernization/05-testcontainers.md`, previously deferred 2026-07-31 and pulled forward here.
 **Depends on:** Phase 04.1 — this phase's entire point is making the suite execute the V1–V4 migrations that 04.1 authored.
 **Blocks:** Phase 5. Those migrations are currently verified only by 04.1-03's manual clean-volume run against local docker-compose, never by CI. Phase 5 points production at a brand-new Neon database and adds a pre-merge DDL verification gate, so closing that gap first is what keeps the cutover from being the first real test of the migration history.
-**Scope decided at insertion** (to be firmed into decisions during discuss-phase):
+**Scope** — locked in `04.2-CONTEXT.md` (D-01..D-05), which is authoritative over this summary:
 
-  - Full drop, not a hybrid — no H2 fallback profile retained, since two schema paths is exactly the drift [`docs/CODE_STYLE.md`](../../docs/CODE_STYLE.md) rule 8 exists to prevent
-  - Static Postgres container behind `AbstractAppTest`, mirroring the singleton pattern `AbstractKafkaContainerTest` already established (imperative `start()`, not `@Testcontainers`/`@Container` — that extension-driven lifecycle proved unreliable across sibling classes here)
-  - Carried risk: ~17 fixture-heavy test classes move off in-memory H2, and the pre-commit `fastTest` gate currently excludes only `*E2ETest`, so its cost profile changes too
+  - D-05: full drop, not a hybrid — no H2 fallback profile retained, since two schema paths is exactly the drift `docs/CODE_STYLE.md` rule 8 exists to prevent
+  - D-01: one static Postgres container in a shared base that **both** `AbstractAppTest` and `AbstractKafkaContainerTest` inherit — not behind `AbstractAppTest` alone as Epic 5's doc says, because the Kafka base does not extend it while its 9 subclasses do persist entities. Imperative `start()`, not `@Testcontainers`/`@Container`, matching the precedent already set here
+  - D-02: test isolation stays `@AfterEach deleteAll()`; test-managed `@Transactional` rollback was considered and rejected — it breaks `AFTER_COMMIT` event delivery, the `getPrepareStatementCount()` metric, and gives REST Assured E2E no isolation anyway
+  - D-03/D-04: `fastTest` keeps its `*E2ETest` exclusion and now requires Docker; Spring Session tables stay out of Flyway per 04.1 D-02
+  - Carried risk: ~25 fixture-heavy test classes move off in-memory H2 against a ~232s full-suite baseline, and the pre-commit gate's container-free premise disappears
 
 **Plans:** 0 plans
 
