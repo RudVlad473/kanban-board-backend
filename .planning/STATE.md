@@ -174,6 +174,7 @@ Carried from research (address during Phase 4/5 planning):
 | 260804-p7a | Disabled deploy-to-ec2 CI job (if: false) with explanatory comment — AWS EC2 host was deleted, so pushes to master stop failing on it; tests and Docker build/push are unaffected. Filed a resolves_phase:5, severity:major todo tracking the Phase 5 rewrite, the Docker Hub tag-accumulation side effect, and a pre-existing truncated curl -X DELETE defect | 2026-08-04 | c350940,6ad98ae | [260804-p7a-disable-the-deploy-to-ec2-job-in-github-](./quick/260804-p7a-disable-the-deploy-to-ec2-job-in-github-/) |
 | 18 | Retarget the settled PMD/Checkstyle/SpotBugs lint-gap todo to NullAway (null-safety dataflow), preserving the coverage-review reasoning as background | 2026-08-05 | fd50d69 | — |
 | 19 | Verify and close the schema-evolution-risk todo against Phase 4's shipped registry work; file D-02's non-transitive-BACKWARD replay-from-zero rationale gap as a separate todo | 2026-08-05 | 61b11af | — |
+| 20 | Rewrite README.md to reflect the current architecture and stack, with every capability claim backed by a named artifact; removes the false EC2-deploy claim and the duplicate run section | 2026-08-06 | a078c0b | — |
 
 ### Roadmap Evolution
 
