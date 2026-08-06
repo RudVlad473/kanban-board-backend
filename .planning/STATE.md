@@ -175,6 +175,7 @@ Carried from research (address during Phase 4/5 planning):
 | 18 | Retarget the settled PMD/Checkstyle/SpotBugs lint-gap todo to NullAway (null-safety dataflow), preserving the coverage-review reasoning as background | 2026-08-05 | fd50d69 | — |
 | 19 | Verify and close the schema-evolution-risk todo against Phase 4's shipped registry work; file D-02's non-transitive-BACKWARD replay-from-zero rationale gap as a separate todo | 2026-08-05 | 61b11af | — |
 | 20 | Rewrite README.md to reflect the current architecture and stack, with every capability claim backed by a named artifact; removes the false EC2-deploy claim and the duplicate run section | 2026-08-06 | a078c0b | — |
+| 21 | Split the README's depth into a new docs/ARCHITECTURE.md and trim README to a 116-line front door in standard-readme section order; reverses task 20's inline-depth decision | 2026-08-06 | 245ad63 | — |
 
 ### Roadmap Evolution
 
