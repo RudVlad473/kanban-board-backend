@@ -6,8 +6,9 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
-import java.util.List;
+import java.util.Set;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -27,8 +28,23 @@ public class BoardEntity extends BaseEntity implements BaseBoard {
     @Column(nullable = false)
     private String name;
 
+    // Set, not List, excluded from equals/hashCode, and explicitly ordered -- see
+    // BoardRepository's Javadoc for the full MultipleBagFetchException / row-multiplication
+    // reasoning behind every collection in the GAP-04 fetch-join chain being a Set.
+    //
+    // The @EqualsAndHashCode.Exclude here is a defensive belt-and-suspenders choice, not currently
+    // load-bearing: ColumnEntity now uses identity-based equals/hashCode (its own comment explains
+    // why), so it no longer recurses back into this field the way its previous @Data-generated
+    // hashCode would have. A mutable collection still has no business being part of an entity's
+    // equals/hashCode regardless, so the exclusion stays.
+    //
+    // @OrderBy("id") gives this collection's iteration order a defined, deterministic ordering
+    // (plain HashSet has none) -- see TaskEntity.subtasks's comment for why id-ascending is the
+    // right choice here, not a hardcoded position sequence.
+    @EqualsAndHashCode.Exclude
     @OneToMany(mappedBy = "board")
-    private List<ColumnEntity> column;
+    @OrderBy("id")
+    private Set<ColumnEntity> column;
 
     @ManyToOne
     @JoinColumn(name = "user_id")

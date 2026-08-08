@@ -7,6 +7,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.util.Set;
@@ -24,14 +25,20 @@ public class TaskEntity extends BaseEntity implements BaseTask {
     @JoinColumn(name = "column_id")
     private ColumnEntity column;
 
-    // Set, not List: see ColumnEntity.task's Javadoc-style comment -- Hibernate's
-    // MultipleBagFetchException fires when 2+ List (bag) collections are fetch-joined in one
-    // query at any nesting depth, so at most one collection in the board->column->task->subtasks
-    // chain (BoardEntity.column) can remain a List. Safe: SubtaskEntity's equals/hashCode
-    // includes only title/isCompleted/task, and task's own equals/hashCode is identity-based
-    // (commented out on TaskEntity), so hashing a SubtaskEntity during Set population never
-    // recurses.
+    // Set, not List: see BoardRepository's Javadoc for the full MultipleBagFetchException /
+    // row-multiplication reasoning behind every collection in the GAP-04 fetch-join chain being a
+    // Set. Safe against a HashSet-population hashCode call: both SubtaskEntity (this Set's
+    // element type) and TaskEntity itself now use Object's identity-based equals/hashCode (see
+    // each entity's own comment), never recursing back through a field.
+    //
+    // @OrderBy("id") gives this collection's iteration order a defined, deterministic ordering
+    // (plain HashSet has none) that matches SubtaskRepository.findAllByTaskId's effective
+    // no-explicit-ORDER-BY (natural/insertion) order closely enough for GAP-04's nested-vs-flat
+    // equivalence test to hold -- ULIDs are roughly creation-time-ordered, so id-ascending
+    // approximates insertion order without hardcoding a position sequence that belongs to a
+    // separate ordering feature.
     @OneToMany(mappedBy = "task")
+    @OrderBy("id")
     private Set<SubtaskEntity> subtasks;
 
     @Column(nullable = false, length = ValidationConstants.MAX_TASK_TITLE_LENGTH)
