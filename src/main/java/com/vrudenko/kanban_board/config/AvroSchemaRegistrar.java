@@ -2,6 +2,7 @@ package com.vrudenko.kanban_board.config;
 
 import com.vrudenko.kanban_board.event.avro.AvroBoardCreatedEvent;
 import com.vrudenko.kanban_board.event.avro.AvroColumnCreatedEvent;
+import com.vrudenko.kanban_board.event.avro.AvroColumnDeletedEvent;
 import com.vrudenko.kanban_board.event.avro.AvroTaskCreatedEvent;
 import com.vrudenko.kanban_board.event.avro.AvroTaskDeletedEvent;
 import com.vrudenko.kanban_board.event.avro.AvroTaskMovedEvent;
@@ -15,7 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Registers all 5 Avro schemas (D-03) against a Confluent-API-compatible Schema Registry, setting
+ * Registers all 6 Avro schemas (D-03) against a Confluent-API-compatible Schema Registry, setting
  * BACKWARD compatibility (D-02, SCHEMA-04) explicitly on each subject before that subject's first
  * version is registered.
  *
@@ -54,12 +55,13 @@ public final class AvroSchemaRegistrar {
                     AvroTaskMovedEvent.getClassSchema(),
                     AvroTaskDeletedEvent.getClassSchema(),
                     AvroBoardCreatedEvent.getClassSchema(),
-                    AvroColumnCreatedEvent.getClassSchema());
+                    AvroColumnCreatedEvent.getClassSchema(),
+                    AvroColumnDeletedEvent.getClassSchema());
 
     private AvroSchemaRegistrar() {}
 
     /**
-     * Registers all 5 schemas against {@code schemaRegistryUrl}, explicitly setting BACKWARD
+     * Registers all 6 schemas against {@code schemaRegistryUrl}, explicitly setting BACKWARD
      * compatibility on each subject first. Idempotent: re-running this against an
      * already-configured registry is a no-op, since registering an unchanged schema returns the
      * existing schema id and re-setting an unchanged compatibility level is itself a no-op write —
