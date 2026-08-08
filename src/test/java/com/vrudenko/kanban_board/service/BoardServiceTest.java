@@ -5,12 +5,14 @@ import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
 import com.vrudenko.kanban_board.entity.BoardEntity;
 import com.vrudenko.kanban_board.exception.AppAccessDeniedException;
+import com.vrudenko.kanban_board.exception.AppDuplicateResourceException;
 import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
 import com.vrudenko.kanban_board.mapper.BoardMapper;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.UUID;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -253,5 +255,63 @@ public class BoardServiceTest extends AbstractAppTest {
 
         // assert
         Assertions.assertThat(boards).isEmpty();
+    }
+
+    // updateById -- per-user name uniqueness guard (D-09, GAP-01)
+    @Nested
+    class UpdateByIdUniquenessTest {
+        @Test
+        void
+                shouldThrowAppDuplicateResourceException_whenRenamingToNameAlreadyUsedByAnotherBoardOfSameUser() {
+            // arrange
+            var userId = getOwningUser().getId();
+            var boardA = mockEmptyBoards.getFirst();
+            var boardB = mockEmptyBoards.get(1);
+
+            // act
+            var exception =
+                    Assertions.catchException(
+                            () ->
+                                    boardService.updateById(
+                                            userId,
+                                            boardB.getId(),
+                                            boardMapper.toUpdateBoardRequestDTO(
+                                                    BoardEntity.builder()
+                                                            .name(boardA.getName())
+                                                            .build())));
+
+            // assert
+            Assertions.assertThat(exception).isInstanceOf(AppDuplicateResourceException.class);
+            var reloadedA =
+                    boardService.findAll().stream()
+                            .filter(b -> b.getId().equals(boardA.getId()))
+                            .toList()
+                            .getFirst();
+            var reloadedB =
+                    boardService.findAll().stream()
+                            .filter(b -> b.getId().equals(boardB.getId()))
+                            .toList()
+                            .getFirst();
+            Assertions.assertThat(reloadedA.getName()).isEqualTo(boardA.getName());
+            Assertions.assertThat(reloadedB.getName()).isEqualTo(boardB.getName());
+        }
+
+        @Test
+        void shouldSucceed_whenRenamingBoardToItsOwnCurrentName() {
+            // arrange
+            var userId = getOwningUser().getId();
+            var board = mockEmptyBoards.getFirst();
+
+            // act
+            var result =
+                    boardService.updateById(
+                            userId,
+                            board.getId(),
+                            boardMapper.toUpdateBoardRequestDTO(
+                                    BoardEntity.builder().name(board.getName()).build()));
+
+            // assert
+            Assertions.assertThat(result.getName()).isEqualTo(board.getName());
+        }
     }
 }
