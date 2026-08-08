@@ -5,16 +5,16 @@ milestone_name: Infra Migration & Schema Registry
 current_phase: 04.2
 current_phase_name: Testcontainers Postgres, drop H2
 status: complete
-stopped_at: Phase 04.2 complete and verified (17/17 must-haves against live codebase); rebased onto master, --ff-only ready, not yet merged
-last_updated: "2026-08-06T21:33:27.273Z"
-last_activity: 2026-08-06
-last_activity_desc: "Phase 04.2 complete — suite runs on Testcontainers Postgres with Flyway-built schema, H2 removed, verified 17/17"
+stopped_at: Phase 6 context gathered
+last_updated: "2026-08-08T14:47:53.761Z"
+last_activity: 2026-08-08
+last_activity_desc: "Completed quick task 260808-ls7: Redo the visual PDF confirmation pass for the mockup feature gap doc now that poppler is installed"
 progress:
-  total_phases: 4
+  total_phases: 5
   completed_phases: 3
   total_plans: 16
   completed_plans: 10
-  percent: 63
+  percent: 60
 ---
 
 # Project State
@@ -190,6 +190,7 @@ Carried from research (address during Phase 4/5 planning):
 
 - Phase 04.1 inserted after Phase 4: Flyway database migration implementation - paused Phase 5 (Infra Migration) to deliver this for resume purposes (URGENT)
 - Phase 04.2 inserted after Phase 4: Testcontainers Postgres, drop H2 — modernization Epic 5 pulled forward ahead of Phase 5 so the Flyway V1-V4 migrations are CI-exercised before the Neon cutover (URGENT)
+- Phase 6 added: Mock-up Feature Gap Closure — six gaps from `docs/MOCKUP_FEATURE_GAP.md` §1 (board creation route, column deletion route, task/column ordering, full-board nested read, per-user theme persistence, subtask optimistic locking); un-defers the `GET /boards/{boardId}/full` item recorded below at 2026-07-31
 
 ## Deferred Items
 
@@ -214,9 +215,9 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-06T20:56:27.430Z
-Stopped at: Completed 04.2-03-PLAN.md (Testcontainers reuse evaluated, all H2 claims corrected, phase closed)
-Resume file: None
+Last session: 2026-08-08T14:47:53.723Z
+Stopped at: Phase 6 context gathered
+Resume file: .planning/phases/06-mock-up-feature-gap-closure/06-CONTEXT.md
 
 ## Operator Next Steps
 

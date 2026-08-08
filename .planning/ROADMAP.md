@@ -154,3 +154,41 @@ Plans:
 | 04.2. Testcontainers Postgres, drop H2 (INSERTED) | v1.2 | 3/3 | Complete | 2026-08-06 |
 | 5. Infra Migration | v1.2 | 0/TBD | Not started | - |
 </content>
+
+### Phase 6: Mock-up Feature Gap Closure
+
+**Goal:** The backend's REST surface closes the six concrete gaps `docs/MOCKUP_FEATURE_GAP.md`
+§1 identifies between the Kanban mock-ups and the current API, bringing feature parity
+with the design without disturbing the existing Board/Column/Task/Subtask/Move
+contracts those gaps sit alongside.
+
+**Candidate features** (source: `docs/MOCKUP_FEATURE_GAP.md` §1, one row per gap):
+
+  1. **Board creation route** *(§1.1)* — expose `POST /boards`, wiring the already-written
+     but unreachable `UserService.addBoardByUserId` onto `BoardController`; decide how the
+     Add New Board modal's initial-columns list is submitted (create-then-batch-add vs. a
+     DTO that grows a columns list)
+  2. **Column deletion route** *(§1.2)* — add `DELETE /boards/{boardId}/columns/{columnId}`
+     to `ColumnController`, with the same cascade-to-tasks/subtasks behavior board deletion
+     already has
+  3. **Task/column ordering** *(§1.3)* — add a position/index field to the task (and
+     optionally column) entity and DTOs so reordering within or between columns has a
+     backend representation; `MoveTaskRequestDTO` today carries no notion of position
+  4. **Single nested "full board" read** *(§1.4)* — `GET /boards/{boardId}/full`, replacing
+     the four-round-trip fan-out (board → columns → tasks → subtasks) a client needs today;
+     previously deferred to v2 per `STATE.md` line 199, now back in scope
+  5. **Per-user theme persistence** *(§1.5)* — a field on `UserEntity`/`UserResponseDTO`
+     plus a read/write endpoint for the light/dark preference the mock-ups render
+     throughout, if it needs to persist across devices/sessions rather than live in
+     client-local storage
+  6. **Subtask optimistic-locking `version` field** *(§1.6, lower confidence)* — bring
+     `UpdateSubtaskRequestDTO`/`SubtaskResponseDTO` in line with Column/Task/Move, which all
+     already require and check a `version` on update
+
+**Requirements**: TBD — define during `/gsd-discuss-phase 6` or `/gsd-plan-phase 6`
+**Depends on:** Phase 5
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 6 to break down)
