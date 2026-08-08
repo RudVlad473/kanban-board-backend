@@ -35,17 +35,17 @@ class FlywaySchemaProvenanceTest extends AbstractPostgresContainerTest {
     @Nested
     class FlywayHistory {
         @Test
-        void shouldRecordFourSuccessfulMigrations_whenContextStarts() {
+        void shouldRecordFiveSuccessfulMigrations_whenContextStarts() {
             // arrange
             var sql =
                     "SELECT count(*) FROM flyway_schema_history WHERE success = true AND version"
-                            + " IN ('1','2','3','4')";
+                            + " IN ('1','2','3','4','5')";
 
             // act
             var successfulCount = jdbcTemplate.queryForObject(sql, Integer.class);
 
             // assert
-            Assertions.assertThat(successfulCount).isEqualTo(4);
+            Assertions.assertThat(successfulCount).isEqualTo(5);
         }
 
         @Test
@@ -170,6 +170,36 @@ class FlywaySchemaProvenanceTest extends AbstractPostgresContainerTest {
 
             // assert
             Assertions.assertThat(count).isZero();
+        }
+
+        @Test
+        void
+                shouldContainBoardsUserIdNameUniqueConstraintNamedByV5Migration_whenSchemaIsBuiltByFlyway() {
+            // arrange
+            var sql =
+                    "SELECT count(*) FROM information_schema.table_constraints WHERE"
+                            + " constraint_schema = 'public' AND constraint_name ="
+                            + " 'uk_boards_user_id_name'";
+
+            // act
+            var count = jdbcTemplate.queryForObject(sql, Integer.class);
+
+            // assert
+            Assertions.assertThat(count).isEqualTo(1);
+        }
+
+        @Test
+        void shouldDefaultUsersThemeColumnToLight_whenSchemaIsBuiltByV5Migration() {
+            // arrange
+            var sql =
+                    "SELECT column_default FROM information_schema.columns WHERE table_schema ="
+                            + " 'public' AND table_name = 'users' AND column_name = 'theme'";
+
+            // act
+            var columnDefault = jdbcTemplate.queryForObject(sql, String.class);
+
+            // assert
+            Assertions.assertThat(columnDefault).startsWith("'LIGHT'");
         }
     }
 

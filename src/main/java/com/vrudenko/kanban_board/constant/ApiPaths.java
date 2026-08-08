@@ -13,11 +13,20 @@ public final class ApiPaths {
     public static final String TASKS = "/tasks";
     public static final String TASK_ID = "/{taskId}";
     public static final String MOVE = "/move";
+    public static final String REORDER = "/reorder";
 
     public static final String SUBTASKS = "/subtasks";
     public static final String SUBTASK_ID = "/{subtaskId}";
 
     public static final String ACTIVITY = "/activity";
+    public static final String FULL = "/full";
+
+    // Unused until plans 04-06 wire the routes that need them; landed here in wave 1 so the
+    // migration/entity/constants foundation is a single plan and plans 04-06 can run in parallel
+    // without contending over this file.
+    public static final String USERS = "/users";
+    public static final String ME = "/me";
+    public static final String THEME = "/theme";
 
     public static final String SIGNIN = "/signin";
     public static final String SIGNUP = "/signup";

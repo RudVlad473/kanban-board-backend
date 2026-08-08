@@ -6,6 +6,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -29,4 +30,9 @@ public class SubtaskEntity extends BaseEntity implements BaseSubtask {
 
     @Column(nullable = false, columnDefinition = "boolean default false")
     private Boolean isCompleted = false;
+
+    @Version
+    @EqualsAndHashCode.Exclude
+    @Column(nullable = false)
+    private Long version;
 }

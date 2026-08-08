@@ -36,4 +36,7 @@ public class TaskEntity extends BaseEntity implements BaseTask {
     @Version
     @Column(nullable = false)
     private Long version;
+
+    @Column(nullable = false)
+    private Integer position = 0;
 }

@@ -35,4 +35,7 @@ public class ColumnEntity extends BaseEntity implements BaseColumn {
     @EqualsAndHashCode.Exclude
     @Column(nullable = false)
     private Long version;
+
+    @Column(nullable = false)
+    private Integer position = 0;
 }

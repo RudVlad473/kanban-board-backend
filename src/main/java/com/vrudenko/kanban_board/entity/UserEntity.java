@@ -4,6 +4,8 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.vrudenko.kanban_board.base.entity.BaseUser;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import java.util.Collection;
@@ -44,6 +46,16 @@ public class UserEntity extends BaseEntity implements BaseUser, UserDetails {
     @Column(nullable = false)
     @JsonIgnore
     private String passwordHash;
+
+    // D-12: default LIGHT for every user with no explicit preference. The annotation below is
+    // mandatory here -- UserEntity carries Lombok's @Builder, and a @Builder-annotated class
+    // silently discards a plain field initialiser unless that annotation is present, which would
+    // otherwise write null into this NOT NULL column on every signup (UserService.addUser builds
+    // via UserEntity.builder()).
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    @Builder.Default
+    private ThemePreference theme = ThemePreference.LIGHT;
 
     // SECURITY INFO
     @Override
