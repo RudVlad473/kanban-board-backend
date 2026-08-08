@@ -2,6 +2,7 @@ package com.vrudenko.kanban_board.controller;
 
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.dto.column_dto.ColumnResponseDTO;
+import com.vrudenko.kanban_board.dto.column_dto.ReorderColumnRequestDTO;
 import com.vrudenko.kanban_board.dto.column_dto.UpdateColumnRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
@@ -17,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -60,5 +62,15 @@ public class ColumnController {
         columnService.deleteById(userId, columnId);
 
         return ResponseEntity.ok().build();
+    }
+
+    // This class's mapping is already board-nested, so — unlike TaskMoveController, whose task
+    // routes are not board-nested — no separate flat controller is needed for the reorder route.
+    @PatchMapping(ApiPaths.COLUMN_ID + ApiPaths.REORDER)
+    public ResponseEntity<ColumnResponseDTO> reorder(
+            @CurrentUserId String userId,
+            @PathVariable @NotBlank String columnId,
+            @Valid @RequestBody ReorderColumnRequestDTO dto) {
+        return ResponseEntity.ok(columnService.reorder(userId, columnId, dto));
     }
 }

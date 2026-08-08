@@ -3,6 +3,7 @@ package com.vrudenko.kanban_board.service;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.primitives.Ints;
 import com.vrudenko.kanban_board.dto.column_dto.ColumnResponseDTO;
+import com.vrudenko.kanban_board.dto.column_dto.ReorderColumnRequestDTO;
 import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
 import com.vrudenko.kanban_board.dto.column_dto.UpdateColumnRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
@@ -78,6 +79,10 @@ public class ColumnService {
         var column = columnMapper.fromSaveColumnRequestDTO(columnDTO);
         column.setBoard(board);
 
+        // Supersedes ColumnEntity.position's `= 0` field initialiser, exactly like
+        // TaskService#save does for tasks — see that method's comment for the full reasoning.
+        column.setPosition(Ints.checkedCast(columnRepository.countByBoardId(board.getId())));
+
         columnRepository.save(column);
 
         eventPublisher.publishEvent(
@@ -144,6 +149,57 @@ public class ColumnService {
         return columnMapper.toColumnResponseDTO(column);
     }
 
+    /**
+     * Structured on {@link #updateById}'s version-guarded mutation shape (load through the
+     * ownership-verified loader, compare version before any write, flush so the response DTO
+     * carries the post-update version) — see that method's Javadoc for why the explicit check is
+     * required in addition to {@code @Version}.
+     *
+     * <p><b>Renumbering contract (GAP-03):</b> {@code dto.getTargetPosition()} is mandatory (unlike
+     * {@link com.vrudenko.kanban_board.service.TaskService#moveToColumn}'s nullable equivalent — a
+     * reorder request with no target position asks for nothing at all). The version compare runs
+     * BEFORE any renumbering statement, so a rejected reorder leaves the board's column sequence
+     * completely untouched. The bulk shift below is a single signed range over the positions
+     * strictly between the column's current and target position — see {@link
+     * com.vrudenko.kanban_board.repository.TaskRepository#shiftPositions}'s Javadoc for why this
+     * composes correctly instead of double-shifting, and {@link
+     * com.vrudenko.kanban_board.service.TaskService#moveToColumn} for the identical single-scope
+     * derivation of this recipe.
+     */
+    @Transactional
+    public ColumnResponseDTO reorder(String userId, String columnId, ReorderColumnRequestDTO dto) {
+        var column = findById(userId, columnId);
+
+        if (!column.getVersion().equals(dto.getVersion())) {
+            throw new OptimisticLockingFailureException(
+                    "Column was modified by another request, please refetch.");
+        }
+
+        var boardId = column.getBoard().getId();
+        var oldPosition = column.getPosition();
+
+        // The board's column count already includes this column, so the highest valid index is
+        // count - 1 (reordering doesn't change how many columns the board has).
+        var siblingCount = Ints.checkedCast(columnRepository.countByBoardId(boardId));
+        var maxValidPosition = siblingCount - 1;
+        var effectivePosition = Math.min(dto.getTargetPosition(), maxValidPosition);
+
+        if (effectivePosition < oldPosition) {
+            columnRepository.shiftPositions(boardId, 1, effectivePosition, oldPosition - 1);
+        } else if (effectivePosition > oldPosition) {
+            columnRepository.shiftPositions(boardId, -1, oldPosition + 1, effectivePosition);
+        }
+
+        column.setPosition(effectivePosition);
+        columnRepository.save(column);
+
+        // Same reason as updateById: force the UPDATE (and version increment) to happen now, so
+        // the response DTO carries the new version instead of the stale pre-reorder one.
+        entityManager.flush();
+
+        return columnMapper.toColumnResponseDTO(column);
+    }
+
     @VisibleForTesting
     public int getColumnCountByBoardId(String boardId) {
         return Ints.checkedCast(columnRepository.countByBoardId(boardId));
@@ -170,7 +226,9 @@ public class ColumnService {
      * {@link TaskService#deleteById}'s Javadoc: once {@code columnRepository.deleteById(...)}
      * executes there is nothing left to derive {@code boardId} from for the {@code
      * ColumnDeletedEvent}, and the Kafka consumer runs with no security context and cannot look it
-     * up.
+     * up. {@code deletedPosition} is captured for the same reason, and is used afterward (GAP-03)
+     * to close the gap the deleted column leaves in its board's sequence — without this, deleting a
+     * middle column would leave a permanent hole instead of a contiguous-from-zero sequence.
      */
     @Transactional
     public void deleteById(String userId, String columnId) {
@@ -178,10 +236,13 @@ public class ColumnService {
 
         var deletedColumnId = column.getId();
         var deletedBoardId = column.getBoard().getId();
+        var deletedPosition = column.getPosition();
 
         taskService.deleteAllByColumn(column);
 
         columnRepository.deleteById(deletedColumnId);
+
+        columnRepository.shiftPositions(deletedBoardId, -1, deletedPosition + 1, Integer.MAX_VALUE);
 
         eventPublisher.publishEvent(
                 new ColumnDeletedEvent(
