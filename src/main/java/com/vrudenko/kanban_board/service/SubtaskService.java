@@ -7,10 +7,12 @@ import com.vrudenko.kanban_board.entity.SubtaskEntity;
 import com.vrudenko.kanban_board.entity.TaskEntity;
 import com.vrudenko.kanban_board.mapper.SubtaskMapper;
 import com.vrudenko.kanban_board.repository.SubtaskRepository;
+import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -20,6 +22,8 @@ public class SubtaskService {
     @Autowired private SubtaskMapper subtaskMapper;
 
     @Autowired private OwnershipVerifierService ownershipVerifierService;
+
+    @Autowired private EntityManager entityManager;
 
     @Transactional
     SubtaskResponseDTO save(TaskEntity task, SaveSubtaskRequestDTO dto) {
@@ -46,10 +50,30 @@ public class SubtaskService {
         return pair.getSecond();
     }
 
+    /**
+     * Explicit version check is required in addition to {@code @Version}: this load-then-save flow
+     * runs entirely within one transaction, so Hibernate's own dirty-checking optimistic lock
+     * (which fires on the UPDATE statement) does not by itself model the "client read at version N,
+     * another client already wrote version N+1, this client's write should be rejected" scenario
+     * across separate HTTP requests. Comparing the caller-supplied {@code dto.getVersion()} against
+     * the just-loaded managed entity's version, before any field is mutated, is what actually
+     * catches a stale read-then-write race and turns it into a rejected request instead of a silent
+     * overwrite.
+     */
     @Transactional
     public SubtaskResponseDTO updateById(
             String userId, String taskId, UpdateSubtaskRequestDTO dto) {
         var subtask = findById(userId, taskId);
+
+        // dto.getVersion() is read ONLY here, for this stale-write precondition check — it is
+        // never assigned onto `subtask`. The version value that actually gets persisted is
+        // generated entirely by Hibernate's own @Version increment mechanism when the UPDATE
+        // statement runs (forced below via entityManager.flush()), independent of whatever value
+        // the client sent.
+        if (!subtask.getVersion().equals(dto.getVersion())) {
+            throw new OptimisticLockingFailureException(
+                    "Subtask was modified by another request, please refetch.");
+        }
 
         if (Optional.ofNullable(dto.getTitle()).isPresent()) {
             subtask.setTitle(dto.getTitle());
@@ -60,6 +84,12 @@ public class SubtaskService {
         }
 
         subtaskRepository.save(subtask);
+
+        // Hibernate only bumps the in-memory @Version field once the UPDATE statement actually
+        // runs, which normally happens at transaction commit, not at save(). Flushing here forces
+        // that UPDATE (and the version increment) to happen before the response DTO is built, so
+        // the caller sees the new version instead of the stale pre-update one.
+        entityManager.flush();
 
         return subtaskMapper.toSubtaskResponseDTO(subtask);
     }

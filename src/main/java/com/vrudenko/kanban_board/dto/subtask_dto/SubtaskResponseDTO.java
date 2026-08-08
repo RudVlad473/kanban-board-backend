@@ -15,4 +15,5 @@ public class SubtaskResponseDTO implements BaseId, BaseSubtask {
     private String id;
     private String title;
     private Boolean isCompleted;
+    private Long version;
 }

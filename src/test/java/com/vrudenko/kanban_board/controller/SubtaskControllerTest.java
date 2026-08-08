@@ -125,12 +125,14 @@ class SubtaskControllerTest extends AbstractAppTest {
                             .title(
                                     dataFactory.getRandomText(
                                             ValidationConstants.MIN_TASK_TITLE_LENGTH + 3))
+                            .version(mockSubtasks.getFirst().getVersion())
                             .build();
             var expectedResponse =
                     SubtaskResponseDTO.builder()
                             .id(subtaskId)
                             .title(updateDto.getTitle())
                             .isCompleted(false)
+                            .version(mockSubtasks.getFirst().getVersion() + 1)
                             .build();
 
             // Act
@@ -155,7 +157,11 @@ class SubtaskControllerTest extends AbstractAppTest {
             var boardId = mockPopulatedBoard.getId();
             var columnId = mockPopulatedColumn.getId();
             var url = getSubtaskPrefix(boardId, columnId, taskId) + "/" + subtaskId;
-            var updateDto = UpdateSubtaskRequestDTO.builder().isCompleted(true).build();
+            var updateDto =
+                    UpdateSubtaskRequestDTO.builder()
+                            .isCompleted(true)
+                            .version(mockSubtasks.getFirst().getVersion())
+                            .build();
             var expectedResponse =
                     Map.of("id", subtaskId, "isCompleted", updateDto.getIsCompleted());
 
@@ -186,6 +192,7 @@ class SubtaskControllerTest extends AbstractAppTest {
                                     dataFactory.getRandomText(
                                             ValidationConstants.MIN_TASK_TITLE_LENGTH + 3))
                             .isCompleted(true)
+                            .version(mockSubtasks.getFirst().getVersion())
                             .build();
             var expectedResponse =
                     Map.ofEntries(
@@ -220,6 +227,7 @@ class SubtaskControllerTest extends AbstractAppTest {
                             .title(
                                     dataFactory.getRandomText(
                                             ValidationConstants.MIN_TASK_TITLE_LENGTH + 3))
+                            .version(0L)
                             .build();
 
             // Act

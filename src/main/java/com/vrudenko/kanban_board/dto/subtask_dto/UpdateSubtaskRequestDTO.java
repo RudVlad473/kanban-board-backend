@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.vrudenko.kanban_board.base.entity.BaseSubtask;
 import com.vrudenko.kanban_board.dto.annotation.SubtaskTitle;
 import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.NotNull;
 import java.util.Optional;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -19,6 +20,11 @@ public class UpdateSubtaskRequestDTO implements BaseSubtask {
     @SubtaskTitle private String title;
 
     private Boolean isCompleted;
+
+    // Mandatory, not one of the optional fields atLeastOneFieldPopulated() below counts —
+    // omitting it would silently disable optimistic locking on this DTO (docs/CODE_STYLE.md
+    // rule 6).
+    @NotNull private Long version;
 
     @AssertTrue(message = "Either 'title' or 'isCompleted' (or both) must be provided.")
     private boolean atLeastOneFieldPopulated() {
