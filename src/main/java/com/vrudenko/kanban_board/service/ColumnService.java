@@ -156,5 +156,21 @@ public class ColumnService {
                 columnRepository.findAllByBoardId(pair.getSecond().getId()));
     }
 
-    // TODO: implement delete logic
+    /**
+     * Deletes one column and cascades to its tasks/subtasks via the existing batched {@link
+     * TaskService#deleteAllByColumn} — mirroring the per-column loop in {@link
+     * #deleteAllByBoardId}, of which this is the single-column case. Deliberately carries no
+     * non-empty-column guard: once ownership passes, the delete always cascades unconditionally,
+     * matching {@link com.vrudenko.kanban_board.service.BoardService#deleteById}'s existing
+     * behaviour (D-07) — this is a deliberate choice, not an oversight to "fix" by adding a
+     * task-count check.
+     */
+    @Transactional
+    public void deleteById(String userId, String columnId) {
+        var column = findById(userId, columnId);
+
+        taskService.deleteAllByColumn(column);
+
+        columnRepository.deleteById(column.getId());
+    }
 }
