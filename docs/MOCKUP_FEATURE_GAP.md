@@ -24,10 +24,10 @@ and where the two disagree.
   `TaskMoveController`, `ActivityController`, `AuthenticationController` — plus the
   declarative `/logout` route wired in `SecurityConfiguration`.
 
-See [Appendix C](#appendix-c-method-and-limitations) for how visual (as opposed to
-textual) confirmation of the mock-ups was — and was not — possible in this
-environment; that constraint applies to every claim below, and is most relevant to
-the Theming and Navigation/layout areas.
+20 of the 73 pages were also visually rendered (not just text-extracted) to
+confirm theming, checkbox states, the drag/reorder affordance, and mobile
+navigation — see [Appendix C](#appendix-c-method-and-limitations) for the method,
+the full page list, and what — if anything — remains unconfirmed.
 
 ## Inventory Schema
 
@@ -114,10 +114,12 @@ introducing a new finding.
 backend row)*
 The mock-up's design system page documents a complete light-mode and dark-mode
 color palette together (Page 1, MU-Th1), and the same 10-screen desktop flow
-recurs as two structurally identical page blocks (Pages 2-11 and 12-21, MU-Th2),
-with the same duplication pattern repeating at the tablet and mobile breakpoints
-(MU-Th3) — see Appendix C for why "structurally identical" rather than "visually
-confirmed as light/dark." No entity, DTO, or endpoint anywhere in the backend
+recurs as a visually confirmed light pass (Pages 2-11) and dark pass (Pages 12-21)
+of the identical screens (MU-Th2), with the same light/dark duplication repeating
+at the tablet and mobile breakpoints (MU-Th3, confirmed on Pages 34/44 and
+55/65). This is a rendered, real light/dark theme toggle — including a visible
+switch control inside the mobile board-switcher panel (Page 63) — not merely a
+structural inference. No entity, DTO, or endpoint anywhere in the backend
 stores a per-user display preference of any kind — `UserResponseDTO`
 (`id`, `email`, `displayName`) and `UserEntity` carry no theme field, and no route
 reads or writes one. If the frontend needs the choice to persist across devices
@@ -277,7 +279,7 @@ affordance — see §3.5.)*
 | ID | Feature Area | Action | Description | Source |
 |----|---|---|---|---|
 | MU-N1 | Navigation and layout | Board header / top bar | Every board screen carries a consistent header (active board name, `+ Add New Task`) regardless of device tier | Page 2 |
-| MU-N2 | Navigation and layout | Sidebar vs. mobile board switcher | PENDING-CALL-2 | PENDING-CALL-2 |
+| MU-N2 | Navigation and layout | Sidebar vs. mobile board switcher | Visually confirmed. At mobile width (Pages 55/65) the persistent sidebar is gone entirely, replaced by a compact header showing the active board's name with a dropdown chevron (`Platform Launch ⌄`); the task columns fill the full width and scroll horizontally. Tapping that header trigger opens the mobile board switcher (Page 63): a rounded dropdown/popover panel anchored below the header — not a full-screen overlay and not an off-canvas side drawer — listing `ALL BOARDS ( 3 )`, each board name (active one highlighted), `+ Create New Board`, and the light/dark theme toggle, all bundled into the same panel. Tablet width (Page 34) keeps the full desktop-style persistent sidebar with its own `Hide Sidebar` control, unchanged from desktop — so the breakpoint boundary where the sidebar is replaced by the dropdown switcher falls between tablet (768px) and mobile (375px), not at the desktop/tablet boundary | Page 34, Page 55, Page 63, Page 65 |
 | MU-N3 | Navigation and layout | Three responsive breakpoints | Structurally confirmed via each page's PDF `mediabox` (canvas) size rather than visual rendering (see Appendix C): 1440×1024 for pages 2-33 (desktop), 768×1024 for pages 34-53 (tablet), and 375-wide pages (heights 667 or 970) for pages 54-73 (mobile). **This corrects the phase's planning-time page-range table**, which had labeled 22-33 as "Tablet" and 34-53 as "further desktop states" — the actual width break falls at page 34, not page 22 | Pages 2, 34, 54 (representative) |
 
 ### Theming
@@ -285,8 +287,8 @@ affordance — see §3.5.)*
 | ID | Feature Area | Action | Description | Source |
 |----|---|---|---|---|
 | MU-Th1 | Theming | Design-system color palette (light + dark) | Visually confirmed. Page 1 documents both a light palette (e.g. `F4F7FD`, `FFFFFF` backgrounds) and a dark palette (e.g. `000112`, `20212C` backgrounds) side by side, plus separately labeled "Light Version" / "Dark Version" catalogs of every interactive-element state: the Light Version catalog (Button Primary/Secondary/Destructive Idle+Hover, Subtask Checkbox Idle/Hovered/Completed, Text Field Idle/Active/Error, Dropdown Idle/Active) sits on a white card; the Dark Version catalog, with the same set of states, sits on its own dark charcoal panel directly below it | Page 1 |
-| MU-Th2 | Theming | Duplicated desktop flow (light/dark pass) | PENDING-CALL-2 | Pages 2-21 |
-| MU-Th3 | Theming | Duplicated flow at other breakpoints | PENDING-CALL-2 | Pages 54-73 |
+| MU-Th2 | Theming | Duplicated desktop flow (light/dark pass) | Visually confirmed as a genuine light/dark theme pass. Pages 2-11 render in the light palette cataloged on the design-system page (white/off-white `F4F7FD`/`FFFFFF` backgrounds, dark navy text); pages 12-21 render the identical screens in the dark palette (`000112`/`20212C` backgrounds, white text) — confirmed by directly comparing page 2 against page 12, page 3 against page 13, and page 5 against page 15, each pair showing the same screen with only the color scheme swapped. The two ranges do **not** extract text-identical content, contrary to this row's earlier claim: page 2's sidebar badge reads `ALL BOARDS ( 3 )` and page 12's reads `( 8 )` — a same-length-but-different-text discrepancy in the mock sample data that is incidental to theming (both list the same three board names); the rendered background/text/accent colors are what actually distinguishes the passes | Pages 2-21 |
+| MU-Th3 | Theming | Duplicated flow at other breakpoints | Visually confirmed as a genuine theme pass at every breakpoint sampled. Tablet: page 34 renders light, page 44 renders the identical empty-board screen dark — and unlike the desktop pair, both tablet pages' sidebar badges read the same `( 3 )`, consistent with the tablet duplication being a pure theme swap with no incidental sample-data drift. Mobile: page 55 renders the populated board light, page 65 renders the same screen dark. The same light/dark duplication pattern established for desktop (MU-Th2) holds at every breakpoint examined | Pages 54-73 |
 
 ### Auth and account
 
@@ -372,60 +374,90 @@ and no endpoint reads or writes one. See Gap §1.5.*
 
 ## Appendix C: Method and Limitations
 
-**PENDING-CALL-2** — this appendix is mid-rewrite as part of the two-call visual
-confirmation pass (`260808-ls7`). Task 1 rendered and reconciled 12 of the 20
-planned pages, resolving MU-Th1, MU-S4, and MU-M3 (see their rows in Appendix A
-and Gap §1.3 above). Task 2 renders the remaining 8 pages, resolves MU-Th2,
-MU-Th3, and MU-N2, and replaces the two paragraphs below — which still describe
-the pre-render state — with an honest account of what was rendered.
-
 **Coverage achieved.** All 73 pages of the mock-up PDF were read as text (78,808
 characters), giving complete textual coverage of every screen's labels, copy, and
 numeric state (task/subtask counts, column headers).
 
-**Visual rendering was not possible in this environment — 0 of the planned up-to-20
-pages were visually confirmed.** The plan called for a bounded visual read (at most
-20 pages, at most 2 tool calls) to catch what text cannot express: theming,
-responsive layout, drag/reorder affordances, and checkbox/toggle visual states.
-Two independent blockers made this unavailable here, discovered during execution
-rather than at planning time:
+**Pages rendered visually:** 20 of 73
 
-1. The Read tool refuses any page-range request against the source PDF outright
-   with "PDF file exceeds maximum allowed size for text extraction (100MB)" — the
-   file is 115 MB, over the tool's fixed cap, regardless of how few pages are
-   requested. Splitting the requested pages into small derived PDFs (well under
-   the cap, using the same already-approved `pypdf` — see below) worked around
-   this first blocker.
-2. Even against a small derived PDF, the Read tool's image-rendering path itself
-   requires `pdftoppm` (poppler-utils), which is not installed in this
-   environment, and no fallback renderer (`pymupdf`/`fitz`, `pdf2image`, `Pillow`)
-   is available either. Installing a new system tool mid-execution was
-   deliberately not attempted: this plan's own threat model (T-ku4-SC) commits to
-   no unattended installs, `pypdf` being pre-installed specifically to avoid that
-   exact class of decision, and a system-level poppler install is a strictly
-   larger version of the same supply-chain concern, not a smaller one.
+Visual rendering — as opposed to text extraction — became possible once
+`pdftoppm` (poppler) 26.02.0 was installed on the developer's machine out of
+band, between this quick task and the prior one (`260808-ku4`) that first
+attempted it. This plan (`260808-ls7`) installed nothing itself: both `pypdf`
+6.15.0 and `pdftoppm` 26.02.0 were verified present at planning time and asserted
+as preconditions, consistent with this project's no-unattended-installs stance
+(`T-ku4-SC`, `T-ls7-SC`). The 100 MB cap the Read tool enforces on the 115 MB
+source still required splitting the requested pages into small derived PDFs via
+`pypdf` before they could be rendered — `split-mockup-pages.py`
+(`.planning/quick/260808-ls7-redo-the-visual-pdf-confirmation-pass-fo/`) does
+this, printing the `derived → original` page mapping so every citation below can
+be traced back to the page it actually came from. Each of the 20 rendered pages
+was independently reconciled against its committed text block in
+`mockup-pages.txt` before any citation was written from it — the check that
+makes a new page citation trustworthy rather than merely confident.
 
-**Compensating technique used instead: PDF page `mediabox` (canvas-size)
-inspection**, via the same `pypdf` library already sanctioned for text extraction
-(no new dependency). Every page's canvas dimensions were read for all 73 pages —
-a structural fact independent of rendering. This directly corrected one finding
-inherited from planning (MU-N3): the true desktop/tablet/mobile breakpoint
-boundaries are at pages 34 and 54, not 22 and 34 as the phase's planning-time
-page-range table stated. It could **not** resolve theming: page dimensions are
-identical within a device tier regardless of light/dark, and the PDF carries no
-outline/bookmark metadata (`reader.outline` is empty, `reader.metadata` is
-`None`) that could label a page pair by theme. Every theming claim in this
-document (MU-Th1..MU-Th3, Gap §1.5) is therefore built from text-derived
-structural evidence (duplicated page-pair content, a design-system page
-documenting both palettes together) rather than a visual confirmation of which
-specific page is rendered light vs. dark — that specific sub-claim remains
-unconfirmed by any method available in this environment. MU-M3 (drag/reorder) is
-similarly unconfirmed by any method, since it has no textual signature at all;
-it is included as a labeled, lower-confidence, convention-based inference rather
-than omitted, so a reader knows the API surface for it was not simply overlooked.
+The 20 pages, and what each closed:
+
+| Page | What it shows | Closed / contributed to |
+|---|---|---|
+| 1 | Design system: light + dark palettes, Light/Dark Version catalogs of every interactive-element state | MU-Th1; subtask checkbox states for MU-S4 |
+| 2 | Desktop light pass, empty board + sidebar | MU-Th2 theme anchor; MU-N2 desktop sidebar baseline |
+| 3 | Desktop light pass, populated Todo/Doing/Done board | MU-M3 (no drag affordance drawn) |
+| 5 | Desktop light pass, View Task modal, Subtasks (2 of 3) | MU-S4 checkbox states in situ; MU-M3 alternate route |
+| 6 | Add New Task modal | Modal coverage |
+| 7 | Edit Task modal | Modal coverage |
+| 8 | Add New Board modal | Modal coverage |
+| 9 | Edit Board modal, column remove controls | Modal coverage |
+| 10 | Delete Board confirmation | Modal coverage |
+| 11 | Delete Task confirmation | Modal coverage |
+| 24 | Board options dropdown (Edit Board / Delete Board) | MU-M3 alternate route |
+| 25 | Task options dropdown (Edit Task / Delete Task) | MU-M3 alternate route |
+| 12 | Desktop dark pass, empty board — counterpart of page 2 | MU-Th2 (confirms dark theme; explains the `( 3 )`/`( 8 )` text discrepancy as incidental, not the theme signal) |
+| 13 | Desktop dark pass, populated board — counterpart of page 3 | MU-Th2; MU-M3 corroboration (still no drag affordance, dark pass) |
+| 15 | Desktop dark pass, View Task modal — counterpart of page 5 | MU-Th2; MU-S4 corroboration in dark mode |
+| 34 | Tablet light pass, empty board + sidebar | MU-Th3 tablet anchor; MU-N2 (tablet keeps the full desktop-style sidebar) |
+| 44 | Tablet dark pass, empty board + sidebar — counterpart of page 34 | MU-Th3 (tablet duplication is a theme pass, not a data variant) |
+| 55 | Mobile light pass, populated board | MU-N2 (sidebar gone, replaced by a header board-name/chevron trigger); MU-M3 corroboration at mobile width |
+| 63 | Mobile board switcher, open | MU-N2 (decisive: a dropdown/popover panel anchored to the header trigger, not an off-canvas drawer or full-screen overlay) |
+| 65 | Mobile dark pass, populated board — counterpart of page 55 | MU-Th3 mobile confirmation |
+
+**What remains open.** Nothing named in the plan's four target questions
+(MU-Th1/Th2/Th3, MU-M3, MU-N2, MU-S4) is unresolved after this pass — each now
+carries a page-cited observation rather than an inference. The other 53 pages of
+the 73-page set were not independently rendered. Per the completed text
+extraction, they fall into two categories: (a) further repeats of screen types
+already examined here in the remaining theme-pass or breakpoint duplicates (e.g.
+pages 14, 16-21 are the dark-pass counterparts of already-rendered light-pass
+modals; pages 47-53 are tablet 2-up composites; pages 64/66-73 are the dark-pass
+counterparts of the mobile screens already rendered), and (b) a handful of
+desktop-pass-A' screens (22, 23, 26, 27) not selected because pages 24-25 already
+answered what that group was chosen to answer (the options-menu route for
+MU-M3). No further open question is known among the unrendered pages, but — as
+with any unexamined row in this document's provenance model — they were not
+independently visually verified, and a reader should treat that as "not yet
+looked at" rather than "confirmed absent of surprises."
+
+**Corroborating technique: PDF page `mediabox` (canvas-size) inspection**, via
+the same `pypdf` library already used for text extraction and page-splitting (no
+new dependency). Every page's canvas dimensions were read for all 73 pages — a
+structural fact independent of rendering, and the same technique the prior quick
+task (`260808-ku4`) relied on before visual rendering was available. It remains
+valid and is kept here as corroborating evidence rather than as a substitute for
+rendering: it originally corrected one finding (MU-N3) — the true
+desktop/tablet/mobile breakpoint boundaries are at pages 34 and 54, not 22 and 34
+as the phase's planning-time page-range table stated — and the rendered pages in
+this pass (34 at the tablet boundary, 55 at the mobile boundary) confirm that
+`mediabox`-derived boundary directly.
 
 **Reproducibility.** Because the source PDF lives outside this repository, the
 extracted text file committed alongside this document
 (`.planning/quick/260808-ku4-analyze-kanban-mock-up-pdf-and-produce-a/mockup-pages.txt`)
-is the durable, re-checkable record of every mock-up claim above — not the PDF
-itself, which a future reader may not have access to.
+is the durable, re-checkable record of every text-derived mock-up claim above —
+not the PDF itself, which a future reader may not have access to. The same is
+true of the visual pass: the two derived PDFs used to render the 20 pages above
+(~30 MB total) were written to a session scratchpad outside this repository and
+were never committed, so `split-mockup-pages.py` plus the page list embedded in
+the table above is the reproducible record of the visual pass, the same way
+`mockup-pages.txt` is for the textual one — a future reader with access to the
+original source PDF can regenerate the identical derived files and re-render the
+identical pages.
