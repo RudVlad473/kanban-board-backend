@@ -35,17 +35,17 @@ class FlywaySchemaProvenanceTest extends AbstractPostgresContainerTest {
     @Nested
     class FlywayHistory {
         @Test
-        void shouldRecordFiveSuccessfulMigrations_whenContextStarts() {
+        void shouldRecordSixSuccessfulMigrations_whenContextStarts() {
             // arrange
             var sql =
                     "SELECT count(*) FROM flyway_schema_history WHERE success = true AND version"
-                            + " IN ('1','2','3','4','5')";
+                            + " IN ('1','2','3','4','5','6')";
 
             // act
             var successfulCount = jdbcTemplate.queryForObject(sql, Integer.class);
 
             // assert
-            Assertions.assertThat(successfulCount).isEqualTo(5);
+            Assertions.assertThat(successfulCount).isEqualTo(6);
         }
 
         @Test
@@ -126,6 +126,21 @@ class FlywaySchemaProvenanceTest extends AbstractPostgresContainerTest {
 
             // assert
             Assertions.assertThat(count).isEqualTo(1);
+        }
+
+        @Test
+        void shouldStoreActivityLogEventIdAsCharacterType_notUuid_whenSchemaIsBuiltByV6Migration() {
+            // arrange
+            var sql =
+                    "SELECT data_type FROM information_schema.columns WHERE table_schema ="
+                            + " 'public' AND table_name = 'activity_log' AND column_name ="
+                            + " 'event_id'";
+
+            // act
+            var dataType = jdbcTemplate.queryForObject(sql, String.class);
+
+            // assert
+            Assertions.assertThat(dataType).isEqualToIgnoringCase("character varying");
         }
 
         @Test
