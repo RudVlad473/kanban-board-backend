@@ -4,6 +4,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.vrudenko.kanban_board.dto.board_dto.BoardResponseDTO;
 import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.user_dto.SignupRequestDTO;
+import com.vrudenko.kanban_board.dto.user_dto.UpdateThemeRequestDTO;
 import com.vrudenko.kanban_board.dto.user_dto.UserResponseDTO;
 import com.vrudenko.kanban_board.entity.UserEntity;
 import com.vrudenko.kanban_board.exception.AppDuplicateResourceException;
@@ -79,6 +80,30 @@ public class UserService implements UserDetailsService {
         }
 
         return boardService.save(boardDTO, user);
+    }
+
+    // GAP-05 (D-10..D-12). userId comes from @CurrentUserId (the session) in UserController --
+    // never a path variable or request-body field -- so this method has no ownership chain to
+    // verify: UserService is the identity root, findById(String) above already is the sanctioned
+    // direct-repository load (docs/CODE_STYLE.md rule 2).
+    @Transactional
+    public UserResponseDTO findThemeByUserId(String userId) {
+        var user = findById(userId);
+
+        return userMapper.toResponseDTO(user);
+    }
+
+    // No entityManager.flush()/version-compare here, unlike TaskService/ColumnService/
+    // SubtaskService's Update* methods -- UserEntity carries no @Version field and this write is
+    // deliberately last-write-wins (see UpdateThemeRequestDTO's Javadoc, T-06-29).
+    @Transactional
+    public UserResponseDTO updateTheme(String userId, UpdateThemeRequestDTO dto) {
+        var user = findById(userId);
+
+        user.setTheme(dto.getTheme());
+        userRepository.save(user);
+
+        return userMapper.toResponseDTO(user);
     }
 
     @Override
