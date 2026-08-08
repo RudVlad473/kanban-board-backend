@@ -26,7 +26,8 @@ and where the two disagree.
 
 See [Appendix C](#appendix-c-method-and-limitations) for how visual (as opposed to
 textual) confirmation of the mock-ups was — and was not — possible in this
-environment; that constraint applies to every claim below, not just Boards.
+environment; that constraint applies to every claim below, and is most relevant to
+the Theming and Navigation/layout areas.
 
 ## Inventory Schema
 
@@ -65,11 +66,107 @@ create-then-batch-add-columns sequence against the existing
 `POST /boards/{boardId}/columns` route, or the board-creation DTO would need to
 grow a columns list.
 
+**1.2 — Column deletion has no route.** *(MU-06, MU-C4 vs. BE-C1, BE-C2)*
+The Edit Board modal's `Board Columns` list (Page 9, MU-06/MU-C4) shows each
+existing column with a remove control alongside `+ Add New Column`, implying a
+column can be deleted independently of deleting the whole board. `ColumnController`
+exposes only list (`GET /boards/{boardId}/columns`) and rename
+(`PUT /boards/{boardId}/columns/{columnId}`) — no `DELETE` mapping exists for a
+column. Today the only way to remove a column is to delete the entire board
+(`DELETE /boards/{boardId}`, which cascades). What would have to change: add a
+`DELETE /boards/{boardId}/columns/{columnId}` route to `ColumnController`,
+presumably reassigning or deleting the column's tasks the same way board deletion
+cascades to its columns.
+
+**1.3 — No ordering or position field anywhere, so task/column reordering has no
+backend representation.** *(MU-M3 vs. BE-M1, BE-C2)*
+`MoveTaskRequestDTO` (`src/main/java/com/vrudenko/kanban_board/dto/task_dto/MoveTaskRequestDTO.java`)
+carries exactly `targetColumnId` and `version` — it moves a task to a different
+column with no notion of where in that column's task list it lands. No DTO in the
+codebase (`SaveTaskRequestDTO`, `UpdateTaskRequestDTO`, `SaveColumnRequestDTO`,
+`UpdateColumnRequestDTO`) carries an ordering/position/index field either, so
+reordering tasks within a column or reordering columns within a board is equally
+unsupported. A drag-and-drop-based reorder affordance is the conventional
+expectation for this exact kind of Kanban board (task cards inside labeled
+columns, per MU-T1/MU-C1); it is purely visual, so it could not be text-confirmed
+and — per Appendix C — could not be visually confirmed either in this
+environment, so this specific line is a lower-confidence, convention-based
+inference rather than a page-cited observation. What would have to change: add a
+position/index field to the task (and optionally column) entity and its DTOs, and
+extend `TaskMoveController`/`ColumnController` to accept and persist it.
+
+**1.4 — No single nested "whole board" read; rendering one requires four separate
+round trips.** *(MU-01 vs. BE-01, BE-C1, BE-T1, BE-Sub1)*
+Switching to a board (Page 2, MU-01) requires the client to render every column,
+every task, and every subtask that board contains. The API has no endpoint that
+returns that in one response: a client must call `GET /boards` (or already have
+the id), then `GET /boards/{boardId}/columns`, then
+`GET /boards/{boardId}/columns/{columnId}/tasks` for each column, then
+`GET .../tasks/{taskId}/subtasks` for each task — an N+1 fan-out proportional to
+the board's column and task counts. `.planning/STATE.md` (line 199) records this
+as a known, deliberate scope decision: `GET /boards/{boardId}/full` is deferred to
+v2. This entry corroborates that decision against the mock-up rather than
+introducing a new finding.
+
+**1.5 — No persistence for a user's theme preference.** *(MU-Th1..MU-Th3 vs. no
+backend row)*
+The mock-up's design system page documents a complete light-mode and dark-mode
+color palette together (Page 1, MU-Th1), and the same 10-screen desktop flow
+recurs as two structurally identical page blocks (Pages 2-11 and 12-21, MU-Th2),
+with the same duplication pattern repeating at the tablet and mobile breakpoints
+(MU-Th3) — see Appendix C for why "structurally identical" rather than "visually
+confirmed as light/dark." No entity, DTO, or endpoint anywhere in the backend
+stores a per-user display preference of any kind — `UserResponseDTO`
+(`id`, `email`, `displayName`) and `UserEntity` carry no theme field, and no route
+reads or writes one. If the frontend needs the choice to persist across devices
+or sessions rather than living in local client storage, a field and an endpoint to
+read/write it would need to be added.
+
+**1.6 — Subtask updates carry no optimistic-locking `version` field, unlike every
+other mutable entity (lower confidence).** *(MU-S4 vs. BE-Sub3)*
+`UpdateSubtaskRequestDTO` and `SubtaskResponseDTO`
+(`src/main/java/com/vrudenko/kanban_board/dto/subtask_dto/`) carry no `version`
+field, while `UpdateColumnRequestDTO`, `UpdateTaskRequestDTO`, and
+`MoveTaskRequestDTO` all require one and `GlobalExceptionHandler` maps a version
+conflict to `409 Conflict`. The mock-up's subtask checkbox toggle (Page 5, MU-S4)
+is exactly the kind of frequent, low-friction edit that two concurrent sessions
+are most likely to race on. Flagged as lower confidence because the mock-up set
+contains no direct evidence of a multi-session/collaboration scenario (no
+presence indicators, no "last edited by" copy) — this is an internal-consistency
+observation (subtasks are the one mutable entity in the update chain missing the
+guard every sibling entity has), not a claim the design explicitly asked for it.
+
 ## 2. Backend features not reflected in the mock-ups
 
-*(Populated in Task 2 for the remaining feature areas; no Boards-specific
-backend-only capability was identified in this pass — `BoardController`'s four
-routes each have a corresponding mock-up affordance, see Section 3.)*
+**2.1 — Paginated board activity log.** *(no MU row vs. BE-Act1)*
+`GET /boards/{boardId}/activity` (`ActivityController.findAllByBoardId`) returns a
+paginated `Page<ActivityLogResponseDTO>` of board events (`eventId`, `action`,
+`detail`, `userId`, `createdAt`). No page in the extracted text or the page
+structure suggests an activity/history feed screen anywhere in the mock-up set —
+no occurrence of "activity," "history," or "log" appears in any of the 73 pages.
+This is a design-has-no-screen-for-this gap, not a backend-internal detail: an
+activity feed is a normal, user-facing product surface, so its absence from the
+design set is worth flagging to whoever owns the mock-ups next, not treated as
+correctly invisible.
+
+**2.2 — Optimistic-locking `version` surface on Columns, Tasks, and task moves.**
+*(no MU row vs. BE-C2, BE-T3, BE-M1)*
+`UpdateColumnRequestDTO`, `UpdateTaskRequestDTO`, and `MoveTaskRequestDTO` each
+require a client-supplied `version` long, and a mismatch surfaces as
+`409 Conflict` (`GlobalExceptionHandler.handleOptimisticLockingFailure`). No mock-up
+screen shows a version number, and none should — this is exactly the
+backend-internal, correctly-invisible case: a frontend needs to round-trip the
+value it was given, but the design has no reason to render it.
+
+**2.3 — The full authentication flow (`signup`, `signin`, `logout`) has no
+corresponding screens in this design set.** *(no MU row vs. BE-A1, BE-A2, BE-A3)*
+`POST /signin`, `POST /signup`, and the declaratively-wired `POST /logout` are
+fully implemented, session-cookie-issuing routes — `SignupRequestDTO` even
+collects a `displayName` that nothing in the mock-up set has a field for. This is
+squarely a design-has-no-screen-for-this gap, not a backend-internal one: every
+board shown in the mock-ups is implicitly "my boards," so a real product needs
+sign-up/sign-in screens somewhere; they are simply outside this particular
+73-page export.
 
 ## 3. Features present in both
 
@@ -82,7 +179,44 @@ routes each have a corresponding mock-up affordance, see Section 3.)*
 | "Delete Board" confirmation (Page 10, MU-08), reached via board options menu (Page 24, MU-07) | `DELETE /boards/{boardId}` — `BoardController.deleteById` (BE-03) |
 | "+ Add New Column" inside Add/Edit Board modals (Pages 8-9, MU-05/MU-06) | `POST /boards/{boardId}/columns` — `BoardController.addColumnByBoardId` (BE-04) |
 
----
+**3.2 — Columns.**
+
+| Mock-up screen / affordance | Backend endpoint |
+|---|---|
+| Column headers with live task counts, e.g. `T O D O ( 4 )` (Page 3, MU-C1) | `GET /boards/{boardId}/columns` — `ColumnController.findAllByBoardId` (BE-C1) |
+| Column name field inside Edit Board modal (Page 9, MU-C3) | `PUT /boards/{boardId}/columns/{columnId}` — `ColumnController.updateById` (BE-C2) |
+
+*(Column creation and deletion are covered under Boards §3.1 and Gap §1.2
+respectively, since column-add is exposed on `BoardController` and column-delete
+does not exist at all.)*
+
+**3.3 — Tasks.**
+
+| Mock-up screen / affordance | Backend endpoint |
+|---|---|
+| Task cards inside a column, subtask progress badge (Page 3, MU-T1) | `GET /boards/{boardId}/columns/{columnId}/tasks` — `TaskController.findAllByColumnId` (BE-T1) |
+| "Add New Task" modal (Page 6, MU-T2) | `POST /boards/{boardId}/columns/{columnId}` — `ColumnController.addTaskByColumnId` (BE-T2) |
+| "Edit Task" modal, Title/Description (Page 7, MU-T4) | `PUT /boards/{boardId}/columns/{columnId}/tasks/{taskId}` — `TaskController.updateById` (BE-T3) |
+| "Delete this task?" confirmation (Page 11, MU-T6), reached via task options menu (Page 25, MU-T5) | `DELETE /boards/{boardId}/columns/{columnId}/tasks/{taskId}` — `TaskController.deleteById` (BE-T4) |
+
+*(The View Task modal's `Current Status` dropdown, page 5/MU-T3, is a task-movement
+affordance — see §3.5.)*
+
+**3.4 — Subtasks.**
+
+| Mock-up screen / affordance | Backend endpoint |
+|---|---|
+| Subtask checklist with progress count, e.g. "Subtasks (2 of 3)" (Page 5, MU-S1) | `GET /boards/{boardId}/columns/{columnId}/tasks/{taskId}/subtasks` — `SubtaskController.findAllByTaskId` (BE-Sub1) |
+| "+ Add New Subtask" inside Add/Edit Task modals (Pages 6-7, MU-S2/MU-S3) | `POST /boards/{boardId}/columns/{columnId}/tasks/{taskId}/subtasks` — `TaskController.addSubtaskByTaskId` (BE-Sub2) |
+| Subtask checkbox toggle / title edit (Page 5, MU-S4) | `PUT .../subtasks/{subtaskId}` — `SubtaskController.updateById` (BE-Sub3, see Gap §1.6 for its missing `version` guard) |
+| Subtask removal (implied by "+ Add New Subtask" list management, Page 7) | `DELETE .../subtasks/{subtaskId}` — `SubtaskController.deleteById` (BE-Sub4) |
+
+**3.5 — Task movement and status.**
+
+| Mock-up screen / affordance | Backend endpoint |
+|---|---|
+| "Current Status" dropdown on View Task modal, Todo/Doing/Done (Page 5, MU-M2), matching the dropdown states cataloged on the design-system page (Page 1) | `PATCH /tasks/{taskId}/move` — `TaskMoveController.moveToColumn` (BE-M1) |
+| Column membership itself as the visual status representation (Page 3, MU-M1) | Same route — moving a task's column *is* changing its status in this data model; there is no separate "status" field |
 
 ## Appendix A: Mock-up Inventory (full)
 
@@ -99,37 +233,70 @@ routes each have a corresponding mock-up affordance, see Section 3.)*
 | MU-07 | Boards | Board options menu | An options menu on the board header exposes `Edit Board` / `Delete Board` | Page 24 |
 | MU-08 | Boards | Delete board confirmation | "Are you sure you want to delete the '<name>' board? This action will remove all columns and tasks and cannot be reversed." with `Delete` / `Cancel` | Page 10 |
 
-### Auth and account
-
-`PENDING-TASK-2`
-
 ### Columns
 
-`PENDING-TASK-2`
+| ID | Feature Area | Action | Description | Source |
+|----|---|---|---|---|
+| MU-C1 | Columns | View columns with live task counts | Column headers read e.g. `T O D O ( 4 )`, `D O I N G ( 6 )`, `D O N E ( 7 )` — count reflects that column's current task total | Page 3 |
+| MU-C2 | Columns | Add new column (inline, board view) | `+ New Column` affordance at the end of the column row, outside the board-edit modal | Page 3 |
+| MU-C3 | Columns | Rename column | Existing column names are editable text fields inside the Edit Board modal's `Board Columns` list | Page 9 |
+| MU-C4 | Columns | Remove column | Each row in the Edit Board modal's `Board Columns` list has a remove control alongside `+ Add New Column` | Page 9 |
 
 ### Tasks
 
-`PENDING-TASK-2`
+| ID | Feature Area | Action | Description | Source |
+|----|---|---|---|---|
+| MU-T1 | Tasks | View task card | Task cards inside a column show the title and a subtask progress badge, e.g. "0 of 3 substasks" | Page 3 |
+| MU-T2 | Tasks | Add New Task modal | Collects `Title`, `Description`, an initial `Subtasks` list, and a `Status` dropdown (defaults to `Todo`), submitted via `Create Task` | Page 6 |
+| MU-T3 | Tasks | View Task modal | Shows title, description, the subtask checklist with a progress count, and a `Current Status` dropdown | Page 5 |
+| MU-T4 | Tasks | Edit Task modal | Pre-fills `Title`, `Description`, `Subtasks`, and `Status`; submitted via `Save Changes` | Page 7 |
+| MU-T5 | Tasks | Task options menu | An options menu on the View Task modal exposes `Edit Task` / `Delete Task` | Page 25 |
+| MU-T6 | Tasks | Delete task confirmation | "Are you sure you want to delete the '<title>' task and its subtasks? This action cannot be reversed." with `Delete` / `Cancel` | Page 11 |
 
 ### Subtasks
 
-`PENDING-TASK-2`
+| ID | Feature Area | Action | Description | Source |
+|----|---|---|---|---|
+| MU-S1 | Subtasks | View subtask checklist | Checklist of subtasks with a running progress count, e.g. "Subtasks (2 of 3)" | Page 5 |
+| MU-S2 | Subtasks | Add subtasks (task creation) | The Add New Task modal collects an initial list of subtask titles, each removable, plus `+ Add New Subtask` | Page 6 |
+| MU-S3 | Subtasks | Add/edit subtasks (task edit) | The Edit Task modal lists existing named subtasks (e.g. "Define user model," "Add auth endpoints") as editable rows, plus `+ Add New Subtask` | Page 7 |
+| MU-S4 | Subtasks | Toggle subtask completion | Clicking a subtask's checkbox updates the checklist's progress count on the View Task modal (interaction inferred from the counted state, e.g. "Subtasks (2 of 3)"; the checkbox's idle/hovered/completed visual states are separately cataloged on the design-system page) | Page 5 (states cataloged Page 1) |
 
 ### Task movement and status
 
-`PENDING-TASK-2`
+| ID | Feature Area | Action | Description | Source |
+|----|---|---|---|---|
+| MU-M1 | Task movement and status | Column membership as status | A task's column (Todo/Doing/Done in the sample data) is the visual representation of its status | Page 3 |
+| MU-M2 | Task movement and status | Change status via dropdown | The View Task modal's `Current Status` dropdown lets a user change a task's status/column without a drag gesture; the same Todo/Doing/Done dropdown states are cataloged on the design-system page | Page 5 (states cataloged Page 1) |
+| MU-M3 | Task movement and status | Drag-and-drop reorder (unconfirmed) | Conventional Kanban affordance for reordering task cards within or between columns; purely visual, so it is a naming-convention inference rather than a page-cited observation — see Appendix C, no page could be visually rendered to confirm or refute it | *(not visually confirmable — see Appendix C)* |
 
 ### Navigation and layout
 
-`PENDING-TASK-2`
+| ID | Feature Area | Action | Description | Source |
+|----|---|---|---|---|
+| MU-N1 | Navigation and layout | Board header / top bar | Every board screen carries a consistent header (active board name, `+ Add New Task`) regardless of device tier | Page 2 |
+| MU-N2 | Navigation and layout | Sidebar vs. mobile board switcher | The persistent `Hide Sidebar`-controlled sidebar (Page 2, desktop/tablet-width pages) is not present in the mobile-width page text; a mobile page still surfaces `ALL BOARDS ( 3 )`, consistent with a different (e.g. modal/off-canvas) navigation pattern at that breakpoint rather than a persistent sidebar — text-inferred, not visually confirmed | Page 63 vs. Page 2 |
+| MU-N3 | Navigation and layout | Three responsive breakpoints | Structurally confirmed via each page's PDF `mediabox` (canvas) size rather than visual rendering (see Appendix C): 1440×1024 for pages 2-33 (desktop), 768×1024 for pages 34-53 (tablet), and 375-wide pages (heights 667 or 970) for pages 54-73 (mobile). **This corrects the phase's planning-time page-range table**, which had labeled 22-33 as "Tablet" and 34-53 as "further desktop states" — the actual width break falls at page 34, not page 22 | Pages 2, 34, 54 (representative) |
 
 ### Theming
 
-`PENDING-TASK-2`
+| ID | Feature Area | Action | Description | Source |
+|----|---|---|---|---|
+| MU-Th1 | Theming | Design-system color palette (light + dark) | Page 1 documents both a light palette (e.g. `F4F7FD`, `FFFFFF` backgrounds) and a dark palette (e.g. `000112`, `20212C` backgrounds) side by side, plus separately labeled "Light Version" / "Dark Version" catalogs of every interactive-element state (buttons, checkboxes, text fields, dropdowns) | Page 1 |
+| MU-Th2 | Theming | Duplicated desktop flow (light/dark pass) | The full 10-screen desktop board flow appears twice, as pages 2-11 and pages 12-21, with each page pair extracting text-identical content (e.g. page 2 and page 12 are both exactly 199 characters) — consistent with one pass per theme, though which pass is which theme could not be visually confirmed | Pages 2-21 |
+| MU-Th3 | Theming | Duplicated flow at other breakpoints | The same duplication pattern recurs within the mobile-width page range (pages 54-63 vs. 64-73 mirror each other in the same way), consistent with each device tier also getting a light and a dark pass | Pages 54-73 |
+
+### Auth and account
+
+*No screens for this feature area were found anywhere in the 73-page mock-up set —
+no sign-up, sign-in, log-out, or account-management screen occurs in the extracted
+text. This absence is itself the finding; see Gap §2.3.*
 
 ### Activity log
 
-`PENDING-TASK-2`
+*No screen for this feature area was found anywhere in the 73-page mock-up set —
+the strings "activity," "history," and "log" do not occur in any of the 73 pages
+of extracted text. This absence is itself the finding; see Gap §2.1.*
 
 ## Appendix B: Backend Inventory (full)
 
@@ -142,38 +309,114 @@ routes each have a corresponding mock-up affordance, see Section 3.)*
 | BE-03 | Boards | Delete board (cascades columns/tasks/subtasks) | Deletes a board and all of its columns, tasks, and subtasks transactionally | `DELETE /boards/{boardId}` — `BoardController.deleteById` |
 | BE-04 | Boards | Add column to board | Creates a new column under the given board | `POST /boards/{boardId}/columns` — `BoardController.addColumnByBoardId` |
 
-### Auth and account
-
-`PENDING-TASK-2`
-
 ### Columns
 
-`PENDING-TASK-2`
+| ID | Feature Area | Action | Description | Source |
+|----|---|---|---|---|
+| BE-C1 | Columns | List columns for board | Returns every column on the given board, each carrying `id`, `name`, and `version` | `GET /boards/{boardId}/columns` — `ColumnController.findAllByBoardId` |
+| BE-C2 | Columns | Rename column | Updates a column's `name`; requires the caller's `version` to match, or fails with `409 Conflict` | `PUT /boards/{boardId}/columns/{columnId}` — `ColumnController.updateById` |
+
+*(No `DELETE` route exists for a column — see Gap §1.2.)*
 
 ### Tasks
 
-`PENDING-TASK-2`
+| ID | Feature Area | Action | Description | Source |
+|----|---|---|---|---|
+| BE-T1 | Tasks | List tasks in column | Returns every task in the given column, each carrying `id`, `title`, `description`, `version` | `GET /boards/{boardId}/columns/{columnId}/tasks` — `TaskController.findAllByColumnId` |
+| BE-T2 | Tasks | Create task in column | Creates a task under the given column from `title`/`description`; the route lives on `ColumnController` (mapped at the column's own URL) rather than `TaskController` | `POST /boards/{boardId}/columns/{columnId}` — `ColumnController.addTaskByColumnId` |
+| BE-T3 | Tasks | Update task title/description | Requires at least one of `title`/`description`, plus the caller's `version`; does not accept a status/column change (see BE-M1) | `PUT /boards/{boardId}/columns/{columnId}/tasks/{taskId}` — `TaskController.updateById` |
+| BE-T4 | Tasks | Delete task (cascades subtasks) | Deletes a task and its subtasks | `DELETE /boards/{boardId}/columns/{columnId}/tasks/{taskId}` — `TaskController.deleteById` |
 
 ### Subtasks
 
-`PENDING-TASK-2`
+| ID | Feature Area | Action | Description | Source |
+|----|---|---|---|---|
+| BE-Sub1 | Subtasks | List subtasks for task | Returns every subtask on the given task, each carrying `id`, `title`, `isCompleted` — no `version` field | `GET /boards/{boardId}/columns/{columnId}/tasks/{taskId}/subtasks` — `SubtaskController.findAllByTaskId` |
+| BE-Sub2 | Subtasks | Create subtask | Creates a subtask under the given task from `title` | `POST /boards/{boardId}/columns/{columnId}/tasks/{taskId}/subtasks` — `TaskController.addSubtaskByTaskId` |
+| BE-Sub3 | Subtasks | Update subtask title / toggle completion | Requires at least one of `title`/`isCompleted`; unlike Column/Task updates, carries **no `version` field** — see Gap §1.6 | `PUT .../subtasks/{subtaskId}` — `SubtaskController.updateById` |
+| BE-Sub4 | Subtasks | Delete subtask | Deletes a single subtask | `DELETE .../subtasks/{subtaskId}` — `SubtaskController.deleteById` |
 
 ### Task movement and status
 
-`PENDING-TASK-2`
+| ID | Feature Area | Action | Description | Source |
+|----|---|---|---|---|
+| BE-M1 | Task movement and status | Move task to another column | Moves a task to `targetColumnId`, guarded by the caller's `version`; carries no target-position/index — see Gap §1.3 | `PATCH /tasks/{taskId}/move` — `TaskMoveController.moveToColumn` |
 
 ### Navigation and layout
 
-`PENDING-TASK-2`
+*No backend routes exist for this feature area, and none are expected to —
+navigation chrome and responsive layout are frontend-only concerns with no
+corresponding server-side capability.*
 
 ### Theming
 
-`PENDING-TASK-2`
+*No backend routes or fields exist for this feature area — no theme-preference
+field appears anywhere in `UserEntity`, `UserResponseDTO`, or any request DTO,
+and no endpoint reads or writes one. See Gap §1.5.*
+
+### Auth and account
+
+| ID | Feature Area | Action | Description | Source |
+|----|---|---|---|---|
+| BE-A1 | Auth and account | Sign up | Creates a user from `displayName`/`email`/`password`, then auto-authenticates and issues a session cookie | `POST /signup` — `AuthenticationController.signup` |
+| BE-A2 | Auth and account | Sign in | Authenticates `email`/`password` and issues a session cookie; enforces a 2-concurrent-session ceiling and rotates the session id (D-01, see `docs/ARCHITECTURE.md`) | `POST /signin` — `AuthenticationController.signin` |
+| BE-A3 | Auth and account | Log out | Clears the session cookie and its server-side session record; wired declaratively rather than through a controller method | `POST /logout` — declarative route (`SecurityConfiguration.securityFilterChain`, no controller class) |
 
 ### Activity log
 
-`PENDING-TASK-2`
+| ID | Feature Area | Action | Description | Source |
+|----|---|---|---|---|
+| BE-Act1 | Activity log | List board activity (paginated) | Returns a paginated `Page<ActivityLogResponseDTO>` of board events (`eventId`, `action`, `detail`, `userId`, `createdAt`) for the given board | `GET /boards/{boardId}/activity` — `ActivityController.findAllByBoardId` |
 
 ## Appendix C: Method and Limitations
 
-`PENDING-TASK-2`
+**Coverage achieved.** All 73 pages of the mock-up PDF were read as text (78,808
+characters), giving complete textual coverage of every screen's labels, copy, and
+numeric state (task/subtask counts, column headers).
+
+**Visual rendering was not possible in this environment — 0 of the planned up-to-20
+pages were visually confirmed.** The plan called for a bounded visual read (at most
+20 pages, at most 2 tool calls) to catch what text cannot express: theming,
+responsive layout, drag/reorder affordances, and checkbox/toggle visual states.
+Two independent blockers made this unavailable here, discovered during execution
+rather than at planning time:
+
+1. The Read tool refuses any page-range request against the source PDF outright
+   with "PDF file exceeds maximum allowed size for text extraction (100MB)" — the
+   file is 115 MB, over the tool's fixed cap, regardless of how few pages are
+   requested. Splitting the requested pages into small derived PDFs (well under
+   the cap, using the same already-approved `pypdf` — see below) worked around
+   this first blocker.
+2. Even against a small derived PDF, the Read tool's image-rendering path itself
+   requires `pdftoppm` (poppler-utils), which is not installed in this
+   environment, and no fallback renderer (`pymupdf`/`fitz`, `pdf2image`, `Pillow`)
+   is available either. Installing a new system tool mid-execution was
+   deliberately not attempted: this plan's own threat model (T-ku4-SC) commits to
+   no unattended installs, `pypdf` being pre-installed specifically to avoid that
+   exact class of decision, and a system-level poppler install is a strictly
+   larger version of the same supply-chain concern, not a smaller one.
+
+**Compensating technique used instead: PDF page `mediabox` (canvas-size)
+inspection**, via the same `pypdf` library already sanctioned for text extraction
+(no new dependency). Every page's canvas dimensions were read for all 73 pages —
+a structural fact independent of rendering. This directly corrected one finding
+inherited from planning (MU-N3): the true desktop/tablet/mobile breakpoint
+boundaries are at pages 34 and 54, not 22 and 34 as the phase's planning-time
+page-range table stated. It could **not** resolve theming: page dimensions are
+identical within a device tier regardless of light/dark, and the PDF carries no
+outline/bookmark metadata (`reader.outline` is empty, `reader.metadata` is
+`None`) that could label a page pair by theme. Every theming claim in this
+document (MU-Th1..MU-Th3, Gap §1.5) is therefore built from text-derived
+structural evidence (duplicated page-pair content, a design-system page
+documenting both palettes together) rather than a visual confirmation of which
+specific page is rendered light vs. dark — that specific sub-claim remains
+unconfirmed by any method available in this environment. MU-M3 (drag/reorder) is
+similarly unconfirmed by any method, since it has no textual signature at all;
+it is included as a labeled, lower-confidence, convention-based inference rather
+than omitted, so a reader knows the API surface for it was not simply overlooked.
+
+**Reproducibility.** Because the source PDF lives outside this repository, the
+extracted text file committed alongside this document
+(`.planning/quick/260808-ku4-analyze-kanban-mock-up-pdf-and-produce-a/mockup-pages.txt`)
+is the durable, re-checkable record of every mock-up claim above — not the PDF
+itself, which a future reader may not have access to.
