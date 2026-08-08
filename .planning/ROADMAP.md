@@ -192,7 +192,7 @@ contracts those gaps sit alongside.
 
 **Requirements**: GAP-01, GAP-02, GAP-03, GAP-04, GAP-05, GAP-06, GAP-07
 **Depends on:** Phase 5
-**Plans:** 1/7 plans executed (4 waves — wave 1: plan 01; wave 2: plans 02, 03 in parallel; wave 3: plans 04, 05, 06 in parallel; wave 4: plan 07)
+**Plans:** 3/7 plans executed (4 waves — wave 1: plan 01; wave 2: plans 02, 03 in parallel; wave 3: plans 04, 05, 06 in parallel; wave 4: plan 07)
 
 Plans:
 **Wave 1**
@@ -201,8 +201,8 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 06-02-PLAN.md — POST /boards + per-user board-name uniqueness on create and rename (GAP-01)
-- [ ] 06-03-PLAN.md — DELETE column with cascade + new ColumnDeletedEvent and Avro schema (GAP-02)
+- [x] 06-02-PLAN.md — POST /boards + per-user board-name uniqueness on create and rename (GAP-01)
+- [x] 06-03-PLAN.md — DELETE column with cascade + new ColumnDeletedEvent and Avro schema (GAP-02)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
