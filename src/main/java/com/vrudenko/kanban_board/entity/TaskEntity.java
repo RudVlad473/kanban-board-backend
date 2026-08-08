@@ -9,7 +9,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
-import java.util.List;
+import java.util.Set;
 import lombok.*;
 
 @Entity
@@ -24,8 +24,15 @@ public class TaskEntity extends BaseEntity implements BaseTask {
     @JoinColumn(name = "column_id")
     private ColumnEntity column;
 
+    // Set, not List: see ColumnEntity.task's Javadoc-style comment -- Hibernate's
+    // MultipleBagFetchException fires when 2+ List (bag) collections are fetch-joined in one
+    // query at any nesting depth, so at most one collection in the board->column->task->subtasks
+    // chain (BoardEntity.column) can remain a List. Safe: SubtaskEntity's equals/hashCode
+    // includes only title/isCompleted/task, and task's own equals/hashCode is identity-based
+    // (commented out on TaskEntity), so hashing a SubtaskEntity during Set population never
+    // recurses.
     @OneToMany(mappedBy = "task")
-    private List<SubtaskEntity> subtasks;
+    private Set<SubtaskEntity> subtasks;
 
     @Column(nullable = false, length = ValidationConstants.MAX_TASK_TITLE_LENGTH)
     private String title;

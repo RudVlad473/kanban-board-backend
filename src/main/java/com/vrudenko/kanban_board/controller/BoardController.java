@@ -1,6 +1,7 @@
 package com.vrudenko.kanban_board.controller;
 
 import com.vrudenko.kanban_board.constant.ApiPaths;
+import com.vrudenko.kanban_board.dto.board_dto.BoardFullResponseDTO;
 import com.vrudenko.kanban_board.dto.board_dto.BoardResponseDTO;
 import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.board_dto.UpdateBoardRequestDTO;
@@ -74,5 +75,18 @@ public class BoardController {
             @PathVariable @NotBlank String boardId,
             @Valid @RequestBody SaveColumnRequestDTO dto) {
         return ResponseEntity.ok(boardService.addColumnByBoardId(userId, boardId, dto));
+    }
+
+    /**
+     * GAP-04: one nested read returning the board with its columns, each column with its tasks, and
+     * each task with its subtasks, in a single document -- see {@link
+     * com.vrudenko.kanban_board.service.BoardService#findFullById} for the ownership/transaction
+     * reasoning. Additive: the four existing flat GET endpoints above and on {@code
+     * ColumnController}/{@code TaskController}/{@code SubtaskController} are unchanged.
+     */
+    @GetMapping(ApiPaths.BOARD_ID + ApiPaths.FULL)
+    public ResponseEntity<BoardFullResponseDTO> findFullById(
+            @CurrentUserId String userId, @PathVariable @NotBlank String boardId) {
+        return ResponseEntity.ok(boardService.findFullById(userId, boardId));
     }
 }
