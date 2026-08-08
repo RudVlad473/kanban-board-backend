@@ -17,7 +17,8 @@ public sealed interface ActivityEvent
                 TaskMovedEvent,
                 TaskDeletedEvent,
                 BoardCreatedEvent,
-                ColumnCreatedEvent {
+                ColumnCreatedEvent,
+                ColumnDeletedEvent {
     UUID eventId();
 
     String userId();

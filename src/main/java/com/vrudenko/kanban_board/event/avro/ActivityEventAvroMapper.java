@@ -3,6 +3,7 @@ package com.vrudenko.kanban_board.event.avro;
 import com.vrudenko.kanban_board.event.ActivityEvent;
 import com.vrudenko.kanban_board.event.BoardCreatedEvent;
 import com.vrudenko.kanban_board.event.ColumnCreatedEvent;
+import com.vrudenko.kanban_board.event.ColumnDeletedEvent;
 import com.vrudenko.kanban_board.event.TaskCreatedEvent;
 import com.vrudenko.kanban_board.event.TaskDeletedEvent;
 import com.vrudenko.kanban_board.event.TaskMovedEvent;
@@ -83,11 +84,19 @@ public class ActivityEventAvroMapper {
                             .setColumnId(e.columnId())
                             .setTimestamp(e.timestamp())
                             .build();
+            case ColumnDeletedEvent e ->
+                    AvroColumnDeletedEvent.newBuilder()
+                            .setEventId(e.eventId())
+                            .setUserId(e.userId())
+                            .setBoardId(e.boardId())
+                            .setColumnId(e.columnId())
+                            .setTimestamp(e.timestamp())
+                            .build();
         };
     }
 
     /**
-     * Dispatches on the 5 generated Avro types. Unlike {@link #toAvro(ActivityEvent)}, this side
+     * Dispatches on the 6 generated Avro types. Unlike {@link #toAvro(ActivityEvent)}, this side
      * requires a {@code default} arm: {@link SpecificRecord} is an ordinary interface, not sealed,
      * so the compiler cannot prove exhaustiveness here the way it can for {@link ActivityEvent}.
      * The {@code default} arm throws rather than silently dropping an unrecognised record.
@@ -124,6 +133,13 @@ public class ActivityEventAvroMapper {
                             r.getEventId(), r.getUserId(), r.getBoardId(), r.getTimestamp());
             case AvroColumnCreatedEvent r ->
                     new ColumnCreatedEvent(
+                            r.getEventId(),
+                            r.getUserId(),
+                            r.getBoardId(),
+                            r.getColumnId(),
+                            r.getTimestamp());
+            case AvroColumnDeletedEvent r ->
+                    new ColumnDeletedEvent(
                             r.getEventId(),
                             r.getUserId(),
                             r.getBoardId(),

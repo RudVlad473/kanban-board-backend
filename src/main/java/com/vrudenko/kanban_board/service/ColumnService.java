@@ -10,6 +10,7 @@ import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
 import com.vrudenko.kanban_board.entity.BoardEntity;
 import com.vrudenko.kanban_board.entity.ColumnEntity;
 import com.vrudenko.kanban_board.event.ColumnCreatedEvent;
+import com.vrudenko.kanban_board.event.ColumnDeletedEvent;
 import com.vrudenko.kanban_board.mapper.ColumnMapper;
 import com.vrudenko.kanban_board.repository.ColumnRepository;
 import jakarta.persistence.EntityManager;
@@ -156,5 +157,34 @@ public class ColumnService {
                 columnRepository.findAllByBoardId(pair.getSecond().getId()));
     }
 
-    // TODO: implement delete logic
+    /**
+     * Deletes one column and cascades to its tasks/subtasks via the existing batched {@link
+     * TaskService#deleteAllByColumn} — mirroring the per-column loop in {@link
+     * #deleteAllByBoardId}, of which this is the single-column case. Deliberately carries no
+     * non-empty-column guard: once ownership passes, the delete always cascades unconditionally,
+     * matching {@link com.vrudenko.kanban_board.service.BoardService#deleteById}'s existing
+     * behaviour (D-07) — this is a deliberate choice, not an oversight to "fix" by adding a
+     * task-count check.
+     *
+     * <p>The ids below are captured into locals BEFORE the deletes run, on purpose — same reason as
+     * {@link TaskService#deleteById}'s Javadoc: once {@code columnRepository.deleteById(...)}
+     * executes there is nothing left to derive {@code boardId} from for the {@code
+     * ColumnDeletedEvent}, and the Kafka consumer runs with no security context and cannot look it
+     * up.
+     */
+    @Transactional
+    public void deleteById(String userId, String columnId) {
+        var column = findById(userId, columnId);
+
+        var deletedColumnId = column.getId();
+        var deletedBoardId = column.getBoard().getId();
+
+        taskService.deleteAllByColumn(column);
+
+        columnRepository.deleteById(deletedColumnId);
+
+        eventPublisher.publishEvent(
+                new ColumnDeletedEvent(
+                        UUID.randomUUID(), userId, deletedBoardId, deletedColumnId, Instant.now()));
+    }
 }

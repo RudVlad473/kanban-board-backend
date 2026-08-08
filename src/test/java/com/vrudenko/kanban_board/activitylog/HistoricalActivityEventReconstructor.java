@@ -7,6 +7,7 @@ import com.vrudenko.kanban_board.entity.ActivityLogEntity;
 import com.vrudenko.kanban_board.event.ActivityEvent;
 import com.vrudenko.kanban_board.event.BoardCreatedEvent;
 import com.vrudenko.kanban_board.event.ColumnCreatedEvent;
+import com.vrudenko.kanban_board.event.ColumnDeletedEvent;
 import com.vrudenko.kanban_board.event.TaskCreatedEvent;
 import com.vrudenko.kanban_board.event.TaskDeletedEvent;
 import com.vrudenko.kanban_board.event.TaskMovedEvent;
@@ -85,6 +86,13 @@ public class HistoricalActivityEventReconstructor {
                             row.getCreatedAt());
             case COLUMN_CREATED ->
                     new ColumnCreatedEvent(
+                            row.getEventId(),
+                            row.getUserId(),
+                            row.getBoardId(),
+                            requireKey(row, detail, "columnId"),
+                            row.getCreatedAt());
+            case COLUMN_DELETED ->
+                    new ColumnDeletedEvent(
                             row.getEventId(),
                             row.getUserId(),
                             row.getBoardId(),

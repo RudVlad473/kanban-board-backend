@@ -11,5 +11,6 @@ public enum ActivityAction {
     TASK_MOVED,
     TASK_DELETED,
     BOARD_CREATED,
-    COLUMN_CREATED
+    COLUMN_CREATED,
+    COLUMN_DELETED
 }

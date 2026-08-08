@@ -7,6 +7,7 @@ import com.vrudenko.kanban_board.entity.ActivityLogEntity;
 import com.vrudenko.kanban_board.event.ActivityEvent;
 import com.vrudenko.kanban_board.event.BoardCreatedEvent;
 import com.vrudenko.kanban_board.event.ColumnCreatedEvent;
+import com.vrudenko.kanban_board.event.ColumnDeletedEvent;
 import com.vrudenko.kanban_board.event.TaskCreatedEvent;
 import com.vrudenko.kanban_board.event.TaskDeletedEvent;
 import com.vrudenko.kanban_board.event.TaskMovedEvent;
@@ -102,6 +103,11 @@ public class ActivityLogConsumer {
                 var ids = new LinkedHashMap<String, String>();
                 ids.put("columnId", e.columnId());
                 yield new ActionAndDetailIds(ActivityAction.COLUMN_CREATED, ids);
+            }
+            case ColumnDeletedEvent e -> {
+                var ids = new LinkedHashMap<String, String>();
+                ids.put("columnId", e.columnId());
+                yield new ActionAndDetailIds(ActivityAction.COLUMN_DELETED, ids);
             }
         };
     }

@@ -3,6 +3,7 @@ package com.vrudenko.kanban_board.event.avro;
 import com.vrudenko.kanban_board.event.ActivityEvent;
 import com.vrudenko.kanban_board.event.BoardCreatedEvent;
 import com.vrudenko.kanban_board.event.ColumnCreatedEvent;
+import com.vrudenko.kanban_board.event.ColumnDeletedEvent;
 import com.vrudenko.kanban_board.event.TaskCreatedEvent;
 import com.vrudenko.kanban_board.event.TaskDeletedEvent;
 import com.vrudenko.kanban_board.event.TaskMovedEvent;
@@ -128,6 +129,22 @@ public class ActivityEventAvroMapperTest
             assertRoundTripEqual(event, roundTripped);
         }
 
+        @Test
+        void shouldRoundTrip_whenColumnDeletedEvent() {
+            // arrange
+            var event =
+                    new ColumnDeletedEvent(
+                            UUID.randomUUID(), "user-1", "board-1", "column-1", Instant.now());
+
+            // act
+            var avroRecord = mapper.toAvro(event);
+            var roundTripped = mapper.toDomain(avroRecord);
+
+            // assert
+            Assertions.assertThat(avroRecord).isInstanceOf(AvroColumnDeletedEvent.class);
+            assertRoundTripEqual(event, roundTripped);
+        }
+
         /**
          * Field-for-field comparison rather than a single record {@code equals()} call. Avro's
          * generated {@code setTimestamp()} truncates to {@link ChronoUnit#MILLIS} (see {@code
@@ -170,6 +187,10 @@ public class ActivityEventAvroMapperTest
                 }
                 case ColumnCreatedEvent o -> {
                     var r = (ColumnCreatedEvent) roundTripped;
+                    Assertions.assertThat(r.columnId()).isEqualTo(o.columnId());
+                }
+                case ColumnDeletedEvent o -> {
+                    var r = (ColumnDeletedEvent) roundTripped;
                     Assertions.assertThat(r.columnId()).isEqualTo(o.columnId());
                 }
             }
