@@ -8,7 +8,6 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
-import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -18,7 +17,19 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@EqualsAndHashCode(callSuper = false)
+// @EqualsAndHashCode(callSuper = false) -- deliberately disabled (matches TaskEntity's identical
+// precedent), not merely a version-field exclusion. GAP-04's TaskEntity.subtasks
+// (Set<SubtaskEntity>)
+// needs a hashCode/equals that safely and correctly identifies distinct rows during Hibernate's
+// HashSet population. The previous field-based equals/hashCode (title, isCompleted, task) could
+// NOT do that: two sibling subtasks under the same task with the same isCompleted value (the
+// common case -- every subtask defaults to false) collide unless their titles happen to differ,
+// which is not guaranteed. A real collision was observed directly: BoardFullReadE2ETest's
+// flat-vs-nested equivalence test lost a subtask this way before this fix. Falling back to
+// Object's identity-based equals/hashCode is safe here (and matches TaskEntity, which already
+// made this exact choice): Hibernate's session-level identity map guarantees the same Java
+// reference is reused for the same row within one persistence context, so identity equality is
+// correct for Set membership, not merely a workaround.
 @Table(name = "subtasks")
 public class SubtaskEntity extends BaseEntity implements BaseSubtask {
     @ManyToOne
@@ -32,7 +43,6 @@ public class SubtaskEntity extends BaseEntity implements BaseSubtask {
     private Boolean isCompleted = false;
 
     @Version
-    @EqualsAndHashCode.Exclude
     @Column(nullable = false)
     private Long version;
 }

@@ -2,7 +2,10 @@ package com.vrudenko.kanban_board.service;
 
 import com.vrudenko.kanban_board.AbstractAppTest;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
+import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
+import com.vrudenko.kanban_board.dto.subtask_dto.SaveSubtaskRequestDTO;
+import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
 import com.vrudenko.kanban_board.entity.BoardEntity;
 import com.vrudenko.kanban_board.exception.AppAccessDeniedException;
 import com.vrudenko.kanban_board.exception.AppDuplicateResourceException;
@@ -27,6 +30,8 @@ public class BoardServiceTest extends AbstractAppTest {
     @Autowired BoardMapper boardMapper;
 
     @Autowired ColumnService columnService;
+
+    @Autowired TaskService taskService;
 
     // addColumnByBoardId
     @Test
@@ -312,6 +317,93 @@ public class BoardServiceTest extends AbstractAppTest {
 
             // assert
             Assertions.assertThat(result.getName()).isEqualTo(board.getName());
+        }
+    }
+
+    // findFullById -- GAP-04's nested read must cost a statement count invariant to graph size,
+    // never 1+1+N+M. See docs/CODE_STYLE.md rule 4 for why countQueries()
+    // (getPrepareStatementCount)
+    // is the only sanctioned way to assert this.
+    @Nested
+    class FindFullByIdQueryCountTest {
+        private String buildBoardGraph(
+                String userId, int columnsCount, int tasksPerColumn, int subtasksPerTask) {
+            var board =
+                    userService.addBoardByUserId(
+                            userId,
+                            SaveBoardRequestDTO.builder()
+                                    .name(
+                                            dataFactory.getRandomWord(
+                                                    ValidationConstants.MIN_BOARD_NAME_LENGTH + 4))
+                                    .build());
+
+            for (int c = 0; c < columnsCount; c++) {
+                var column =
+                        boardService.addColumnByBoardId(
+                                userId,
+                                board.getId(),
+                                SaveColumnRequestDTO.builder()
+                                        .name(
+                                                dataFactory.getRandomWord(
+                                                        ValidationConstants.MIN_COLUMN_NAME_LENGTH))
+                                        .build());
+
+                for (int t = 0; t < tasksPerColumn; t++) {
+                    var task =
+                            columnService.addTaskByColumnId(
+                                    userId,
+                                    column.getId(),
+                                    SaveTaskRequestDTO.builder()
+                                            .title(
+                                                    dataFactory.getRandomWord(
+                                                            ValidationConstants
+                                                                            .MIN_TASK_TITLE_LENGTH
+                                                                    + 2))
+                                            .description(
+                                                    dataFactory.getRandomText(
+                                                            ValidationConstants
+                                                                    .MIN_TASK_DESCRIPTION_LENGTH))
+                                            .build());
+
+                    for (int s = 0; s < subtasksPerTask; s++) {
+                        taskService.addSubtaskByTaskId(
+                                userId,
+                                task.getId(),
+                                SaveSubtaskRequestDTO.builder()
+                                        .title(
+                                                dataFactory.getRandomText(
+                                                        ValidationConstants.MIN_SUBTASK_TITLE_LENGTH
+                                                                + 1))
+                                        .build());
+                    }
+                }
+            }
+
+            return board.getId();
+        }
+
+        @Test
+        void queryCountDoesNotScaleWithGraphSize() {
+            // arrange -- a small graph and a materially larger (doubled) one, both owned by the
+            // same user
+            var userId = getOwningUser().getId();
+            var smallBoardId = buildBoardGraph(userId, 2, 2, 2);
+            var largeBoardId = buildBoardGraph(userId, 4, 4, 4);
+
+            // act
+            var smallGraphQueryCount =
+                    countQueries(() -> boardService.findFullById(userId, smallBoardId));
+            var largeGraphQueryCount =
+                    countQueries(() -> boardService.findFullById(userId, largeBoardId));
+
+            // assert -- invariance: doubling columns/tasks/subtasks must not change the statement
+            // count. If the fetch join were ever removed and lazy loading took over instead, this
+            // would grow with graph size and fail -- falsified by hand during this plan's task 2:
+            // with the fetch join, both graphs cost 3 statements (2 from ownership verification's
+            // user+board lookups, 1 from the fetch join itself); swapping the fetch join for a
+            // plain findById made the count scale with graph size (9 vs. 23, observed), and the
+            // assertion correctly went red. See 06-05-SUMMARY.md.
+            Assertions.assertThat(largeGraphQueryCount).isEqualTo(smallGraphQueryCount);
         }
     }
 }

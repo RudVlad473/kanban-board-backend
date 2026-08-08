@@ -1,6 +1,7 @@
 package com.vrudenko.kanban_board.service;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.vrudenko.kanban_board.dto.board_dto.BoardFullResponseDTO;
 import com.vrudenko.kanban_board.dto.board_dto.BoardResponseDTO;
 import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.board_dto.UpdateBoardRequestDTO;
@@ -10,6 +11,8 @@ import com.vrudenko.kanban_board.entity.BoardEntity;
 import com.vrudenko.kanban_board.entity.UserEntity;
 import com.vrudenko.kanban_board.event.BoardCreatedEvent;
 import com.vrudenko.kanban_board.exception.AppDuplicateResourceException;
+import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
+import com.vrudenko.kanban_board.mapper.BoardFullMapper;
 import com.vrudenko.kanban_board.mapper.BoardMapper;
 import com.vrudenko.kanban_board.repository.BoardRepository;
 import jakarta.transaction.Transactional;
@@ -25,6 +28,8 @@ public class BoardService {
     @Autowired private BoardRepository boardRepository;
 
     @Autowired private BoardMapper boardMapper;
+
+    @Autowired private BoardFullMapper boardFullMapper;
 
     @Autowired private ColumnService columnService;
 
@@ -67,6 +72,29 @@ public class BoardService {
         var pair = ownershipVerifierService.verifyOwnershipOfBoard(userId, boardId);
 
         return pair.getSecond();
+    }
+
+    /**
+     * GAP-04's nested read ({@code GET /boards/{boardId}/full}) -- the one deliberate exception to
+     * this codebase's flat-DTO convention, justified in {@code 06-05-PLAN.md}'s {@code
+     * flat_dto_exception_justification} block. Ownership is verified FIRST via {@link #findById},
+     * exactly like every other method in this class, and the fetch-join query below runs against
+     * the <b>verified entity's own id</b> ({@code verifiedBoard.getId()}), never the raw {@code
+     * boardId} path parameter -- a nested response discloses strictly more than any flat one, so
+     * the ownership check matters more here, not less. The fetch join and the mapping both happen
+     * inside this {@code @Transactional} method, so the returned DTO tree is fully materialised
+     * before the transaction ends and no unfetched association is ever touched outside it.
+     */
+    @Transactional
+    public BoardFullResponseDTO findFullById(String userId, String boardId) {
+        var verifiedBoard = findById(userId, boardId);
+
+        var fullBoard = boardRepository.findByIdWithColumnsTasksAndSubtasks(verifiedBoard.getId());
+        if (fullBoard.isEmpty()) {
+            throw new AppEntityNotFoundException("Board");
+        }
+
+        return boardFullMapper.toBoardFullResponseDTO(fullBoard.get());
     }
 
     @Transactional
