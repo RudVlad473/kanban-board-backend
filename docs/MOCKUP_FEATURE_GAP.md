@@ -86,12 +86,14 @@ column with no notion of where in that column's task list it lands. No DTO in th
 codebase (`SaveTaskRequestDTO`, `UpdateTaskRequestDTO`, `SaveColumnRequestDTO`,
 `UpdateColumnRequestDTO`) carries an ordering/position/index field either, so
 reordering tasks within a column or reordering columns within a board is equally
-unsupported. A drag-and-drop-based reorder affordance is the conventional
+unsupported. A drag-and-drop-based reorder affordance would be the conventional
 expectation for this exact kind of Kanban board (task cards inside labeled
-columns, per MU-T1/MU-C1); it is purely visual, so it could not be text-confirmed
-and — per Appendix C — could not be visually confirmed either in this
-environment, so this specific line is a lower-confidence, convention-based
-inference rather than a page-cited observation. What would have to change: add a
+columns, per MU-T1/MU-C1), but visual rendering of the populated board and every
+plausible alternate route (Pages 3, 5, 24, 25) shows no grab handle, drag shadow,
+drop placeholder, or insertion indicator anywhere on a task card or column
+header — the design does not draw this affordance at all; the only task-movement
+mechanism shown anywhere in the mock-up set is the `Current Status` dropdown
+(MU-M2). What would have to change: add a
 position/index field to the task (and optionally column) entity and its DTOs, and
 extend `TaskMoveController`/`ColumnController` to accept and persist it.
 
@@ -260,7 +262,7 @@ affordance — see §3.5.)*
 | MU-S1 | Subtasks | View subtask checklist | Checklist of subtasks with a running progress count, e.g. "Subtasks (2 of 3)" | Page 5 |
 | MU-S2 | Subtasks | Add subtasks (task creation) | The Add New Task modal collects an initial list of subtask titles, each removable, plus `+ Add New Subtask` | Page 6 |
 | MU-S3 | Subtasks | Add/edit subtasks (task edit) | The Edit Task modal lists existing named subtasks (e.g. "Define user model," "Add auth endpoints") as editable rows, plus `+ Add New Subtask` | Page 7 |
-| MU-S4 | Subtasks | Toggle subtask completion | Clicking a subtask's checkbox updates the checklist's progress count on the View Task modal (interaction inferred from the counted state, e.g. "Subtasks (2 of 3)"; the checkbox's idle/hovered/completed visual states are separately cataloged on the design-system page) | Page 5 (states cataloged Page 1) |
+| MU-S4 | Subtasks | Toggle subtask completion | Visually confirmed. Clicking a subtask's checkbox toggles completion and updates the checklist's progress count (e.g. "Subtasks (2 of 3)") on the View Task modal. The idle checkbox is an empty square outline; the completed checkbox is a filled indigo/purple square with a white checkmark, paired with a strikethrough on the subtask's label text; the hovered state (design-system catalog) tints the row's background with a light lavender highlight while the checkbox itself stays unfilled. On the View Task modal (Page 5) both completed subtasks render the filled purple checkbox plus strikethrough label; the remaining incomplete subtask renders a plain outline checkbox with unstruck text | Page 1, Page 5 |
 
 ### Task movement and status
 
@@ -268,23 +270,23 @@ affordance — see §3.5.)*
 |----|---|---|---|---|
 | MU-M1 | Task movement and status | Column membership as status | A task's column (Todo/Doing/Done in the sample data) is the visual representation of its status | Page 3 |
 | MU-M2 | Task movement and status | Change status via dropdown | The View Task modal's `Current Status` dropdown lets a user change a task's status/column without a drag gesture; the same Todo/Doing/Done dropdown states are cataloged on the design-system page | Page 5 (states cataloged Page 1) |
-| MU-M3 | Task movement and status | Drag-and-drop reorder (unconfirmed) | Conventional Kanban affordance for reordering task cards within or between columns; purely visual, so it is a naming-convention inference rather than a page-cited observation — see Appendix C, no page could be visually rendered to confirm or refute it | *(not visually confirmable — see Appendix C)* |
+| MU-M3 | Task movement and status | Drag-and-drop reorder (visually confirmed absent) | Conventional Kanban affordance for reordering task cards within or between columns. Visually rendered and examined on the populated board (Page 3) and every modal that could plausibly carry a drag cue (the View Task modal, Page 5; the board options menu, Page 24; the task options menu, Page 25): no grab handle, drag shadow, drop placeholder, or insertion indicator is drawn on any task card or column header. The affordance is not present in this design — status change is handled exclusively via the `Current Status` dropdown (MU-M2) | Page 3, Page 5, Page 24, Page 25 |
 
 ### Navigation and layout
 
 | ID | Feature Area | Action | Description | Source |
 |----|---|---|---|---|
 | MU-N1 | Navigation and layout | Board header / top bar | Every board screen carries a consistent header (active board name, `+ Add New Task`) regardless of device tier | Page 2 |
-| MU-N2 | Navigation and layout | Sidebar vs. mobile board switcher | The persistent `Hide Sidebar`-controlled sidebar (Page 2, desktop/tablet-width pages) is not present in the mobile-width page text; a mobile page still surfaces `ALL BOARDS ( 3 )`, consistent with a different (e.g. modal/off-canvas) navigation pattern at that breakpoint rather than a persistent sidebar — text-inferred, not visually confirmed | Page 63 vs. Page 2 |
+| MU-N2 | Navigation and layout | Sidebar vs. mobile board switcher | PENDING-CALL-2 | PENDING-CALL-2 |
 | MU-N3 | Navigation and layout | Three responsive breakpoints | Structurally confirmed via each page's PDF `mediabox` (canvas) size rather than visual rendering (see Appendix C): 1440×1024 for pages 2-33 (desktop), 768×1024 for pages 34-53 (tablet), and 375-wide pages (heights 667 or 970) for pages 54-73 (mobile). **This corrects the phase's planning-time page-range table**, which had labeled 22-33 as "Tablet" and 34-53 as "further desktop states" — the actual width break falls at page 34, not page 22 | Pages 2, 34, 54 (representative) |
 
 ### Theming
 
 | ID | Feature Area | Action | Description | Source |
 |----|---|---|---|---|
-| MU-Th1 | Theming | Design-system color palette (light + dark) | Page 1 documents both a light palette (e.g. `F4F7FD`, `FFFFFF` backgrounds) and a dark palette (e.g. `000112`, `20212C` backgrounds) side by side, plus separately labeled "Light Version" / "Dark Version" catalogs of every interactive-element state (buttons, checkboxes, text fields, dropdowns) | Page 1 |
-| MU-Th2 | Theming | Duplicated desktop flow (light/dark pass) | The full 10-screen desktop board flow appears twice, as pages 2-11 and pages 12-21, with each page pair extracting text-identical content (e.g. page 2 and page 12 are both exactly 199 characters) — consistent with one pass per theme, though which pass is which theme could not be visually confirmed | Pages 2-21 |
-| MU-Th3 | Theming | Duplicated flow at other breakpoints | The same duplication pattern recurs within the mobile-width page range (pages 54-63 vs. 64-73 mirror each other in the same way), consistent with each device tier also getting a light and a dark pass | Pages 54-73 |
+| MU-Th1 | Theming | Design-system color palette (light + dark) | Visually confirmed. Page 1 documents both a light palette (e.g. `F4F7FD`, `FFFFFF` backgrounds) and a dark palette (e.g. `000112`, `20212C` backgrounds) side by side, plus separately labeled "Light Version" / "Dark Version" catalogs of every interactive-element state: the Light Version catalog (Button Primary/Secondary/Destructive Idle+Hover, Subtask Checkbox Idle/Hovered/Completed, Text Field Idle/Active/Error, Dropdown Idle/Active) sits on a white card; the Dark Version catalog, with the same set of states, sits on its own dark charcoal panel directly below it | Page 1 |
+| MU-Th2 | Theming | Duplicated desktop flow (light/dark pass) | PENDING-CALL-2 | Pages 2-21 |
+| MU-Th3 | Theming | Duplicated flow at other breakpoints | PENDING-CALL-2 | Pages 54-73 |
 
 ### Auth and account
 
@@ -369,6 +371,13 @@ and no endpoint reads or writes one. See Gap §1.5.*
 | BE-Act1 | Activity log | List board activity (paginated) | Returns a paginated `Page<ActivityLogResponseDTO>` of board events (`eventId`, `action`, `detail`, `userId`, `createdAt`) for the given board | `GET /boards/{boardId}/activity` — `ActivityController.findAllByBoardId` |
 
 ## Appendix C: Method and Limitations
+
+**PENDING-CALL-2** — this appendix is mid-rewrite as part of the two-call visual
+confirmation pass (`260808-ls7`). Task 1 rendered and reconciled 12 of the 20
+planned pages, resolving MU-Th1, MU-S4, and MU-M3 (see their rows in Appendix A
+and Gap §1.3 above). Task 2 renders the remaining 8 pages, resolves MU-Th2,
+MU-Th3, and MU-N2, and replaces the two paragraphs below — which still describe
+the pre-render state — with an honest account of what was rendered.
 
 **Coverage achieved.** All 73 pages of the mock-up PDF were read as text (78,808
 characters), giving complete textual coverage of every screen's labels, copy, and
