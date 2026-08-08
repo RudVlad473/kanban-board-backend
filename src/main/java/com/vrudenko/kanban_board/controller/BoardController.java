@@ -2,13 +2,17 @@ package com.vrudenko.kanban_board.controller;
 
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.dto.board_dto.BoardResponseDTO;
+import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.board_dto.UpdateBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.column_dto.ColumnResponseDTO;
 import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
 import com.vrudenko.kanban_board.security.CurrentUserId;
 import com.vrudenko.kanban_board.service.BoardService;
+import com.vrudenko.kanban_board.service.UserService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import java.net.URI;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -30,11 +34,22 @@ import org.springframework.web.bind.annotation.RestController;
 public class BoardController {
     @Autowired private BoardService boardService;
 
+    @Autowired private UserService userService;
+
     @GetMapping
     public ResponseEntity<List<BoardResponseDTO>> findAllByUserId(@CurrentUserId String userId) {
         var boards = this.boardService.findAllByUserId(userId);
 
         return ResponseEntity.ok(boards);
+    }
+
+    @PostMapping
+    public ResponseEntity<BoardResponseDTO> save(
+            @CurrentUserId String userId,
+            @Valid @RequestBody SaveBoardRequestDTO dto,
+            HttpServletRequest request) {
+        return ResponseEntity.created(URI.create(request.getRequestURI()))
+                .body(userService.addBoardByUserId(userId, dto));
     }
 
     @DeleteMapping(ApiPaths.BOARD_ID)
