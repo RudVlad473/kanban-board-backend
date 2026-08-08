@@ -54,6 +54,12 @@ public class TaskService {
         var task = taskMapper.fromSaveTaskRequestDTO(dto);
         task.setColumn(column);
 
+        // Supersedes TaskEntity.position's `= 0` field initialiser, which exists only so plan 01
+        // could ship a NOT NULL column safely. The real next-slot position is the current sibling
+        // count in this column — positions are kept contiguous from zero by every mutation in this
+        // class, so "current count" and "next append-at-end index" are the same number.
+        task.setPosition(Ints.checkedCast(taskRepository.countByColumnId(column.getId())));
+
         taskRepository.save(task);
 
         eventPublisher.publishEvent(
@@ -138,6 +144,18 @@ public class TaskService {
      * OwnershipVerifierService#verifyOwnershipOfColumn}, and rejects a move across board boundaries
      * (MOVE-03) before the version check — a wrong-board target is a request-shape problem
      * independent of concurrency, so 400 is the more specific signal to return first.
+     *
+     * <p><b>Renumbering contract (GAP-03/D-04):</b> {@code dto.getTargetPosition()} is nullable —
+     * {@code null} means "append at the end of the target column," preserving the pre-D-04 move
+     * behaviour for clients that never send it. Positions are kept contiguous from zero within
+     * their column at all times; a request for a position beyond the destination's sibling count is
+     * clamped to the end rather than rejected, so the natural drag-to-end gesture always succeeds.
+     * The bulk shifts below run as plain JPQL, which bypasses the persistence context — they
+     * deliberately never touch the moved task's own pre-shift position, so the still-managed {@code
+     * task} entity in this method never goes stale, and shifted siblings do NOT have their
+     * {@code @Version} bumped (bulk JPQL never loads them as managed entities): a client editing a
+     * sibling task should not be 409'd just because someone else reordered a different task in the
+     * same column.
      */
     @Transactional
     public TaskResponseDTO moveToColumn(String userId, String taskId, MoveTaskRequestDTO dto) {
@@ -159,7 +177,43 @@ public class TaskService {
                     "Task was modified by another request, please refetch.");
         }
 
+        var oldPosition = task.getPosition();
+        var targetColumnId = targetColumn.getId();
+        var sameColumn = sourceColumnId.equals(targetColumnId);
+
+        // The destination's current sibling count already includes the moving task when the move
+        // is within the same column (it hasn't left yet), so the highest valid target index is
+        // count - 1 there, versus count (a genuine new slot) when moving across columns.
+        var destinationSiblingCount =
+                Ints.checkedCast(taskRepository.countByColumnId(targetColumnId));
+        var maxValidPosition = sameColumn ? destinationSiblingCount - 1 : destinationSiblingCount;
+        var requestedPosition = dto.getTargetPosition();
+        var effectivePosition =
+                requestedPosition == null
+                        ? maxValidPosition
+                        : Math.min(requestedPosition, maxValidPosition);
+
+        if (sameColumn) {
+            // Same-column reorder: steps 2 and 3 of the plan's cross-column recipe compose into
+            // one signed shift over the range strictly between the old and new position, excluding
+            // the moved task's own oldPosition on both ends so its still-managed row is never
+            // touched by the bulk statement.
+            if (effectivePosition < oldPosition) {
+                taskRepository.shiftPositions(
+                        targetColumnId, 1, effectivePosition, oldPosition - 1);
+            } else if (effectivePosition > oldPosition) {
+                taskRepository.shiftPositions(
+                        targetColumnId, -1, oldPosition + 1, effectivePosition);
+            }
+        } else {
+            // Close the gap left in the source column.
+            taskRepository.shiftPositions(sourceColumnId, -1, oldPosition + 1, Integer.MAX_VALUE);
+            // Open the slot in the destination column.
+            taskRepository.shiftPositions(targetColumnId, 1, effectivePosition, Integer.MAX_VALUE);
+        }
+
         task.setColumn(targetColumn);
+        task.setPosition(effectivePosition);
         taskRepository.save(task);
 
         // Same reason as updateById: force the UPDATE (and version increment) to happen now, so
