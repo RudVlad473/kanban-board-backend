@@ -4,6 +4,8 @@ import com.vrudenko.kanban_board.AbstractAppTest;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.subtask_dto.SaveSubtaskRequestDTO;
 import com.vrudenko.kanban_board.dto.subtask_dto.SubtaskResponseDTO;
+import com.vrudenko.kanban_board.dto.task_dto.MoveTaskRequestDTO;
+import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
 import com.vrudenko.kanban_board.dto.task_dto.UpdateTaskRequestDTO;
 import com.vrudenko.kanban_board.entity.TaskEntity;
@@ -21,6 +23,8 @@ public class TaskServiceTest extends AbstractAppTest {
     @Autowired TaskService taskService;
 
     @Autowired SubtaskService subtaskService;
+
+    @Autowired ColumnService columnService;
 
     // Guards against the N+1 previously in deleteAllByColumnId: it used to re-verify ownership
     // (task -> column -> board -> user) and issue a separate delete per task, so query count grew
@@ -48,6 +52,66 @@ public class TaskServiceTest extends AbstractAppTest {
 
             // Assert
             Assertions.assertThat(populatedColumnQueryCount).isEqualTo(emptyColumnQueryCount + 2);
+        }
+    }
+
+    // Proves this plan's central design claim (GAP-03): the bulk-shift renumbering mechanism
+    // makes a move's statement count constant, not linear in the number of siblings in the source
+    // column. Uses countQueries, the sanctioned prepared-statement counter (docs/CODE_STYLE.md
+    // rule 4) — the weaker, HQL/JPQL-only counter it deliberately avoids misses findById() lookups
+    // entirely.
+    @Nested
+    class MoveToColumnQueryCountTest {
+        @Test
+        void queryCountDoesNotScaleWithSourceColumnSize() {
+            // arrange
+            final var userId = getOwningUser().getId();
+
+            var smallSourceColumn = mockColumns.get(1);
+            var smallTask =
+                    taskService.save(
+                            SaveTaskRequestDTO.builder()
+                                    .title(
+                                            dataFactory.getRandomWord(
+                                                    ValidationConstants.MIN_TASK_TITLE_LENGTH + 2))
+                                    .description(
+                                            dataFactory.getRandomText(
+                                                    ValidationConstants
+                                                            .MIN_TASK_DESCRIPTION_LENGTH))
+                                    .build(),
+                            columnService.findById(userId, smallSourceColumn.getId()));
+
+            // mockPopulatedColumn already holds MOCK_TASKS_AMOUNT + 1 tasks — a noticeably larger
+            // source column than the single-task one above.
+            var largeTask = mockTasks.getFirst();
+
+            var smallDestination = mockColumns.get(2);
+            var largeDestination = mockColumns.get(3);
+
+            // act
+            var smallMoveQueryCount =
+                    countQueries(
+                            () ->
+                                    taskService.moveToColumn(
+                                            userId,
+                                            smallTask.getId(),
+                                            MoveTaskRequestDTO.builder()
+                                                    .targetColumnId(smallDestination.getId())
+                                                    .version(smallTask.getVersion())
+                                                    .build()));
+            var largeMoveQueryCount =
+                    countQueries(
+                            () ->
+                                    taskService.moveToColumn(
+                                            userId,
+                                            largeTask.getId(),
+                                            MoveTaskRequestDTO.builder()
+                                                    .targetColumnId(largeDestination.getId())
+                                                    .version(largeTask.getVersion())
+                                                    .build()));
+
+            // assert
+            Assertions.assertThat(largeMoveQueryCount).isEqualTo(smallMoveQueryCount);
         }
     }
 

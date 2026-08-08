@@ -186,6 +186,7 @@ class TaskControllerTest extends AbstractAppTest {
                             .title(updateDto.getTitle())
                             .description(updateDto.getDescription())
                             .version(mockPopulatedTask.getVersion() + 1)
+                            .position(mockPopulatedTask.getPosition())
                             .build(); // Columns preservation would need to be checked
             // differently
             // or

@@ -8,7 +8,15 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface TaskRepository extends JpaRepository<TaskEntity, String> {
-    List<TaskEntity> findAllByColumnId(String columnId);
+    // Explicit @Query (rather than a derived findAllByColumnIdOrderByPositionAscIdAsc rename) so
+    // every existing call site keeps compiling unchanged. The (position, id) two-key sort is a
+    // total order, not decoration: ids are creation-ordered ULIDs, so ties on `position` (see
+    // TaskService#moveToColumn's Javadoc on the accepted concurrent-insert race) still resolve
+    // deterministically instead of falling back to undefined database row order. Same precedent as
+    // the activity feed's own two-key (createdAt, id) sort (Phase 3 Plan 03).
+    @Query(
+            "select t from TaskEntity t where t.column.id = :columnId order by t.position asc, t.id asc")
+    List<TaskEntity> findAllByColumnId(@Param("columnId") String columnId);
 
     // countByColumnId doubles as the "next position" probe for TaskService.save: since positions
     // are kept contiguous from zero by every mutation in this class, the current sibling count is

@@ -198,6 +198,7 @@ public class ColumnControllerTest extends AbstractAppTest {
                             .id(columnId)
                             .name(updateDto.getName())
                             .version(mockPopulatedColumn.getVersion() + 1)
+                            .position(mockPopulatedColumn.getPosition())
                             .build();
 
             // Act

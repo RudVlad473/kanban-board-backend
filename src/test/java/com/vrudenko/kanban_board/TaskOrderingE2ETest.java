@@ -36,6 +36,7 @@ public class TaskOrderingE2ETest extends AbstractAppE2ETest {
 
     @Autowired private TaskRepository taskRepository;
 
+    // POST endpoint (add task to column): ColumnController's mapping, no /tasks suffix.
     private String getColumnTasksUrl(String columnId) {
         return ApiPaths.BOARDS
                 + "/"
@@ -43,6 +44,11 @@ public class TaskOrderingE2ETest extends AbstractAppE2ETest {
                 + ApiPaths.COLUMNS
                 + "/"
                 + columnId;
+    }
+
+    // GET endpoint (list tasks in column): TaskController's own, differently-nested mapping.
+    private String getListTasksUrl(String columnId) {
+        return getColumnTasksUrl(columnId) + ApiPaths.TASKS;
     }
 
     private String getBoardColumnsUrl(String boardId) {
@@ -370,12 +376,62 @@ public class TaskOrderingE2ETest extends AbstractAppE2ETest {
             createTaskInColumn(cookie, column.getId());
             createTaskInColumn(cookie, column.getId());
 
-            // act
-            var firstRead = orderedTaskIds(column.getId());
-            var secondRead = orderedTaskIds(column.getId());
+            // act — reads TaskRepository.findAllByColumnId directly, with no additional sort
+            // applied by this test: the (position, id) order must come from the production query
+            // itself, not from a test-side re-sort, or a future change that drops the id tiebreak
+            // would pass here undetected.
+            var firstRead =
+                    taskRepository.findAllByColumnId(column.getId()).stream()
+                            .map(TaskEntity::getId)
+                            .toList();
+            var secondRead =
+                    taskRepository.findAllByColumnId(column.getId()).stream()
+                            .map(TaskEntity::getId)
+                            .toList();
 
             // assert
             Assertions.assertThat(firstRead).isEqualTo(secondRead);
+        }
+
+        @Test
+        void shouldReturnTasksSortedByPosition_overHttp() {
+            // arrange
+            var cookie = signin();
+            var column = createEmptyColumn(cookie);
+            var first = createTaskInColumn(cookie, column.getId());
+            var second = createTaskInColumn(cookie, column.getId());
+            var third = createTaskInColumn(cookie, column.getId());
+
+            var moveDto =
+                    MoveTaskRequestDTO.builder()
+                            .targetColumnId(column.getId())
+                            .version(third.getVersion())
+                            .targetPosition(0)
+                            .build();
+            given().cookie(cookie.getFirst(), cookie.getSecond())
+                    .contentType(ContentType.JSON)
+                    .body(moveDto)
+                    .when()
+                    .patch(getMoveUrl(third.getId()))
+                    .then()
+                    .extract();
+
+            // act
+            var response =
+                    given().cookie(cookie.getFirst(), cookie.getSecond())
+                            .when()
+                            .get(getListTasksUrl(column.getId()))
+                            .then()
+                            .extract()
+                            .as(TaskResponseDTO[].class);
+
+            // assert
+            Assertions.assertThat(response)
+                    .extracting(TaskResponseDTO::getId)
+                    .containsExactly(third.getId(), first.getId(), second.getId());
+            Assertions.assertThat(response)
+                    .extracting(TaskResponseDTO::getPosition)
+                    .containsExactly(0, 1, 2);
         }
     }
 }

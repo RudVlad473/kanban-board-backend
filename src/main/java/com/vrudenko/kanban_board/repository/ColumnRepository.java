@@ -8,7 +8,12 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface ColumnRepository extends JpaRepository<ColumnEntity, String> {
-    List<ColumnEntity> findAllByBoardId(String boardId);
+    // Explicit @Query (rather than a derived-name rename) so every existing call site keeps
+    // compiling unchanged — see TaskRepository#findAllByColumnId's Javadoc for the full rationale
+    // behind the (position, id) two-key total order.
+    @Query(
+            "select c from ColumnEntity c where c.board.id = :boardId order by c.position asc, c.id asc")
+    List<ColumnEntity> findAllByBoardId(@Param("boardId") String boardId);
 
     void deleteAllByBoardId(String boardId);
 
