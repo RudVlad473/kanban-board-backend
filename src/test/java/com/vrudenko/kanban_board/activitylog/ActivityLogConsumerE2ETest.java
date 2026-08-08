@@ -4,6 +4,7 @@ import com.vrudenko.kanban_board.entity.ActivityAction;
 import com.vrudenko.kanban_board.entity.ActivityLogEntity;
 import com.vrudenko.kanban_board.event.BoardCreatedEvent;
 import com.vrudenko.kanban_board.event.ColumnCreatedEvent;
+import com.vrudenko.kanban_board.event.ColumnDeletedEvent;
 import com.vrudenko.kanban_board.event.TaskCreatedEvent;
 import com.vrudenko.kanban_board.event.TaskDeletedEvent;
 import com.vrudenko.kanban_board.event.TaskMovedEvent;
@@ -217,6 +218,41 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
                                         .isEqualTo(ActivityAction.COLUMN_CREATED);
                                 Assertions.assertThat(row.getDetail())
                                         .isEqualTo("{\"columnId\":\"" + columnId + "\"}");
+                            });
+        }
+
+        @Test
+        void shouldPersistColumnDeleted_withColumnIdDetailAndEventTimestamp() throws Exception {
+            // arrange
+            var eventId = UUID.randomUUID();
+            var columnId = randomId();
+            var timestamp = Instant.now();
+            var event =
+                    new ColumnDeletedEvent(eventId, randomId(), randomId(), columnId, timestamp);
+
+            // act
+            sendAndAwaitAck(event);
+
+            // assert
+            Awaitility.await()
+                    .atMost(Duration.ofSeconds(30))
+                    .untilAsserted(
+                            () -> {
+                                var row = findByEventId(eventId);
+                                Assertions.assertThat(row.getAction())
+                                        .isEqualTo(ActivityAction.COLUMN_DELETED);
+                                Assertions.assertThat(row.getDetail())
+                                        .isEqualTo("{\"columnId\":\"" + columnId + "\"}");
+                                // Proves the row's timestamp comes from the event, not a fresh
+                                // clock reading taken by the consumer (see
+                                // ActivityLogConsumer.onActivityEvent's Javadoc). Millisecond
+                                // tolerance because Avro's timestamp-millis logical type
+                                // truncates by design (see
+                                // shouldPopulateAllColumns_whenBoardCreatedEventIsSparsest below
+                                // for the fuller explanation of this same tolerance).
+                                Assertions.assertThat(row.getCreatedAt())
+                                        .isCloseTo(
+                                                timestamp, Assertions.within(1, ChronoUnit.MILLIS));
                             });
         }
 

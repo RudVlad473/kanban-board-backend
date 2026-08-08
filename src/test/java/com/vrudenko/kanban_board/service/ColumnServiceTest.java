@@ -2,6 +2,7 @@ package com.vrudenko.kanban_board.service;
 
 import com.vrudenko.kanban_board.AbstractAppTest;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
+import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
 import com.vrudenko.kanban_board.entity.ColumnEntity;
 import com.vrudenko.kanban_board.entity.TaskEntity;
@@ -19,6 +20,8 @@ public class ColumnServiceTest extends AbstractAppTest {
     @Autowired ColumnService columnService;
 
     @Autowired TaskService taskService;
+
+    @Autowired BoardService boardService;
 
     @Nested
     class DeleteAllByBoardIdTest {
@@ -290,6 +293,107 @@ public class ColumnServiceTest extends AbstractAppTest {
                             Assertions.catchException(
                                     () -> taskService.findAllByColumnId(userId, columnId)))
                     .isInstanceOf(AppAccessDeniedException.class);
+        }
+    }
+
+    @Nested
+    class DeleteByIdTest {
+        @Test
+        void shouldThrow_whenColumnDoesntExist() {
+            // arrange
+            var userId = getOwningUser().getId();
+            var columnId = UUID.randomUUID().toString();
+
+            // act
+            var exception =
+                    Assertions.catchException(() -> columnService.deleteById(userId, columnId));
+
+            // assert
+            Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
+        }
+
+        @Test
+        void shouldThrowAndDeleteNothing_whenUserDoesntOwnTheColumn() {
+            // arrange
+            var userId = getNoBoardsUser().getId();
+            var columnId = mockPopulatedColumn.getId();
+
+            // act
+            var exception =
+                    Assertions.catchException(() -> columnService.deleteById(userId, columnId));
+
+            // assert
+            Assertions.assertThat(exception).isInstanceOf(AppAccessDeniedException.class);
+            Assertions.assertThat(columnService.findById(getOwningUser().getId(), columnId))
+                    .isInstanceOf(ColumnEntity.class);
+        }
+
+        /**
+         * Proves the cascade ({@code TaskService#deleteAllByColumn}) is a fixed number of bulk
+         * statements regardless of how many tasks live in the column being deleted — the property
+         * batching exists to provide, and nothing before this test exercised it at the
+         * column-delete entry point.
+         */
+        @Test
+        void shouldCostSameQueryCount_regardlessOfTaskCountInColumn() {
+            // arrange
+            var userId = getOwningUser().getId();
+            var board = boardService.findById(userId, mockPopulatedBoard.getId());
+
+            var smallColumn =
+                    columnService.save(
+                            SaveColumnRequestDTO.builder()
+                                    .name(
+                                            dataFactory.getRandomWord(
+                                                    ValidationConstants.MIN_COLUMN_NAME_LENGTH))
+                                    .build(),
+                            board);
+            for (int i = 0; i < 2; i++) {
+                columnService.addTaskByColumnId(
+                        userId,
+                        smallColumn.getId(),
+                        SaveTaskRequestDTO.builder()
+                                .title(
+                                        dataFactory.getRandomWord(
+                                                ValidationConstants.MIN_TASK_TITLE_LENGTH + 2))
+                                .description(
+                                        dataFactory.getRandomText(
+                                                ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH,
+                                                ValidationConstants.MAX_TASK_DESCRIPTION_LENGTH))
+                                .build());
+            }
+
+            var largeColumn =
+                    columnService.save(
+                            SaveColumnRequestDTO.builder()
+                                    .name(
+                                            dataFactory.getRandomWord(
+                                                    ValidationConstants.MIN_COLUMN_NAME_LENGTH))
+                                    .build(),
+                            board);
+            for (int i = 0; i < 8; i++) {
+                columnService.addTaskByColumnId(
+                        userId,
+                        largeColumn.getId(),
+                        SaveTaskRequestDTO.builder()
+                                .title(
+                                        dataFactory.getRandomWord(
+                                                ValidationConstants.MIN_TASK_TITLE_LENGTH + 2))
+                                .description(
+                                        dataFactory.getRandomText(
+                                                ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH,
+                                                ValidationConstants.MAX_TASK_DESCRIPTION_LENGTH))
+                                .build());
+            }
+
+            // act
+            var smallColumnQueryCount =
+                    countQueries(() -> columnService.deleteById(userId, smallColumn.getId()));
+            var largeColumnQueryCount =
+                    countQueries(() -> columnService.deleteById(userId, largeColumn.getId()));
+
+            // assert
+            Assertions.assertThat(largeColumnQueryCount).isEqualTo(smallColumnQueryCount);
         }
     }
 }
