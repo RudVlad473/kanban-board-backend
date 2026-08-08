@@ -89,6 +89,14 @@ The failure-path decisions are the substance here:
   `DataIntegrityViolationException` — but only absorbs it after re-confirming the row is actually
   present under that `eventId`. A constraint violation from anything else (a `NOT NULL` on a
   malformed event) is rethrown so it reaches the retry path instead of vanishing.
+- **`eventId` is a time-ordered string, not a random UUID.** `EventIdGenerator` delegates to this
+  project's existing `RandFlakeGenerator` (the same algorithm behind every entity primary key), so
+  the dedupe key gets index locality on `uk_activity_log_event_id` for free instead of scattering
+  inserts randomly across the B-tree. This was a deliberate, one-way change (v1.2 Phase 6, GAP-07):
+  the `activity_log.event_id` column moved from `uuid` to `varchar`, existing rows keep their old
+  UUID string form, and `GET /boards/{boardId}/activity`'s `eventId` field changed its JSON type on
+  an already-shipped endpoint — a documented breaking change with zero blast radius today, since no
+  frontend consumes it yet.
 - **Poison messages are isolated with their bytes intact.** `DefaultErrorHandler` retries three
   times at 1s, then dead-letters to `kanban.activity.dlt`. The dead-letter path uses its own
   byte-preserving `KafkaTemplate` — routing a raw `byte[]` payload through the application's normal
