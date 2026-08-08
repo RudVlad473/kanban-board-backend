@@ -192,12 +192,12 @@ contracts those gaps sit alongside.
 
 **Requirements**: GAP-01, GAP-02, GAP-03, GAP-04, GAP-05, GAP-06, GAP-07
 **Depends on:** Phase 5
-**Plans:** 7 plans (4 waves — wave 1: plan 01; wave 2: plans 02, 03 in parallel; wave 3: plans 04, 05, 06 in parallel; wave 4: plan 07)
+**Plans:** 1/7 plans executed (4 waves — wave 1: plan 01; wave 2: plans 02, 03 in parallel; wave 3: plans 04, 05, 06 in parallel; wave 4: plan 07)
 
 Plans:
 **Wave 1**
 
-- [ ] 06-01-PLAN.md — [BLOCKING] Flyway V5 + all new entity fields + ApiPaths constants, proven by subtask optimistic locking (GAP-06, schema half of GAP-03/GAP-05)
+- [x] 06-01-PLAN.md — [BLOCKING] Flyway V5 + all new entity fields + ApiPaths constants, proven by subtask optimistic locking (GAP-06, schema half of GAP-03/GAP-05)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

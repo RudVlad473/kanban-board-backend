@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Infra Migration & Schema Registry
-current_phase: 04.2
-current_phase_name: Testcontainers Postgres, drop H2
-status: complete
+current_phase: 6
+current_phase_name: Mock-up Feature Gap Closure
+status: executing
 stopped_at: Phase 6 context gathered
-last_updated: "2026-08-08T15:45:39.333Z"
+last_updated: "2026-08-08T15:48:19.821Z"
 last_activity: 2026-08-08
 last_activity_desc: "Completed quick task 260808-ls7: Redo the visual PDF confirmation pass for the mockup feature gap doc now that poppler is installed"
 progress:
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-03)
 
 **Core value:** Redeploy the app on a cost-guarded, always-free/near-free stack (Oracle Cloud + Neon + self-hosted Redpanda) after the AWS EC2/RDS deletion, and add a Schema Registry (Avro) in front of the Kafka activity-log pipeline to close the schema-evolution risk flagged during v1.1.
-**Current focus:** Phase 04.2 — Testcontainers Postgres, drop H2 (inserted ahead of Phase 5 so the Flyway V1–V4 migrations are CI-exercised before the Neon cutover; Phase 5 resumes after)
+**Current focus:** Phase 6 — Mock-up Feature Gap Closure
 
 ## Current Position
 
-Phase: 04.2 — Testcontainers Postgres, drop H2 (INSERTED)
-Plan: 3 of 3
-Status: Ready to execute
-Last activity: 2026-08-08 - Completed quick task 260808-ls7: Redo the visual PDF confirmation pass for the mockup feature gap doc now that poppler is installed
+Phase: 6 (Mock-up Feature Gap Closure) — EXECUTING
+Plan: 1 of 7
+Status: Executing Phase 6
+Last activity: 2026-08-08 — Phase 6 execution started
 
 Progress: [██████░░░░] 63% (Phase 04.2)
 
@@ -140,6 +140,7 @@ Recent decisions affecting current work:
 - [minor] Create a sequence diagram documenting the full system flow — deferred until all functional epics of the backend modernization plan are complete and the project is ready for frontend hand-off. See `.planning/todos/pending/2026-08-01-create-sequence-diagram-documenting-full-system-flow-for-fro.md`.
 - [minor] Bump Java version from 21 to 25 (current LTS) — build.gradle toolchain, Dockerfile (both stages), and CI `java-version` all pinned to 21; not urgent (21 LTS supported until ~2028), but worth doing proactively. See `.planning/todos/pending/2026-08-01-bump-java-version-from-21-to-25-current-lts.md`.
 - [minor] Account for schema evolution risk when changing ActivityEvent shapes — a rolling deploy that renames/retypes an event field while old-shape messages are still unconsumed can dead-letter valid (non-poison) messages; Kafka itself enforces no schema. Directly addressed by v1.2 Phase 4 (Schema Registry) — expect this todo to close at that phase's transition. See `.planning/todos/pending/2026-08-01-account-for-schema-evolution-risk-when-changing-activityeven.md`.
+- [minor] Restructure test folder — separate setup/fixture classes (`AbstractAppTest` and friends) from actual test classes, and evaluate merging closely related test files with `@Nested` instead of one-class-per-file. Evaluation first, not a blanket reorg. See `.planning/todos/pending/2026-08-08-restructure-test-folder-separate-setup-from-tests-evaluate-n.md`.
 - [minor] Enable virtual threads in Spring Boot config (`spring.threads.virtual.enabled=true`) — evaluate JDBC/Hibernate and Spring Session JDBC blocking-call pinning risk first. See `.planning/todos/pending/2026-08-02-enable-virtual-threads-in-spring-boot-config.md`.
 - [minor] Use a Snowflake ID generator for activity log events (`eventId`) instead of UUID — for index locality and time-ordering; see also the general note about adopting this as the project's default ID-generation strategy. See `.planning/todos/pending/2026-08-02-use-snowflake-id-generator-for-activity-log-events.md`.
 - [minor] Add a dependency vulnerability scan (OWASP dependency-check or similar) — no scan exists today despite several manually-pinned third-party libs. See `.planning/todos/pending/2026-08-03-add-dependency-vulnerability-scan.md`.

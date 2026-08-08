@@ -2,29 +2,25 @@
 # Auto-installed: build.gradle points core.hooksPath at .githooks/ on any ./gradlew
 # invocation, so this file needs no per-clone setup. Keep it mode 100755 in the
 # index - git silently skips a non-executable hook on Linux and macOS.
-# Part 1 Assign all staged files to a variable
-stagedFiles=$(git diff --staged --name-only)
-echo "Running spotlessApply. Formatting code..."
+#
+# Gate: formatting is correct, the project compiles, and the non-E2E test suite
+# passes. Does not auto-fix anything - a formatting violation fails the commit
+# with instructions instead of silently rewriting staged files.
+echo "Checking formatting..."
+./gradlew spotlessCheck < /dev/null
+if [ $? -ne 0 ]; then
+  echo "Formatting check failed. Run ./gradlew spotlessApply and re-commit."
+  exit 1
+fi
 
-# Part 2 Apply the formatting
-./gradlew spotlessApply
-
-# Part 3 Re-add staged files
-for file in $stagedFiles; do
-  if test -f "$file"; then
-    git add $file
-  fi
-done
-
-# Part 4 Run the fast local test gate: the `fastTest` Gradle task (build.gradle)
-# runs everything except the Testcontainers-backed E2E suite (every E2E class is
-# suffixed E2ETest). The default `test` task is untouched, so `./gradlew test` run
-# directly (and in CI) still executes everything, E2E included. Still runs
+# `fastTest` (build.gradle) depends on compileJava/compileTestJava, so this single
+# invocation covers both "project compiles" and "non-E2E tests pass". E2E classes
+# (suffixed E2ETest) are excluded - see build.gradle's fastTest task. Still runs
 # ArchUnit's LayeringArchTest plus all unit/service tests, so ownership-layering
 # and Error Prone regressions are caught before the commit lands, not first in CI.
-echo "Running fast test suite (excluding E2E tests)..."
-./gradlew fastTest
+echo "Compiling and running non-E2E tests..."
+./gradlew fastTest < /dev/null
 if [ $? -ne 0 ]; then
-  echo "Tests failed. Commit aborted."
+  echo "Compile or test failure. Commit aborted."
   exit 1
 fi
