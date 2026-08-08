@@ -3,7 +3,9 @@ package com.vrudenko.kanban_board.service;
 import com.vrudenko.kanban_board.AbstractAppTest;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
+import com.vrudenko.kanban_board.dto.user_dto.UpdateThemeRequestDTO;
 import com.vrudenko.kanban_board.dto.user_dto.UserResponseDTO;
+import com.vrudenko.kanban_board.entity.ThemePreference;
 import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
 import java.util.ArrayList;
 import java.util.List;
@@ -14,6 +16,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 @SpringBootTest
 public class UserServiceTest extends AbstractAppTest {
@@ -22,6 +25,8 @@ public class UserServiceTest extends AbstractAppTest {
     @Autowired UserService userService;
 
     @Autowired BoardService boardService;
+
+    @Autowired JdbcTemplate jdbcTemplate;
 
     List<UserResponseDTO> mockUsers = new ArrayList<>();
 
@@ -169,6 +174,30 @@ public class UserServiceTest extends AbstractAppTest {
             Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
             Assertions.assertThat(boardCountForUserAfterAddition)
                     .isEqualTo(boardCountForUserBeforeAddition);
+        }
+    }
+
+    @Nested
+    class UpdateTheme {
+        @Test
+        void shouldPersistThemeAsEnumStringForm_whenUpdatingTheme() {
+            // Arrange
+            var userId = getOwningUser().getId();
+            var dto = UpdateThemeRequestDTO.builder().theme(ThemePreference.DARK).build();
+
+            // Act
+            userService.updateTheme(userId, dto);
+
+            // Assert: the column holds the enum's STRING form (UserEntity.theme is
+            // @Enumerated(EnumType.STRING)), not an ordinal integer -- a future reordering of
+            // ThemePreference's members would silently corrupt an ordinal-mapped column without
+            // this check, and this is invisible at the HTTP/Jackson layer since Jackson
+            // serializes an enum as its name either way.
+            var storedTheme =
+                    jdbcTemplate.queryForObject(
+                            "SELECT theme FROM users WHERE id = ?", String.class, userId);
+
+            Assertions.assertThat(storedTheme).isEqualTo("DARK");
         }
     }
 }
