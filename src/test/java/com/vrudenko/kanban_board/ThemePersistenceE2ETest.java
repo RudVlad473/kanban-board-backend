@@ -3,6 +3,8 @@ package com.vrudenko.kanban_board;
 import static io.restassured.RestAssured.given;
 
 import com.vrudenko.kanban_board.constant.ApiPaths;
+import com.vrudenko.kanban_board.constant.ValidationConstants;
+import com.vrudenko.kanban_board.dto.user_dto.SigninRequestDTO;
 import com.vrudenko.kanban_board.dto.user_dto.UpdateThemeRequestDTO;
 import com.vrudenko.kanban_board.dto.user_dto.UserResponseDTO;
 import com.vrudenko.kanban_board.entity.ThemePreference;
@@ -178,6 +180,104 @@ public class ThemePersistenceE2ETest extends AbstractAppE2ETest {
 
             // assert: see GetTheme.shouldReturnForbidden_whenNotAuthenticated for why 403, not 401
             Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.FORBIDDEN.value());
+        }
+
+        /**
+         * The load-bearing case in this plan: it is the one test that actually distinguishes
+         * server-side persistence (D-10) from a client-side or {@code HttpSession}-scoped
+         * preference. A test that only PUTs then GETs within one session would pass against a
+         * session-scoped implementation too and would prove nothing about the requirement -- the
+         * logout + fresh signin in between is what makes this a real round trip through the {@code
+         * users} table.
+         */
+        @Test
+        void shouldReturnDark_whenLoggingOutAndSigningInAgainAfterWritingDark() {
+            // arrange
+            Pair<String, String> firstCookie = signin();
+            var dto = UpdateThemeRequestDTO.builder().theme(ThemePreference.DARK).build();
+
+            // act: write DARK, then log out (clears the session server-side)
+            given().cookie(firstCookie.getFirst(), firstCookie.getSecond())
+                    .contentType(ContentType.JSON)
+                    .body(dto)
+                    .when()
+                    .put(THEME_URL);
+
+            given().cookie(firstCookie.getFirst(), firstCookie.getSecond())
+                    .when()
+                    .post(ApiPaths.LOGOUT);
+
+            // act: sign in again as the same user, under a brand-new session
+            Pair<String, String> secondCookie = signin();
+            Assertions.assertThat(secondCookie.getSecond()).isNotEqualTo(firstCookie.getSecond());
+
+            var getResponse =
+                    given().cookie(secondCookie.getFirst(), secondCookie.getSecond())
+                            .when()
+                            .get(THEME_URL)
+                            .then()
+                            .extract();
+
+            // assert: the fresh session still sees DARK -- the value came from the users table,
+            // not from the (now-cleared) first session
+            var body = getResponse.as(UserResponseDTO.class);
+            Assertions.assertThat(body.getTheme()).isEqualTo(ThemePreference.DARK);
+        }
+
+        @Test
+        void shouldBeIndependentPerUser_whenTwoUsersSetDifferentThemes() {
+            // arrange
+            Pair<String, String> firstUserCookie = signin();
+
+            // createUser() only exposes an unpredictable, internally-generated password, so a
+            // second, independently sign-in-able user is created with an explicit password here
+            // instead (AbstractAppTest.createUser(String) overload) -- still a real users row,
+            // just not routed through the HTTP signup endpoint.
+            var secondUserPassword =
+                    dataFactory.getRandomWord(ValidationConstants.MIN_PASSWORD_LENGTH);
+            var secondUser = createUser(secondUserPassword);
+            var secondUserSigninCookie =
+                    given().contentType(ContentType.JSON)
+                            .body(
+                                    SigninRequestDTO.builder()
+                                            .email(secondUser.getEmail())
+                                            .password(secondUserPassword)
+                                            .build())
+                            .when()
+                            .post(ApiPaths.SIGNIN)
+                            .then()
+                            .extract()
+                            .cookie(COOKIE_NAME);
+
+            var dto = UpdateThemeRequestDTO.builder().theme(ThemePreference.DARK).build();
+
+            // act: the first (fixture-owning) user writes DARK
+            given().cookie(firstUserCookie.getFirst(), firstUserCookie.getSecond())
+                    .contentType(ContentType.JSON)
+                    .body(dto)
+                    .when()
+                    .put(THEME_URL);
+
+            // assert: the second, brand-new user still reads LIGHT -- the first user's write did
+            // not leak across the row boundary
+            var secondUserGetResponse =
+                    given().cookie(COOKIE_NAME, secondUserSigninCookie)
+                            .when()
+                            .get(THEME_URL)
+                            .then()
+                            .extract();
+            var secondUserBody = secondUserGetResponse.as(UserResponseDTO.class);
+            Assertions.assertThat(secondUserBody.getTheme()).isEqualTo(ThemePreference.LIGHT);
+
+            // assert: the first user's own write is unaffected by the second user's read
+            var firstUserGetResponse =
+                    given().cookie(firstUserCookie.getFirst(), firstUserCookie.getSecond())
+                            .when()
+                            .get(THEME_URL)
+                            .then()
+                            .extract();
+            var firstUserBody = firstUserGetResponse.as(UserResponseDTO.class);
+            Assertions.assertThat(firstUserBody.getTheme()).isEqualTo(ThemePreference.DARK);
         }
     }
 }
