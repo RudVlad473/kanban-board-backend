@@ -9,6 +9,7 @@ import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
 import com.vrudenko.kanban_board.entity.BoardEntity;
 import com.vrudenko.kanban_board.entity.UserEntity;
 import com.vrudenko.kanban_board.event.BoardCreatedEvent;
+import com.vrudenko.kanban_board.exception.AppDuplicateResourceException;
 import com.vrudenko.kanban_board.mapper.BoardMapper;
 import com.vrudenko.kanban_board.repository.BoardRepository;
 import jakarta.transaction.Transactional;
@@ -73,7 +74,14 @@ public class BoardService {
             String userId, String boardId, UpdateBoardRequestDTO boardDTO) {
         var boardToUpdate = findById(userId, boardId);
 
-        // TODO: Disallow duplicating board names for a single user
+        // A no-op rename (new name equals the current name) must not collide with the board's
+        // own existing row, so the uniqueness check is skipped entirely in that case.
+        var isNoOpRename = boardToUpdate.getName().equals(boardDTO.getName());
+        if (!isNoOpRename
+                && boardRepository.existsByUserIdAndName(
+                        boardToUpdate.getUser().getId(), boardDTO.getName())) {
+            throw new AppDuplicateResourceException("Board");
+        }
 
         boardToUpdate.setName(boardDTO.getName());
 

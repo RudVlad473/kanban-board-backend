@@ -2,12 +2,14 @@ package com.vrudenko.kanban_board.handler;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vrudenko.kanban_board.exception.AppAccessDeniedException;
+import com.vrudenko.kanban_board.exception.AppDuplicateResourceException;
 import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
 import io.vavr.control.Try;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.HashMap;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.util.Pair;
 import org.springframework.http.HttpStatus;
@@ -80,6 +82,24 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(OptimisticLockingFailureException.class)
     public ResponseEntity<String> handleOptimisticLockingFailure(
             OptimisticLockingFailureException ex) {
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    // the checked, expected duplicate-name path (D-09) -- a service-layer existsByUserIdAndName
+    // guard throws this before any insert/update is attempted
+    @ExceptionHandler(AppDuplicateResourceException.class)
+    public ResponseEntity<String> handleAppDuplicateResource(AppDuplicateResourceException ex) {
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    // Catches a uk_boards_user_id_name violation that slips past the service-level check-then-act
+    // window -- the race uk_boards_user_id_name (plan 01's V5) backstops.
+    // AppDuplicateResourceException
+    // extends this exception, so Spring resolves the more specific arm above first for the checked
+    // path; this broader arm exists only for the unchecked race and must not be deleted as dead
+    // code.
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<String> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
         return new ResponseEntity<>(ex.getMessage(), HttpStatus.CONFLICT);
     }
 

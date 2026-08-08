@@ -6,8 +6,10 @@ import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.user_dto.SignupRequestDTO;
 import com.vrudenko.kanban_board.dto.user_dto.UserResponseDTO;
 import com.vrudenko.kanban_board.entity.UserEntity;
+import com.vrudenko.kanban_board.exception.AppDuplicateResourceException;
 import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
 import com.vrudenko.kanban_board.mapper.UserMapper;
+import com.vrudenko.kanban_board.repository.BoardRepository;
 import com.vrudenko.kanban_board.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import java.util.List;
@@ -24,6 +26,8 @@ public class UserService implements UserDetailsService {
     @Autowired private UserMapper userMapper;
 
     @Autowired private BoardService boardService;
+
+    @Autowired private BoardRepository boardRepository;
 
     @Transactional
     public UserEntity findById(String id) throws AppEntityNotFoundException {
@@ -70,7 +74,10 @@ public class UserService implements UserDetailsService {
     public BoardResponseDTO addBoardByUserId(String userId, SaveBoardRequestDTO boardDTO) {
         var user = findById(userId);
 
-        // TODO: Disallow duplicating board names for a single user
+        if (boardRepository.existsByUserIdAndName(user.getId(), boardDTO.getName())) {
+            throw new AppDuplicateResourceException("Board");
+        }
+
         return boardService.save(boardDTO, user);
     }
 
