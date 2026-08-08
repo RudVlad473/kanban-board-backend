@@ -2,6 +2,7 @@ package com.vrudenko.kanban_board.service;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.primitives.Ints;
+import com.vrudenko.kanban_board.config.EventIdGenerator;
 import com.vrudenko.kanban_board.dto.column_dto.ColumnResponseDTO;
 import com.vrudenko.kanban_board.dto.column_dto.ReorderColumnRequestDTO;
 import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
@@ -18,7 +19,6 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -37,6 +37,8 @@ public class ColumnService {
     @Autowired private EntityManager entityManager;
 
     @Autowired private ApplicationEventPublisher eventPublisher;
+
+    @Autowired private EventIdGenerator eventIdGenerator;
 
     /**
      * Deletes every column (and, per column, all of its tasks/subtasks via {@link
@@ -87,7 +89,7 @@ public class ColumnService {
 
         eventPublisher.publishEvent(
                 new ColumnCreatedEvent(
-                        UUID.randomUUID(),
+                        eventIdGenerator.generate(),
                         board.getUser().getId(),
                         board.getId(),
                         column.getId(),
@@ -246,6 +248,10 @@ public class ColumnService {
 
         eventPublisher.publishEvent(
                 new ColumnDeletedEvent(
-                        UUID.randomUUID(), userId, deletedBoardId, deletedColumnId, Instant.now()));
+                        eventIdGenerator.generate(),
+                        userId,
+                        deletedBoardId,
+                        deletedColumnId,
+                        Instant.now()));
     }
 }

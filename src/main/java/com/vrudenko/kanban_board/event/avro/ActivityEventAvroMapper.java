@@ -23,12 +23,13 @@ import org.springframework.stereotype.Component;
  * Do not "fix" this class into a {@code @Mapper} interface — it is not possible, and rediscovering
  * that costs more than this paragraph.
  *
- * <p>Both generated Avro logical types used by every {@code .avsc} schema in this package (Avro's
- * {@code uuid} on {@code eventId}, {@code timestamp-millis} on {@code timestamp}) were confirmed by
- * inspection (Task 1 of this plan; see the comment in {@code build.gradle} next to the avro plugin
- * declaration) to generate native {@link java.util.UUID}/{@link java.time.Instant} accessors under
- * gradle-avro-plugin 1.9.1 + Avro 1.12.1. No manual epoch-millis/string conversion is therefore
- * needed anywhere below — every field passes straight through.
+ * <p>The {@code timestamp-millis} logical type on {@code timestamp}, used by every {@code .avsc}
+ * schema in this package, was confirmed by inspection (see the comment in {@code build.gradle} next
+ * to the avro plugin declaration) to generate a native {@link java.time.Instant} accessor under
+ * gradle-avro-plugin 1.9.1 + Avro 1.12.1. {@code eventId} carries no logical type (GAP-07 — it is a
+ * Base36 Snowflake-style string, not a UUID) and generates a plain {@link String} accessor. No
+ * manual epoch-millis/string conversion is therefore needed anywhere below — every field passes
+ * straight through.
  */
 @Component
 public class ActivityEventAvroMapper {

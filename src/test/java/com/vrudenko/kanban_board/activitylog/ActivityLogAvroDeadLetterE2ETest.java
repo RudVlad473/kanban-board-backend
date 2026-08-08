@@ -208,7 +208,7 @@ class ActivityLogAvroDeadLetterE2ETest extends AbstractKafkaContainerTest {
             // published behind the registry-aware poison one can only be consumed if the
             // container advanced past the poisoned offset instead of stalling on it (T-04-10).
             publishRawBytes(poisonBytes, key);
-            var wellFormedEventId = UUID.randomUUID();
+            var wellFormedEventId = UUID.randomUUID().toString();
             var wellFormedEvent =
                     new TaskMovedEvent(
                             wellFormedEventId,

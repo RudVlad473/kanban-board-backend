@@ -1,7 +1,6 @@
 package com.vrudenko.kanban_board.event;
 
 import java.time.Instant;
-import java.util.UUID;
 
 /**
  * Announces that a column (and, via the cascade, every task and subtask it held) was deleted. Every
@@ -11,5 +10,5 @@ import java.util.UUID;
  * column's name, per the event package's no-user-authored-content rule.
  */
 public record ColumnDeletedEvent(
-        UUID eventId, String userId, String boardId, String columnId, Instant timestamp)
+        String eventId, String userId, String boardId, String columnId, Instant timestamp)
         implements ActivityEvent {}

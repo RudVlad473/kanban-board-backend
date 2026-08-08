@@ -1,7 +1,6 @@
 package com.vrudenko.kanban_board.repository;
 
 import com.vrudenko.kanban_board.entity.ActivityLogEntity;
-import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -13,9 +12,12 @@ import org.springframework.data.jpa.repository.JpaRepository;
  * repository contract up front keeps the two plans on separate files and lets Spring Data validate
  * the derived query name at context startup, where this plan's own tests catch a typo. Ordering is
  * deliberately not encoded in the method name; the caller supplies it through {@link Pageable}.
+ *
+ * <p>{@code existsByEventId}'s parameter is a {@link String} (GAP-07) — its dedupe semantics are
+ * unchanged, only the type of the key being compared.
  */
 public interface ActivityLogRepository extends JpaRepository<ActivityLogEntity, String> {
-    boolean existsByEventId(UUID eventId);
+    boolean existsByEventId(String eventId);
 
     Page<ActivityLogEntity> findAllByBoardId(String boardId, Pageable pageable);
 }

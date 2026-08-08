@@ -1,7 +1,6 @@
 package com.vrudenko.kanban_board.event;
 
 import java.time.Instant;
-import java.util.UUID;
 
 /**
  * Announces that a task was reassigned to a different column. Carries identifiers, actor, action
@@ -9,7 +8,7 @@ import java.util.UUID;
  * no-user-authored-content rule.
  */
 public record TaskMovedEvent(
-        UUID eventId,
+        String eventId,
         String userId,
         String boardId,
         String taskId,

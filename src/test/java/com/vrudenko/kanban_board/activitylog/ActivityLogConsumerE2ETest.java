@@ -43,7 +43,7 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
         void shouldPersistExactlyOneRow_whenTaskMovedEventPublishedThroughRealBroker()
                 throws Exception {
             // arrange
-            var eventId = UUID.randomUUID();
+            var eventId = UUID.randomUUID().toString();
             var userId = randomId();
             var boardId = randomId();
             var event =
@@ -75,7 +75,7 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
         @Test
         void shouldPersistTaskCreated_withColumnIdThenTaskIdDetail() throws Exception {
             // arrange
-            var eventId = UUID.randomUUID();
+            var eventId = UUID.randomUUID().toString();
             var columnId = randomId();
             var taskId = randomId();
             var event =
@@ -107,7 +107,7 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
         void shouldPersistTaskMoved_withTaskIdSourceColumnIdTargetColumnIdDetail()
                 throws Exception {
             // arrange
-            var eventId = UUID.randomUUID();
+            var eventId = UUID.randomUUID().toString();
             var taskId = randomId();
             var sourceColumnId = randomId();
             var targetColumnId = randomId();
@@ -147,7 +147,7 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
         @Test
         void shouldPersistTaskDeleted_withColumnIdThenTaskIdDetail() throws Exception {
             // arrange
-            var eventId = UUID.randomUUID();
+            var eventId = UUID.randomUUID().toString();
             var columnId = randomId();
             var taskId = randomId();
             var event =
@@ -178,7 +178,7 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
         @Test
         void shouldPersistBoardCreated_withEmptyDetail() throws Exception {
             // arrange
-            var eventId = UUID.randomUUID();
+            var eventId = UUID.randomUUID().toString();
             var event = new BoardCreatedEvent(eventId, randomId(), randomId(), Instant.now());
 
             // act
@@ -199,7 +199,7 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
         @Test
         void shouldPersistColumnCreated_withColumnIdDetail() throws Exception {
             // arrange
-            var eventId = UUID.randomUUID();
+            var eventId = UUID.randomUUID().toString();
             var columnId = randomId();
             var event =
                     new ColumnCreatedEvent(
@@ -224,7 +224,7 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
         @Test
         void shouldPersistColumnDeleted_withColumnIdDetailAndEventTimestamp() throws Exception {
             // arrange
-            var eventId = UUID.randomUUID();
+            var eventId = UUID.randomUUID().toString();
             var columnId = randomId();
             var timestamp = Instant.now();
             var event =
@@ -262,8 +262,8 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
             var taskId = randomId();
             var sourceColumnId = randomId();
             var targetColumnId = randomId();
-            var firstEventId = UUID.randomUUID();
-            var secondEventId = UUID.randomUUID();
+            var firstEventId = UUID.randomUUID().toString();
+            var secondEventId = UUID.randomUUID().toString();
             var firstEvent =
                     new TaskMovedEvent(
                             firstEventId,
@@ -306,8 +306,8 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
             var boardId = randomId();
             var userId = randomId();
             var sharedInstant = Instant.now();
-            var firstEventId = UUID.randomUUID();
-            var secondEventId = UUID.randomUUID();
+            var firstEventId = UUID.randomUUID().toString();
+            var secondEventId = UUID.randomUUID().toString();
             var firstEvent =
                     new ColumnCreatedEvent(
                             firstEventId, userId, boardId, randomId(), sharedInstant);
@@ -335,7 +335,7 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
         @Test
         void shouldPopulateAllColumns_whenBoardCreatedEventIsSparsest() throws Exception {
             // arrange
-            var eventId = UUID.randomUUID();
+            var eventId = UUID.randomUUID().toString();
             var userId = randomId();
             var boardId = randomId();
             var timestamp = Instant.now();
@@ -376,7 +376,7 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
                             });
         }
 
-        private ActivityLogEntity findByEventId(UUID eventId) {
+        private ActivityLogEntity findByEventId(String eventId) {
             var rows =
                     activityLogRepository.findAll().stream()
                             .filter(row -> row.getEventId().equals(eventId))

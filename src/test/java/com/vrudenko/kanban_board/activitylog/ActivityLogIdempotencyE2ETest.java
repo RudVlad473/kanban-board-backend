@@ -49,7 +49,7 @@ class ActivityLogIdempotencyE2ETest extends AbstractKafkaContainerTest {
     }
 
     private ActivityLogEntity buildActivityLogEntity(
-            UUID eventId, String boardId, String userId, Instant timestamp) {
+            String eventId, String boardId, String userId, Instant timestamp) {
         var entity = new ActivityLogEntity();
         entity.setBoardId(boardId);
         entity.setUserId(userId);
@@ -77,7 +77,7 @@ class ActivityLogIdempotencyE2ETest extends AbstractKafkaContainerTest {
 
         var sentinel =
                 new TaskMovedEvent(
-                        UUID.randomUUID(),
+                        UUID.randomUUID().toString(),
                         randomId(),
                         randomId(),
                         randomId(),
@@ -127,7 +127,7 @@ class ActivityLogIdempotencyE2ETest extends AbstractKafkaContainerTest {
         @Test
         void shouldPersistExactlyOneRow_whenEventRedeliveredThroughRealBroker() throws Exception {
             // arrange
-            var eventId = UUID.randomUUID();
+            var eventId = UUID.randomUUID().toString();
             var event =
                     new TaskMovedEvent(
                             eventId,
@@ -153,7 +153,7 @@ class ActivityLogIdempotencyE2ETest extends AbstractKafkaContainerTest {
         @Test
         void shouldLeaveDeadLetterTopicEmpty_whenEventIsRedeliveredNotPoison() throws Exception {
             // arrange
-            var eventId = UUID.randomUUID();
+            var eventId = UUID.randomUUID().toString();
             var event =
                     new TaskMovedEvent(
                             eventId,
@@ -203,7 +203,7 @@ class ActivityLogIdempotencyE2ETest extends AbstractKafkaContainerTest {
             // concurrent call to the recorder can reach the exists-check/insert race window and
             // prove the database's unique constraint -- not just the exists-check fast path -- is
             // what arbitrates it (ACTLOG-03 concurrency probe).
-            var eventId = UUID.randomUUID();
+            var eventId = UUID.randomUUID().toString();
             var timestamp = Instant.now();
             var firstEntity = buildActivityLogEntity(eventId, randomId(), randomId(), timestamp);
             var secondEntity = buildActivityLogEntity(eventId, randomId(), randomId(), timestamp);
@@ -272,7 +272,7 @@ class ActivityLogIdempotencyE2ETest extends AbstractKafkaContainerTest {
         void shouldInsertRow_whenEventIdIsNeverSeenBefore() {
             // arrange -- control case: without it, a recorder that silently dropped everything
             // would still pass the redelivery and concurrency cases above.
-            var eventId = UUID.randomUUID();
+            var eventId = UUID.randomUUID().toString();
             var entity = buildActivityLogEntity(eventId, randomId(), randomId(), Instant.now());
 
             // act

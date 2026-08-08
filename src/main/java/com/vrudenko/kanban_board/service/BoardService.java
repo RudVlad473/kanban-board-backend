@@ -1,6 +1,7 @@
 package com.vrudenko.kanban_board.service;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.vrudenko.kanban_board.config.EventIdGenerator;
 import com.vrudenko.kanban_board.dto.board_dto.BoardFullResponseDTO;
 import com.vrudenko.kanban_board.dto.board_dto.BoardResponseDTO;
 import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
@@ -18,7 +19,6 @@ import com.vrudenko.kanban_board.repository.BoardRepository;
 import jakarta.transaction.Transactional;
 import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -36,6 +36,8 @@ public class BoardService {
     @Autowired private OwnershipVerifierService ownershipVerifierService;
 
     @Autowired private ApplicationEventPublisher eventPublisher;
+
+    @Autowired private EventIdGenerator eventIdGenerator;
 
     public List<BoardResponseDTO> findAllByUserId(String userId) {
         return boardMapper.toResponseDTOList(boardRepository.findAllByUserId(userId));
@@ -134,7 +136,7 @@ public class BoardService {
 
         eventPublisher.publishEvent(
                 new BoardCreatedEvent(
-                        UUID.randomUUID(), user.getId(), board.getId(), Instant.now()));
+                        eventIdGenerator.generate(), user.getId(), board.getId(), Instant.now()));
 
         return boardMapper.toResponseDTO(board);
     }

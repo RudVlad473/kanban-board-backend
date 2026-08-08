@@ -77,7 +77,7 @@ class ActivityLogCleanupIsolationTest extends AbstractAppTest {
             entity.setUserId(getOwningUser().getId());
             entity.setAction(ActivityAction.TASK_CREATED);
             entity.setDetail("{}");
-            entity.setEventId(UUID.randomUUID());
+            entity.setEventId(UUID.randomUUID().toString());
             entity.setCreatedAt(Instant.now());
             activityLogRepository.save(entity);
         }

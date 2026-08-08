@@ -2,6 +2,7 @@ package com.vrudenko.kanban_board.service;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.primitives.Ints;
+import com.vrudenko.kanban_board.config.EventIdGenerator;
 import com.vrudenko.kanban_board.dto.subtask_dto.SaveSubtaskRequestDTO;
 import com.vrudenko.kanban_board.dto.subtask_dto.SubtaskResponseDTO;
 import com.vrudenko.kanban_board.dto.task_dto.MoveTaskRequestDTO;
@@ -20,7 +21,6 @@ import jakarta.transaction.Transactional;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -39,6 +39,8 @@ public class TaskService {
     @Autowired private EntityManager entityManager;
 
     @Autowired private ApplicationEventPublisher eventPublisher;
+
+    @Autowired private EventIdGenerator eventIdGenerator;
 
     /**
      * {@code @Transactional} here (rather than relying on the caller, {@link
@@ -64,7 +66,7 @@ public class TaskService {
 
         eventPublisher.publishEvent(
                 new TaskCreatedEvent(
-                        UUID.randomUUID(),
+                        eventIdGenerator.generate(),
                         column.getBoard().getUser().getId(),
                         column.getBoard().getId(),
                         column.getId(),
@@ -222,7 +224,7 @@ public class TaskService {
 
         eventPublisher.publishEvent(
                 new TaskMovedEvent(
-                        UUID.randomUUID(),
+                        eventIdGenerator.generate(),
                         userId,
                         sourceBoardId,
                         task.getId(),
@@ -253,7 +255,7 @@ public class TaskService {
 
         eventPublisher.publishEvent(
                 new TaskDeletedEvent(
-                        UUID.randomUUID(),
+                        eventIdGenerator.generate(),
                         userId,
                         deletedBoardId,
                         deletedColumnId,

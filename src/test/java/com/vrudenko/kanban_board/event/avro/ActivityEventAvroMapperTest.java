@@ -39,7 +39,7 @@ public class ActivityEventAvroMapperTest
             // arrange
             var event =
                     new TaskCreatedEvent(
-                            UUID.randomUUID(),
+                            UUID.randomUUID().toString(),
                             "user-1",
                             "board-1",
                             "column-1",
@@ -60,7 +60,7 @@ public class ActivityEventAvroMapperTest
             // arrange
             var event =
                     new TaskMovedEvent(
-                            UUID.randomUUID(),
+                            UUID.randomUUID().toString(),
                             "user-1",
                             "board-1",
                             "task-1",
@@ -82,7 +82,7 @@ public class ActivityEventAvroMapperTest
             // arrange
             var event =
                     new TaskDeletedEvent(
-                            UUID.randomUUID(),
+                            UUID.randomUUID().toString(),
                             "user-1",
                             "board-1",
                             "column-1",
@@ -102,7 +102,8 @@ public class ActivityEventAvroMapperTest
         void shouldRoundTrip_whenBoardCreatedEvent() {
             // arrange
             var event =
-                    new BoardCreatedEvent(UUID.randomUUID(), "user-1", "board-1", Instant.now());
+                    new BoardCreatedEvent(
+                            UUID.randomUUID().toString(), "user-1", "board-1", Instant.now());
 
             // act
             var avroRecord = mapper.toAvro(event);
@@ -118,7 +119,11 @@ public class ActivityEventAvroMapperTest
             // arrange
             var event =
                     new ColumnCreatedEvent(
-                            UUID.randomUUID(), "user-1", "board-1", "column-1", Instant.now());
+                            UUID.randomUUID().toString(),
+                            "user-1",
+                            "board-1",
+                            "column-1",
+                            Instant.now());
 
             // act
             var avroRecord = mapper.toAvro(event);
@@ -134,7 +139,11 @@ public class ActivityEventAvroMapperTest
             // arrange
             var event =
                     new ColumnDeletedEvent(
-                            UUID.randomUUID(), "user-1", "board-1", "column-1", Instant.now());
+                            UUID.randomUUID().toString(),
+                            "user-1",
+                            "board-1",
+                            "column-1",
+                            Instant.now());
 
             // act
             var avroRecord = mapper.toAvro(event);

@@ -93,7 +93,7 @@ class ActivityLogAvroRoundTripE2ETest extends AbstractKafkaContainerTest {
                 shouldPersistMatchingActivityLogRow_whenTaskMovedEventPublishedThroughRealAvroPipeline()
                         throws Exception {
             // arrange
-            var eventId = UUID.randomUUID();
+            var eventId = UUID.randomUUID().toString();
             var taskId = randomId();
             var sourceColumnId = randomId();
             var targetColumnId = randomId();
@@ -143,7 +143,7 @@ class ActivityLogAvroRoundTripE2ETest extends AbstractKafkaContainerTest {
         void shouldEncodeAsGenuineAvro_whenTaskMovedEventPublishedThroughRealPipeline()
                 throws Exception {
             // arrange
-            var eventId = UUID.randomUUID();
+            var eventId = UUID.randomUUID().toString();
             var event =
                     new TaskMovedEvent(
                             eventId,

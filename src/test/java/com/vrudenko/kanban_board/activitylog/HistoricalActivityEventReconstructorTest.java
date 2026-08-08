@@ -55,7 +55,7 @@ class HistoricalActivityEventReconstructorTest extends AbstractKafkaContainerTes
      * package's cached Spring context, so matching must be scoped by {@code eventId} rather than
      * assuming the table starts empty.
      */
-    private ActivityLogEntity awaitPersistedRow(UUID eventId) {
+    private ActivityLogEntity awaitPersistedRow(String eventId) {
         var found = new ArrayList<ActivityLogEntity>();
         Awaitility.await()
                 .atMost(Duration.ofSeconds(30))
@@ -98,7 +98,7 @@ class HistoricalActivityEventReconstructorTest extends AbstractKafkaContainerTes
         @Test
         void shouldReconstructExactEvent_whenActionIsTaskCreated() throws Exception {
             // arrange
-            var eventId = UUID.randomUUID();
+            var eventId = UUID.randomUUID().toString();
             var event =
                     new TaskCreatedEvent(
                             eventId, randomId(), randomId(), randomId(), randomId(), Instant.now());
@@ -116,7 +116,7 @@ class HistoricalActivityEventReconstructorTest extends AbstractKafkaContainerTes
         @Test
         void shouldReconstructExactEvent_whenActionIsTaskMoved() throws Exception {
             // arrange
-            var eventId = UUID.randomUUID();
+            var eventId = UUID.randomUUID().toString();
             var event =
                     new TaskMovedEvent(
                             eventId,
@@ -140,7 +140,7 @@ class HistoricalActivityEventReconstructorTest extends AbstractKafkaContainerTes
         @Test
         void shouldReconstructExactEvent_whenActionIsTaskDeleted() throws Exception {
             // arrange
-            var eventId = UUID.randomUUID();
+            var eventId = UUID.randomUUID().toString();
             var event =
                     new TaskDeletedEvent(
                             eventId, randomId(), randomId(), randomId(), randomId(), Instant.now());
@@ -158,7 +158,7 @@ class HistoricalActivityEventReconstructorTest extends AbstractKafkaContainerTes
         @Test
         void shouldReconstructExactEvent_whenActionIsBoardCreated() throws Exception {
             // arrange
-            var eventId = UUID.randomUUID();
+            var eventId = UUID.randomUUID().toString();
             var event = new BoardCreatedEvent(eventId, randomId(), randomId(), Instant.now());
 
             // act
@@ -174,7 +174,7 @@ class HistoricalActivityEventReconstructorTest extends AbstractKafkaContainerTes
         @Test
         void shouldReconstructExactEvent_whenActionIsColumnCreated() throws Exception {
             // arrange
-            var eventId = UUID.randomUUID();
+            var eventId = UUID.randomUUID().toString();
             var event =
                     new ColumnCreatedEvent(
                             eventId, randomId(), randomId(), randomId(), Instant.now());
@@ -194,7 +194,7 @@ class HistoricalActivityEventReconstructorTest extends AbstractKafkaContainerTes
             // arrange -- constructed directly, never published: this proves the reconstructor's
             // own defensive behaviour, not a property of what the real consumer ever actually
             // writes.
-            var eventId = UUID.randomUUID();
+            var eventId = UUID.randomUUID().toString();
             var row = new ActivityLogEntity();
             row.setEventId(eventId);
             row.setUserId(randomId());

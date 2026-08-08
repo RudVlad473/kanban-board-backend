@@ -1,7 +1,6 @@
 package com.vrudenko.kanban_board.event;
 
 import java.time.Instant;
-import java.util.UUID;
 
 /**
  * Announces that a task was created in a column. Carries identifiers, actor, action and timestamp
@@ -9,7 +8,7 @@ import java.util.UUID;
  * rule.
  */
 public record TaskCreatedEvent(
-        UUID eventId,
+        String eventId,
         String userId,
         String boardId,
         String columnId,

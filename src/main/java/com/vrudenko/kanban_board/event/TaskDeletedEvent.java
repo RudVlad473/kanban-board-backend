@@ -1,7 +1,6 @@
 package com.vrudenko.kanban_board.event;
 
 import java.time.Instant;
-import java.util.UUID;
 
 /**
  * Announces that a task was deleted. Every identifier is captured from the loaded {@code
@@ -10,7 +9,7 @@ import java.util.UUID;
  * description, per the event package's no-user-authored-content rule.
  */
 public record TaskDeletedEvent(
-        UUID eventId,
+        String eventId,
         String userId,
         String boardId,
         String columnId,

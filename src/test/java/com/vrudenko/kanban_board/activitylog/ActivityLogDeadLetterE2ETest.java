@@ -159,7 +159,7 @@ class ActivityLogDeadLetterE2ETest extends AbstractKafkaContainerTest {
             // event published behind the poison one can only be consumed if the container
             // advanced past the poisoned offset instead of stalling on it (RELY-01).
             publishRawBytes(poisonBytes, key);
-            var wellFormedEventId = UUID.randomUUID();
+            var wellFormedEventId = UUID.randomUUID().toString();
             var wellFormedEvent =
                     new TaskMovedEvent(
                             wellFormedEventId,
@@ -197,7 +197,7 @@ class ActivityLogDeadLetterE2ETest extends AbstractKafkaContainerTest {
             // itself routed to the dead-letter topic is an implementation consequence, not
             // something RELY-01/RELY-02 specify; only non-blocking is asserted here.
             publishRawBytes(null, key);
-            var sentinelEventId = UUID.randomUUID();
+            var sentinelEventId = UUID.randomUUID().toString();
             var sentinelEvent =
                     new TaskMovedEvent(
                             sentinelEventId,

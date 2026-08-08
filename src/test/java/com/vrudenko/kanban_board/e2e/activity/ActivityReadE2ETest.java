@@ -46,7 +46,7 @@ public class ActivityReadE2ETest extends AbstractAppE2ETest {
         entity.setUserId(userId);
         entity.setAction(ActivityAction.TASK_CREATED);
         entity.setDetail("{}");
-        entity.setEventId(UUID.randomUUID());
+        entity.setEventId(UUID.randomUUID().toString());
         entity.setCreatedAt(createdAt);
         return activityLogRepository.save(entity);
     }
