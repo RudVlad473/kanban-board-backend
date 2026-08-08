@@ -168,19 +168,24 @@ contracts those gaps sit alongside.
      but unreachable `UserService.addBoardByUserId` onto `BoardController`; decide how the
      Add New Board modal's initial-columns list is submitted (create-then-batch-add vs. a
      DTO that grows a columns list)
+
   2. **Column deletion route** *(§1.2)* — add `DELETE /boards/{boardId}/columns/{columnId}`
      to `ColumnController`, with the same cascade-to-tasks/subtasks behavior board deletion
      already has
+
   3. **Task/column ordering** *(§1.3)* — add a position/index field to the task (and
      optionally column) entity and DTOs so reordering within or between columns has a
      backend representation; `MoveTaskRequestDTO` today carries no notion of position
+
   4. **Single nested "full board" read** *(§1.4)* — `GET /boards/{boardId}/full`, replacing
      the four-round-trip fan-out (board → columns → tasks → subtasks) a client needs today;
      previously deferred to v2 per `STATE.md` line 199, now back in scope
+
   5. **Per-user theme persistence** *(§1.5)* — a field on `UserEntity`/`UserResponseDTO`
      plus a read/write endpoint for the light/dark preference the mock-ups render
      throughout, if it needs to persist across devices/sessions rather than live in
      client-local storage
+
   6. **Subtask optimistic-locking `version` field** *(§1.6, lower confidence)* — bring
      `UpdateSubtaskRequestDTO`/`SubtaskResponseDTO` in line with Column/Task/Move, which all
      already require and check a `version` on update
@@ -190,11 +195,21 @@ contracts those gaps sit alongside.
 **Plans:** 7 plans (4 waves — wave 1: plan 01; wave 2: plans 02, 03 in parallel; wave 3: plans 04, 05, 06 in parallel; wave 4: plan 07)
 
 Plans:
+**Wave 1**
 
 - [ ] 06-01-PLAN.md — [BLOCKING] Flyway V5 + all new entity fields + ApiPaths constants, proven by subtask optimistic locking (GAP-06, schema half of GAP-03/GAP-05)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 06-02-PLAN.md — POST /boards + per-user board-name uniqueness on create and rename (GAP-01)
 - [ ] 06-03-PLAN.md — DELETE column with cascade + new ColumnDeletedEvent and Avro schema (GAP-02)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 06-04-PLAN.md — Task/column position, reorder endpoints, ordered reads (GAP-03)
 - [ ] 06-05-PLAN.md — GET /boards/{boardId}/full nested single-round-trip read (GAP-04)
 - [ ] 06-06-PLAN.md — Per-user theme persistence on a new UserController (GAP-05)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 06-07-PLAN.md — Snowflake-style activity-log eventId; opens with a blocking decision checkpoint (GAP-07)
