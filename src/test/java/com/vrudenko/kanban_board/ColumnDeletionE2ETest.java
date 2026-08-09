@@ -1,6 +1,6 @@
 package com.vrudenko.kanban_board;
 
-import static io.restassured.RestAssured.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
@@ -13,15 +13,17 @@ import com.vrudenko.kanban_board.repository.TaskRepository;
 import com.vrudenko.kanban_board.service.BoardService;
 import com.vrudenko.kanban_board.service.ColumnService;
 import com.vrudenko.kanban_board.service.TaskService;
-import com.vrudenko.kanban_board.support.fixtures.AbstractAppE2ETest;
+import com.vrudenko.kanban_board.support.fixtures.AbstractAppMockMvcTest;
+import jakarta.servlet.http.Cookie;
 import java.util.UUID;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.data.util.Pair;
 import org.springframework.http.HttpStatus;
+import org.springframework.test.web.servlet.MockMvc;
 
 /**
  * Tracer proving GAP-02's cascade end to end: a real HTTP DELETE travels controller to ownership
@@ -29,8 +31,11 @@ import org.springframework.http.HttpStatus;
  * before the event-publishing expansion (plan 03's task 2) lands. Modeled on {@code
  * SubtaskLockingE2ETest}.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-public class ColumnDeletionE2ETest extends AbstractAppE2ETest {
+@SpringBootTest
+@AutoConfigureMockMvc
+public class ColumnDeletionE2ETest extends AbstractAppMockMvcTest {
+
+    @Autowired private MockMvc mockMvc;
 
     @Autowired private BoardService boardService;
 
@@ -53,7 +58,8 @@ public class ColumnDeletionE2ETest extends AbstractAppE2ETest {
 
         @Test
         void
-                shouldReturnOkAndCascadeDeleteTasksAndSubtasks_andLeaveSiblingColumnUntouched_whenColumnIsNonEmpty() {
+                shouldReturnOkAndCascadeDeleteTasksAndSubtasks_andLeaveSiblingColumnUntouched_whenColumnIsNonEmpty()
+                        throws Exception {
             // arrange: a sibling column, with its own task and subtask, must survive
             var siblingColumn =
                     boardService.addColumnByBoardId(
@@ -95,14 +101,15 @@ public class ColumnDeletionE2ETest extends AbstractAppE2ETest {
             var targetTaskIds = mockTasks.stream().map(t -> t.getId()).toList();
             var targetTaskWithSubtasksId = mockPopulatedTask.getId();
 
-            Pair<String, String> cookie = signin();
+            Cookie cookie = signinCookie();
             var url = getColumnUrl(mockPopulatedBoard.getId(), targetColumnId);
 
             // act
-            var response = given().cookie(cookie.getFirst(), cookie.getSecond()).when().delete(url);
+            var response = mockMvc.perform(delete(url).cookie(cookie)).andReturn();
 
             // assert
-            Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
+            Assertions.assertThat(response.getResponse().getStatus())
+                    .isEqualTo(HttpStatus.OK.value());
 
             Assertions.assertThat(columnRepository.findById(targetColumnId)).isEmpty();
             for (var taskId : targetTaskIds) {
@@ -128,7 +135,7 @@ public class ColumnDeletionE2ETest extends AbstractAppE2ETest {
         }
 
         @Test
-        void shouldReturnOk_whenColumnIsEmpty() {
+        void shouldReturnOk_whenColumnIsEmpty() throws Exception {
             // arrange
             var emptyColumn =
                     boardService.addColumnByBoardId(
@@ -140,19 +147,21 @@ public class ColumnDeletionE2ETest extends AbstractAppE2ETest {
                                                     ValidationConstants.MIN_COLUMN_NAME_LENGTH))
                                     .build());
 
-            Pair<String, String> cookie = signin();
+            Cookie cookie = signinCookie();
             var url = getColumnUrl(mockPopulatedBoard.getId(), emptyColumn.getId());
 
             // act
-            var response = given().cookie(cookie.getFirst(), cookie.getSecond()).when().delete(url);
+            var response = mockMvc.perform(delete(url).cookie(cookie)).andReturn();
 
             // assert
-            Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
+            Assertions.assertThat(response.getResponse().getStatus())
+                    .isEqualTo(HttpStatus.OK.value());
             Assertions.assertThat(columnRepository.findById(emptyColumn.getId())).isEmpty();
         }
 
         @Test
-        void shouldReturnUnauthorizedAndDeleteNothing_whenColumnBelongsToAnotherUser() {
+        void shouldReturnUnauthorizedAndDeleteNothing_whenColumnBelongsToAnotherUser()
+                throws Exception {
             // arrange
             var otherUser = createUser();
             var otherUsersColumn =
@@ -162,28 +171,30 @@ public class ColumnDeletionE2ETest extends AbstractAppE2ETest {
                                     ValidationConstants.MIN_BOARD_NAME_LENGTH + 4),
                             dataFactory.getRandomWord(ValidationConstants.MIN_COLUMN_NAME_LENGTH));
 
-            Pair<String, String> cookie = signin();
+            Cookie cookie = signinCookie();
             var url = getColumnUrl(mockPopulatedBoard.getId(), otherUsersColumn.getId());
 
             // act: signed in as the original owning user, targeting another user's column
-            var response = given().cookie(cookie.getFirst(), cookie.getSecond()).when().delete(url);
+            var response = mockMvc.perform(delete(url).cookie(cookie)).andReturn();
 
             // assert
-            Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
+            Assertions.assertThat(response.getResponse().getStatus())
+                    .isEqualTo(HttpStatus.UNAUTHORIZED.value());
             Assertions.assertThat(columnRepository.findById(otherUsersColumn.getId())).isPresent();
         }
 
         @Test
-        void shouldReturnNotFound_whenColumnDoesNotExist() {
+        void shouldReturnNotFound_whenColumnDoesNotExist() throws Exception {
             // arrange
-            Pair<String, String> cookie = signin();
+            Cookie cookie = signinCookie();
             var url = getColumnUrl(mockPopulatedBoard.getId(), UUID.randomUUID().toString());
 
             // act
-            var response = given().cookie(cookie.getFirst(), cookie.getSecond()).when().delete(url);
+            var response = mockMvc.perform(delete(url).cookie(cookie)).andReturn();
 
             // assert
-            Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.NOT_FOUND.value());
+            Assertions.assertThat(response.getResponse().getStatus())
+                    .isEqualTo(HttpStatus.NOT_FOUND.value());
         }
     }
 }
