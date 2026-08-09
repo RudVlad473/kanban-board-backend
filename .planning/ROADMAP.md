@@ -239,3 +239,22 @@ Plans:
 - [x] 07-05-PLAN.md — Downgrade `BoardFullReadE2ETest` and `SubtaskLockingE2ETest`; keep `BoardCreationE2ETest` on the real-socket tier (wave 2; TEST-03)
 - [x] 07-06-PLAN.md — Downgrade `ThemePersistenceE2ETest` and `ActivityReadE2ETest` (wave 2; TEST-03)
 - [x] 07-07-PLAN.md — Full `spotlessCheck` + `clean test` gate (278/278 tests, no shrinkage), documentation reconciliation, service/controller/e2e test-tier decision guide added to `docs/CODE_STYLE.md`, filed the E2ETest-suffix/fastTest-filter follow-up todo (wave 3; TEST-01..04)
+
+### Phase 07.1: Address hard blockers and inconsistencies from the frontend-integration-readiness audit: add CORS configuration for local frontend dev origins with credentials support; add @Valid to signin/signup request bodies; converge the error response envelope in GlobalExceptionHandler to one consistent shape; split the overloaded 401 into 401 (unauthenticated) vs 403 (forbidden-ownership); make create-endpoint success status codes consistently 201; close the optimistic-locking gap on Board/User entities to match Column/Task/Subtask; add security/injection-attempt test coverage and thorough auth-gating test coverage proving every protected endpoint rejects both unauthenticated requests and cross-user access. (INSERTED)
+
+**Goal:** Every error the API returns is one consistent RFC 7807 envelope with a stable machine-readable code; 401 means unauthenticated and 403 means forbidden, with no overlap; a local frontend dev server can make credentialed cross-origin calls; signin/signup actually validate their request bodies; every resource-creating POST returns 201; Board carries the same optimistic locking Column/Task/Subtask already have; and adversarial injection resistance plus complete auth gating are proven by tests rather than assumed.
+**Requirements**: D-01..D-26 (CONTEXT.md decisions — this inserted phase has no REQUIREMENTS.md IDs), plus ROADMAP-201 (the create-endpoint 201 item named in this phase's title, which has no D-number)
+**Depends on:** Phase 7
+**Plans:** 9 plans (7 waves)
+
+Plans:
+
+- [ ] 07.1-01-PLAN.md — Converge GlobalExceptionHandler on RFC 7807 ProblemDetail with a stable code taxonomy; remap ownership denials 401→403 (wave 1; D-01, D-02, D-03, D-05)
+- [ ] 07.1-02-PLAN.md — CorsConfigurationSource bean with credentialed, property-driven explicit origins (wave 1; D-10, D-11, D-12)
+- [ ] 07.1-03-PLAN.md — ProblemDetail-producing AuthenticationEntryPoint so unauthenticated requests return a real 401 (wave 2; D-04, D-05)
+- [ ] 07.1-04-PLAN.md — @Valid on signin/signup, duplicate-email 409, and the fixture hardening validation forces (wave 2; D-06, D-07, D-08, D-09, D-20)
+- [ ] 07.1-05-PLAN.md — Board optimistic locking: V7 migration, @Version, version on the board DTOs (wave 3; D-13, D-14, D-15)
+- [ ] 07.1-06-PLAN.md — Create-endpoint status consistency: column and subtask creation return 201 (wave 4; ROADMAP-201)
+- [ ] 07.1-07-PLAN.md — Retarget the pre-commit fastTest gate from name-suffix to JUnit @Tag; rename the 11 mistiered classes (wave 5; D-21, D-22, D-23)
+- [ ] 07.1-08-PLAN.md — InjectionAttemptTest and AuthorizationGatingTest, sweeping every protected route (wave 6; D-16, D-17, D-18, D-19, D-20)
+- [ ] 07.1-09-PLAN.md — /claude-security scan and triage, then four Mermaid sequence diagrams in docs/ARCHITECTURE.md (wave 7; D-24, D-25, D-26)
