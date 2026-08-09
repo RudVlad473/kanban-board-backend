@@ -87,13 +87,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INFRA-06 | Phase 5 | Pending |
 | INFRA-07 | Phase 5 | Pending |
 | INFRA-08 | Phase 5 | Pending |
-| GAP-01 | Phase 6 (plan 02) | Pending |
-| GAP-02 | Phase 6 (plan 03) | Pending |
-| GAP-03 | Phase 6 (plans 01, 04) | Pending |
-| GAP-04 | Phase 6 (plan 05) | Pending |
-| GAP-05 | Phase 6 (plans 01, 06) | Pending |
-| GAP-06 | Phase 6 (plan 01) | Pending |
-| GAP-07 | Phase 6 (plan 07) | Pending |
+| GAP-01 | Phase 6 (plan 02) | Complete |
+| GAP-02 | Phase 6 (plan 03) | Complete |
+| GAP-03 | Phase 6 (plans 01, 04) | Complete |
+| GAP-04 | Phase 6 (plan 05) | Complete |
+| GAP-05 | Phase 6 (plans 01, 06) | Complete |
+| GAP-06 | Phase 6 (plan 01) | Complete |
+| GAP-07 | Phase 6 (plan 07) | Complete |
 
 **Coverage:**
 
