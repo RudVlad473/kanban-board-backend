@@ -1,7 +1,8 @@
 package com.vrudenko.kanban_board;
 
-import static io.restassured.RestAssured.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.board_dto.BoardFullResponseDTO;
@@ -12,16 +13,18 @@ import com.vrudenko.kanban_board.dto.subtask_dto.SubtaskResponseDTO;
 import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
 import com.vrudenko.kanban_board.service.BoardService;
 import com.vrudenko.kanban_board.service.UserService;
-import com.vrudenko.kanban_board.support.fixtures.AbstractAppE2ETest;
+import com.vrudenko.kanban_board.support.fixtures.AbstractAppMockMvcTest;
+import jakarta.servlet.http.Cookie;
 import java.util.Arrays;
 import java.util.UUID;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.data.util.Pair;
 import org.springframework.http.HttpStatus;
+import org.springframework.test.web.servlet.MockMvc;
 
 /**
  * Tracer proving GAP-04 end to end: one authenticated GET on {@code /boards/{boardId}/full} runs
@@ -31,8 +34,13 @@ import org.springframework.http.HttpStatus;
  * subtasks four levels deep in a single nested document. Modeled on {@link
  * BoardCreationE2ETest}/{@link SubtaskLockingE2ETest}.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-public class BoardFullReadE2ETest extends AbstractAppE2ETest {
+@SpringBootTest
+@AutoConfigureMockMvc
+public class BoardFullReadE2ETest extends AbstractAppMockMvcTest {
+
+    @Autowired private MockMvc mockMvc;
+
+    @Autowired private ObjectMapper objectMapper;
 
     @Autowired private UserService userService;
 
@@ -66,21 +74,23 @@ public class BoardFullReadE2ETest extends AbstractAppE2ETest {
     @Nested
     class GetFullBoard {
         @Test
-        void shouldReturnNestedDocumentFourLevelsDeep_whenBoardHasColumnsTasksAndSubtasks() {
+        void shouldReturnNestedDocumentFourLevelsDeep_whenBoardHasColumnsTasksAndSubtasks()
+                throws Exception {
             // arrange
-            Pair<String, String> cookie = signin();
+            Cookie cookie = signinCookie();
 
             // act
             var response =
-                    given().cookie(cookie.getFirst(), cookie.getSecond())
-                            .when()
-                            .get(getFullBoardUrl(mockPopulatedBoard.getId()))
-                            .then()
-                            .extract();
+                    mockMvc.perform(get(getFullBoardUrl(mockPopulatedBoard.getId())).cookie(cookie))
+                            .andReturn();
 
             // assert
-            Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
-            var body = response.as(BoardFullResponseDTO.class);
+            Assertions.assertThat(response.getResponse().getStatus())
+                    .isEqualTo(HttpStatus.OK.value());
+            var body =
+                    objectMapper.readValue(
+                            response.getResponse().getContentAsString(),
+                            BoardFullResponseDTO.class);
             Assertions.assertThat(body.getId()).isEqualTo(mockPopulatedBoard.getId());
             Assertions.assertThat(body.getName()).isEqualTo(mockPopulatedBoard.getName());
             Assertions.assertThat(body.getColumns()).isNotEmpty();
@@ -114,42 +124,43 @@ public class BoardFullReadE2ETest extends AbstractAppE2ETest {
         }
 
         @Test
-        void shouldReturnEmptyColumnsArray_whenBoardHasNoColumns() {
+        void shouldReturnEmptyColumnsArray_whenBoardHasNoColumns() throws Exception {
             // arrange
-            Pair<String, String> cookie = signin();
+            Cookie cookie = signinCookie();
             var emptyBoard = mockEmptyBoards.getFirst();
 
             // act
             var response =
-                    given().cookie(cookie.getFirst(), cookie.getSecond())
-                            .when()
-                            .get(getFullBoardUrl(emptyBoard.getId()))
-                            .then()
-                            .extract();
+                    mockMvc.perform(get(getFullBoardUrl(emptyBoard.getId())).cookie(cookie))
+                            .andReturn();
 
             // assert
-            Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
-            var body = response.as(BoardFullResponseDTO.class);
+            Assertions.assertThat(response.getResponse().getStatus())
+                    .isEqualTo(HttpStatus.OK.value());
+            var body =
+                    objectMapper.readValue(
+                            response.getResponse().getContentAsString(),
+                            BoardFullResponseDTO.class);
             Assertions.assertThat(body.getColumns()).isNotNull().isEmpty();
         }
 
         @Test
-        void shouldReturnEmptyTasksArray_whenColumnHasNoTasks() {
+        void shouldReturnEmptyTasksArray_whenColumnHasNoTasks() throws Exception {
             // arrange -- mockColumns are columns added directly to mockPopulatedBoard with no
             // tasks of their own (only mockPopulatedColumn, added separately, has tasks).
-            Pair<String, String> cookie = signin();
+            Cookie cookie = signinCookie();
             var taskLessColumn = mockColumns.getFirst();
 
             // act
             var response =
-                    given().cookie(cookie.getFirst(), cookie.getSecond())
-                            .when()
-                            .get(getFullBoardUrl(mockPopulatedBoard.getId()))
-                            .then()
-                            .extract();
+                    mockMvc.perform(get(getFullBoardUrl(mockPopulatedBoard.getId())).cookie(cookie))
+                            .andReturn();
 
             // assert
-            var body = response.as(BoardFullResponseDTO.class);
+            var body =
+                    objectMapper.readValue(
+                            response.getResponse().getContentAsString(),
+                            BoardFullResponseDTO.class);
             var reloadedColumn =
                     body.getColumns().stream()
                             .filter(c -> c.getId().equals(taskLessColumn.getId()))
@@ -159,22 +170,22 @@ public class BoardFullReadE2ETest extends AbstractAppE2ETest {
         }
 
         @Test
-        void shouldReturnEmptySubtasksArray_whenTaskHasNoSubtasks() {
+        void shouldReturnEmptySubtasksArray_whenTaskHasNoSubtasks() throws Exception {
             // arrange -- mockTasks are tasks added to mockPopulatedColumn with no subtasks of
             // their own (only mockPopulatedTask, added separately, has subtasks).
-            Pair<String, String> cookie = signin();
+            Cookie cookie = signinCookie();
             var subtaskLessTask = mockTasks.getFirst();
 
             // act
             var response =
-                    given().cookie(cookie.getFirst(), cookie.getSecond())
-                            .when()
-                            .get(getFullBoardUrl(mockPopulatedBoard.getId()))
-                            .then()
-                            .extract();
+                    mockMvc.perform(get(getFullBoardUrl(mockPopulatedBoard.getId())).cookie(cookie))
+                            .andReturn();
 
             // assert
-            var body = response.as(BoardFullResponseDTO.class);
+            var body =
+                    objectMapper.readValue(
+                            response.getResponse().getContentAsString(),
+                            BoardFullResponseDTO.class);
             var reloadedColumn =
                     body.getColumns().stream()
                             .filter(c -> c.getId().equals(mockPopulatedColumn.getId()))
@@ -189,9 +200,10 @@ public class BoardFullReadE2ETest extends AbstractAppE2ETest {
         }
 
         @Test
-        void shouldReturnUnauthorizedAndDiscloseNothing_whenBoardOwnedByAnotherUser() {
+        void shouldReturnUnauthorizedAndDiscloseNothing_whenBoardOwnedByAnotherUser()
+                throws Exception {
             // arrange
-            Pair<String, String> cookie = signin();
+            Cookie cookie = signinCookie();
             var otherUser = createUser();
             var otherBoard =
                     userService.addBoardByUserId(
@@ -212,33 +224,30 @@ public class BoardFullReadE2ETest extends AbstractAppE2ETest {
 
             // act
             var response =
-                    given().cookie(cookie.getFirst(), cookie.getSecond())
-                            .when()
-                            .get(getFullBoardUrl(otherBoard.getId()))
-                            .then()
-                            .extract();
+                    mockMvc.perform(get(getFullBoardUrl(otherBoard.getId())).cookie(cookie))
+                            .andReturn();
 
             // assert
-            Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
-            Assertions.assertThat(response.asString()).doesNotContain(otherBoard.getName());
+            Assertions.assertThat(response.getResponse().getStatus())
+                    .isEqualTo(HttpStatus.UNAUTHORIZED.value());
+            Assertions.assertThat(response.getResponse().getContentAsString())
+                    .doesNotContain(otherBoard.getName());
         }
 
         @Test
-        void shouldReturnNotFound_whenBoardDoesNotExist() {
+        void shouldReturnNotFound_whenBoardDoesNotExist() throws Exception {
             // arrange
-            Pair<String, String> cookie = signin();
+            Cookie cookie = signinCookie();
             var unknownBoardId = UUID.randomUUID().toString();
 
             // act
             var response =
-                    given().cookie(cookie.getFirst(), cookie.getSecond())
-                            .when()
-                            .get(getFullBoardUrl(unknownBoardId))
-                            .then()
-                            .extract();
+                    mockMvc.perform(get(getFullBoardUrl(unknownBoardId)).cookie(cookie))
+                            .andReturn();
 
             // assert
-            Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.NOT_FOUND.value());
+            Assertions.assertThat(response.getResponse().getStatus())
+                    .isEqualTo(HttpStatus.NOT_FOUND.value());
         }
     }
 
@@ -247,26 +256,28 @@ public class BoardFullReadE2ETest extends AbstractAppE2ETest {
     @Nested
     class FlatEquivalence {
         @Test
-        void shouldMatchFlatEndpointsFieldByField_forSameBoard() {
+        void shouldMatchFlatEndpointsFieldByField_forSameBoard() throws Exception {
             // arrange
-            Pair<String, String> cookie = signin();
+            Cookie cookie = signinCookie();
 
             // act
+            var nestedResponse =
+                    mockMvc.perform(get(getFullBoardUrl(mockPopulatedBoard.getId())).cookie(cookie))
+                            .andReturn();
             var nestedBody =
-                    given().cookie(cookie.getFirst(), cookie.getSecond())
-                            .when()
-                            .get(getFullBoardUrl(mockPopulatedBoard.getId()))
-                            .then()
-                            .extract()
-                            .as(BoardFullResponseDTO.class);
+                    objectMapper.readValue(
+                            nestedResponse.getResponse().getContentAsString(),
+                            BoardFullResponseDTO.class);
 
+            var flatColumnsResponse =
+                    mockMvc.perform(
+                                    get(getFlatColumnsUrl(mockPopulatedBoard.getId()))
+                                            .cookie(cookie))
+                            .andReturn();
             var flatColumns =
-                    given().cookie(cookie.getFirst(), cookie.getSecond())
-                            .when()
-                            .get(getFlatColumnsUrl(mockPopulatedBoard.getId()))
-                            .then()
-                            .extract()
-                            .as(ColumnResponseDTO[].class);
+                    objectMapper.readValue(
+                            flatColumnsResponse.getResponse().getContentAsString(),
+                            ColumnResponseDTO[].class);
 
             // assert -- every column field the flat DTO carries (id, name, version) is present
             // and equal on the corresponding nested object
@@ -280,15 +291,17 @@ public class BoardFullReadE2ETest extends AbstractAppE2ETest {
                 Assertions.assertThat(nestedColumn.getName()).isEqualTo(flatColumn.getName());
                 Assertions.assertThat(nestedColumn.getVersion()).isEqualTo(flatColumn.getVersion());
 
+                var flatTasksResponse =
+                        mockMvc.perform(
+                                        get(getFlatTasksUrl(
+                                                        mockPopulatedBoard.getId(),
+                                                        flatColumn.getId()))
+                                                .cookie(cookie))
+                                .andReturn();
                 var flatTasks =
-                        given().cookie(cookie.getFirst(), cookie.getSecond())
-                                .when()
-                                .get(
-                                        getFlatTasksUrl(
-                                                mockPopulatedBoard.getId(), flatColumn.getId()))
-                                .then()
-                                .extract()
-                                .as(TaskResponseDTO[].class);
+                        objectMapper.readValue(
+                                flatTasksResponse.getResponse().getContentAsString(),
+                                TaskResponseDTO[].class);
 
                 for (var flatTask : flatTasks) {
                     var nestedTask =
@@ -302,17 +315,18 @@ public class BoardFullReadE2ETest extends AbstractAppE2ETest {
                             .isEqualTo(flatTask.getDescription());
                     Assertions.assertThat(nestedTask.getVersion()).isEqualTo(flatTask.getVersion());
 
+                    var flatSubtasksResponse =
+                            mockMvc.perform(
+                                            get(getFlatSubtasksUrl(
+                                                            mockPopulatedBoard.getId(),
+                                                            flatColumn.getId(),
+                                                            flatTask.getId()))
+                                                    .cookie(cookie))
+                                    .andReturn();
                     var flatSubtasks =
-                            given().cookie(cookie.getFirst(), cookie.getSecond())
-                                    .when()
-                                    .get(
-                                            getFlatSubtasksUrl(
-                                                    mockPopulatedBoard.getId(),
-                                                    flatColumn.getId(),
-                                                    flatTask.getId()))
-                                    .then()
-                                    .extract()
-                                    .as(SubtaskResponseDTO[].class);
+                            objectMapper.readValue(
+                                    flatSubtasksResponse.getResponse().getContentAsString(),
+                                    SubtaskResponseDTO[].class);
 
                     for (var flatSubtask : flatSubtasks) {
                         var nestedSubtask =
@@ -333,37 +347,41 @@ public class BoardFullReadE2ETest extends AbstractAppE2ETest {
         }
 
         @Test
-        void shouldContainSameElementsAsFlatEndpoints_andBeInternallyOrdered_forSameBoard() {
+        void shouldContainSameElementsAsFlatEndpoints_andBeInternallyOrdered_forSameBoard()
+                throws Exception {
             // arrange
-            Pair<String, String> cookie = signin();
+            Cookie cookie = signinCookie();
 
             // act
+            var nestedResponse =
+                    mockMvc.perform(get(getFullBoardUrl(mockPopulatedBoard.getId())).cookie(cookie))
+                            .andReturn();
             var nestedBody =
-                    given().cookie(cookie.getFirst(), cookie.getSecond())
-                            .when()
-                            .get(getFullBoardUrl(mockPopulatedBoard.getId()))
-                            .then()
-                            .extract()
-                            .as(BoardFullResponseDTO.class);
+                    objectMapper.readValue(
+                            nestedResponse.getResponse().getContentAsString(),
+                            BoardFullResponseDTO.class);
 
+            var flatColumnsResponse =
+                    mockMvc.perform(
+                                    get(getFlatColumnsUrl(mockPopulatedBoard.getId()))
+                                            .cookie(cookie))
+                            .andReturn();
             var flatColumns =
-                    given().cookie(cookie.getFirst(), cookie.getSecond())
-                            .when()
-                            .get(getFlatColumnsUrl(mockPopulatedBoard.getId()))
-                            .then()
-                            .extract()
-                            .as(ColumnResponseDTO[].class);
+                    objectMapper.readValue(
+                            flatColumnsResponse.getResponse().getContentAsString(),
+                            ColumnResponseDTO[].class);
 
+            var flatTasksResponse =
+                    mockMvc.perform(
+                                    get(getFlatTasksUrl(
+                                                    mockPopulatedBoard.getId(),
+                                                    mockPopulatedColumn.getId()))
+                                            .cookie(cookie))
+                            .andReturn();
             var flatTasks =
-                    given().cookie(cookie.getFirst(), cookie.getSecond())
-                            .when()
-                            .get(
-                                    getFlatTasksUrl(
-                                            mockPopulatedBoard.getId(),
-                                            mockPopulatedColumn.getId()))
-                            .then()
-                            .extract()
-                            .as(TaskResponseDTO[].class);
+                    objectMapper.readValue(
+                            flatTasksResponse.getResponse().getContentAsString(),
+                            TaskResponseDTO[].class);
 
             // assert -- same elements as the flat endpoints, order-agnostic. A strict
             // element-for-element order match against the flat endpoints was tried first and
