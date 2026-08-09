@@ -346,7 +346,7 @@ public class TaskMoveE2ETest extends AbstractAppMockMvcTest {
         @Nested
         class UnownedTarget {
             @Test
-            void shouldReturnUnauthorized_whenTargetColumnOwnedByAnotherUser() throws Exception {
+            void shouldReturnForbidden_whenTargetColumnOwnedByAnotherUser() throws Exception {
                 // arrange
                 recorder.clear();
                 var cookie = signinCookie();
@@ -381,7 +381,7 @@ public class TaskMoveE2ETest extends AbstractAppMockMvcTest {
 
                 // assert
                 Assertions.assertThat(result.getResponse().getStatus())
-                        .isEqualTo(HttpStatus.UNAUTHORIZED.value());
+                        .isEqualTo(HttpStatus.FORBIDDEN.value());
 
                 var sourceColumnTasks = getColumnTasks(cookie, boardId, sourceColumnId);
 

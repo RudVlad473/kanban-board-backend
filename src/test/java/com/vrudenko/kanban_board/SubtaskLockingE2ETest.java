@@ -242,7 +242,7 @@ public class SubtaskLockingE2ETest extends AbstractAppMockMvcTest {
         }
 
         @Test
-        void shouldReturnUnauthorized_whenSubtaskOwnedByAnotherUser_andVersionCheckNeverRuns()
+        void shouldReturnForbidden_whenSubtaskOwnedByAnotherUser_andVersionCheckNeverRuns()
                 throws Exception {
             // arrange
             Cookie cookie = signinCookie();
@@ -260,7 +260,7 @@ public class SubtaskLockingE2ETest extends AbstractAppMockMvcTest {
                             otherSubtask.getId());
 
             // an intentionally wrong version — if ownership were checked after the version
-            // compare, this would surface as a 409 instead of a 401
+            // compare, this would surface as a 409 instead of a 403
             var updateDto =
                     UpdateSubtaskRequestDTO.builder()
                             .title("Attempted cross-user update")
@@ -278,7 +278,7 @@ public class SubtaskLockingE2ETest extends AbstractAppMockMvcTest {
 
             // assert
             Assertions.assertThat(response.getResponse().getStatus())
-                    .isEqualTo(HttpStatus.UNAUTHORIZED.value());
+                    .isEqualTo(HttpStatus.FORBIDDEN.value());
         }
     }
 }

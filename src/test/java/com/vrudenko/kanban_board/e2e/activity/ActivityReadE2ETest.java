@@ -180,7 +180,7 @@ public class ActivityReadE2ETest extends AbstractAppMockMvcTest {
 
             // assert
             Assertions.assertThat(unauthorizedResponse.getStatus())
-                    .isEqualTo(HttpStatus.UNAUTHORIZED.value());
+                    .isEqualTo(HttpStatus.FORBIDDEN.value());
             Assertions.assertThat(unauthorizedResponse.getContentAsString())
                     .doesNotContain(seededRow.getEventId().toString());
 
