@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
@@ -15,6 +16,8 @@ import com.vrudenko.kanban_board.dto.column_dto.UpdateColumnRequestDTO;
 import com.vrudenko.kanban_board.service.UserService;
 import com.vrudenko.kanban_board.support.fixtures.AbstractAppMockMvcTest;
 import jakarta.servlet.http.Cookie;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Nested;
@@ -207,6 +210,96 @@ class GlobalExceptionHandlerTest extends AbstractAppMockMvcTest {
                     .andExpect(status().isBadRequest())
                     .andExpect(content().contentType("application/problem+json"))
                     .andExpect(jsonPath("$.code").value("MALFORMED_REQUEST_BODY"));
+        }
+    }
+
+    /**
+     * Proves D-04/D-05: a genuinely unauthenticated request (no session cookie at all) now returns
+     * a real 401 carrying the same RFC 7807 envelope every other error path uses, produced by
+     * {@link com.vrudenko.kanban_board.security.ProblemDetailAuthenticationEntryPoint} -- a second,
+     * independent producer from this class's own {@code @ExceptionHandler} methods, since Spring
+     * Security's {@code ExceptionTranslationFilter} rejects the request before {@code
+     * DispatcherServlet} ever dispatches to a controller.
+     */
+    @Nested
+    class UnauthenticatedTest {
+
+        @Test
+        void shouldReturnUnauthorizedWithUnauthenticatedCode_whenNoSessionCookie()
+                throws Exception {
+            // arrange & act
+            var response =
+                    mockMvc.perform(get(ApiPaths.USERS + ApiPaths.ME + ApiPaths.THEME))
+                            .andReturn()
+                            .getResponse();
+
+            // assert
+            Assertions.assertThat(response.getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
+            Assertions.assertThat(response.getContentType()).isEqualTo("application/problem+json");
+
+            var body = objectMapper.readTree(response.getContentAsString());
+            Assertions.assertThat(body.get("status").asInt())
+                    .isEqualTo(HttpStatus.UNAUTHORIZED.value());
+            Assertions.assertThat(body.get("code").asText()).isEqualTo("UNAUTHENTICATED");
+        }
+
+        @Test
+        void shouldReturnOk_whenSignedInRequestToSameRoute() throws Exception {
+            // arrange
+            Cookie cookie = signinCookie();
+
+            // act
+            var response =
+                    mockMvc.perform(
+                                    get(ApiPaths.USERS + ApiPaths.ME + ApiPaths.THEME)
+                                            .cookie(cookie))
+                            .andReturn()
+                            .getResponse();
+
+            // assert: the entry point wiring did not break the happy path
+            Assertions.assertThat(response.getStatus()).isEqualTo(HttpStatus.OK.value());
+        }
+
+        @Test
+        void shouldMatchAccessDeniedBodyKeySet_whenComparing401To403() throws Exception {
+            // arrange: a real 403 ownership-denial body, from a second, independent user
+            Cookie cookie = signinCookie();
+            var otherUser = createUser();
+            var otherBoard =
+                    userService.addBoardByUserId(
+                            otherUser.getId(),
+                            SaveBoardRequestDTO.builder()
+                                    .name(
+                                            dataFactory.getRandomWord(
+                                                    ValidationConstants.MIN_BOARD_NAME_LENGTH + 4))
+                                    .build());
+
+            // act
+            var unauthenticatedResponse =
+                    mockMvc.perform(get(ApiPaths.USERS + ApiPaths.ME + ApiPaths.THEME))
+                            .andReturn()
+                            .getResponse();
+            var forbiddenResponse =
+                    mockMvc.perform(
+                                    get(ApiPaths.BOARDS + "/" + otherBoard.getId() + ApiPaths.FULL)
+                                            .cookie(cookie))
+                            .andReturn()
+                            .getResponse();
+
+            // assert: two independent producers (ProblemDetailAuthenticationEntryPoint and
+            // GlobalExceptionHandler) emit the exact same top-level key set
+            var unauthenticatedKeys =
+                    topLevelKeys(
+                            objectMapper.readTree(unauthenticatedResponse.getContentAsString()));
+            var forbiddenKeys =
+                    topLevelKeys(objectMapper.readTree(forbiddenResponse.getContentAsString()));
+            Assertions.assertThat(unauthenticatedKeys).isEqualTo(forbiddenKeys);
+        }
+
+        private Set<String> topLevelKeys(JsonNode node) {
+            var keys = new HashSet<String>();
+            node.fieldNames().forEachRemaining(keys::add);
+            return keys;
         }
     }
 }

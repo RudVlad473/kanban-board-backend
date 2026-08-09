@@ -138,14 +138,12 @@ public class BoardCreationE2ETest extends AbstractAppE2ETest {
         }
 
         @Test
-        void shouldReturnForbiddenAndCreateNoRow_whenNotAuthenticated() {
-            // arrange -- no session cookie at all (not merely a wrong user). This app registers
-            // no custom AuthenticationEntryPoint (no formLogin/httpBasic in
-            // SecurityConfiguration), so Spring Security's default Http403ForbiddenEntryPoint
-            // applies uniformly to every @PreAuthorize("isAuthenticated()") route when the
-            // security context is empty -- verified against this route directly, since no
-            // existing test in this codebase exercises a fully-unauthenticated (zero-cookie)
-            // request.
+        void shouldReturnUnauthorizedAndCreateNoRow_whenNotAuthenticated() {
+            // arrange -- no session cookie at all (not merely a wrong user).
+            // ProblemDetailAuthenticationEntryPoint (plan 07.1-03) now produces a real 401 for
+            // this case, wired explicitly via SecurityConfiguration's
+            // http.exceptionHandling(...) DSL call; 403 is reserved for an
+            // authenticated-but-forbidden ownership denial (D-04, D-05).
             var dto = SaveBoardRequestDTO.builder().name(randomBoardName()).build();
             var boardCountBefore = boardService.findAll().size();
 
@@ -158,8 +156,11 @@ public class BoardCreationE2ETest extends AbstractAppE2ETest {
                             .then()
                             .extract();
 
-            // assert
-            Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.FORBIDDEN.value());
+            // assert: the real-socket tier proves the entry point's envelope reaches a genuine
+            // HTTP client, not just MockMvc's in-process dispatch
+            Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
+            Assertions.assertThat(response.body().jsonPath().getString("code"))
+                    .isEqualTo("UNAUTHENTICATED");
             Assertions.assertThat(boardService.findAll().size()).isEqualTo(boardCountBefore);
         }
     }

@@ -15,6 +15,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.annotation.web.configurers.SessionManagementConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.logout.HeaderWriterLogoutHandler;
 import org.springframework.security.web.authentication.session.ChangeSessionIdAuthenticationStrategy;
@@ -34,6 +35,7 @@ import org.springframework.session.security.SpringSessionBackedSessionRegistry;
 public class SecurityConfiguration {
     private final AuthenticationProvider authenticationProvider;
     private final LogoutHandler handlerLogout;
+    private final AuthenticationEntryPoint problemDetailAuthenticationEntryPoint;
 
     // Shared by the sessionManagement DSL below and by the enforcing bean, so the two cannot
     // drift to different numbers.
@@ -68,6 +70,15 @@ public class SecurityConfiguration {
 
                     auth.anyRequest().authenticated();
                 });
+
+        // Mandatory, unlike CorsConfigurationSource: an AuthenticationEntryPoint bean is NOT
+        // auto-detected from the context. Without this explicit DSL call, a genuinely
+        // unauthenticated request still falls through to Spring Security's default
+        // Http403ForbiddenEntryPoint (bare 403, no body) instead of the RFC 7807 401 envelope
+        // ProblemDetailAuthenticationEntryPoint produces (D-04, D-05).
+        http.exceptionHandling(
+                handling ->
+                        handling.authenticationEntryPoint(problemDetailAuthenticationEntryPoint));
 
         // session management
         // These lines are declarations only -- no filter reads them on this application's

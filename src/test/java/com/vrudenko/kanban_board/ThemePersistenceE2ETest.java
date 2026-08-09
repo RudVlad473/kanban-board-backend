@@ -62,16 +62,16 @@ public class ThemePersistenceE2ETest extends AbstractAppMockMvcTest {
         }
 
         @Test
-        void shouldReturnForbidden_whenNotAuthenticated() throws Exception {
+        void shouldReturnUnauthorized_whenNotAuthenticated() throws Exception {
             // arrange
             // act
             var response = mockMvc.perform(get(THEME_URL)).andReturn().getResponse();
 
-            // assert: Spring Security's default Http403ForbiddenEntryPoint applies uniformly to
-            // every @PreAuthorize("isAuthenticated()") route with no session cookie at all --
-            // verified pre-existing, route-independent framework behavior (plan 06-02 found the
-            // identical result for the fully-unauthenticated POST /boards case).
-            Assertions.assertThat(response.getStatus()).isEqualTo(HttpStatus.FORBIDDEN.value());
+            // assert: ProblemDetailAuthenticationEntryPoint (plan 07.1-03) now produces a real
+            // 401 for a genuinely unauthenticated request (no session cookie at all) -- 403 is
+            // reserved for an authenticated-but-forbidden case (D-04, D-05), which this route
+            // never exercises since it has no ownership dimension.
+            Assertions.assertThat(response.getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
         }
     }
 
@@ -173,7 +173,7 @@ public class ThemePersistenceE2ETest extends AbstractAppMockMvcTest {
         }
 
         @Test
-        void shouldReturnForbidden_whenNotAuthenticated() throws Exception {
+        void shouldReturnUnauthorized_whenNotAuthenticated() throws Exception {
             // arrange
             var dto = UpdateThemeRequestDTO.builder().theme(ThemePreference.DARK).build();
 
@@ -186,8 +186,9 @@ public class ThemePersistenceE2ETest extends AbstractAppMockMvcTest {
                             .andReturn()
                             .getResponse();
 
-            // assert: see GetTheme.shouldReturnForbidden_whenNotAuthenticated for why 403, not 401
-            Assertions.assertThat(response.getStatus()).isEqualTo(HttpStatus.FORBIDDEN.value());
+            // assert: see GetTheme.shouldReturnUnauthorized_whenNotAuthenticated for why 401,
+            // not 403
+            Assertions.assertThat(response.getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
         }
 
         /**
