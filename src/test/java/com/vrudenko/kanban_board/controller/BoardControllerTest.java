@@ -11,7 +11,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.board_dto.BoardResponseDTO;
-import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
+import com.vrudenko.kanban_board.dto.board_dto.UpdateBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.column_dto.ColumnResponseDTO;
 import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
 import com.vrudenko.kanban_board.service.ColumnService;
@@ -105,31 +105,30 @@ public class BoardControllerTest extends AbstractAppTest {
             var userId = getOwningUser().getId();
             var boardId = mockPopulatedBoard.getId();
             var url = getBoardPrefix() + "/" + boardId;
-            var updateDto = SaveBoardRequestDTO.builder().name("Updated Board Name").build();
-            var expectedResponse =
-                    BoardResponseDTO.builder()
-                            .id(boardId)
-                            .name(updateDto.getName())
-                            .build(); // Columns
-            // preservation
-            // would
-            // need
-            // to be
-            // checked
-            // differently
-            // or
-            // BoardResponseDTO updated to include them with accessible methods.
+            var updateDto =
+                    UpdateBoardRequestDTO.builder()
+                            .name("Updated Board Name")
+                            .version(mockPopulatedBoard.getVersion())
+                            .build();
 
             // Act
+            var response =
+                    mockMvc.perform(
+                                    put(url).with(user(userId))
+                                            .contentType(APPLICATION_JSON)
+                                            .content(objectMapper.writeValueAsString(updateDto)))
+                            .andDo(print())
+                            .andExpect(status().isOk())
+                            .andReturn();
+
             // Assert
-            mockMvc.perform(
-                            put(url).with(user(userId))
-                                    .contentType(APPLICATION_JSON)
-                                    .content(objectMapper.writeValueAsString(updateDto)))
-                    .andDo(print())
-                    .andExpect(status().isOk())
-                    .andExpect(content().json(objectMapper.writeValueAsString(expectedResponse)))
-                    .andReturn();
+            var responseBody =
+                    objectMapper.readValue(
+                            response.getResponse().getContentAsString(), BoardResponseDTO.class);
+            Assertions.assertThat(responseBody.getId()).isEqualTo(boardId);
+            Assertions.assertThat(responseBody.getName()).isEqualTo(updateDto.getName());
+            Assertions.assertThat(responseBody.getVersion())
+                    .isNotEqualTo(mockPopulatedBoard.getVersion());
         }
 
         @Test
@@ -139,7 +138,10 @@ public class BoardControllerTest extends AbstractAppTest {
             var userId = getOwningUser().getId();
             var nonExistentBoardId = java.util.UUID.randomUUID().toString();
             var url = getBoardPrefix() + "/" + nonExistentBoardId;
-            var updateDto = SaveBoardRequestDTO.builder().name("Updated Board Name").build();
+            // Any non-null version satisfies validation here -- ownership/findById throws before
+            // the version-compare guard ever runs against a board that doesn't exist.
+            var updateDto =
+                    UpdateBoardRequestDTO.builder().name("Updated Board Name").version(0L).build();
 
             // Act
             // Assert
@@ -159,7 +161,34 @@ public class BoardControllerTest extends AbstractAppTest {
             var boardId = mockPopulatedBoard.getId();
             var url = getBoardPrefix() + "/" + boardId;
             // Assuming blank name is invalid
-            var updateDto = SaveBoardRequestDTO.builder().name("").build();
+            var updateDto =
+                    UpdateBoardRequestDTO.builder()
+                            .name("")
+                            .version(mockPopulatedBoard.getVersion())
+                            .build();
+
+            // Act
+            // Assert
+            mockMvc.perform(
+                            put(url).with(user(userId))
+                                    .contentType(APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(updateDto)))
+                    .andDo(print())
+                    .andExpect(status().isBadRequest())
+                    .andReturn();
+        }
+
+        // Single-endpoint HTTP contract coverage (docs/CODE_STYLE.md rule 4): a version-less PUT
+        // body is a request-shape concern belonging here, distinct from BoardLockingTest's e2e
+        // proof of the 409 stale-write conflict itself.
+        @Test
+        void testWithAuthenticatedUser_shouldReturnBadRequest_whenVersionIsMissing()
+                throws Exception {
+            // Arrange
+            var userId = getOwningUser().getId();
+            var boardId = mockPopulatedBoard.getId();
+            var url = getBoardPrefix() + "/" + boardId;
+            var updateDto = UpdateBoardRequestDTO.builder().name("Updated Board Name").build();
 
             // Act
             // Assert

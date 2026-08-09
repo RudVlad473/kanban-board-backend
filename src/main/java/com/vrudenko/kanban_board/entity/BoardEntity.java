@@ -8,6 +8,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.util.Set;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -49,4 +50,15 @@ public class BoardEntity extends BaseEntity implements BaseBoard {
     @ManyToOne
     @JoinColumn(name = "user_id")
     private UserEntity user;
+
+    // Excluded from equals/hashCode for the same reason `column` above is: this field's whole
+    // purpose (D-13) is to change on every update, and this class -- unlike ColumnEntity/
+    // TaskEntity, which dropped field-based equals/hashCode entirely -- still derives them from
+    // its fields via @EqualsAndHashCode. A mutable field driving equals/hashCode is exactly the
+    // hazard those two entities' comments describe: an object already stored in a HashSet/HashMap
+    // keyed by its old hashCode becomes unreachable once the field it was hashed on changes.
+    @EqualsAndHashCode.Exclude
+    @Version
+    @Column(nullable = false)
+    private Long version;
 }

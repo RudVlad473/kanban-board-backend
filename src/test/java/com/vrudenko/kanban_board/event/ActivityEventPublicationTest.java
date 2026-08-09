@@ -158,7 +158,10 @@ public class ActivityEventPublicationTest extends AbstractAppTest {
             boardService.updateById(
                     userId,
                     mockPopulatedBoard.getId(),
-                    UpdateBoardRequestDTO.builder().name(newName).build());
+                    UpdateBoardRequestDTO.builder()
+                            .name(newName)
+                            .version(mockPopulatedBoard.getVersion())
+                            .build());
 
             // assert
             Assertions.assertThat(recorder.getRecorded()).isEmpty();

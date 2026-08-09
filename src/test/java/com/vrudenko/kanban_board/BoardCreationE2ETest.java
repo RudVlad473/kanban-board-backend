@@ -236,7 +236,11 @@ public class BoardCreationE2ETest extends AbstractAppE2ETest {
             var response =
                     given().cookie(cookie.getFirst(), cookie.getSecond())
                             .contentType(ContentType.JSON)
-                            .body(UpdateBoardRequestDTO.builder().name(nameA).build())
+                            .body(
+                                    UpdateBoardRequestDTO.builder()
+                                            .name(nameA)
+                                            .version(boardB.getVersion())
+                                            .build())
                             .when()
                             .put(ApiPaths.BOARDS + "/" + boardB.getId())
                             .then()
@@ -287,7 +291,11 @@ public class BoardCreationE2ETest extends AbstractAppE2ETest {
             var response =
                     given().cookie(cookie.getFirst(), cookie.getSecond())
                             .contentType(ContentType.JSON)
-                            .body(UpdateBoardRequestDTO.builder().name(boardName).build())
+                            .body(
+                                    UpdateBoardRequestDTO.builder()
+                                            .name(boardName)
+                                            .version(board.getVersion())
+                                            .build())
                             .when()
                             .put(ApiPaths.BOARDS + "/" + board.getId())
                             .then()

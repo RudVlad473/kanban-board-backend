@@ -16,11 +16,13 @@ import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
 import com.vrudenko.kanban_board.mapper.BoardFullMapper;
 import com.vrudenko.kanban_board.mapper.BoardMapper;
 import com.vrudenko.kanban_board.repository.BoardRepository;
+import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -34,6 +36,8 @@ public class BoardService {
     @Autowired private ColumnService columnService;
 
     @Autowired private OwnershipVerifierService ownershipVerifierService;
+
+    @Autowired private EntityManager entityManager;
 
     @Autowired private ApplicationEventPublisher eventPublisher;
 
@@ -99,10 +103,30 @@ public class BoardService {
         return boardFullMapper.toBoardFullResponseDTO(fullBoard.get());
     }
 
+    /**
+     * Explicit version check is required in addition to {@code @Version}, for the same reason
+     * {@link ColumnService#updateById} needs one: this load-then-save flow runs entirely within one
+     * transaction, so Hibernate's own dirty-checking optimistic lock (which fires on the UPDATE
+     * statement) does not by itself model a stale-read-then-write race across separate HTTP
+     * requests. Comparing the caller-supplied {@code boardDTO.getVersion()} against the just-loaded
+     * managed entity's version, before any field is mutated -- and before the duplicate-name guard
+     * below, matching {@code ColumnService}'s "compare before any other logic" ordering -- is what
+     * actually catches that race (D-13).
+     */
     @Transactional
     public BoardResponseDTO updateById(
             String userId, String boardId, UpdateBoardRequestDTO boardDTO) {
         var boardToUpdate = findById(userId, boardId);
+
+        // boardDTO.getVersion() is read ONLY here, for this stale-write precondition check -- it
+        // is never assigned onto `boardToUpdate`. The version value that actually gets persisted
+        // is generated entirely by Hibernate's own @Version increment mechanism when the UPDATE
+        // statement runs (forced below via entityManager.flush()), independent of whatever value
+        // the client sent.
+        if (!boardToUpdate.getVersion().equals(boardDTO.getVersion())) {
+            throw new OptimisticLockingFailureException(
+                    "Board was modified by another request, please refetch.");
+        }
 
         // A no-op rename (new name equals the current name) must not collide with the board's
         // own existing row, so the uniqueness check is skipped entirely in that case.
@@ -116,6 +140,13 @@ public class BoardService {
         boardToUpdate.setName(boardDTO.getName());
 
         var savedBoard = boardRepository.save(boardToUpdate);
+
+        // Hibernate only bumps the in-memory @Version field once the UPDATE statement actually
+        // runs, which normally happens at transaction commit, not at save(). Flushing here forces
+        // that UPDATE (and the version increment) to happen before the response DTO is built, so
+        // the caller sees the new version instead of the stale pre-update one -- same reasoning as
+        // ColumnService.updateById.
+        entityManager.flush();
 
         return boardMapper.toResponseDTO(savedBoard);
     }

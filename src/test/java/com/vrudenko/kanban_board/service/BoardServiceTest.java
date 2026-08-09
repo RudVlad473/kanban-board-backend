@@ -166,7 +166,10 @@ public class BoardServiceTest extends AbstractAppTest {
                 getOwningUser().getId(),
                 boardBeforeUpdate.getId(),
                 boardMapper.toUpdateBoardRequestDTO(
-                        BoardEntity.builder().name(newBoardName).build()));
+                        BoardEntity.builder()
+                                .name(newBoardName)
+                                .version(boardBeforeUpdate.getVersion())
+                                .build()));
 
         // Assert
         var boardAfterUpdate =
@@ -283,6 +286,7 @@ public class BoardServiceTest extends AbstractAppTest {
                                             boardMapper.toUpdateBoardRequestDTO(
                                                     BoardEntity.builder()
                                                             .name(boardA.getName())
+                                                            .version(boardB.getVersion())
                                                             .build())));
 
             // assert
@@ -313,7 +317,10 @@ public class BoardServiceTest extends AbstractAppTest {
                             userId,
                             board.getId(),
                             boardMapper.toUpdateBoardRequestDTO(
-                                    BoardEntity.builder().name(board.getName()).build()));
+                                    BoardEntity.builder()
+                                            .name(board.getName())
+                                            .version(board.getVersion())
+                                            .build()));
 
             // assert
             Assertions.assertThat(result.getName()).isEqualTo(board.getName());
