@@ -5,16 +5,16 @@ milestone_name: Infra Migration & Schema Registry
 current_phase: 5
 current_phase_name: Infra Migration
 status: planning
-stopped_at: Phase 7 context gathered
-last_updated: "2026-08-09T14:18:59.834Z"
+stopped_at: Phase 07.1 context gathered
+last_updated: "2026-08-09T15:45:30.034Z"
 last_activity: 2026-08-09
 last_activity_desc: Phase 7 complete, transitioned to Phase 5
 progress:
-  total_phases: 6
+  total_phases: 7
   completed_phases: 5
   total_plans: 30
   completed_plans: 24
-  percent: 80
+  percent: 71
 ---
 
 # Project State
@@ -196,6 +196,7 @@ Carried from research (address during Phase 4/5 planning):
 - Phase 6 added: Mock-up Feature Gap Closure — six gaps from `docs/MOCKUP_FEATURE_GAP.md` §1 (board creation route, column deletion route, task/column ordering, full-board nested read, per-user theme persistence, subtask optimistic locking); un-defers the `GET /boards/{boardId}/full` item recorded below at 2026-07-31
 - Phase 7 added: Restructure test folder — picked up the pending test-restructure todo (2026-08-08) as a full phase rather than a quick task, since it spans ~25+ test files and needs a judgment call on scope, not a mechanical edit
 - Phase 7 completed 2026-08-09 (7/7 plans, 3 waves, verified 9/9 must-haves) — see decisions above and `07-VERIFICATION.md`. Confirmed at completion time that Phase 6 (Mock-up Feature Gap Closure) had already been fully executed and verified in a prior session (49/49 must-haves, `06-VERIFICATION.md`); STATE.md's frontmatter had simply not been refreshed since then. `phase.complete` correctly advanced current_phase to 5 (Infra Migration), the next genuinely unstarted phase.
+- Phase 07.1 inserted after Phase 7: Address hard blockers and inconsistencies from the frontend-integration-readiness audit (CORS, signin/signup validation, error-envelope consistency, 401/403 split, create-status-code consistency, Board/User optimistic locking) plus security/injection and auth-gating test coverage (URGENT)
 
 ## Deferred Items
 
@@ -220,9 +221,9 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-09T14:18:59.834Z
-Stopped at: Phase 7 complete and verified; transitioned to Phase 5
-Resume file: .planning/phases/07-restructure-test-folder-separate-setup-from-tests-evaluate-n/07-VERIFICATION.md
+Last session: 2026-08-09T15:45:29.995Z
+Stopped at: Phase 07.1 context gathered
+Resume file: .planning/phases/07.1-address-hard-blockers-and-inconsistencies-from-the-frontend/07.1-CONTEXT.md
 
 ## Operator Next Steps
 
