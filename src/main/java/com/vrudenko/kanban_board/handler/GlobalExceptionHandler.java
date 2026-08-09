@@ -1,6 +1,7 @@
 package com.vrudenko.kanban_board.handler;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.vrudenko.kanban_board.constant.ErrorCode;
 import com.vrudenko.kanban_board.exception.AppAccessDeniedException;
 import com.vrudenko.kanban_board.exception.AppDuplicateResourceException;
 import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
@@ -14,6 +15,7 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.util.Pair;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
@@ -34,8 +36,11 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(AppEntityNotFoundException.class)
-    public ResponseEntity<String> handleAppEntityNotFound(AppEntityNotFoundException ex) {
-        return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
+    public ResponseEntity<ProblemDetail> handleAppEntityNotFound(AppEntityNotFoundException ex) {
+        var problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        problem.setProperty(ErrorCode.CODE_PROPERTY, ErrorCode.ENTITY_NOT_FOUND.name());
+
+        return ResponseEntity.status(problem.getStatus()).body(problem);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
