@@ -22,5 +22,11 @@ import lombok.Setter;
 public class BoardFullResponseDTO implements BaseId, BaseBoard {
     private String id;
     private String name;
+
+    // D-13/D-15: the board's own version, alongside the column/task/subtask versions this
+    // document already carries -- so a client reading the nested document has everything it needs
+    // to issue a subsequent PUT /boards/{boardId} without a separate flat GET first.
+    private Long version;
+
     private List<ColumnFullResponseDTO> columns;
 }
