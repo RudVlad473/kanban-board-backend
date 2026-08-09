@@ -1,6 +1,7 @@
 package com.vrudenko.kanban_board.security;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,6 +12,7 @@ import com.vrudenko.kanban_board.dto.user_dto.SignupRequestDTO;
 import com.vrudenko.kanban_board.support.fixtures.AbstractAppMockMvcTest;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.UUID;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Nested;
@@ -227,6 +229,110 @@ public class AuthenticationE2ETest extends AbstractAppMockMvcTest {
                 Assertions.assertThat(result.getResponse().getCookie(COOKIE_NAME)).isNull();
             }
         }
+
+        // D-06/D-08: field validation on the signin body actually fires and is distinguishable
+        // from a genuine credential failure -- see RESEARCH.md Pattern 3 for why @Valid's
+        // pre-method-body timing makes this fall out with zero ordering code, and Pitfall 5 for
+        // why "falls out naturally" still needs its own regression test.
+        @Nested
+        class FieldValidation {
+            @Test
+            void shouldReturnBadRequestWithValidationFailedCode_whenEmailIsMalformed()
+                    throws Exception {
+                // arrange: password is a valid, well-shaped password -- email is the only
+                // constraint this request violates
+                var body =
+                        SigninRequestDTO.builder()
+                                .email("not-an-email")
+                                .password(generateValidPassword())
+                                .build();
+
+                // act & assert
+                mockMvc.perform(
+                                post(ApiPaths.SIGNIN)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(objectMapper.writeValueAsString(body)))
+                        .andExpect(status().isBadRequest())
+                        .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                        .andExpect(jsonPath("$.errors.email").exists());
+            }
+        }
+
+        // D-08: the generic BadCredentialsException collapse must stay indistinguishable for
+        // every genuine credential failure -- an unregistered (but well-formed) email and a
+        // registered email with a wrong (but well-shaped) password must produce the exact same
+        // response, not merely the same status code.
+        @Nested
+        class AntiEnumeration {
+            @Test
+            void
+                    shouldReturnUnauthorizedWithBadCredentialsCode_whenEmailIsWellFormedButUnregistered()
+                            throws Exception {
+                // arrange
+                var body =
+                        SigninRequestDTO.builder()
+                                .email(collisionProofEmail())
+                                .password(generateValidPassword())
+                                .build();
+
+                // act & assert
+                mockMvc.perform(
+                                post(ApiPaths.SIGNIN)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(objectMapper.writeValueAsString(body)))
+                        .andExpect(status().isUnauthorized())
+                        .andExpect(jsonPath("$.code").value("BAD_CREDENTIALS"));
+            }
+
+            @Test
+            void
+                    shouldReturnByteIdenticalBody_whenComparingUnregisteredEmailAndWrongPasswordSignins()
+                            throws Exception {
+                // arrange: two structurally different failure causes -- an email that was never
+                // registered, and a registered email paired with an incorrect (but
+                // otherwise-valid-shaped) password. Asserting byte-identical bodies, not merely
+                // matching status codes, is what actually proves neither response leaks which
+                // case occurred.
+                var unregisteredEmailBody =
+                        SigninRequestDTO.builder()
+                                .email(collisionProofEmail())
+                                .password(generateValidPassword())
+                                .build();
+                var wrongPasswordBody =
+                        SigninRequestDTO.builder()
+                                .email(getOwningUser().getEmail())
+                                .password(getOwningUserPassword().concat("__"))
+                                .build();
+
+                // act
+                var unregisteredEmailResponse =
+                        mockMvc.perform(
+                                        post(ApiPaths.SIGNIN)
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(
+                                                        objectMapper.writeValueAsString(
+                                                                unregisteredEmailBody)))
+                                .andReturn()
+                                .getResponse();
+                var wrongPasswordResponse =
+                        mockMvc.perform(
+                                        post(ApiPaths.SIGNIN)
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(
+                                                        objectMapper.writeValueAsString(
+                                                                wrongPasswordBody)))
+                                .andReturn()
+                                .getResponse();
+
+                // assert
+                Assertions.assertThat(unregisteredEmailResponse.getStatus())
+                        .isEqualTo(HttpStatus.UNAUTHORIZED.value());
+                Assertions.assertThat(wrongPasswordResponse.getStatus())
+                        .isEqualTo(HttpStatus.UNAUTHORIZED.value());
+                Assertions.assertThat(unregisteredEmailResponse.getContentAsString())
+                        .isEqualTo(wrongPasswordResponse.getContentAsString());
+            }
+        }
     }
 
     @Nested
@@ -257,6 +363,174 @@ public class AuthenticationE2ETest extends AbstractAppMockMvcTest {
                 Assertions.assertThat(result.getResponse().getStatus())
                         .isEqualTo(HttpStatus.CREATED.value());
                 Assertions.assertThat(result.getResponse().getCookie(COOKIE_NAME)).isNotNull();
+            }
+        }
+
+        // D-06: field constraints on the signup body actually fire, per-field, rather than being
+        // silently skipped -- see AbstractAppTest.generateValidPassword()'s Javadoc for the exact
+        // @Password constraint these bodies are constructed to isolate.
+        @Nested
+        class FieldValidation {
+            @Test
+            void shouldReturnBadRequestWithValidationFailedCode_whenEmailIsMalformed()
+                    throws Exception {
+                // arrange: password/displayName are valid -- email is the only violated
+                // constraint
+                var body =
+                        SignupRequestDTO.builder()
+                                .email("not-an-email")
+                                .password(generateValidPassword())
+                                .displayName(
+                                        dataFactory.getRandomWord(
+                                                ValidationConstants.MIN_USER_DISPLAY_NAME_LENGTH))
+                                .build();
+
+                // act & assert
+                mockMvc.perform(
+                                post(ApiPaths.SIGNUP)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(objectMapper.writeValueAsString(body)))
+                        .andExpect(status().isBadRequest())
+                        .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                        .andExpect(jsonPath("$.errors.email").exists());
+            }
+
+            @Test
+            void shouldReturnBadRequestWithValidationFailedCode_whenPasswordLacksUppercase()
+                    throws Exception {
+                // arrange: email/displayName are valid -- lower-casing an otherwise-valid
+                // generateValidPassword() strips its one guaranteed uppercase character while
+                // keeping the lowercase/digit/special-char classes intact, isolating password as
+                // the only violated constraint
+                var weakPassword = generateValidPassword().toLowerCase(Locale.ROOT);
+                var body =
+                        SignupRequestDTO.builder()
+                                .email(collisionProofEmail())
+                                .password(weakPassword)
+                                .displayName(
+                                        dataFactory.getRandomWord(
+                                                ValidationConstants.MIN_USER_DISPLAY_NAME_LENGTH))
+                                .build();
+
+                // act & assert
+                mockMvc.perform(
+                                post(ApiPaths.SIGNUP)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(objectMapper.writeValueAsString(body)))
+                        .andExpect(status().isBadRequest())
+                        .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                        .andExpect(jsonPath("$.errors.password").exists());
+            }
+        }
+
+        /**
+         * D-07 (deliberate trade-off, recorded here so it reads as a decision rather than an
+         * oversight to any later reviewer or the {@code /claude-security} scan in plan 07.1-09):
+         * signup reveals whether an email is already registered via an explicit 409, rather than
+         * collapsing into signin's generic 401. Knowingly accepted email enumeration on signup for
+         * this project's personal/portfolio scope, weighed against the cost of building a full
+         * email-verification flow -- see {@code T-07.1-04-02} in {@code 07.1-04-PLAN.md}'s threat
+         * register.
+         */
+        @Nested
+        class DuplicateEmail {
+            @Test
+            void shouldReturnConflictWithDuplicateResourceCode_whenEmailAlreadyRegistered()
+                    throws Exception {
+                // arrange: a fresh, valid signup succeeds (201) and registers the email
+                var email = collisionProofEmail();
+                var firstBody =
+                        SignupRequestDTO.builder()
+                                .email(email)
+                                .password(generateValidPassword())
+                                .displayName(
+                                        dataFactory.getRandomWord(
+                                                ValidationConstants.MIN_USER_DISPLAY_NAME_LENGTH))
+                                .build();
+                mockMvc.perform(
+                                post(ApiPaths.SIGNUP)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(objectMapper.writeValueAsString(firstBody)))
+                        .andExpect(status().isCreated());
+
+                var duplicateBody =
+                        SignupRequestDTO.builder()
+                                .email(email)
+                                .password(generateValidPassword())
+                                .displayName(
+                                        dataFactory.getRandomWord(
+                                                ValidationConstants.MIN_USER_DISPLAY_NAME_LENGTH))
+                                .build();
+
+                // act: an otherwise-valid signup reusing that email is rejected as a 409, not
+                // swallowed into signin's generic 401
+                var response =
+                        mockMvc.perform(
+                                        post(ApiPaths.SIGNUP)
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(
+                                                        objectMapper.writeValueAsString(
+                                                                duplicateBody)))
+                                .andReturn()
+                                .getResponse();
+
+                // assert
+                Assertions.assertThat(response.getStatus()).isEqualTo(HttpStatus.CONFLICT.value());
+                var body = objectMapper.readTree(response.getContentAsString());
+                Assertions.assertThat(body.get("code").asText()).isEqualTo("DUPLICATE_RESOURCE");
+                Assertions.assertThat(body.get("detail").asText()).contains(email);
+            }
+
+            /**
+             * D-09: field validation must run, and win, before the duplicate-email check -- proven
+             * empirically here, not just inferred from {@code @Valid}'s pre-method-body timing
+             * (RESEARCH.md Pitfall 5). A malformed *email* cannot simultaneously equal an
+             * already-registered email, since every registered email already passed
+             * {@code @AppEmail} to be created -- so this violates {@code @Password} instead while
+             * reusing a genuinely duplicate email, which still exercises the same ordering
+             * question: does the duplicate-email 409 or the validation-failure 400 win when a
+             * single request qualifies for both?
+             */
+            @Test
+            void shouldReturnBadRequestNotConflict_whenSignupIsBothInvalidAndDuplicate()
+                    throws Exception {
+                // arrange: register a real user first, so its email is a genuine duplicate target
+                var email = collisionProofEmail();
+                var firstBody =
+                        SignupRequestDTO.builder()
+                                .email(email)
+                                .password(generateValidPassword())
+                                .displayName(
+                                        dataFactory.getRandomWord(
+                                                ValidationConstants.MIN_USER_DISPLAY_NAME_LENGTH))
+                                .build();
+                mockMvc.perform(
+                                post(ApiPaths.SIGNUP)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(objectMapper.writeValueAsString(firstBody)))
+                        .andExpect(status().isCreated());
+
+                // act: reuse that now-duplicate email, paired with a password too short to
+                // satisfy @Password -- both the duplicate-email guard and field validation would
+                // independently reject this request
+                var invalidAndDuplicateBody =
+                        SignupRequestDTO.builder()
+                                .email(email)
+                                .password("short")
+                                .displayName(
+                                        dataFactory.getRandomWord(
+                                                ValidationConstants.MIN_USER_DISPLAY_NAME_LENGTH))
+                                .build();
+
+                // assert
+                mockMvc.perform(
+                                post(ApiPaths.SIGNUP)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(
+                                                objectMapper.writeValueAsString(
+                                                        invalidAndDuplicateBody)))
+                        .andExpect(status().isBadRequest())
+                        .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
             }
         }
     }
