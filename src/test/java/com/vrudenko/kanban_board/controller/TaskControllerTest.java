@@ -11,14 +11,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
+import com.vrudenko.kanban_board.dto.subtask_dto.SubtaskResponseDTO;
 import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
 import com.vrudenko.kanban_board.dto.task_dto.UpdateTaskRequestDTO;
+import com.vrudenko.kanban_board.service.SubtaskService;
 import com.vrudenko.kanban_board.support.fixtures.AbstractAppTest;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.apache.commons.collections4.ListUtils;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -294,6 +297,41 @@ class TaskControllerTest extends AbstractAppTest {
                     .andDo(print())
                     .andExpect(status().isBadRequest())
                     .andReturn();
+        }
+    }
+
+    @Nested
+    class AddSubtaskByTaskId {
+        @Autowired private SubtaskService subtaskService;
+
+        @Test
+        void testWithAuthenticatedUser_shouldAddSubtask_whenTaskExists() throws Exception {
+            // Arrange
+            var userId = getOwningUser().getId();
+            var boardId = mockPopulatedBoard.getId();
+            var columnId = mockPopulatedColumn.getId();
+            var taskId = mockPopulatedTask.getId();
+            var url = getTaskPrefix(boardId, columnId) + "/" + taskId + ApiPaths.SUBTASKS;
+            var title = dataFactory.getRandomText(ValidationConstants.MIN_SUBTASK_TITLE_LENGTH + 3);
+
+            // Act
+            // addSubtaskByTaskId's DTO parameter carries no @RequestBody (see filed todo), so
+            // Spring binds it as a model attribute from request parameters, not a JSON body.
+            var response =
+                    mockMvc.perform(post(url).with(user(userId)).param("title", title))
+                            .andDo(print())
+                            .andExpect(status().isCreated())
+                            .andReturn();
+            var responseBody =
+                    objectMapper.readValue(
+                            response.getResponse().getContentAsString(), SubtaskResponseDTO.class);
+
+            // Assert
+            var subtasksAfter = subtaskService.findAllByTaskId(userId, taskId);
+            Assertions.assertThat(subtasksAfter)
+                    .anyMatch(subtask -> subtask.getId().equals(responseBody.getId()));
+            Assertions.assertThat(responseBody.getTitle()).isEqualTo(title);
+            Assertions.assertThat(response.getResponse().getHeader("Location")).isNotBlank();
         }
     }
 }
