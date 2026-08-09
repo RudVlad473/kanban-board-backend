@@ -2,6 +2,7 @@ package com.vrudenko.kanban_board.support.fixtures;
 
 import com.google.common.collect.ImmutableList;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
+import com.vrudenko.kanban_board.dto.annotation.Password;
 import com.vrudenko.kanban_board.dto.board_dto.BoardResponseDTO;
 import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.column_dto.ColumnResponseDTO;
@@ -19,6 +20,7 @@ import com.vrudenko.kanban_board.service.TaskService;
 import com.vrudenko.kanban_board.service.UserService;
 import com.vrudenko.kanban_board.support.containers.AbstractPostgresContainerTest;
 import jakarta.persistence.EntityManagerFactory;
+import java.util.Locale;
 import java.util.stream.Stream;
 import lombok.Getter;
 import org.fluttercode.datafactory.impl.DataFactory;
@@ -57,17 +59,28 @@ public abstract class AbstractAppTest extends AbstractPostgresContainerTest {
     protected final int MOCK_SUBTASKS_AMOUNT = 7;
 
     // users
-    @Getter
-    private final String owningUserPassword =
-            dataFactory.getRandomWord(ValidationConstants.MIN_PASSWORD_LENGTH);
+    @Getter private final String owningUserPassword = generateValidPassword();
 
     @Getter private UserResponseDTO owningUser;
 
-    @Getter
-    private final String noBoardsUserPassword =
-            dataFactory.getRandomWord(ValidationConstants.MIN_PASSWORD_LENGTH);
+    @Getter private final String noBoardsUserPassword = generateValidPassword();
 
     @Getter private UserResponseDTO noBoardsUser;
+
+    @Getter private final String foreignUserPassword = generateValidPassword();
+
+    @Getter private UserResponseDTO foreignUser;
+
+    /**
+     * A board owned by {@link #getForeignUser()}, not {@link #getOwningUser()}. Distinct from
+     * {@link #getNoBoardsUser()}: the no-boards user owns nothing, so a cross-user test against it
+     * only proves an empty account sees nothing. The foreign user owns a genuine board+column, so a
+     * cross-user test targeting {@link #getForeignUserColumn()} proves a legitimate owner is still
+     * refused someone else's resource (D-20).
+     */
+    @Getter private BoardResponseDTO foreignUserBoard;
+
+    @Getter private ColumnResponseDTO foreignUserColumn;
 
     // boards
     protected ImmutableList<BoardResponseDTO> mockEmptyBoards = ImmutableList.of();
@@ -149,6 +162,23 @@ public abstract class AbstractAppTest extends AbstractPostgresContainerTest {
                                 .limit(MOCK_SUBTASKS_AMOUNT)
                                 .map((ignore) -> createSubtask())
                                 .toList());
+
+        // foreign user (D-20) -- created last so it never shifts the insertion order
+        // boardService.findAll()/columnService.findAll() etc. return for the owning user's
+        // fixtures above, which several existing tests assert against positionally (e.g.
+        // BoardServiceTest.testUpdateById_shouldUpdateBoard_whenBoardExists() takes
+        // boardService.findAll().getFirst() and expects it to be an owningUser board).
+        foreignUser = createUser(foreignUserPassword);
+        foreignUserBoard = createBoardForUser(foreignUser.getId(), "Foreign board");
+        foreignUserColumn =
+                boardService.addColumnByBoardId(
+                        foreignUser.getId(),
+                        foreignUserBoard.getId(),
+                        SaveColumnRequestDTO.builder()
+                                .name(
+                                        dataFactory.getRandomWord(
+                                                ValidationConstants.MIN_COLUMN_NAME_LENGTH))
+                                .build());
     }
 
     /**
@@ -169,8 +199,28 @@ public abstract class AbstractAppTest extends AbstractPostgresContainerTest {
         activityLogRepository.deleteAll();
     }
 
+    /**
+     * Returns a password value guaranteed to satisfy {@link Password}: at least one lowercase
+     * letter, one uppercase letter, one digit, and one special character, with total length between
+     * {@link ValidationConstants#MIN_PASSWORD_LENGTH} and {@link
+     * ValidationConstants#MAX_PASSWORD_LENGTH}. Fixture passwords must satisfy {@code @Password}
+     * because {@link AbstractAppMockMvcTest#signinCookie()} posts them to the real {@code POST
+     * /signin} route, which validates its request body as of D-06.
+     */
+    protected String generateValidPassword() {
+        var base =
+                dataFactory
+                        .getRandomWord(ValidationConstants.MIN_PASSWORD_LENGTH)
+                        .toLowerCase(Locale.ROOT);
+
+        // "Aa1!" appends one uppercase letter, one digit, and one special character on top of
+        // the lowercased base word -- satisfying every @Password character class regardless of
+        // what dataFactory happened to generate.
+        return base + "Aa1!";
+    }
+
     protected UserResponseDTO createUser() {
-        return createUser(dataFactory.getRandomWord(ValidationConstants.MIN_PASSWORD_LENGTH));
+        return createUser(generateValidPassword());
     }
 
     protected UserResponseDTO createUser(String password) {
@@ -193,12 +243,21 @@ public abstract class AbstractAppTest extends AbstractPostgresContainerTest {
      */
     protected ColumnResponseDTO createColumnForUser(
             String userId, String boardName, String columnName) {
-        var board =
-                userService.addBoardByUserId(
-                        userId, SaveBoardRequestDTO.builder().name(boardName).build());
+        var board = createBoardForUser(userId, boardName);
 
         return boardService.addColumnByBoardId(
                 userId, board.getId(), SaveColumnRequestDTO.builder().name(columnName).build());
+    }
+
+    /**
+     * Creates a board owned by an arbitrary user, without adding a column. Sibling to {@link
+     * #createColumnForUser(String, String, String)} for callers (e.g. {@link
+     * #getForeignUserBoard()} fixture setup) that need the board reference itself, not just a
+     * column within it.
+     */
+    protected BoardResponseDTO createBoardForUser(String userId, String boardName) {
+        return userService.addBoardByUserId(
+                userId, SaveBoardRequestDTO.builder().name(boardName).build());
     }
 
     protected TaskResponseDTO createTask() {

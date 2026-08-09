@@ -153,7 +153,7 @@ public class AuthenticationE2ETest extends AbstractAppMockMvcTest {
      */
     private String[] signupOverHttp() throws Exception {
         var email = collisionProofEmail();
-        var password = dataFactory.getRandomWord(ValidationConstants.MIN_PASSWORD_LENGTH);
+        var password = generateValidPassword();
         var displayName =
                 dataFactory.getRandomWord(ValidationConstants.MIN_USER_DISPLAY_NAME_LENGTH);
 
@@ -238,10 +238,8 @@ public class AuthenticationE2ETest extends AbstractAppMockMvcTest {
                 // Arrange
                 var body =
                         SignupRequestDTO.builder()
-                                .email(dataFactory.getEmailAddress())
-                                .password(
-                                        dataFactory.getRandomWord(
-                                                ValidationConstants.MIN_PASSWORD_LENGTH))
+                                .email(collisionProofEmail())
+                                .password(generateValidPassword())
                                 .displayName(
                                         dataFactory.getRandomWord(
                                                 ValidationConstants.MIN_USER_DISPLAY_NAME_LENGTH))
