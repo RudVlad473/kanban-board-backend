@@ -160,7 +160,7 @@ public class ColumnDeletionE2ETest extends AbstractAppMockMvcTest {
         }
 
         @Test
-        void shouldReturnUnauthorizedAndDeleteNothing_whenColumnBelongsToAnotherUser()
+        void shouldReturnForbiddenAndDeleteNothing_whenColumnBelongsToAnotherUser()
                 throws Exception {
             // arrange
             var otherUser = createUser();
@@ -179,7 +179,7 @@ public class ColumnDeletionE2ETest extends AbstractAppMockMvcTest {
 
             // assert
             Assertions.assertThat(response.getResponse().getStatus())
-                    .isEqualTo(HttpStatus.UNAUTHORIZED.value());
+                    .isEqualTo(HttpStatus.FORBIDDEN.value());
             Assertions.assertThat(columnRepository.findById(otherUsersColumn.getId())).isPresent();
         }
 

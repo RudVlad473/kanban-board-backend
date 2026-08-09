@@ -200,7 +200,7 @@ public class BoardFullReadE2ETest extends AbstractAppMockMvcTest {
         }
 
         @Test
-        void shouldReturnUnauthorizedAndDiscloseNothing_whenBoardOwnedByAnotherUser()
+        void shouldReturnForbiddenAndDiscloseNothing_whenBoardOwnedByAnotherUser()
                 throws Exception {
             // arrange
             Cookie cookie = signinCookie();
@@ -229,7 +229,7 @@ public class BoardFullReadE2ETest extends AbstractAppMockMvcTest {
 
             // assert
             Assertions.assertThat(response.getResponse().getStatus())
-                    .isEqualTo(HttpStatus.UNAUTHORIZED.value());
+                    .isEqualTo(HttpStatus.FORBIDDEN.value());
             Assertions.assertThat(response.getResponse().getContentAsString())
                     .doesNotContain(otherBoard.getName());
         }

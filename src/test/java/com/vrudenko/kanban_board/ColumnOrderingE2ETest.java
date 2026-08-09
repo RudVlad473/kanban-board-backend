@@ -275,7 +275,7 @@ public class ColumnOrderingE2ETest extends AbstractAppMockMvcTest {
         }
 
         @Test
-        void shouldReturnUnauthorized_whenColumnBelongsToAnotherUsersBoard() throws Exception {
+        void shouldReturnForbidden_whenColumnBelongsToAnotherUsersBoard() throws Exception {
             // arrange
             var cookie = signinCookie();
             var otherUser = createUser();
@@ -307,7 +307,7 @@ public class ColumnOrderingE2ETest extends AbstractAppMockMvcTest {
 
             // assert
             Assertions.assertThat(response.getResponse().getStatus())
-                    .isEqualTo(HttpStatus.UNAUTHORIZED.value());
+                    .isEqualTo(HttpStatus.FORBIDDEN.value());
         }
 
         @Test
