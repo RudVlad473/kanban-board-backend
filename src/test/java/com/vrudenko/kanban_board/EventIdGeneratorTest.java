@@ -1,6 +1,7 @@
 package com.vrudenko.kanban_board;
 
 import com.vrudenko.kanban_board.config.EventIdGenerator;
+import com.vrudenko.kanban_board.support.containers.AbstractPostgresContainerTest;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;

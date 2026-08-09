@@ -1,4 +1,4 @@
-package com.vrudenko.kanban_board;
+package com.vrudenko.kanban_board.support.containers;
 
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -6,9 +6,9 @@ import org.testcontainers.utility.DockerImageName;
 
 /**
  * Shared, third ancestor providing exactly one real PostgreSQL container for the whole JVM run
- * (04.2, D-01). Both {@link com.vrudenko.kanban_board.AbstractAppTest} and {@link
- * com.vrudenko.kanban_board.activitylog.AbstractKafkaContainerTest} extend this class, as do the
- * two {@code @SpringBootTest} classes that extend neither hierarchy ({@code
+ * (04.2, D-01). Both {@link com.vrudenko.kanban_board.support.fixtures.AbstractAppTest} and {@link
+ * com.vrudenko.kanban_board.support.containers.AbstractKafkaContainerTest} extend this class, as do
+ * the two {@code @SpringBootTest} classes that extend neither hierarchy ({@code
  * KanbanBoardApplicationTests} and {@code ActivityEventAvroMapperTest}) -- so every Spring test
  * context in the repository boots against this one container. {@link
  * com.vrudenko.kanban_board.FlywaySchemaProvenanceTest} is the standing proof of

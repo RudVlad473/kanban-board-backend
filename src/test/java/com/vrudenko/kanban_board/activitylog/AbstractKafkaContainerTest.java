@@ -1,10 +1,10 @@
 package com.vrudenko.kanban_board.activitylog;
 
-import com.vrudenko.kanban_board.AbstractPostgresContainerTest;
 import com.vrudenko.kanban_board.config.AvroSchemaRegistrar;
 import com.vrudenko.kanban_board.constant.KafkaTopics;
 import com.vrudenko.kanban_board.event.ActivityEvent;
 import com.vrudenko.kanban_board.event.avro.ActivityEventAvroMapper;
+import com.vrudenko.kanban_board.support.containers.AbstractPostgresContainerTest;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;

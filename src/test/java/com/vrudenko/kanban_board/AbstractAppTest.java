@@ -17,6 +17,7 @@ import com.vrudenko.kanban_board.service.BoardService;
 import com.vrudenko.kanban_board.service.ColumnService;
 import com.vrudenko.kanban_board.service.TaskService;
 import com.vrudenko.kanban_board.service.UserService;
+import com.vrudenko.kanban_board.support.containers.AbstractPostgresContainerTest;
 import jakarta.persistence.EntityManagerFactory;
 import java.util.stream.Stream;
 import lombok.Getter;
