@@ -46,21 +46,24 @@ Added 2026-08-09 during `/gsd-plan-phase 7`. Source: the pending test-restructur
 sections above; nothing was renumbered or removed. Every requirement here is satisfied entirely
 within `src/test/java` — no production code changes.
 
-- [ ] **TEST-01**: All shared test fixture/setup infrastructure lives under a single `support/` package
+- [x] **TEST-01**: All shared test fixture/setup infrastructure lives under a single `support/` package
   subdivided by concern (`containers/` for Testcontainers lifecycle, `fixtures/` for app-domain fixture
   data and HTTP-flow helpers, `listeners/` for event-capture Spring components); no abstract base class
   or shared test component remains interspersed with concrete test classes (D-01)
-- [ ] **TEST-02**: The three real-HTTP authentication/session test classes are consolidated into one
+
+- [x] **TEST-02**: The three real-HTTP authentication/session test classes are consolidated into one
   `@Nested`-grouped file with every group still individually runnable and no assertion lost, eliminating
   the duplicated copy of `AbstractAppE2ETest`'s port/cookie wiring in `AuthenticationControllerTest`
   (D-02). The four conditional per-resource merge candidates (Column, Task, Subtask, Board) are
   deliberately deferred out of this phase
-- [ ] **TEST-03**: Every `E2ETest`-suffixed class with neither a Kafka/Schema-Registry dependency nor a
+
+- [x] **TEST-03**: Every `E2ETest`-suffixed class with neither a Kafka/Schema-Registry dependency nor a
   genuinely concurrent multi-threaded request assertion runs at the in-process `@SpringBootTest` +
   `MockMvc` tier — 13 of 22 classes; the other 9 keep the real-socket/real-Kafka tier. Downgraded classes
   authenticate through the real signin route with session-cookie relay, never an injected principal, so
   no security-control coverage is lost (D-03)
-- [ ] **TEST-04**: No test class with zero `@Test` methods exists anywhere under `src/test/java`
+
+- [x] **TEST-04**: No test class with zero `@Test` methods exists anywhere under `src/test/java`
 
 ## v2 Requirements
 
@@ -117,10 +120,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GAP-05 | Phase 6 (plans 01, 06) | Complete |
 | GAP-06 | Phase 6 (plan 01) | Complete |
 | GAP-07 | Phase 6 (plan 07) | Complete |
-| TEST-01 | Phase 7 (plans 01, 07) | Pending |
-| TEST-02 | Phase 7 (plans 02, 07) | Pending |
-| TEST-03 | Phase 7 (plans 01, 02, 03, 04, 05, 06, 07) | Pending |
-| TEST-04 | Phase 7 (plans 01, 07) | Pending |
+| TEST-01 | Phase 7 (plans 01, 07) | Complete |
+| TEST-02 | Phase 7 (plans 02, 07) | Complete |
+| TEST-03 | Phase 7 (plans 01, 02, 03, 04, 05, 06, 07) | Complete |
+| TEST-04 | Phase 7 (plans 01, 07) | Complete |
 
 **Coverage:**
 

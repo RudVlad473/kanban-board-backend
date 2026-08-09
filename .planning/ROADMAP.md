@@ -228,14 +228,14 @@ Source todo:
 `.planning/todos/pending/2026-08-08-restructure-test-folder-separate-setup-from-tests-evaluate-n.md`
 **Requirements**: TEST-01, TEST-02, TEST-03, TEST-04
 **Depends on:** Phase 6
-**Plans:** 7 plans
+**Plans:** 7/7 plans complete
 
 Plans:
 
-- [ ] 07-01-PLAN.md — Relocate all 5 fixture files into `support/{containers,fixtures,listeners}`, add the shared MockMvc fixture base, delete the 2 empty classes (wave 1; TEST-01, TEST-03, TEST-04)
-- [ ] 07-02-PLAN.md — Merge the 3 auth/session classes into one in-process `AuthenticationE2ETest` and falsify the session-strategy coverage (wave 2; TEST-02, TEST-03)
-- [ ] 07-03-PLAN.md — Downgrade the Column family: `ColumnDeletionE2ETest`, `ColumnOrderingE2ETest` (wave 2; TEST-03)
-- [ ] 07-04-PLAN.md — Downgrade the Task family: `TaskLockingE2ETest`, `TaskOrderingE2ETest`, `TaskMoveE2ETest` (wave 2; TEST-03)
-- [ ] 07-05-PLAN.md — Downgrade `BoardFullReadE2ETest` and `SubtaskLockingE2ETest`; keep `BoardCreationE2ETest` on the real-socket tier (wave 2; TEST-03)
-- [ ] 07-06-PLAN.md — Downgrade `ThemePersistenceE2ETest` and `ActivityReadE2ETest` (wave 2; TEST-03)
-- [ ] 07-07-PLAN.md — Full `spotlessCheck` + `clean test` gate, documentation reconciliation, file the E2ETest-suffix/fastTest-filter decision (wave 3; TEST-01..04)
+- [x] 07-01-PLAN.md — Relocate all 5 fixture files into `support/{containers,fixtures,listeners}`, add the shared MockMvc fixture base, delete the 2 empty classes (wave 1; TEST-01, TEST-03, TEST-04) — Assumption A2 proven true
+- [x] 07-02-PLAN.md — Merge the 3 auth/session classes into one in-process `AuthenticationE2ETest` and falsify the session-strategy coverage (wave 2; TEST-02, TEST-03) — falsification probe confirmed the merged tests genuinely exercise `SessionAuthenticationStrategy`
+- [x] 07-03-PLAN.md — Downgrade the Column family: `ColumnDeletionE2ETest`, `ColumnOrderingE2ETest` (wave 2; TEST-03)
+- [x] 07-04-PLAN.md — Downgrade the Task family: `TaskLockingE2ETest`, `TaskOrderingE2ETest`, `TaskMoveE2ETest` (wave 2; TEST-03)
+- [x] 07-05-PLAN.md — Downgrade `BoardFullReadE2ETest` and `SubtaskLockingE2ETest`; keep `BoardCreationE2ETest` on the real-socket tier (wave 2; TEST-03)
+- [x] 07-06-PLAN.md — Downgrade `ThemePersistenceE2ETest` and `ActivityReadE2ETest` (wave 2; TEST-03)
+- [x] 07-07-PLAN.md — Full `spotlessCheck` + `clean test` gate (278/278 tests, no shrinkage), documentation reconciliation, service/controller/e2e test-tier decision guide added to `docs/CODE_STYLE.md`, filed the E2ETest-suffix/fastTest-filter follow-up todo (wave 3; TEST-01..04)

@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Infra Migration & Schema Registry
-current_phase: 6
-current_phase_name: Mock-up Feature Gap Closure
-status: executing
+current_phase: 5
+current_phase_name: Infra Migration
+status: planning
 stopped_at: Phase 7 context gathered
-last_updated: "2026-08-09T10:54:41.403Z"
-last_activity: 2026-08-08
-last_activity_desc: "Completed quick task 260808-ls7: Redo the visual PDF confirmation pass for the mockup feature gap doc now that poppler is installed"
+last_updated: "2026-08-09T14:18:59.834Z"
+last_activity: 2026-08-09
+last_activity_desc: Phase 7 complete, transitioned to Phase 5
 progress:
   total_phases: 6
-  completed_phases: 4
-  total_plans: 23
-  completed_plans: 17
-  percent: 67
+  completed_phases: 5
+  total_plans: 30
+  completed_plans: 24
+  percent: 80
 ---
 
 # Project State
@@ -24,22 +24,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-03)
 
 **Core value:** Redeploy the app on a cost-guarded, always-free/near-free stack (Oracle Cloud + Neon + self-hosted Redpanda) after the AWS EC2/RDS deletion, and add a Schema Registry (Avro) in front of the Kafka activity-log pipeline to close the schema-evolution risk flagged during v1.1.
-**Current focus:** Phase 6 — Mock-up Feature Gap Closure
+**Current focus:** Phase 5 — Infra Migration
 
 ## Current Position
 
-Phase: 6 (Mock-up Feature Gap Closure) — EXECUTING
-Plan: 1 of 7
-Status: Executing Phase 6
-Last activity: 2026-08-08 — Phase 6 execution started
+Phase: 5 — Infra Migration
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-08-09 — Phase 7 (Restructure test folder) complete and verified (9/9 must-haves); Phase 6 (Mock-up Feature Gap Closure) confirmed already complete from a prior session (STATE.md's stale "1 of 7" note was outdated documentation, not an actual execution gap — all 7 plans have SUMMARY.md files and 06-VERIFICATION.md records 49/49 must-haves)
 
-Progress: [██████░░░░] 63% (Phase 04.2)
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 10
+- Total plans completed: 17
 - Average duration: 32 min
 - Total execution time: 1.6 hours
 
@@ -53,6 +53,7 @@ Progress: [██████░░░░] 63% (Phase 04.2)
 | 04 | 4 | - | - |
 | 5 | TBD | - | - |
 | 04.1 | 3 | - | - |
+| 7 | 7 | - | - |
 
 **Recent Trend:**
 
@@ -133,6 +134,7 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 04.2 Plan 02]: Cutover to Postgres complete -- full suite green (210 tests, 0 failures, 4m51s), ~19s FASTER than the post-tracer H2 baseline it is compared against (5m10s/208 tests), flagged as a hypothesis (single Flyway migration vs. per-context H2 create-drop) for wave 3 to confirm, not a settled conclusion. Both dialect-sensitive query-count assertions (TaskServiceTest, OwnershipVerifierServiceTest) passed unchanged -- outcome is 'unchanged, nothing adjudicated', not 'a change was accepted'. com.h2database:h2 fully removed (D-05); activity_log cross-test isolation gap closed via a second AbstractAppTest.cleanup() call, guarded by a falsified tripwire test (D-02a); isolation remains @AfterEach deletion, no @Transactional introduced (D-02).
 - [Phase ?]: [Phase 04.2 Plan 03]: Testcontainers reuse evaluated and NOT enabled -- measured container-start (~2.29s) is ~1% of fastTest wall-clock (232s/224s/242s across three runs), smaller than run-to-run variance; D-01's one-container-per-JVM-run design caps any benefit to a separate ./gradlew invocation; no zero-manual-step opt-in satisfies docs/CODE_STYLE.md rule 8. Full writeup in docs/LOCAL_DEV.md.
 - [Phase ?]: [Phase 04.2 Plan 03]: Duration finding confirmed by a second run -- this plan's own clean test (295s/210 tests) reproduced 04.2-02's post-cutover figure (291s/210), supporting the ~19s/6.1% improvement over the like-for-like H2 baseline (310s/208) as real. Phase 04.2 closed: Epic 5 ticked in docs/plans/backend-modernization/STATUS.md, every H2 claim in git-tracked docs, agent context, and .planning/codebase/ corrected, final gate green (spotlessCheck + clean test 210/0/0 + FlywaySchemaProvenanceTest).
+- [Phase 7]: Test folder restructured across 7 plans (3 waves): 5 shared fixture files split into `support/{containers,fixtures,listeners}`; auth/session trio (`AuthenticationControllerTest`, `SessionPersistenceE2ETest`, `UserPersistenceE2ETest`) merged into one `@Nested`-grouped `security/AuthenticationE2ETest` at the in-process tier; 13 of 22 `E2ETest`-suffixed classes downgraded from real-socket RestAssured to in-process MockMvc (9 Kafka-dependent classes plus `BoardCreationE2ETest`'s genuine-concurrency test stayed on the real-socket/Kafka tier); 2 empty test classes deleted. RESEARCH.md's Assumption A2 (MockMvc + `@AutoConfigureMockMvc` genuinely runs the full security filter chain, including `SessionAuthenticationStrategy`) was proven true twice — once generically (07-01) and once by falsification specifically for the session-strategy path (07-02: neutralized the strategy call, confirmed the ceiling/fixation tests went red, restored, confirmed zero net `src/main` diff). Full suite: 278/278 tests, zero shrinkage, zero production-code changes across the whole phase. `docs/CODE_STYLE.md` rule 4 extended with both a which-package (service = edge-case/business-logic coverage, controller = single-endpoint HTTP contract, e2e = cross-service/real-infra flow) and a which-base-class decision rule — verified against the existing `service/*ServiceTest.java` classes, which already matched the framing (no redundancy found, no fix needed). The Column/Task/Subtask/Board conditional `@Nested` merges (RESEARCH.md's Candidates 2-4) were deliberately descoped by the operator mid-phase and not executed. Surfaced and filed as a new todo rather than fixed: `build.gradle`'s `fastTest` task (run by the pre-commit hook) filters tests by the literal `E2ETest` name suffix, so the 12 renamed-in-tier-but-not-in-name classes stay excluded from the pre-commit gate — renaming is a build-behavior decision, not a tidy-up, and needed its own todo. Also surfaced: a stale comment in `UserAuthenticationProvider.java:38` still names the now-deleted `SessionPersistenceE2ETest` class — left unfixed (production-code changes were out of this phase's scope) and folded into the same follow-up todo.
 
 ### Pending Todos
 
@@ -140,7 +142,7 @@ Recent decisions affecting current work:
 - [minor] Create a sequence diagram documenting the full system flow — deferred until all functional epics of the backend modernization plan are complete and the project is ready for frontend hand-off. See `.planning/todos/pending/2026-08-01-create-sequence-diagram-documenting-full-system-flow-for-fro.md`.
 - [minor] Bump Java version from 21 to 25 (current LTS) — build.gradle toolchain, Dockerfile (both stages), and CI `java-version` all pinned to 21; not urgent (21 LTS supported until ~2028), but worth doing proactively. See `.planning/todos/pending/2026-08-01-bump-java-version-from-21-to-25-current-lts.md`.
 - [minor] Account for schema evolution risk when changing ActivityEvent shapes — a rolling deploy that renames/retypes an event field while old-shape messages are still unconsumed can dead-letter valid (non-poison) messages; Kafka itself enforces no schema. Directly addressed by v1.2 Phase 4 (Schema Registry) — expect this todo to close at that phase's transition. See `.planning/todos/pending/2026-08-01-account-for-schema-evolution-risk-when-changing-activityeven.md`.
-- [minor] Restructure test folder — separate setup/fixture classes (`AbstractAppTest` and friends) from actual test classes, and evaluate merging closely related test files with `@Nested` instead of one-class-per-file. Evaluation first, not a blanket reorg. See `.planning/todos/pending/2026-08-08-restructure-test-folder-separate-setup-from-tests-evaluate-n.md`.
+- [minor] Decide E2ETest-suffix vs. `fastTest`-filter coupling — Phase 7 downgraded 12 classes to the in-process tier but kept the `E2ETest` suffix, since `build.gradle`'s `fastTest` task (run by the pre-commit hook) excludes tests by that literal name pattern; renaming would silently change what runs pre-commit. Three framed options recorded. See `.planning/todos/pending/2026-08-09-decide-e2etest-suffix-vs-fasttest-filter-coupling.md`.
 - [minor] Enable virtual threads in Spring Boot config (`spring.threads.virtual.enabled=true`) — evaluate JDBC/Hibernate and Spring Session JDBC blocking-call pinning risk first. See `.planning/todos/pending/2026-08-02-enable-virtual-threads-in-spring-boot-config.md`.
 - [minor] Use a Snowflake ID generator for activity log events (`eventId`) instead of UUID — for index locality and time-ordering; see also the general note about adopting this as the project's default ID-generation strategy. See `.planning/todos/pending/2026-08-02-use-snowflake-id-generator-for-activity-log-events.md`.
 - [minor] Add a dependency vulnerability scan (OWASP dependency-check or similar) — no scan exists today despite several manually-pinned third-party libs. See `.planning/todos/pending/2026-08-03-add-dependency-vulnerability-scan.md`.
@@ -193,6 +195,7 @@ Carried from research (address during Phase 4/5 planning):
 - Phase 04.2 inserted after Phase 4: Testcontainers Postgres, drop H2 — modernization Epic 5 pulled forward ahead of Phase 5 so the Flyway V1-V4 migrations are CI-exercised before the Neon cutover (URGENT)
 - Phase 6 added: Mock-up Feature Gap Closure — six gaps from `docs/MOCKUP_FEATURE_GAP.md` §1 (board creation route, column deletion route, task/column ordering, full-board nested read, per-user theme persistence, subtask optimistic locking); un-defers the `GET /boards/{boardId}/full` item recorded below at 2026-07-31
 - Phase 7 added: Restructure test folder — picked up the pending test-restructure todo (2026-08-08) as a full phase rather than a quick task, since it spans ~25+ test files and needs a judgment call on scope, not a mechanical edit
+- Phase 7 completed 2026-08-09 (7/7 plans, 3 waves, verified 9/9 must-haves) — see decisions above and `07-VERIFICATION.md`. Confirmed at completion time that Phase 6 (Mock-up Feature Gap Closure) had already been fully executed and verified in a prior session (49/49 must-haves, `06-VERIFICATION.md`); STATE.md's frontmatter had simply not been refreshed since then. `phase.complete` correctly advanced current_phase to 5 (Infra Migration), the next genuinely unstarted phase.
 
 ## Deferred Items
 
@@ -217,13 +220,14 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-09T10:54:41.356Z
-Stopped at: Phase 7 context gathered
-Resume file: .planning/phases/07-restructure-test-folder-separate-setup-from-tests-evaluate-n/07-CONTEXT.md
+Last session: 2026-08-09T14:18:59.834Z
+Stopped at: Phase 7 complete and verified; transitioned to Phase 5
+Resume file: .planning/phases/07-restructure-test-folder-separate-setup-from-tests-evaluate-n/07-VERIFICATION.md
 
 ## Operator Next Steps
 
-- Resume Phase 5 (Infra Migration) — it was paused specifically to make room for Phase 04.1's insertion, and Phase 04.1 is now fully closed out with Flyway proven end-to-end (both automated migration application and a live HTTP request against the migrated schema).
+- Resume Phase 5 (Infra Migration) — it was paused specifically to make room for Phase 04.1's insertion, and Phase 04.1 is now fully closed out with Flyway proven end-to-end (both automated migration application and a live HTTP request against the migrated schema). Phase 6 and Phase 7 both landed and closed out since, so Phase 5 is next in sequence with nothing else outstanding ahead of it.
+- New: decide the E2ETest-suffix vs. `fastTest`-filter coupling Phase 7 surfaced — see Pending Todos below.
 - Minor, out-of-scope: `GET /api/docs` returns HTTP 500 with no logged exception (observed during Phase 04.1 Plan 03's checkpoint run). Springdoc/OpenAPI-path territory, not investigated — see Pending Todos below.
 
 </content>
