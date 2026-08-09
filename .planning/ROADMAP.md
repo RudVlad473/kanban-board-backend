@@ -213,3 +213,29 @@ Plans:
 **Wave 4** *(blocked on Wave 3 completion)*
 
 - [x] 06-07-PLAN.md — Snowflake-style activity-log eventId; opens with a blocking decision checkpoint (GAP-07)
+
+### Phase 7: Restructure test folder
+
+**Goal:** Execute (not merely evaluate — D-04) three test-suite organization improvements from the
+Phase 1-6 growth period: relocate all five shared setup/fixture infrastructure files (`AbstractAppTest`,
+`AbstractAppE2ETest`, `AbstractKafkaContainerTest`, `AbstractPostgresContainerTest`,
+`RecordingActivityEventListener`) into a three-way-split `support/` package; merge the three
+closely-related authentication/session test classes into one `@Nested`-grouped file; and drop the 13
+`E2ETest`-suffixed classes that need neither a real socket nor Kafka to the cheaper in-process
+`@SpringBootTest` + MockMvc tier, keeping the 9 that genuinely earn the expensive tier. Two empty test
+classes are deleted as a byproduct. Zero production-code changes — every diff is under `src/test/java`.
+Source todo:
+`.planning/todos/pending/2026-08-08-restructure-test-folder-separate-setup-from-tests-evaluate-n.md`
+**Requirements**: TEST-01, TEST-02, TEST-03, TEST-04
+**Depends on:** Phase 6
+**Plans:** 7 plans
+
+Plans:
+
+- [ ] 07-01-PLAN.md — Relocate all 5 fixture files into `support/{containers,fixtures,listeners}`, add the shared MockMvc fixture base, delete the 2 empty classes (wave 1; TEST-01, TEST-03, TEST-04)
+- [ ] 07-02-PLAN.md — Merge the 3 auth/session classes into one in-process `AuthenticationE2ETest` and falsify the session-strategy coverage (wave 2; TEST-02, TEST-03)
+- [ ] 07-03-PLAN.md — Downgrade the Column family: `ColumnDeletionE2ETest`, `ColumnOrderingE2ETest` (wave 2; TEST-03)
+- [ ] 07-04-PLAN.md — Downgrade the Task family: `TaskLockingE2ETest`, `TaskOrderingE2ETest`, `TaskMoveE2ETest` (wave 2; TEST-03)
+- [ ] 07-05-PLAN.md — Downgrade `BoardFullReadE2ETest` and `SubtaskLockingE2ETest`; keep `BoardCreationE2ETest` on the real-socket tier (wave 2; TEST-03)
+- [ ] 07-06-PLAN.md — Downgrade `ThemePersistenceE2ETest` and `ActivityReadE2ETest` (wave 2; TEST-03)
+- [ ] 07-07-PLAN.md — Full `spotlessCheck` + `clean test` gate, documentation reconciliation, file the E2ETest-suffix/fastTest-filter decision (wave 3; TEST-01..04)
