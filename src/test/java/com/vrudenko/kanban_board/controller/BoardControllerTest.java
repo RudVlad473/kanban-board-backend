@@ -225,7 +225,7 @@ public class BoardControllerTest extends AbstractAppTest {
                                             .contentType(APPLICATION_JSON)
                                             .content(objectMapper.writeValueAsString(saveDTO)))
                             .andDo(print())
-                            .andExpect(status().isOk())
+                            .andExpect(status().isCreated())
                             .andReturn();
             var responseBody =
                     objectMapper.readValue(
@@ -237,6 +237,7 @@ public class BoardControllerTest extends AbstractAppTest {
             // this is an assertion since if no entity was found, it'll throw an error
             columnService.findById(userId, createdColumnId);
             Assertions.assertThat(responseBody.getName()).isEqualTo(saveDTO.getName());
+            Assertions.assertThat(response.getResponse().getHeader("Location")).isNotBlank();
         }
 
         @Test
