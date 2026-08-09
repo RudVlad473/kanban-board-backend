@@ -225,7 +225,7 @@ public class BoardControllerTest extends AbstractAppTest {
                                             .contentType(APPLICATION_JSON)
                                             .content(objectMapper.writeValueAsString(saveDTO)))
                             .andDo(print())
-                            .andExpect(status().isOk())
+                            .andExpect(status().isCreated())
                             .andReturn();
             var responseBody =
                     objectMapper.readValue(

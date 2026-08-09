@@ -7,8 +7,10 @@ import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
 import com.vrudenko.kanban_board.dto.task_dto.UpdateTaskRequestDTO;
 import com.vrudenko.kanban_board.security.CurrentUserId;
 import com.vrudenko.kanban_board.service.TaskService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import java.net.URI;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -54,7 +56,9 @@ class TaskController {
     public ResponseEntity<SubtaskResponseDTO> addSubtaskByTaskId(
             @CurrentUserId String userId,
             @PathVariable @NotBlank String taskId,
-            @Valid SaveSubtaskRequestDTO dto) {
-        return ResponseEntity.ok(taskService.addSubtaskByTaskId(userId, taskId, dto));
+            @Valid SaveSubtaskRequestDTO dto,
+            HttpServletRequest request) {
+        return ResponseEntity.created(URI.create(request.getRequestURI()))
+                .body(taskService.addSubtaskByTaskId(userId, taskId, dto));
     }
 }

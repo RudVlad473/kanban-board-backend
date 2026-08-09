@@ -73,8 +73,10 @@ public class BoardController {
     public ResponseEntity<ColumnResponseDTO> addColumnByBoardId(
             @CurrentUserId String userId,
             @PathVariable @NotBlank String boardId,
-            @Valid @RequestBody SaveColumnRequestDTO dto) {
-        return ResponseEntity.ok(boardService.addColumnByBoardId(userId, boardId, dto));
+            @Valid @RequestBody SaveColumnRequestDTO dto,
+            HttpServletRequest request) {
+        return ResponseEntity.created(URI.create(request.getRequestURI()))
+                .body(boardService.addColumnByBoardId(userId, boardId, dto));
     }
 
     /**
