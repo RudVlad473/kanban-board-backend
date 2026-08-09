@@ -160,8 +160,7 @@ public class ActivityReadE2ETest extends AbstractAppMockMvcTest {
         void shouldRejectAnotherUsersBoard_andNotFoundUnknownBoard() throws Exception {
             // arrange
             Cookie cookie = signinCookie();
-            var otherUser =
-                    createUser(dataFactory.getRandomWord(ValidationConstants.MIN_PASSWORD_LENGTH));
+            var otherUser = createUser(generateValidPassword());
             var otherBoard =
                     userService.addBoardByUserId(
                             otherUser.getId(),

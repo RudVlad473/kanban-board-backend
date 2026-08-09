@@ -7,6 +7,7 @@ import com.vrudenko.kanban_board.service.UserService;
 import io.vavr.control.Try;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import java.net.URI;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,7 +42,7 @@ public class AuthenticationController {
     // only these authentication routes yield session cookie
     @PostMapping(ApiPaths.SIGNIN)
     public ResponseEntity<Void> signin(
-            @RequestBody SigninRequestDTO dto,
+            @Valid @RequestBody SigninRequestDTO dto,
             HttpServletRequest request,
             HttpServletResponse response) {
         try {
@@ -63,12 +64,17 @@ public class AuthenticationController {
     // only these authentication routes yield session cookie
     @PostMapping(ApiPaths.SIGNUP)
     public ResponseEntity<String> signup(
-            @RequestBody SignupRequestDTO signupDTO,
+            @Valid @RequestBody SignupRequestDTO signupDTO,
             HttpServletRequest request,
             HttpServletResponse response) {
-        try {
-            var createdUser = userService.save(signupDTO);
+        // Deliberately outside the try block below (D-07/D-09): a duplicate email throws
+        // AppDuplicateResourceException, which must reach GlobalExceptionHandler as a 409, not be
+        // swallowed by this method's blanket catch, which exists only to collapse a failed
+        // *authentication* of the account just created into the same generic 401 every other
+        // credential failure returns.
+        var createdUser = userService.save(signupDTO);
 
+        try {
             var successfullyAuthenticated =
                     authenticate(createdUser.getId(), signupDTO.getPassword(), request, response);
 

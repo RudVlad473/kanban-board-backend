@@ -6,7 +6,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vrudenko.kanban_board.constant.ApiPaths;
-import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.user_dto.UpdateThemeRequestDTO;
 import com.vrudenko.kanban_board.dto.user_dto.UserResponseDTO;
 import com.vrudenko.kanban_board.entity.ThemePreference;
@@ -235,9 +234,10 @@ public class ThemePersistenceE2ETest extends AbstractAppMockMvcTest {
             // createUser() only exposes an unpredictable, internally-generated password, so a
             // second, independently sign-in-able user is created with an explicit password here
             // instead (AbstractAppTest.createUser(String) overload) -- still a real users row,
-            // just not routed through the HTTP signup endpoint.
-            var secondUserPassword =
-                    dataFactory.getRandomWord(ValidationConstants.MIN_PASSWORD_LENGTH);
+            // just not routed through the HTTP signup endpoint. generateValidPassword() (not a
+            // raw dataFactory word) because this password is posted to the real POST /signin
+            // route below, which validates its body as of D-06.
+            var secondUserPassword = generateValidPassword();
             var secondUser = createUser(secondUserPassword);
             var secondUserCookie = signinCookie(secondUser.getEmail(), secondUserPassword);
 

@@ -303,7 +303,10 @@ public class BoardCreationE2ETest extends AbstractAppE2ETest {
         void shouldAllowBothCreates_whenTwoDifferentUsersUseIdenticalBoardName() {
             // arrange
             var boardName = randomBoardName();
-            var otherPassword = dataFactory.getRandomWord(ValidationConstants.MIN_PASSWORD_LENGTH);
+            // generateValidPassword() (not a raw dataFactory word) because this password is
+            // posted to the real POST /signin route below via signinAs(), which validates its
+            // body as of D-06.
+            var otherPassword = generateValidPassword();
             var otherUser = createUser(otherPassword);
 
             Pair<String, String> ownerCookie = signin();
