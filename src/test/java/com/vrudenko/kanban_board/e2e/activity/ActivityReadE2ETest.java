@@ -2,7 +2,6 @@ package com.vrudenko.kanban_board.e2e.activity;
 
 import static io.restassured.RestAssured.given;
 
-import com.vrudenko.kanban_board.AbstractAppE2ETest;
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
@@ -10,6 +9,7 @@ import com.vrudenko.kanban_board.entity.ActivityAction;
 import com.vrudenko.kanban_board.entity.ActivityLogEntity;
 import com.vrudenko.kanban_board.repository.ActivityLogRepository;
 import com.vrudenko.kanban_board.service.UserService;
+import com.vrudenko.kanban_board.support.fixtures.AbstractAppE2ETest;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;

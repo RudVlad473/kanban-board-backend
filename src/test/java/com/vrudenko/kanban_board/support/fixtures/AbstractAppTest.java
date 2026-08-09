@@ -1,4 +1,4 @@
-package com.vrudenko.kanban_board;
+package com.vrudenko.kanban_board.support.fixtures;
 
 import com.google.common.collect.ImmutableList;
 import com.vrudenko.kanban_board.constant.ValidationConstants;

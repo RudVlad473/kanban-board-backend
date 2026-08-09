@@ -11,6 +11,7 @@ import com.vrudenko.kanban_board.dto.user_dto.UserResponseDTO;
 import com.vrudenko.kanban_board.repository.ActivityLogRepository;
 import com.vrudenko.kanban_board.repository.BoardRepository;
 import com.vrudenko.kanban_board.service.UserService;
+import com.vrudenko.kanban_board.support.containers.AbstractKafkaContainerTest;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicReference;
 import org.assertj.core.api.Assertions;

@@ -1,4 +1,4 @@
-package com.vrudenko.kanban_board;
+package com.vrudenko.kanban_board.support.fixtures;
 
 import static io.restassured.RestAssured.given;
 

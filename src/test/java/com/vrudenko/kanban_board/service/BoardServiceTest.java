@@ -1,6 +1,5 @@
 package com.vrudenko.kanban_board.service;
 
-import com.vrudenko.kanban_board.AbstractAppTest;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
@@ -11,6 +10,7 @@ import com.vrudenko.kanban_board.exception.AppAccessDeniedException;
 import com.vrudenko.kanban_board.exception.AppDuplicateResourceException;
 import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
 import com.vrudenko.kanban_board.mapper.BoardMapper;
+import com.vrudenko.kanban_board.support.fixtures.AbstractAppTest;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.UUID;
 import org.apache.commons.lang3.RandomStringUtils;

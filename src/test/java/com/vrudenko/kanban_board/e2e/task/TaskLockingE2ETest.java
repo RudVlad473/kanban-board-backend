@@ -2,10 +2,10 @@ package com.vrudenko.kanban_board.e2e.task;
 
 import static io.restassured.RestAssured.given;
 
-import com.vrudenko.kanban_board.AbstractAppE2ETest;
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
 import com.vrudenko.kanban_board.dto.task_dto.UpdateTaskRequestDTO;
+import com.vrudenko.kanban_board.support.fixtures.AbstractAppE2ETest;
 import io.restassured.http.ContentType;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;

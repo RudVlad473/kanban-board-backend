@@ -2,7 +2,6 @@ package com.vrudenko.kanban_board.e2e.task;
 
 import static io.restassured.RestAssured.given;
 
-import com.vrudenko.kanban_board.AbstractAppE2ETest;
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.column_dto.ColumnResponseDTO;
@@ -10,7 +9,8 @@ import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.MoveTaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
 import com.vrudenko.kanban_board.event.TaskMovedEvent;
-import com.vrudenko.kanban_board.support.RecordingActivityEventListener;
+import com.vrudenko.kanban_board.support.fixtures.AbstractAppE2ETest;
+import com.vrudenko.kanban_board.support.listeners.RecordingActivityEventListener;
 import io.restassured.http.ContentType;
 import java.util.List;
 import java.util.UUID;

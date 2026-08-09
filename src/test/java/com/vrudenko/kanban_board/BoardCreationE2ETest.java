@@ -9,6 +9,7 @@ import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.board_dto.UpdateBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.user_dto.SigninRequestDTO;
 import com.vrudenko.kanban_board.service.BoardService;
+import com.vrudenko.kanban_board.support.fixtures.AbstractAppE2ETest;
 import io.restassured.http.ContentType;
 import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;

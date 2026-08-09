@@ -12,6 +12,7 @@ import com.vrudenko.kanban_board.dto.subtask_dto.SubtaskResponseDTO;
 import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
 import com.vrudenko.kanban_board.service.BoardService;
 import com.vrudenko.kanban_board.service.UserService;
+import com.vrudenko.kanban_board.support.fixtures.AbstractAppE2ETest;
 import java.util.Arrays;
 import java.util.UUID;
 import org.assertj.core.api.Assertions;

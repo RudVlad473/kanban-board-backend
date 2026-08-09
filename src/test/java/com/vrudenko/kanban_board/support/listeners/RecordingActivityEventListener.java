@@ -1,4 +1,4 @@
-package com.vrudenko.kanban_board.support;
+package com.vrudenko.kanban_board.support.listeners;
 
 import com.vrudenko.kanban_board.event.ActivityEvent;
 import java.util.List;

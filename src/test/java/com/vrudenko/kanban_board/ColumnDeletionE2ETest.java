@@ -13,6 +13,7 @@ import com.vrudenko.kanban_board.repository.TaskRepository;
 import com.vrudenko.kanban_board.service.BoardService;
 import com.vrudenko.kanban_board.service.ColumnService;
 import com.vrudenko.kanban_board.service.TaskService;
+import com.vrudenko.kanban_board.support.fixtures.AbstractAppE2ETest;
 import java.util.UUID;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Nested;

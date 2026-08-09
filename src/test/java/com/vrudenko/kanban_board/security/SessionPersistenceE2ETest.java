@@ -2,9 +2,9 @@ package com.vrudenko.kanban_board.security;
 
 import static io.restassured.RestAssured.given;
 
-import com.vrudenko.kanban_board.AbstractAppE2ETest;
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.dto.user_dto.SigninRequestDTO;
+import com.vrudenko.kanban_board.support.fixtures.AbstractAppE2ETest;
 import io.restassured.http.ContentType;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;

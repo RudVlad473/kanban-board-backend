@@ -3,6 +3,7 @@ package com.vrudenko.kanban_board;
 import com.vrudenko.kanban_board.entity.ActivityAction;
 import com.vrudenko.kanban_board.entity.ActivityLogEntity;
 import com.vrudenko.kanban_board.repository.ActivityLogRepository;
+import com.vrudenko.kanban_board.support.fixtures.AbstractAppTest;
 import java.time.Instant;
 import java.util.UUID;
 import org.assertj.core.api.Assertions;

@@ -12,6 +12,7 @@ import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
 import com.vrudenko.kanban_board.entity.ColumnEntity;
 import com.vrudenko.kanban_board.repository.ColumnRepository;
 import com.vrudenko.kanban_board.repository.TaskRepository;
+import com.vrudenko.kanban_board.support.fixtures.AbstractAppE2ETest;
 import io.restassured.http.ContentType;
 import java.util.Comparator;
 import java.util.List;

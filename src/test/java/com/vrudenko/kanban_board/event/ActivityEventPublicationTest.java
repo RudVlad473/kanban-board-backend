@@ -1,6 +1,5 @@
 package com.vrudenko.kanban_board.event;
 
-import com.vrudenko.kanban_board.AbstractAppTest;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.board_dto.UpdateBoardRequestDTO;
@@ -13,7 +12,8 @@ import com.vrudenko.kanban_board.service.BoardService;
 import com.vrudenko.kanban_board.service.ColumnService;
 import com.vrudenko.kanban_board.service.TaskService;
 import com.vrudenko.kanban_board.service.UserService;
-import com.vrudenko.kanban_board.support.RecordingActivityEventListener;
+import com.vrudenko.kanban_board.support.fixtures.AbstractAppTest;
+import com.vrudenko.kanban_board.support.listeners.RecordingActivityEventListener;
 import java.util.UUID;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Nested;
