@@ -1,7 +1,10 @@
 package com.vrudenko.kanban_board;
 
-import static io.restassured.RestAssured.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.column_dto.ColumnResponseDTO;
@@ -12,17 +15,19 @@ import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
 import com.vrudenko.kanban_board.entity.ColumnEntity;
 import com.vrudenko.kanban_board.repository.ColumnRepository;
 import com.vrudenko.kanban_board.repository.TaskRepository;
-import com.vrudenko.kanban_board.support.fixtures.AbstractAppE2ETest;
-import io.restassured.http.ContentType;
+import com.vrudenko.kanban_board.support.fixtures.AbstractAppMockMvcTest;
+import jakarta.servlet.http.Cookie;
 import java.util.Comparator;
 import java.util.List;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.data.util.Pair;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
 
 /**
  * Plan 04's board-scoped mirror of {@code TaskOrderingE2ETest}: proves column creation assigns
@@ -31,8 +36,13 @@ import org.springframework.http.HttpStatus;
  * Positions are asserted through {@link ColumnRepository} directly, since {@code ColumnResponseDTO}
  * does not carry {@code position} until task 3 of this plan.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-public class ColumnOrderingE2ETest extends AbstractAppE2ETest {
+@SpringBootTest
+@AutoConfigureMockMvc
+public class ColumnOrderingE2ETest extends AbstractAppMockMvcTest {
+
+    @Autowired private MockMvc mockMvc;
+
+    @Autowired private ObjectMapper objectMapper;
 
     @Autowired private ColumnRepository columnRepository;
 
@@ -56,41 +66,50 @@ public class ColumnOrderingE2ETest extends AbstractAppE2ETest {
         return ApiPaths.BOARDS + "/" + boardId + ApiPaths.COLUMNS + "/" + columnId;
     }
 
-    private ColumnResponseDTO createColumnOnBoard(Pair<String, String> cookie, String boardId) {
-        return given().cookie(cookie.getFirst(), cookie.getSecond())
-                .contentType(ContentType.JSON)
-                .body(
-                        SaveColumnRequestDTO.builder()
-                                .name(
-                                        dataFactory.getRandomWord(
-                                                ValidationConstants.MIN_COLUMN_NAME_LENGTH))
-                                .build())
-                .when()
-                .post(getBoardColumnsUrl(boardId))
-                .then()
-                .extract()
-                .as(ColumnResponseDTO.class);
+    private ColumnResponseDTO createColumnOnBoard(Cookie cookie, String boardId) throws Exception {
+        var result =
+                mockMvc.perform(
+                                post(getBoardColumnsUrl(boardId))
+                                        .cookie(cookie)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(
+                                                objectMapper.writeValueAsString(
+                                                        SaveColumnRequestDTO.builder()
+                                                                .name(
+                                                                        dataFactory.getRandomWord(
+                                                                                ValidationConstants
+                                                                                        .MIN_COLUMN_NAME_LENGTH))
+                                                                .build())))
+                        .andReturn();
+        return objectMapper.readValue(
+                result.getResponse().getContentAsString(), ColumnResponseDTO.class);
     }
 
-    private TaskResponseDTO createTaskInColumn(
-            Pair<String, String> cookie, String boardId, String columnId) {
-        return given().cookie(cookie.getFirst(), cookie.getSecond())
-                .contentType(ContentType.JSON)
-                .body(
-                        SaveTaskRequestDTO.builder()
-                                .title(
-                                        dataFactory.getRandomWord(
-                                                ValidationConstants.MIN_TASK_TITLE_LENGTH + 2))
-                                .description(
-                                        dataFactory.getRandomText(
-                                                ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH,
-                                                ValidationConstants.MAX_TASK_DESCRIPTION_LENGTH))
-                                .build())
-                .when()
-                .post(getColumnTasksUrl(boardId, columnId))
-                .then()
-                .extract()
-                .as(TaskResponseDTO.class);
+    private TaskResponseDTO createTaskInColumn(Cookie cookie, String boardId, String columnId)
+            throws Exception {
+        var result =
+                mockMvc.perform(
+                                post(getColumnTasksUrl(boardId, columnId))
+                                        .cookie(cookie)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(
+                                                objectMapper.writeValueAsString(
+                                                        SaveTaskRequestDTO.builder()
+                                                                .title(
+                                                                        dataFactory.getRandomWord(
+                                                                                ValidationConstants
+                                                                                                .MIN_TASK_TITLE_LENGTH
+                                                                                        + 2))
+                                                                .description(
+                                                                        dataFactory.getRandomText(
+                                                                                ValidationConstants
+                                                                                        .MIN_TASK_DESCRIPTION_LENGTH,
+                                                                                ValidationConstants
+                                                                                        .MAX_TASK_DESCRIPTION_LENGTH))
+                                                                .build())))
+                        .andReturn();
+        return objectMapper.readValue(
+                result.getResponse().getContentAsString(), TaskResponseDTO.class);
     }
 
     private List<ColumnEntity> orderedColumns(String boardId) {
@@ -112,9 +131,9 @@ public class ColumnOrderingE2ETest extends AbstractAppE2ETest {
     @Nested
     class ColumnCreation {
         @Test
-        void shouldAssignContiguousPositions_whenCreatingThreeColumnsOnOneBoard() {
+        void shouldAssignContiguousPositions_whenCreatingThreeColumnsOnOneBoard() throws Exception {
             // arrange
-            var cookie = signin();
+            var cookie = signinCookie();
             var boardId = mockEmptyBoards.get(0).getId();
 
             // act
@@ -133,9 +152,10 @@ public class ColumnOrderingE2ETest extends AbstractAppE2ETest {
     class Reorder {
 
         @Test
-        void shouldMoveThirdColumnToFront_andShiftOthersDown_whenTargetPositionIsZero() {
+        void shouldMoveThirdColumnToFront_andShiftOthersDown_whenTargetPositionIsZero()
+                throws Exception {
             // arrange
-            var cookie = signin();
+            var cookie = signinCookie();
             var boardId = mockEmptyBoards.get(0).getId();
             var first = createColumnOnBoard(cookie, boardId);
             var second = createColumnOnBoard(cookie, boardId);
@@ -149,25 +169,25 @@ public class ColumnOrderingE2ETest extends AbstractAppE2ETest {
 
             // act
             var response =
-                    given().cookie(cookie.getFirst(), cookie.getSecond())
-                            .contentType(ContentType.JSON)
-                            .body(reorderDto)
-                            .when()
-                            .patch(getReorderUrl(boardId, third.getId()))
-                            .then()
-                            .extract();
+                    mockMvc.perform(
+                                    patch(getReorderUrl(boardId, third.getId()))
+                                            .cookie(cookie)
+                                            .contentType(MediaType.APPLICATION_JSON)
+                                            .content(objectMapper.writeValueAsString(reorderDto)))
+                            .andReturn();
 
             // assert
-            Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
+            Assertions.assertThat(response.getResponse().getStatus())
+                    .isEqualTo(HttpStatus.OK.value());
             Assertions.assertThat(orderedColumnIds(boardId))
                     .containsExactly(third.getId(), first.getId(), second.getId());
             Assertions.assertThat(positionsOf(boardId)).containsExactly(0, 1, 2);
         }
 
         @Test
-        void shouldClampToEnd_whenTargetPositionExceedsBoardColumnCount() {
+        void shouldClampToEnd_whenTargetPositionExceedsBoardColumnCount() throws Exception {
             // arrange
-            var cookie = signin();
+            var cookie = signinCookie();
             var boardId = mockEmptyBoards.get(0).getId();
             var first = createColumnOnBoard(cookie, boardId);
             var second = createColumnOnBoard(cookie, boardId);
@@ -181,25 +201,25 @@ public class ColumnOrderingE2ETest extends AbstractAppE2ETest {
 
             // act
             var response =
-                    given().cookie(cookie.getFirst(), cookie.getSecond())
-                            .contentType(ContentType.JSON)
-                            .body(reorderDto)
-                            .when()
-                            .patch(getReorderUrl(boardId, first.getId()))
-                            .then()
-                            .extract();
+                    mockMvc.perform(
+                                    patch(getReorderUrl(boardId, first.getId()))
+                                            .cookie(cookie)
+                                            .contentType(MediaType.APPLICATION_JSON)
+                                            .content(objectMapper.writeValueAsString(reorderDto)))
+                            .andReturn();
 
             // assert
-            Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
+            Assertions.assertThat(response.getResponse().getStatus())
+                    .isEqualTo(HttpStatus.OK.value());
             Assertions.assertThat(orderedColumnIds(boardId))
                     .containsExactly(second.getId(), third.getId(), first.getId());
             Assertions.assertThat(positionsOf(boardId)).containsExactly(0, 1, 2);
         }
 
         @Test
-        void shouldReturnBadRequest_whenTargetPositionIsNegative() {
+        void shouldReturnBadRequest_whenTargetPositionIsNegative() throws Exception {
             // arrange
-            var cookie = signin();
+            var cookie = signinCookie();
             var boardId = mockEmptyBoards.get(0).getId();
             var column = createColumnOnBoard(cookie, boardId);
 
@@ -211,22 +231,22 @@ public class ColumnOrderingE2ETest extends AbstractAppE2ETest {
 
             // act
             var response =
-                    given().cookie(cookie.getFirst(), cookie.getSecond())
-                            .contentType(ContentType.JSON)
-                            .body(reorderDto)
-                            .when()
-                            .patch(getReorderUrl(boardId, column.getId()))
-                            .then()
-                            .extract();
+                    mockMvc.perform(
+                                    patch(getReorderUrl(boardId, column.getId()))
+                                            .cookie(cookie)
+                                            .contentType(MediaType.APPLICATION_JSON)
+                                            .content(objectMapper.writeValueAsString(reorderDto)))
+                            .andReturn();
 
             // assert
-            Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+            Assertions.assertThat(response.getResponse().getStatus())
+                    .isEqualTo(HttpStatus.BAD_REQUEST.value());
         }
 
         @Test
-        void shouldReturnConflict_andLeavePositionsUnchanged_whenVersionIsStale() {
+        void shouldReturnConflict_andLeavePositionsUnchanged_whenVersionIsStale() throws Exception {
             // arrange
-            var cookie = signin();
+            var cookie = signinCookie();
             var boardId = mockEmptyBoards.get(0).getId();
             var first = createColumnOnBoard(cookie, boardId);
             var second = createColumnOnBoard(cookie, boardId);
@@ -239,25 +259,25 @@ public class ColumnOrderingE2ETest extends AbstractAppE2ETest {
 
             // act
             var response =
-                    given().cookie(cookie.getFirst(), cookie.getSecond())
-                            .contentType(ContentType.JSON)
-                            .body(reorderDto)
-                            .when()
-                            .patch(getReorderUrl(boardId, first.getId()))
-                            .then()
-                            .extract();
+                    mockMvc.perform(
+                                    patch(getReorderUrl(boardId, first.getId()))
+                                            .cookie(cookie)
+                                            .contentType(MediaType.APPLICATION_JSON)
+                                            .content(objectMapper.writeValueAsString(reorderDto)))
+                            .andReturn();
 
             // assert
-            Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.CONFLICT.value());
+            Assertions.assertThat(response.getResponse().getStatus())
+                    .isEqualTo(HttpStatus.CONFLICT.value());
             Assertions.assertThat(orderedColumnIds(boardId))
                     .containsExactly(first.getId(), second.getId());
             Assertions.assertThat(positionsOf(boardId)).containsExactly(0, 1);
         }
 
         @Test
-        void shouldReturnUnauthorized_whenColumnBelongsToAnotherUsersBoard() {
+        void shouldReturnUnauthorized_whenColumnBelongsToAnotherUsersBoard() throws Exception {
             // arrange
-            var cookie = signin();
+            var cookie = signinCookie();
             var otherUser = createUser();
             var otherColumn =
                     createColumnForUser(
@@ -275,22 +295,25 @@ public class ColumnOrderingE2ETest extends AbstractAppE2ETest {
             // act: attempt the reorder as the ORIGINAL signed-in user against another user's
             // column
             var response =
-                    given().cookie(cookie.getFirst(), cookie.getSecond())
-                            .contentType(ContentType.JSON)
-                            .body(reorderDto)
-                            .when()
-                            .patch(getReorderUrl(mockPopulatedBoard.getId(), otherColumn.getId()))
-                            .then()
-                            .extract();
+                    mockMvc.perform(
+                                    patch(
+                                                    getReorderUrl(
+                                                            mockPopulatedBoard.getId(),
+                                                            otherColumn.getId()))
+                                            .cookie(cookie)
+                                            .contentType(MediaType.APPLICATION_JSON)
+                                            .content(objectMapper.writeValueAsString(reorderDto)))
+                            .andReturn();
 
             // assert
-            Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
+            Assertions.assertThat(response.getResponse().getStatus())
+                    .isEqualTo(HttpStatus.UNAUTHORIZED.value());
         }
 
         @Test
-        void shouldNotChangeAnyTaskPosition_whenReorderingAColumn() {
+        void shouldNotChangeAnyTaskPosition_whenReorderingAColumn() throws Exception {
             // arrange
-            var cookie = signin();
+            var cookie = signinCookie();
             var boardId = mockEmptyBoards.get(0).getId();
             var first = createColumnOnBoard(cookie, boardId);
             var second = createColumnOnBoard(cookie, boardId);
@@ -315,16 +338,16 @@ public class ColumnOrderingE2ETest extends AbstractAppE2ETest {
 
             // act
             var response =
-                    given().cookie(cookie.getFirst(), cookie.getSecond())
-                            .contentType(ContentType.JSON)
-                            .body(reorderDto)
-                            .when()
-                            .patch(getReorderUrl(boardId, second.getId()))
-                            .then()
-                            .extract();
+                    mockMvc.perform(
+                                    patch(getReorderUrl(boardId, second.getId()))
+                                            .cookie(cookie)
+                                            .contentType(MediaType.APPLICATION_JSON)
+                                            .content(objectMapper.writeValueAsString(reorderDto)))
+                            .andReturn();
 
             // assert
-            Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
+            Assertions.assertThat(response.getResponse().getStatus())
+                    .isEqualTo(HttpStatus.OK.value());
             var positionsAfter =
                     List.of(
                             taskRepository.findById(firstTaskA.getId()).orElseThrow().getPosition(),
@@ -340,9 +363,10 @@ public class ColumnOrderingE2ETest extends AbstractAppE2ETest {
     @Nested
     class DeleteById {
         @Test
-        void shouldLeaveSurvivingColumnsContiguousFromZero_whenDeletingAMiddleColumn() {
+        void shouldLeaveSurvivingColumnsContiguousFromZero_whenDeletingAMiddleColumn()
+                throws Exception {
             // arrange
-            var cookie = signin();
+            var cookie = signinCookie();
             var boardId = mockEmptyBoards.get(0).getId();
             var first = createColumnOnBoard(cookie, boardId);
             var middle = createColumnOnBoard(cookie, boardId);
@@ -350,12 +374,14 @@ public class ColumnOrderingE2ETest extends AbstractAppE2ETest {
 
             // act
             var response =
-                    given().cookie(cookie.getFirst(), cookie.getSecond())
-                            .when()
-                            .delete(getColumnTasksUrl(boardId, middle.getId()));
+                    mockMvc.perform(
+                                    delete(getColumnTasksUrl(boardId, middle.getId()))
+                                            .cookie(cookie))
+                            .andReturn();
 
             // assert
-            Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
+            Assertions.assertThat(response.getResponse().getStatus())
+                    .isEqualTo(HttpStatus.OK.value());
             Assertions.assertThat(orderedColumnIds(boardId))
                     .containsExactly(first.getId(), last.getId());
             Assertions.assertThat(positionsOf(boardId)).containsExactly(0, 1);
