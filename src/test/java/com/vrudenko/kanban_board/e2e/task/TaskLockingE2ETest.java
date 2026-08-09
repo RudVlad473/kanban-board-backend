@@ -1,20 +1,29 @@
 package com.vrudenko.kanban_board.e2e.task;
 
-import static io.restassured.RestAssured.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
 import com.vrudenko.kanban_board.dto.task_dto.UpdateTaskRequestDTO;
-import com.vrudenko.kanban_board.support.fixtures.AbstractAppE2ETest;
-import io.restassured.http.ContentType;
+import com.vrudenko.kanban_board.support.fixtures.AbstractAppMockMvcTest;
+import jakarta.servlet.http.Cookie;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.data.util.Pair;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-public class TaskLockingE2ETest extends AbstractAppE2ETest {
+@SpringBootTest
+@AutoConfigureMockMvc
+public class TaskLockingE2ETest extends AbstractAppMockMvcTest {
+
+    @Autowired private MockMvc mockMvc;
+
+    @Autowired private ObjectMapper objectMapper;
 
     private String getTaskUrl(String boardId, String columnId, String taskId) {
         return ApiPaths.BOARDS
@@ -29,9 +38,9 @@ public class TaskLockingE2ETest extends AbstractAppE2ETest {
     }
 
     @Test
-    void concurrentConflictingUpdates_firstSucceeds_secondReturnsConflict() {
+    void concurrentConflictingUpdates_firstSucceeds_secondReturnsConflict() throws Exception {
         // Arrange
-        Pair<String, String> cookie = signin();
+        Cookie cookie = signinCookie();
         var boardId = mockPopulatedBoard.getId();
         var columnId = mockPopulatedColumn.getId();
         var taskId = mockPopulatedTask.getId();
@@ -52,51 +61,50 @@ public class TaskLockingE2ETest extends AbstractAppE2ETest {
 
         // Act: first PUT with the starting version succeeds and bumps the version
         var firstResponse =
-                given().cookie(cookie.getFirst(), cookie.getSecond())
-                        .contentType(ContentType.JSON)
-                        .body(firstUpdate)
-                        .when()
-                        .put(url)
-                        .then()
-                        .extract();
+                mockMvc.perform(
+                                put(url).cookie(cookie)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(objectMapper.writeValueAsString(firstUpdate)))
+                        .andReturn();
 
         // Assert
-        Assertions.assertThat(firstResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
-        var firstResponseBody = firstResponse.as(TaskResponseDTO.class);
+        Assertions.assertThat(firstResponse.getResponse().getStatus())
+                .isEqualTo(HttpStatus.OK.value());
+        var firstResponseBody =
+                objectMapper.readValue(
+                        firstResponse.getResponse().getContentAsString(), TaskResponseDTO.class);
         Assertions.assertThat(firstResponseBody.getVersion()).isNotEqualTo(startingVersion);
 
         // Act: second PUT still holding the stale starting version is rejected
         var secondResponse =
-                given().cookie(cookie.getFirst(), cookie.getSecond())
-                        .contentType(ContentType.JSON)
-                        .body(secondUpdate)
-                        .when()
-                        .put(url)
-                        .then()
-                        .extract();
+                mockMvc.perform(
+                                put(url).cookie(cookie)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(objectMapper.writeValueAsString(secondUpdate)))
+                        .andReturn();
 
         // Assert
-        Assertions.assertThat(secondResponse.statusCode()).isEqualTo(HttpStatus.CONFLICT.value());
+        Assertions.assertThat(secondResponse.getResponse().getStatus())
+                .isEqualTo(HttpStatus.CONFLICT.value());
 
         // Act: re-submitting the same stale PUT again (without refetching) must still be
         // rejected, never silently succeed
         var retryResponse =
-                given().cookie(cookie.getFirst(), cookie.getSecond())
-                        .contentType(ContentType.JSON)
-                        .body(secondUpdate)
-                        .when()
-                        .put(url)
-                        .then()
-                        .extract();
+                mockMvc.perform(
+                                put(url).cookie(cookie)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(objectMapper.writeValueAsString(secondUpdate)))
+                        .andReturn();
 
         // Assert
-        Assertions.assertThat(retryResponse.statusCode()).isEqualTo(HttpStatus.CONFLICT.value());
+        Assertions.assertThat(retryResponse.getResponse().getStatus())
+                .isEqualTo(HttpStatus.CONFLICT.value());
     }
 
     @Test
-    void update_withCurrentVersion_succeedsAndReturnsIncrementedVersion() {
+    void update_withCurrentVersion_succeedsAndReturnsIncrementedVersion() throws Exception {
         // Arrange
-        Pair<String, String> cookie = signin();
+        Cookie cookie = signinCookie();
         var boardId = mockPopulatedBoard.getId();
         var columnId = mockPopulatedColumn.getId();
         var taskId = mockPopulatedTask.getId();
@@ -111,24 +119,24 @@ public class TaskLockingE2ETest extends AbstractAppE2ETest {
 
         // Act
         var response =
-                given().cookie(cookie.getFirst(), cookie.getSecond())
-                        .contentType(ContentType.JSON)
-                        .body(updateDto)
-                        .when()
-                        .put(url)
-                        .then()
-                        .extract();
+                mockMvc.perform(
+                                put(url).cookie(cookie)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(objectMapper.writeValueAsString(updateDto)))
+                        .andReturn();
 
         // Assert
-        Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
-        var responseBody = response.as(TaskResponseDTO.class);
+        Assertions.assertThat(response.getResponse().getStatus()).isEqualTo(HttpStatus.OK.value());
+        var responseBody =
+                objectMapper.readValue(
+                        response.getResponse().getContentAsString(), TaskResponseDTO.class);
         Assertions.assertThat(responseBody.getVersion()).isGreaterThan(startingVersion);
     }
 
     @Test
-    void update_withoutVersion_returnsBadRequest() {
+    void update_withoutVersion_returnsBadRequest() throws Exception {
         // Arrange
-        Pair<String, String> cookie = signin();
+        Cookie cookie = signinCookie();
         var boardId = mockPopulatedBoard.getId();
         var columnId = mockPopulatedColumn.getId();
         var taskId = mockPopulatedTask.getId();
@@ -139,15 +147,16 @@ public class TaskLockingE2ETest extends AbstractAppE2ETest {
 
         // Act
         var response =
-                given().cookie(cookie.getFirst(), cookie.getSecond())
-                        .contentType(ContentType.JSON)
-                        .body(updateDtoWithoutVersion)
-                        .when()
-                        .put(url)
-                        .then()
-                        .extract();
+                mockMvc.perform(
+                                put(url).cookie(cookie)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(
+                                                objectMapper.writeValueAsString(
+                                                        updateDtoWithoutVersion)))
+                        .andReturn();
 
         // Assert
-        Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        Assertions.assertThat(response.getResponse().getStatus())
+                .isEqualTo(HttpStatus.BAD_REQUEST.value());
     }
 }
