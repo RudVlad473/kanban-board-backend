@@ -1,7 +1,9 @@
 package com.vrudenko.kanban_board;
 
-import static io.restassured.RestAssured.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.subtask_dto.SaveSubtaskRequestDTO;
@@ -10,16 +12,18 @@ import com.vrudenko.kanban_board.dto.subtask_dto.UpdateSubtaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
 import com.vrudenko.kanban_board.service.ColumnService;
 import com.vrudenko.kanban_board.service.TaskService;
-import com.vrudenko.kanban_board.support.fixtures.AbstractAppE2ETest;
-import io.restassured.http.ContentType;
+import com.vrudenko.kanban_board.support.fixtures.AbstractAppMockMvcTest;
+import jakarta.servlet.http.Cookie;
 import java.util.Arrays;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.data.util.Pair;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
 
 /**
  * Tracer proving GAP-06 end to end: a PUT to the subtask update route runs through the controller,
@@ -27,8 +31,13 @@ import org.springframework.http.HttpStatus;
  * guard, and back out through {@link com.vrudenko.kanban_board.handler.GlobalExceptionHandler}.
  * Modeled on {@code e2e.task.TaskLockingE2ETest} and {@code e2e.column.ColumnLockingE2ETest}.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-public class SubtaskLockingE2ETest extends AbstractAppE2ETest {
+@SpringBootTest
+@AutoConfigureMockMvc
+public class SubtaskLockingE2ETest extends AbstractAppMockMvcTest {
+
+    @Autowired private MockMvc mockMvc;
+
+    @Autowired private ObjectMapper objectMapper;
 
     @Autowired private ColumnService columnService;
 
@@ -88,9 +97,9 @@ public class SubtaskLockingE2ETest extends AbstractAppE2ETest {
     @Nested
     class UpdateById {
         @Test
-        void shouldReturnOkWithIncrementedVersion_whenVersionIsCurrent() {
+        void shouldReturnOkWithIncrementedVersion_whenVersionIsCurrent() throws Exception {
             // arrange
-            Pair<String, String> cookie = signin();
+            Cookie cookie = signinCookie();
             var subtask = mockSubtasks.getFirst();
             var url =
                     getSubtaskUrl(
@@ -108,24 +117,25 @@ public class SubtaskLockingE2ETest extends AbstractAppE2ETest {
 
             // act
             var response =
-                    given().cookie(cookie.getFirst(), cookie.getSecond())
-                            .contentType(ContentType.JSON)
-                            .body(updateDto)
-                            .when()
-                            .put(url)
-                            .then()
-                            .extract();
+                    mockMvc.perform(
+                                    put(url).cookie(cookie)
+                                            .contentType(MediaType.APPLICATION_JSON)
+                                            .content(objectMapper.writeValueAsString(updateDto)))
+                            .andReturn();
 
             // assert
-            Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
-            var responseBody = response.as(SubtaskResponseDTO.class);
+            Assertions.assertThat(response.getResponse().getStatus())
+                    .isEqualTo(HttpStatus.OK.value());
+            var responseBody =
+                    objectMapper.readValue(
+                            response.getResponse().getContentAsString(), SubtaskResponseDTO.class);
             Assertions.assertThat(responseBody.getVersion()).isEqualTo(startingVersion + 1);
         }
 
         @Test
-        void shouldReturnConflictAndLeaveStateUnchanged_whenVersionIsStale() {
+        void shouldReturnConflictAndLeaveStateUnchanged_whenVersionIsStale() throws Exception {
             // arrange
-            Pair<String, String> cookie = signin();
+            Cookie cookie = signinCookie();
             var subtask = mockSubtasks.get(1);
             var url =
                     getSubtaskUrl(
@@ -148,49 +158,47 @@ public class SubtaskLockingE2ETest extends AbstractAppE2ETest {
 
             // act: first PUT with the starting version succeeds and bumps the version
             var firstResponse =
-                    given().cookie(cookie.getFirst(), cookie.getSecond())
-                            .contentType(ContentType.JSON)
-                            .body(firstUpdate)
-                            .when()
-                            .put(url)
-                            .then()
-                            .extract();
+                    mockMvc.perform(
+                                    put(url).cookie(cookie)
+                                            .contentType(MediaType.APPLICATION_JSON)
+                                            .content(objectMapper.writeValueAsString(firstUpdate)))
+                            .andReturn();
 
             // assert
-            Assertions.assertThat(firstResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
+            Assertions.assertThat(firstResponse.getResponse().getStatus())
+                    .isEqualTo(HttpStatus.OK.value());
 
             // act: second PUT still holding the stale starting version is rejected
             var staleResponse =
-                    given().cookie(cookie.getFirst(), cookie.getSecond())
-                            .contentType(ContentType.JSON)
-                            .body(staleUpdate)
-                            .when()
-                            .put(url)
-                            .then()
-                            .extract();
+                    mockMvc.perform(
+                                    put(url).cookie(cookie)
+                                            .contentType(MediaType.APPLICATION_JSON)
+                                            .content(objectMapper.writeValueAsString(staleUpdate)))
+                            .andReturn();
 
             // assert
-            Assertions.assertThat(staleResponse.statusCode())
+            Assertions.assertThat(staleResponse.getResponse().getStatus())
                     .isEqualTo(HttpStatus.CONFLICT.value());
 
             // assert: a subsequent GET shows the original title/isCompleted unchanged
+            var currentSubtasksResponse =
+                    mockMvc.perform(
+                                    get(ApiPaths.BOARDS
+                                                    + "/"
+                                                    + mockPopulatedBoard.getId()
+                                                    + ApiPaths.COLUMNS
+                                                    + "/"
+                                                    + mockPopulatedColumn.getId()
+                                                    + ApiPaths.TASKS
+                                                    + "/"
+                                                    + mockPopulatedTask.getId()
+                                                    + ApiPaths.SUBTASKS)
+                                            .cookie(cookie))
+                            .andReturn();
             var currentSubtasks =
-                    given().cookie(cookie.getFirst(), cookie.getSecond())
-                            .when()
-                            .get(
-                                    ApiPaths.BOARDS
-                                            + "/"
-                                            + mockPopulatedBoard.getId()
-                                            + ApiPaths.COLUMNS
-                                            + "/"
-                                            + mockPopulatedColumn.getId()
-                                            + ApiPaths.TASKS
-                                            + "/"
-                                            + mockPopulatedTask.getId()
-                                            + ApiPaths.SUBTASKS)
-                            .then()
-                            .extract()
-                            .as(SubtaskResponseDTO[].class);
+                    objectMapper.readValue(
+                            currentSubtasksResponse.getResponse().getContentAsString(),
+                            SubtaskResponseDTO[].class);
 
             var matchingSubtasks =
                     Arrays.stream(currentSubtasks)
@@ -204,9 +212,9 @@ public class SubtaskLockingE2ETest extends AbstractAppE2ETest {
         }
 
         @Test
-        void shouldReturnBadRequest_whenVersionIsMissing() {
+        void shouldReturnBadRequest_whenVersionIsMissing() throws Exception {
             // arrange
-            Pair<String, String> cookie = signin();
+            Cookie cookie = signinCookie();
             var subtask = mockSubtasks.get(2);
             var url =
                     getSubtaskUrl(
@@ -220,22 +228,24 @@ public class SubtaskLockingE2ETest extends AbstractAppE2ETest {
 
             // act
             var response =
-                    given().cookie(cookie.getFirst(), cookie.getSecond())
-                            .contentType(ContentType.JSON)
-                            .body(updateDtoWithoutVersion)
-                            .when()
-                            .put(url)
-                            .then()
-                            .extract();
+                    mockMvc.perform(
+                                    put(url).cookie(cookie)
+                                            .contentType(MediaType.APPLICATION_JSON)
+                                            .content(
+                                                    objectMapper.writeValueAsString(
+                                                            updateDtoWithoutVersion)))
+                            .andReturn();
 
             // assert
-            Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+            Assertions.assertThat(response.getResponse().getStatus())
+                    .isEqualTo(HttpStatus.BAD_REQUEST.value());
         }
 
         @Test
-        void shouldReturnUnauthorized_whenSubtaskOwnedByAnotherUser_andVersionCheckNeverRuns() {
+        void shouldReturnUnauthorized_whenSubtaskOwnedByAnotherUser_andVersionCheckNeverRuns()
+                throws Exception {
             // arrange
-            Pair<String, String> cookie = signin();
+            Cookie cookie = signinCookie();
             var otherUser = createUser();
             var otherSubtask = createSubtaskForUser(otherUser.getId());
 
@@ -260,16 +270,15 @@ public class SubtaskLockingE2ETest extends AbstractAppE2ETest {
             // act: attempt the update as the ORIGINAL signed-in user against another user's
             // subtask
             var response =
-                    given().cookie(cookie.getFirst(), cookie.getSecond())
-                            .contentType(ContentType.JSON)
-                            .body(updateDto)
-                            .when()
-                            .put(url)
-                            .then()
-                            .extract();
+                    mockMvc.perform(
+                                    put(url).cookie(cookie)
+                                            .contentType(MediaType.APPLICATION_JSON)
+                                            .content(objectMapper.writeValueAsString(updateDto)))
+                            .andReturn();
 
             // assert
-            Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
+            Assertions.assertThat(response.getResponse().getStatus())
+                    .isEqualTo(HttpStatus.UNAUTHORIZED.value());
         }
     }
 }
