@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Infra Migration & Schema Registry
-current_phase: 5
-current_phase_name: Infra Migration
+current_phase: 07.1
+current_phase_name: address-hard-blockers-and-inconsistencies-from-the-frontend
 status: executing
 stopped_at: Phase 07.1 context gathered
-last_updated: "2026-08-09T16:39:05.670Z"
+last_updated: "2026-08-09T19:06:34.319Z"
 last_activity: 2026-08-09
 last_activity_desc: Phase 7 complete, transitioned to Phase 5
 progress:
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-03)
 
 **Core value:** Redeploy the app on a cost-guarded, always-free/near-free stack (Oracle Cloud + Neon + self-hosted Redpanda) after the AWS EC2/RDS deletion, and add a Schema Registry (Avro) in front of the Kafka activity-log pipeline to close the schema-evolution risk flagged during v1.1.
-**Current focus:** Phase 5 — Infra Migration
+**Current focus:** Phase 07.1 — address-hard-blockers-and-inconsistencies-from-the-frontend
 
 ## Current Position
 
-Phase: 5 — Infra Migration
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-08-09 — Phase 7 (Restructure test folder) complete and verified (9/9 must-haves); Phase 6 (Mock-up Feature Gap Closure) confirmed already complete from a prior session (STATE.md's stale "1 of 7" note was outdated documentation, not an actual execution gap — all 7 plans have SUMMARY.md files and 06-VERIFICATION.md records 49/49 must-haves)
+Phase: 07.1 (address-hard-blockers-and-inconsistencies-from-the-frontend) — EXECUTING
+Plan: 1 of 9
+Status: Executing Phase 07.1
+Last activity: 2026-08-09 — Phase 07.1 execution started
 
 Progress: [████████░░] 80%
 
@@ -138,7 +138,7 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-- [minor] `GET /api/docs` returns HTTP 500 with no logged exception — observed by the operator during Phase 04.1 Plan 03's checkpoint verification run (2026-08-05), against the freshly migrated docker-compose stack. Springdoc/OpenAPI-path territory; every plan in Phase 04.1 explicitly left Epic 3's OpenAPI half untouched, so this was noted rather than fixed. Not yet filed as a dedicated todo file — worth investigating whenever Epic 3's OpenAPI half is picked up.
+- [major] `GET /api/docs` returns HTTP 500 — root cause found 2026-08-09 while generating an OpenAPI spec for frontend consumption: `io.confluent:kafka-avro-serializer` transitively pulls the pre-jakarta `swagger-annotations:2.1.10`, which shadows the `swagger-annotations-jakarta:2.2.30` SpringDoc needs (same package, older class missing `validationGroups()`), causing a `NoSuchMethodError`. One-line `build.gradle` exclusion fix verified working. See `.planning/todos/pending/2026-08-09-fix-broken-api-docs-swagger-endpoint-swagger-annotations-ver.md`.
 - [minor] Create a sequence diagram documenting the full system flow — deferred until all functional epics of the backend modernization plan are complete and the project is ready for frontend hand-off. See `.planning/todos/pending/2026-08-01-create-sequence-diagram-documenting-full-system-flow-for-fro.md`.
 - [minor] Bump Java version from 21 to 25 (current LTS) — build.gradle toolchain, Dockerfile (both stages), and CI `java-version` all pinned to 21; not urgent (21 LTS supported until ~2028), but worth doing proactively. See `.planning/todos/pending/2026-08-01-bump-java-version-from-21-to-25-current-lts.md`.
 - [minor] Account for schema evolution risk when changing ActivityEvent shapes — a rolling deploy that renames/retypes an event field while old-shape messages are still unconsumed can dead-letter valid (non-poison) messages; Kafka itself enforces no schema. Directly addressed by v1.2 Phase 4 (Schema Registry) — expect this todo to close at that phase's transition. See `.planning/todos/pending/2026-08-01-account-for-schema-evolution-risk-when-changing-activityeven.md`.
@@ -229,6 +229,6 @@ Resume file: .planning/phases/07.1-address-hard-blockers-and-inconsistencies-fro
 
 - Resume Phase 5 (Infra Migration) — it was paused specifically to make room for Phase 04.1's insertion, and Phase 04.1 is now fully closed out with Flyway proven end-to-end (both automated migration application and a live HTTP request against the migrated schema). Phase 6 and Phase 7 both landed and closed out since, so Phase 5 is next in sequence with nothing else outstanding ahead of it.
 - New: decide the E2ETest-suffix vs. `fastTest`-filter coupling Phase 7 surfaced — see Pending Todos below.
-- Minor, out-of-scope: `GET /api/docs` returns HTTP 500 with no logged exception (observed during Phase 04.1 Plan 03's checkpoint run). Springdoc/OpenAPI-path territory, not investigated — see Pending Todos below.
+- `GET /api/docs` returns HTTP 500 — root cause identified 2026-08-09 (swagger-annotations version conflict via kafka-avro-serializer), one-line fix verified but not applied — see Pending Todos below.
 
 </content>
