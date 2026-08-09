@@ -20,7 +20,7 @@ inner classes could read more clearly and reduce file-count sprawl.
 
 ## Solution
 
-TBD — two things to evaluate, not necessarily both:
+TBD — three things to evaluate, not necessarily all:
 
 1. **Separate setup/fixture classes from actual test classes.** Consider whether abstract
    base classes and shared fixtures (e.g. `AbstractAppTest`, `AbstractKafkaContainerTest`,
@@ -32,6 +32,20 @@ TBD — two things to evaluate, not necessarily both:
    different angles) and assess whether consolidating them into one file with `@Nested`
    inner classes would improve readability over the current one-class-per-file split, without
    sacrificing the ability to run/target individual test groups.
+3. **Evaluate which `E2ETest`-suffixed classes could drop to the cheaper in-process tier.** Since
+   H2 was dropped in Phase 04.2, every test — `E2ETest`-suffixed or not — already hits real
+   Testcontainers PostgreSQL; the `E2ETest` suffix no longer tracks "real vs. fake DB." What it
+   actually tracks today is a narrower, more expensive layer: a real HTTP socket (REST Assured
+   over `RANDOM_PORT`) and, for the activity-log classes, real Kafka + Schema Registry containers.
+   As of Phase 6, 23 of 45 test files (51%) carry the suffix. Review those 23 and check whether
+   any assert only a status code plus a DB row with no dependency on real-socket or real-Kafka
+   behavior specifically — those could run at the same in-process `@SpringBootTest` tier as the
+   other 22 non-E2E classes without losing real coverage. Keep the real-socket/real-Kafka tier for
+   genuinely cross-cutting concerns (security/ownership boundary checks, Kafka
+   publish→consume→dedupe, Avro schema evolution) where it is actually buying something a
+   Postgres-real, in-process test can't. This does not reintroduce mocking — the project's
+   no-mocks rule (`docs/CODE_STYLE.md`) and its real-DB-everywhere stance stay intact either way;
+   this only asks which tests also pay for a real socket/Kafka on top of that.
 
 Scope this as an evaluation first (which files, if any, actually benefit) rather than a
 blanket reorganization — the test suite has grown to ~25+ classes across several phases

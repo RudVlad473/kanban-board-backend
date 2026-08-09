@@ -26,6 +26,30 @@ Record the recovery that worked, because it is the reusable part: a `git reset` 
 
 Timeout corollary, since it is what converted a safe commit into a recovery: a `git commit` in this repo triggers `.githooks/pre-commit` (`spotlessApply`, then `./gradlew test --exclude-tests '*E2ETest'`), which takes minutes — give it a generous timeout instead of letting a default kill it partway through.
 
+### 3. Redirect stdin on any subprocess launched from a git hook
+
+**What happened:** `.githooks/pre-commit` invokes `./gradlew spotlessCheck` and `./gradlew fastTest`. When git itself was invoked through a nested tool-invoked subprocess chain, those `gradlew` calls hung indefinitely — zero CPU usage, no Testcontainers ever started (`docker ps -a --filter label=org.testcontainers` showed zero containers created the entire time). Running the identical `gradlew` commands directly, outside that chain, completed in 17 seconds.
+
+**Why:** the hook process inherits stdin from its parent chain. When that chain's stdin is an open-but-never-closed pipe, a child process that blocks on stdin availability — even one that never actually reads from it — can hang waiting for an EOF that never arrives.
+
+**The rule:** any command invoked from a git hook that doesn't need interactive input should redirect stdin explicitly (`< /dev/null`) rather than rely on default inheritance. `.githooks/pre-commit` now does this for both `gradlew` calls; treat it as the template for any future hook command, not a one-off fix.
+
+### 4. Worktree cleanup must wait for every agent inside it to confirm return, not just the one that finished last
+
+**What happened:** after fast-forward-merging a worktree's branch into master, its directory was removed (`rm -rf`) while a separate, later-dispatched agent instance was still actively running commands inside that same worktree, recovering a stalled plan. That agent reported the worktree as "destroyed externally." No commits were actually lost — worktree-directory deletion never touches git's shared object database, and all commits remained reachable from master — but the near-miss was real.
+
+**Why:** a worktree can have more than one agent instance dispatched against it over its lifetime (e.g. a stalled original executor followed by a recovery agent). Treating "the branch merged cleanly" as proof the worktree is idle skips checking whether a later-dispatched agent is still running inside it.
+
+**The rule:** before removing a worktree directory or its branch, confirm independently that no agent — original or any recovery dispatch — is still active in it. Merge success is not evidence of idleness by itself; a worktree reported auto-cleaned by the harness after making zero commits is a stronger signal of true idleness than an assumption based on the merge.
+
+### 5. Verify a silent or long-running executor by direct inspection, not by its own self-report
+
+**What happened:** an executor went silent for over an hour with no new commits. A resume attempt reported progress that direct `git log`/`git status` inspection did not confirm, and messaging it directly returned that it "had no active task; resumed from transcript" — it had genuinely stalled, not merely gone quiet while working. Separately, in an earlier session, an agent self-reported "~2h10min" elapsed on a task the harness's own measured duration put at ~36 minutes.
+
+**Why:** a genuine hang and a merely slow real workload (Testcontainers startup, a long Gradle run) look identical from the outside — flat elapsed time, nothing visible happening. Only the underlying state — live process CPU deltas, actual new commits or file mtimes, or the harness's own measured duration — distinguishes them; an agent's own narrative summary is not reliable evidence either way.
+
+**The rule:** when a task looks stuck or its reported duration looks surprising, check the state the environment actually produced — new commits, process activity, container lifecycle — before accepting either "it's fine, just slow" or "it's stuck" on the strength of an agent's self-report alone.
+
 ## Adding a lesson
 
 New lessons are appended as a new `###` section under `## Lessons`, numbered with the next integer. Each lesson carries exactly three bolded labels, in this order: **What happened**, **Why**, **The rule**. This differs from `CODE_STYLE.md`'s rule shape, which requires a bad-vs-good Java code example — that contract does not apply here, since these lessons describe process, not code. Do not copy the code-example requirement from the sibling file when adding a lesson.
