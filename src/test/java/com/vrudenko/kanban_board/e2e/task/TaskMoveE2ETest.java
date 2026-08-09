@@ -1,7 +1,10 @@
 package com.vrudenko.kanban_board.e2e.task;
 
-import static io.restassured.RestAssured.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.column_dto.ColumnResponseDTO;
@@ -9,23 +12,30 @@ import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.MoveTaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
 import com.vrudenko.kanban_board.event.TaskMovedEvent;
-import com.vrudenko.kanban_board.support.fixtures.AbstractAppE2ETest;
+import com.vrudenko.kanban_board.support.fixtures.AbstractAppMockMvcTest;
 import com.vrudenko.kanban_board.support.listeners.RecordingActivityEventListener;
-import io.restassured.http.ContentType;
+import jakarta.servlet.http.Cookie;
 import java.util.List;
 import java.util.UUID;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.data.util.Pair;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-public class TaskMoveE2ETest extends AbstractAppE2ETest {
+@SpringBootTest
+@AutoConfigureMockMvc
+public class TaskMoveE2ETest extends AbstractAppMockMvcTest {
 
     @Autowired private RecordingActivityEventListener recorder;
+
+    @Autowired private MockMvc mockMvc;
+
+    @Autowired private ObjectMapper objectMapper;
 
     private String getMoveUrl(String taskId) {
         return ApiPaths.TASKS + "/" + taskId + ApiPaths.MOVE;
@@ -39,20 +49,32 @@ public class TaskMoveE2ETest extends AbstractAppE2ETest {
         return ApiPaths.BOARDS + "/" + boardId + ApiPaths.COLUMNS;
     }
 
-    private ColumnResponseDTO createColumnOnBoard(Pair<String, String> cookie, String boardId) {
-        return given().cookie(cookie.getFirst(), cookie.getSecond())
-                .contentType(ContentType.JSON)
-                .body(
-                        SaveColumnRequestDTO.builder()
-                                .name(
-                                        dataFactory.getRandomWord(
-                                                ValidationConstants.MIN_COLUMN_NAME_LENGTH))
-                                .build())
-                .when()
-                .post(getBoardColumnsUrl(boardId))
-                .then()
-                .extract()
-                .as(ColumnResponseDTO.class);
+    private ColumnResponseDTO createColumnOnBoard(Cookie cookie, String boardId) throws Exception {
+        var result =
+                mockMvc.perform(
+                                post(getBoardColumnsUrl(boardId))
+                                        .cookie(cookie)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(
+                                                objectMapper.writeValueAsString(
+                                                        SaveColumnRequestDTO.builder()
+                                                                .name(
+                                                                        dataFactory.getRandomWord(
+                                                                                ValidationConstants
+                                                                                        .MIN_COLUMN_NAME_LENGTH))
+                                                                .build())))
+                        .andReturn();
+        return objectMapper.readValue(
+                result.getResponse().getContentAsString(), ColumnResponseDTO.class);
+    }
+
+    private TaskResponseDTO[] getColumnTasks(Cookie cookie, String boardId, String columnId)
+            throws Exception {
+        var result =
+                mockMvc.perform(get(getColumnTasksUrl(boardId, columnId)).cookie(cookie))
+                        .andReturn();
+        return objectMapper.readValue(
+                result.getResponse().getContentAsString(), TaskResponseDTO[].class);
     }
 
     private List<TaskMovedEvent> recordedMovedEvents() {
@@ -63,10 +85,10 @@ public class TaskMoveE2ETest extends AbstractAppE2ETest {
     }
 
     @Test
-    void move_toColumnOnSameBoard_succeedsAndAnnouncesTaskMovedEvent() {
+    void move_toColumnOnSameBoard_succeedsAndAnnouncesTaskMovedEvent() throws Exception {
         // arrange
         recorder.clear();
-        Pair<String, String> cookie = signin();
+        Cookie cookie = signinCookie();
         var boardId = mockPopulatedBoard.getId();
         var sourceColumnId = mockPopulatedColumn.getId();
         var targetColumnId = mockColumns.getFirst().getId();
@@ -80,35 +102,24 @@ public class TaskMoveE2ETest extends AbstractAppE2ETest {
                         .build();
 
         // act
-        var response =
-                given().cookie(cookie.getFirst(), cookie.getSecond())
-                        .contentType(ContentType.JSON)
-                        .body(moveDto)
-                        .when()
-                        .patch(getMoveUrl(taskId))
-                        .then()
-                        .extract();
+        var result =
+                mockMvc.perform(
+                                patch(getMoveUrl(taskId))
+                                        .cookie(cookie)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(objectMapper.writeValueAsString(moveDto)))
+                        .andReturn();
 
         // assert
-        Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
-        var responseBody = response.as(TaskResponseDTO.class);
+        Assertions.assertThat(result.getResponse().getStatus()).isEqualTo(HttpStatus.OK.value());
+        var responseBody =
+                objectMapper.readValue(
+                        result.getResponse().getContentAsString(), TaskResponseDTO.class);
         Assertions.assertThat(responseBody.getVersion()).isGreaterThan(startingVersion);
 
         // act
-        var targetColumnTasks =
-                given().cookie(cookie.getFirst(), cookie.getSecond())
-                        .when()
-                        .get(getColumnTasksUrl(boardId, targetColumnId))
-                        .then()
-                        .extract()
-                        .as(TaskResponseDTO[].class);
-        var sourceColumnTasks =
-                given().cookie(cookie.getFirst(), cookie.getSecond())
-                        .when()
-                        .get(getColumnTasksUrl(boardId, sourceColumnId))
-                        .then()
-                        .extract()
-                        .as(TaskResponseDTO[].class);
+        var targetColumnTasks = getColumnTasks(cookie, boardId, targetColumnId);
+        var sourceColumnTasks = getColumnTasks(cookie, boardId, sourceColumnId);
 
         // assert
         Assertions.assertThat(targetColumnTasks)
@@ -138,9 +149,10 @@ public class TaskMoveE2ETest extends AbstractAppE2ETest {
         @Nested
         class StaleVersion {
             @Test
-            void shouldReturnConflict_whenVersionIsStale_andStaysRejectedOnRetry() {
+            void shouldReturnConflict_whenVersionIsStale_andStaysRejectedOnRetry()
+                    throws Exception {
                 // arrange
-                var cookie = signin();
+                var cookie = signinCookie();
                 var boardId = mockPopulatedBoard.getId();
                 var taskId = mockPopulatedTask.getId();
                 var startingVersion = mockPopulatedTask.getVersion();
@@ -159,65 +171,54 @@ public class TaskMoveE2ETest extends AbstractAppE2ETest {
                                 .build();
 
                 // act: first move succeeds and bumps the version
-                var firstResponse =
-                        given().cookie(cookie.getFirst(), cookie.getSecond())
-                                .contentType(ContentType.JSON)
-                                .body(firstMove)
-                                .when()
-                                .patch(getMoveUrl(taskId))
-                                .then()
-                                .extract();
+                var firstResult =
+                        mockMvc.perform(
+                                        patch(getMoveUrl(taskId))
+                                                .cookie(cookie)
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(
+                                                        objectMapper.writeValueAsString(firstMove)))
+                                .andReturn();
 
                 // assert
-                Assertions.assertThat(firstResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
+                Assertions.assertThat(firstResult.getResponse().getStatus())
+                        .isEqualTo(HttpStatus.OK.value());
 
                 recorder.clear();
 
                 // act: second move still holding the pre-move version is rejected
-                var secondResponse =
-                        given().cookie(cookie.getFirst(), cookie.getSecond())
-                                .contentType(ContentType.JSON)
-                                .body(staleMove)
-                                .when()
-                                .patch(getMoveUrl(taskId))
-                                .then()
-                                .extract();
+                var secondResult =
+                        mockMvc.perform(
+                                        patch(getMoveUrl(taskId))
+                                                .cookie(cookie)
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(
+                                                        objectMapper.writeValueAsString(staleMove)))
+                                .andReturn();
 
                 // assert
-                Assertions.assertThat(secondResponse.statusCode())
+                Assertions.assertThat(secondResult.getResponse().getStatus())
                         .isEqualTo(HttpStatus.CONFLICT.value());
 
                 // act: retrying the same stale move again, without refetching, must still be
                 // rejected
-                var retryResponse =
-                        given().cookie(cookie.getFirst(), cookie.getSecond())
-                                .contentType(ContentType.JSON)
-                                .body(staleMove)
-                                .when()
-                                .patch(getMoveUrl(taskId))
-                                .then()
-                                .extract();
+                var retryResult =
+                        mockMvc.perform(
+                                        patch(getMoveUrl(taskId))
+                                                .cookie(cookie)
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(
+                                                        objectMapper.writeValueAsString(staleMove)))
+                                .andReturn();
 
                 // assert
-                Assertions.assertThat(retryResponse.statusCode())
+                Assertions.assertThat(retryResult.getResponse().getStatus())
                         .isEqualTo(HttpStatus.CONFLICT.value());
 
                 // assert: the task's column is still the first move's target — rejected attempts
                 // changed nothing
-                var firstTargetTasks =
-                        given().cookie(cookie.getFirst(), cookie.getSecond())
-                                .when()
-                                .get(getColumnTasksUrl(boardId, firstTargetColumnId))
-                                .then()
-                                .extract()
-                                .as(TaskResponseDTO[].class);
-                var secondTargetTasks =
-                        given().cookie(cookie.getFirst(), cookie.getSecond())
-                                .when()
-                                .get(getColumnTasksUrl(boardId, secondTargetColumnId))
-                                .then()
-                                .extract()
-                                .as(TaskResponseDTO[].class);
+                var firstTargetTasks = getColumnTasks(cookie, boardId, firstTargetColumnId);
+                var secondTargetTasks = getColumnTasks(cookie, boardId, secondTargetColumnId);
 
                 Assertions.assertThat(firstTargetTasks)
                         .extracting(TaskResponseDTO::getId)
@@ -234,10 +235,11 @@ public class TaskMoveE2ETest extends AbstractAppE2ETest {
         @Nested
         class ConcurrentConflict {
             @Test
-            void shouldAcceptFirstWriter_andRejectSecondWriter_whenBothStartFromSameVersion() {
+            void shouldAcceptFirstWriter_andRejectSecondWriter_whenBothStartFromSameVersion()
+                    throws Exception {
                 // arrange
                 recorder.clear();
-                var cookie = signin();
+                var cookie = signinCookie();
                 var boardId = mockPopulatedBoard.getId();
                 var taskId = mockPopulatedTask.getId();
                 var startingVersion = mockPopulatedTask.getVersion();
@@ -256,42 +258,32 @@ public class TaskMoveE2ETest extends AbstractAppE2ETest {
                                 .build();
 
                 // act
-                var firstResponse =
-                        given().cookie(cookie.getFirst(), cookie.getSecond())
-                                .contentType(ContentType.JSON)
-                                .body(firstMove)
-                                .when()
-                                .patch(getMoveUrl(taskId))
-                                .then()
-                                .extract();
-                var secondResponse =
-                        given().cookie(cookie.getFirst(), cookie.getSecond())
-                                .contentType(ContentType.JSON)
-                                .body(secondMove)
-                                .when()
-                                .patch(getMoveUrl(taskId))
-                                .then()
-                                .extract();
+                var firstResult =
+                        mockMvc.perform(
+                                        patch(getMoveUrl(taskId))
+                                                .cookie(cookie)
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(
+                                                        objectMapper.writeValueAsString(firstMove)))
+                                .andReturn();
+                var secondResult =
+                        mockMvc.perform(
+                                        patch(getMoveUrl(taskId))
+                                                .cookie(cookie)
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(
+                                                        objectMapper.writeValueAsString(
+                                                                secondMove)))
+                                .andReturn();
 
                 // assert: first wins, second is rejected — never a silent overwrite
-                Assertions.assertThat(firstResponse.statusCode()).isEqualTo(HttpStatus.OK.value());
-                Assertions.assertThat(secondResponse.statusCode())
+                Assertions.assertThat(firstResult.getResponse().getStatus())
+                        .isEqualTo(HttpStatus.OK.value());
+                Assertions.assertThat(secondResult.getResponse().getStatus())
                         .isEqualTo(HttpStatus.CONFLICT.value());
 
-                var firstTargetTasks =
-                        given().cookie(cookie.getFirst(), cookie.getSecond())
-                                .when()
-                                .get(getColumnTasksUrl(boardId, firstTargetColumnId))
-                                .then()
-                                .extract()
-                                .as(TaskResponseDTO[].class);
-                var secondTargetTasks =
-                        given().cookie(cookie.getFirst(), cookie.getSecond())
-                                .when()
-                                .get(getColumnTasksUrl(boardId, secondTargetColumnId))
-                                .then()
-                                .extract()
-                                .as(TaskResponseDTO[].class);
+                var firstTargetTasks = getColumnTasks(cookie, boardId, firstTargetColumnId);
+                var secondTargetTasks = getColumnTasks(cookie, boardId, secondTargetColumnId);
 
                 Assertions.assertThat(firstTargetTasks)
                         .extracting(TaskResponseDTO::getId)
@@ -311,10 +303,11 @@ public class TaskMoveE2ETest extends AbstractAppE2ETest {
         @Nested
         class CrossBoardTarget {
             @Test
-            void shouldReturnBadRequest_whenTargetColumnIsOnDifferentBoardOwnedBySameUser() {
+            void shouldReturnBadRequest_whenTargetColumnIsOnDifferentBoardOwnedBySameUser()
+                    throws Exception {
                 // arrange
                 recorder.clear();
-                var cookie = signin();
+                var cookie = signinCookie();
                 var boardId = mockPopulatedBoard.getId();
                 var sourceColumnId = mockPopulatedColumn.getId();
                 var taskId = mockPopulatedTask.getId();
@@ -329,26 +322,19 @@ public class TaskMoveE2ETest extends AbstractAppE2ETest {
                                 .build();
 
                 // act
-                var response =
-                        given().cookie(cookie.getFirst(), cookie.getSecond())
-                                .contentType(ContentType.JSON)
-                                .body(moveDto)
-                                .when()
-                                .patch(getMoveUrl(taskId))
-                                .then()
-                                .extract();
+                var result =
+                        mockMvc.perform(
+                                        patch(getMoveUrl(taskId))
+                                                .cookie(cookie)
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(objectMapper.writeValueAsString(moveDto)))
+                                .andReturn();
 
                 // assert
-                Assertions.assertThat(response.statusCode())
+                Assertions.assertThat(result.getResponse().getStatus())
                         .isEqualTo(HttpStatus.BAD_REQUEST.value());
 
-                var sourceColumnTasks =
-                        given().cookie(cookie.getFirst(), cookie.getSecond())
-                                .when()
-                                .get(getColumnTasksUrl(boardId, sourceColumnId))
-                                .then()
-                                .extract()
-                                .as(TaskResponseDTO[].class);
+                var sourceColumnTasks = getColumnTasks(cookie, boardId, sourceColumnId);
 
                 Assertions.assertThat(sourceColumnTasks)
                         .extracting(TaskResponseDTO::getId)
@@ -360,10 +346,10 @@ public class TaskMoveE2ETest extends AbstractAppE2ETest {
         @Nested
         class UnownedTarget {
             @Test
-            void shouldReturnUnauthorized_whenTargetColumnOwnedByAnotherUser() {
+            void shouldReturnUnauthorized_whenTargetColumnOwnedByAnotherUser() throws Exception {
                 // arrange
                 recorder.clear();
-                var cookie = signin();
+                var cookie = signinCookie();
                 var boardId = mockPopulatedBoard.getId();
                 var sourceColumnId = mockPopulatedColumn.getId();
                 var taskId = mockPopulatedTask.getId();
@@ -385,26 +371,19 @@ public class TaskMoveE2ETest extends AbstractAppE2ETest {
                                 .build();
 
                 // act: attempt the move as the ORIGINAL signed-in user
-                var response =
-                        given().cookie(cookie.getFirst(), cookie.getSecond())
-                                .contentType(ContentType.JSON)
-                                .body(moveDto)
-                                .when()
-                                .patch(getMoveUrl(taskId))
-                                .then()
-                                .extract();
+                var result =
+                        mockMvc.perform(
+                                        patch(getMoveUrl(taskId))
+                                                .cookie(cookie)
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(objectMapper.writeValueAsString(moveDto)))
+                                .andReturn();
 
                 // assert
-                Assertions.assertThat(response.statusCode())
+                Assertions.assertThat(result.getResponse().getStatus())
                         .isEqualTo(HttpStatus.UNAUTHORIZED.value());
 
-                var sourceColumnTasks =
-                        given().cookie(cookie.getFirst(), cookie.getSecond())
-                                .when()
-                                .get(getColumnTasksUrl(boardId, sourceColumnId))
-                                .then()
-                                .extract()
-                                .as(TaskResponseDTO[].class);
+                var sourceColumnTasks = getColumnTasks(cookie, boardId, sourceColumnId);
 
                 Assertions.assertThat(sourceColumnTasks)
                         .extracting(TaskResponseDTO::getId)
@@ -416,9 +395,9 @@ public class TaskMoveE2ETest extends AbstractAppE2ETest {
         @Nested
         class MissingVersion {
             @Test
-            void shouldReturnBadRequest_whenVersionIsMissing() {
+            void shouldReturnBadRequest_whenVersionIsMissing() throws Exception {
                 // arrange
-                var cookie = signin();
+                var cookie = signinCookie();
                 var taskId = mockPopulatedTask.getId();
                 var targetColumnId = mockColumns.getFirst().getId();
 
@@ -426,17 +405,18 @@ public class TaskMoveE2ETest extends AbstractAppE2ETest {
                         MoveTaskRequestDTO.builder().targetColumnId(targetColumnId).build();
 
                 // act
-                var response =
-                        given().cookie(cookie.getFirst(), cookie.getSecond())
-                                .contentType(ContentType.JSON)
-                                .body(moveDtoWithoutVersion)
-                                .when()
-                                .patch(getMoveUrl(taskId))
-                                .then()
-                                .extract();
+                var result =
+                        mockMvc.perform(
+                                        patch(getMoveUrl(taskId))
+                                                .cookie(cookie)
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(
+                                                        objectMapper.writeValueAsString(
+                                                                moveDtoWithoutVersion)))
+                                .andReturn();
 
                 // assert
-                Assertions.assertThat(response.statusCode())
+                Assertions.assertThat(result.getResponse().getStatus())
                         .isEqualTo(HttpStatus.BAD_REQUEST.value());
             }
         }
@@ -444,9 +424,9 @@ public class TaskMoveE2ETest extends AbstractAppE2ETest {
         @Nested
         class UnknownIds {
             @Test
-            void shouldReturnNotFound_whenTaskIdIsUnknown() {
+            void shouldReturnNotFound_whenTaskIdIsUnknown() throws Exception {
                 // arrange
-                var cookie = signin();
+                var cookie = signinCookie();
                 var unknownTaskId = UUID.randomUUID().toString();
                 var targetColumnId = mockColumns.getFirst().getId();
 
@@ -457,24 +437,23 @@ public class TaskMoveE2ETest extends AbstractAppE2ETest {
                                 .build();
 
                 // act
-                var response =
-                        given().cookie(cookie.getFirst(), cookie.getSecond())
-                                .contentType(ContentType.JSON)
-                                .body(moveDto)
-                                .when()
-                                .patch(getMoveUrl(unknownTaskId))
-                                .then()
-                                .extract();
+                var result =
+                        mockMvc.perform(
+                                        patch(getMoveUrl(unknownTaskId))
+                                                .cookie(cookie)
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(objectMapper.writeValueAsString(moveDto)))
+                                .andReturn();
 
                 // assert
-                Assertions.assertThat(response.statusCode())
+                Assertions.assertThat(result.getResponse().getStatus())
                         .isEqualTo(HttpStatus.NOT_FOUND.value());
             }
 
             @Test
-            void shouldReturnNotFound_whenTargetColumnIdIsUnknown() {
+            void shouldReturnNotFound_whenTargetColumnIdIsUnknown() throws Exception {
                 // arrange
-                var cookie = signin();
+                var cookie = signinCookie();
                 var taskId = mockPopulatedTask.getId();
                 var startingVersion = mockPopulatedTask.getVersion();
                 var unknownColumnId = UUID.randomUUID().toString();
@@ -486,17 +465,16 @@ public class TaskMoveE2ETest extends AbstractAppE2ETest {
                                 .build();
 
                 // act
-                var response =
-                        given().cookie(cookie.getFirst(), cookie.getSecond())
-                                .contentType(ContentType.JSON)
-                                .body(moveDto)
-                                .when()
-                                .patch(getMoveUrl(taskId))
-                                .then()
-                                .extract();
+                var result =
+                        mockMvc.perform(
+                                        patch(getMoveUrl(taskId))
+                                                .cookie(cookie)
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(objectMapper.writeValueAsString(moveDto)))
+                                .andReturn();
 
                 // assert
-                Assertions.assertThat(response.statusCode())
+                Assertions.assertThat(result.getResponse().getStatus())
                         .isEqualTo(HttpStatus.NOT_FOUND.value());
             }
         }
