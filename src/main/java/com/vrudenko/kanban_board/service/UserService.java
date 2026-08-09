@@ -51,7 +51,19 @@ public class UserService implements UserDetailsService {
         return user.get();
     }
 
+    // D-07: checked, expected duplicate-email path -- signup reveals this explicitly as a 409
+    // rather than swallowing it into a generic auth failure. users.email carries a unique
+    // constraint at the database level too (uk_users_email, V1__init.sql), so a race between two
+    // concurrent signups for the same email that both pass this check-then-act guard still cannot
+    // create two rows -- the loser hits DataIntegrityViolationException instead, backstopped by
+    // GlobalExceptionHandler's broader arm (also a 409), the same pattern BoardService.updateById
+    // already relies on for board-name uniqueness.
     public UserResponseDTO save(SignupRequestDTO userDTO) {
+        if (userRepository.existsByEmail(userDTO.getEmail())) {
+            throw AppDuplicateResourceException.withMessage(
+                    "Email '" + userDTO.getEmail() + "' is already taken");
+        }
+
         return userMapper.toResponseDTO(
                 userRepository.save(userMapper.fromSignupRequestDTO(userDTO)));
     }
