@@ -37,31 +37,36 @@ Test profile activated automatically: `spring.profiles.active=test` set in `buil
 - Test method naming: `test{Scenario}_{ExpectedBehavior}()` or `{scenario}_{expectedBehavior}()`
   - Examples: `testWithAuthenticatedUser_shouldReturn_whenBoardsExist()`, `shouldReturn_whenTaskExists()`
 
-**Structure:**
+**Structure (fixture bases as of Phase 7, D-01 — the three-way `support/` split):**
 ```
 src/test/java/com/vrudenko/kanban_board/
-├── AbstractAppTest.java                    # Base class for all service/integration tests
-├── AbstractAppE2ETest.java                 # Base class for end-to-end tests with REST Assured
+├── support/
+│   ├── containers/
+│   │   ├── AbstractPostgresContainerTest.java   # Testcontainers PostgreSQL lifecycle only
+│   │   └── AbstractKafkaContainerTest.java      # Testcontainers Redpanda (Kafka+Schema Registry) lifecycle only
+│   ├── fixtures/
+│   │   ├── AbstractAppTest.java                 # Base for all service/integration tests
+│   │   ├── AbstractAppE2ETest.java              # Base for real-socket (RestAssured) E2E tests
+│   │   └── AbstractAppMockMvcTest.java          # Base for in-process MockMvc E2E tests (added Phase 7)
+│   └── listeners/
+│       └── RecordingActivityEventListener.java  # Real @Component test spy, not a base class
 ├── service/
 │   ├── TaskServiceTest.java
 │   ├── BoardServiceTest.java
 │   ├── ColumnServiceTest.java
 │   ├── UserServiceTest.java
-│   ├── SubtaskServiceTest.java
 │   └── OwnershipVerifierServiceTest.java
 ├── controller/
 │   ├── BoardControllerTest.java
 │   ├── TaskControllerTest.java
 │   ├── ColumnControllerTest.java
 │   └── SubtaskControllerTest.java
-├── e2e/
-│   └── board/
-│       └── BoardE2ETest.java
 ├── security/
-│   └── AuthenticationControllerTest.java
+│   └── AuthenticationE2ETest.java     # merged Signin/Signup/SessionPersistence/UserPersistence (Phase 7)
 └── dto/
     └── SignupRequestDTOTest.java
 ```
+(This tree shows the fixture-base layout and a representative sample only — `activitylog/`, `e2e/{activity,column,task}/`, `event/` and `architecture/` also exist; see the live tree for the full, current list.)
 
 ## Test Structure
 
@@ -184,8 +189,8 @@ protected TaskResponseDTO createTask() {
 ```
 
 **Location:**
-- `AbstractAppTest.java` contains factory methods: `createUser()`, `createTask()`, `createSubtask()`
-- `AbstractAppE2ETest.java` extends `AbstractAppTest` and adds HTTP testing helpers
+- `support/fixtures/AbstractAppTest.java` contains factory methods: `createUser()`, `createTask()`, `createSubtask()`
+- `support/fixtures/AbstractAppE2ETest.java` extends `AbstractAppTest` and adds real-socket HTTP testing helpers (`signin()`); `support/fixtures/AbstractAppMockMvcTest.java` extends `AbstractAppTest` and adds the in-process `signinCookie()` counterpart (Phase 7)
 - Reusable mock data collections defined as fields: `mockEmptyBoards`, `mockPopulatedBoard`, `mockTasks`, etc.
 - DataFactory library (`org.fluttercode.datafactory:datafactory:0.8`) used for random data generation
 - Test constants respect validation constraints: `ValidationConstants.MIN_TASK_TITLE_LENGTH`
@@ -217,12 +222,12 @@ protected TaskResponseDTO createTask() {
 - File location: `src/test/java/com/vrudenko/kanban_board/controller/`
 
 **E2E Tests:**
-- Scope: Full application stack including HTTP server
-- Approach: Spring Boot with `webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT`
-- REST Assured for making actual HTTP requests to test server
-- Session/cookie management tested: Signin flow returns JSESSIONID cookie
-- Examples: `BoardE2ETest` (currently minimal, extends infrastructure)
-- File location: `src/test/java/com/vrudenko/kanban_board/e2e/`
+- Scope: Full application stack, `*E2ETest`-suffixed classes. As of Phase 7 (D-03 tier downgrade), this suffix no longer implies a real socket — most of these classes run at the cheaper in-process tier; see `docs/CODE_STYLE.md` rule 4 for the current three-way (`AbstractAppTest`/`AbstractAppMockMvcTest`/`AbstractAppE2ETest`) decision rule and `.planning/todos/pending/2026-08-09-decide-e2etest-suffix-vs-fasttest-filter-coupling.md` for the open naming/filter question this created.
+- Real-socket approach (`support/fixtures/AbstractAppE2ETest`, exactly one remaining subclass, `BoardCreationE2ETest`): Spring Boot with `webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT`, REST Assured for making actual HTTP requests, kept only for its genuinely concurrent multi-threaded `ConcurrentCreate` test
+- In-process approach (`support/fixtures/AbstractAppMockMvcTest`, the majority of `*E2ETest` classes as of Phase 7): plain `@SpringBootTest` + `@AutoConfigureMockMvc`, real `POST /signin`/`POST /signup` through `MockMvc` with the returned cookie relayed by hand — never an injected pre-authenticated principal, since that would bypass the authentication call site these classes exist to cover
+- Kafka/Schema-Registry-dependent classes (`support/containers/AbstractKafkaContainerTest`, 9 classes under `activitylog/`) stay on real Testcontainers-backed Kafka regardless of tier, per D-03
+- Session/cookie management tested: Signin flow returns a session cookie under both the real-socket and in-process tiers
+- File location: `src/test/java/com/vrudenko/kanban_board/` (root package and `e2e/{activity,column,task}/`, `security/`, `activitylog/`) — no longer a single `e2e/` directory; the former `e2e/board/` subpackage (an empty, 0-test-method `BoardE2ETest` class) was removed entirely in Phase 7 — see `.planning/codebase/CONCERNS.md`'s resolved finding
 
 ## Common Patterns
 

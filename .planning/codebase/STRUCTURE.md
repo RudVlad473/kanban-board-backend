@@ -99,8 +99,6 @@ kanban-board-backend/
 │   │       └── application-test.properties     # Test config
 │   └── test/
 │       └── java/com/vrudenko/kanban_board/
-│           ├── AbstractAppE2ETest.java
-│           ├── AbstractAppTest.java
 │           ├── KanbanBoardApplicationTests.java
 │           ├── controller/                    # Controller tests
 │           │   ├── BoardControllerTest.java
@@ -109,18 +107,26 @@ kanban-board-backend/
 │           │   └── TaskControllerTest.java
 │           ├── dto/
 │           │   └── SignupRequestDTOTest.java
-│           ├── e2e/
-│           │   └── board/
-│           │       └── BoardE2ETest.java
 │           ├── security/
-│           │   └── AuthenticationControllerTest.java
-│           └── service/                      # Service tests
-│               ├── BoardServiceTest.java
-│               ├── ColumnServiceTest.java
-│               ├── OwnershipVerifierServiceTest.java
-│               ├── SubtaskServiceTest.java
-│               ├── TaskServiceTest.java
-│               └── UserServiceTest.java
+│           │   └── AuthenticationE2ETest.java   # merged Signin/Signup/SessionPersistence/UserPersistence (Phase 7)
+│           ├── service/                      # Service tests
+│           │   ├── BoardServiceTest.java
+│           │   ├── ColumnServiceTest.java
+│           │   ├── OwnershipVerifierServiceTest.java
+│           │   ├── TaskServiceTest.java
+│           │   └── UserServiceTest.java
+│           └── support/                      # Shared test infrastructure, 3-way split (Phase 7, D-01)
+│               ├── containers/                # Testcontainers lifecycle only
+│               │   ├── AbstractPostgresContainerTest.java
+│               │   └── AbstractKafkaContainerTest.java
+│               ├── fixtures/                  # App-domain fixture data + HTTP-flow helpers
+│               │   ├── AbstractAppTest.java          # base for service/integration tests
+│               │   ├── AbstractAppE2ETest.java        # base for real-socket (RestAssured) E2E tests
+│               │   └── AbstractAppMockMvcTest.java    # base for in-process MockMvc E2E tests
+│               └── listeners/                 # Event-capture test doubles (real Spring components)
+│                   └── RecordingActivityEventListener.java
+│           # Note: this tree predates Phase 4-6 additions (activitylog/, e2e/{activity,column,task}/,
+│           # event/, architecture/) and is not exhaustive outside what Phase 7 corrected above.
 ├── build.gradle                               # Gradle build configuration
 ├── build/                                     # Compiled artifacts (generated)
 ├── gradle/                                    # Gradle wrapper scripts
@@ -211,8 +217,8 @@ kanban-board-backend/
 
 **src/test/java/**
 - Purpose: Unit tests, integration tests, end-to-end tests
-- Contains: Test classes mirroring src/main/java structure plus AbstractAppTest/AbstractAppE2ETest base classes
-- Key files: `AbstractAppTest.java` (base for unit/integration tests), `AbstractAppE2ETest.java` (base for E2E tests)
+- Contains: Test classes mirroring src/main/java structure plus shared fixture/setup infrastructure under `support/` (Phase 7, D-01: split into `support/containers/`, `support/fixtures/`, `support/listeners/` — no shared base class or Spring test component is interspersed with concrete test classes any more)
+- Key files: `support/fixtures/AbstractAppTest.java` (base for unit/integration tests), `support/fixtures/AbstractAppE2ETest.java` (base for real-socket E2E tests), `support/fixtures/AbstractAppMockMvcTest.java` (base for in-process MockMvc E2E tests, added Phase 7)
 
 **build/ (Generated)**
 - Purpose: Compiled Java classes, JAR artifacts
@@ -249,11 +255,12 @@ kanban-board-backend/
 - `mapper/BoardMapper.java`, `mapper/TaskMapper.java`, etc.: Entity ↔ DTO conversion
 
 **Testing:**
-- `AbstractAppTest.java`: Base class for unit/integration tests (test database setup, test users, helper methods)
-- `AbstractAppE2ETest.java`: Base class for end-to-end tests (RestAssured client, HTTP-level testing)
+- `support/fixtures/AbstractAppTest.java`: Base class for unit/integration tests (test database setup, test users, helper methods)
+- `support/fixtures/AbstractAppE2ETest.java`: Base class for real-socket end-to-end tests (RestAssured client, HTTP-level testing) — as of Phase 7 this tier has exactly one remaining subclass, `BoardCreationE2ETest` (kept for its genuinely concurrent `ConcurrentCreate` race)
+- `support/fixtures/AbstractAppMockMvcTest.java`: Base class for in-process end-to-end tests (real `POST /signin`/`POST /signup` through `MockMvc` + cookie relay, no socket) — added Phase 7 as the cheaper counterpart to `AbstractAppE2ETest`
 - `service/BoardServiceTest.java`, `service/TaskServiceTest.java`: Service layer tests
 - `controller/BoardControllerTest.java`: Controller tests with mock services
-- `e2e/board/BoardE2ETest.java`: End-to-end tests via HTTP API
+- `security/AuthenticationE2ETest.java`: In-process end-to-end tests for signin/signup/session persistence/concurrent-session-ceiling/session-fixation (merged from three files, Phase 7)
 
 ## Naming Conventions
 
@@ -313,9 +320,9 @@ kanban-board-backend/
 
 **New Test:**
 - Co-locate with code being tested: test file in `src/test/java/` mirrors `src/main/java/` structure
-- Extend `AbstractAppTest` for unit/integration tests, `AbstractAppE2ETest` for E2E tests
+- Extend one of three bases under `support/fixtures/` (Phase 7 split; see `docs/CODE_STYLE.md` rule 4 for the full decision rule): `AbstractAppTest` for tests that call services directly, `AbstractAppMockMvcTest` for HTTP tests that don't need a real socket, `AbstractAppE2ETest` only when a genuinely concurrent multi-threaded request is required
 - Use `DataFactory` for test data generation (library included in build.gradle)
-- Mock services via Mockito if testing controllers; use real services for integration tests
+- No mocks anywhere in this repository (`docs/CODE_STYLE.md` rule 4) — real Spring wiring and a real Testcontainers-managed PostgreSQL for every test, including controller tests
 - Follow naming: `{ClassUnderTest}Test.java`
 
 ## Special Directories

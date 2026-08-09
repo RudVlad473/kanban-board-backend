@@ -115,7 +115,48 @@ void shouldThrow_whenColumnDoesntExist() {
 
 ### 4. No mocks — test against real Spring wiring
 
-Every test class is a `@SpringBootTest` extending `AbstractAppTest` (or, for full HTTP round-trips, `AbstractAppE2ETest`), exercising the real Spring context against a Testcontainers-managed PostgreSQL 16 instance shared across the whole JVM run, whose schema is built by the same Flyway migrations production runs. `AbstractPostgresContainerTest` is the shared container ancestor both `AbstractAppTest` and `AbstractKafkaContainerTest` extend — a bare `@SpringBootTest` extending neither will not get a datasource. Mockito, `@Mock`, `@MockBean`, and slice annotations such as `@WebMvcTest` or `@DataJpaTest` are not used anywhere in this repository and must not be introduced. Shared fixtures (mock users, boards, columns, tasks, subtasks) belong in `AbstractAppTest`'s single `@BeforeEach`, not re-created inline inside individual test classes. `AbstractAppTest.countQueries(Runnable)` is the only sanctioned way to assert on query counts; its Javadoc records why it reads `getPrepareStatementCount()` instead of `getQueryExecutionCount()` — the latter misses `repository.findById()` calls entirely.
+**Which package a new test belongs in (by purpose, decided before which base class to extend):**
+`service/*ServiceTest.java`, `controller/*ControllerTest.java` and the `*E2ETest`-suffixed classes
+(`e2e/`, `security/`, `activitylog/`, and a handful still at the root package) are three different
+questions about the same behavior, not three copies of the same test. `service/*ServiceTest.java`
+exercises the service layer directly (no HTTP, no MockMvc) for cheap, high-volume coverage of
+business-logic edge cases and input-combination branches — validation boundaries, ownership-chain
+edge cases, the kind of case-count that would bloat a flow test if it lived there instead. Worked
+example: `TaskServiceTest.UpdateByIdTest.shouldThrow_whenUserDoesntOwnTheTask()` proves the
+ownership-denial branch directly against the service, something no controller test in this
+codebase separately re-proves. `controller/*ControllerTest.java` proves one HTTP endpoint's
+contract — status codes, request/response JSON shape, auth/ownership wiring at the HTTP boundary —
+not every edge case its underlying service test already covers. Worked example:
+`TaskControllerTest.UpdateById.testWithAuthenticatedUser_shouldReturnConflict_whenVersionIsStale()`
+proves the controller maps a stale-version conflict to HTTP 409; it reuses the same triggering
+scenario `TaskServiceTest` uses for a different assertion (HTTP status vs. exception type), which is
+intentional layering, not redundancy. `*E2ETest`-suffixed classes are for flows that genuinely span
+multiple services or controllers, or that need real infrastructure this project's tier split
+(rule below) already scoped — Kafka/Schema Registry, or genuine multi-threaded concurrency. Worked
+examples: `BoardCreationE2ETest.ConcurrentCreate` (two real concurrent HTTP threads racing a
+database unique constraint) and `ActivityLogIdempotencyE2ETest` (a cross-service Kafka
+publish-then-consume-then-dedupe flow). This rule governs package/purpose selection and is
+independent of the base-class rule immediately below — both must be read together when starting a
+new test file.
+
+**Which base class to extend, within `support/fixtures/`:** every test class is a `@SpringBootTest`
+extending one of three bases under `support/fixtures/` — `AbstractAppTest` for tests that call
+services directly, `AbstractAppMockMvcTest` for HTTP tests that go through MockMvc without needing
+a real socket, or `AbstractAppE2ETest` (full real-socket HTTP round-trips) only when a genuinely
+concurrent multi-threaded request is required — exercising the real Spring context against a
+Testcontainers-managed PostgreSQL 16 instance shared across the whole JVM run, whose schema is
+built by the same Flyway migrations production runs. `AbstractPostgresContainerTest` (under
+`support/containers/`) is the shared container ancestor both `AbstractAppTest` and
+`AbstractKafkaContainerTest` extend — a bare `@SpringBootTest` extending none of these three will
+not get a datasource. `AbstractAppMockMvcTest` does not apply `server.servlet.context-path` the way
+a real embedded servlet container does, so tests extending it build routes from the bare `ApiPaths`
+constants, without the context-path prefix the `AbstractAppE2ETest` tier needs. Mockito, `@Mock`,
+`@MockBean`, and slice annotations such as `@WebMvcTest` or `@DataJpaTest` are not used anywhere in
+this repository and must not be introduced. Shared fixtures (mock users, boards, columns, tasks,
+subtasks) belong in `AbstractAppTest`'s single `@BeforeEach`, not re-created inline inside
+individual test classes. `AbstractAppTest.countQueries(Runnable)` is the only sanctioned way to
+assert on query counts; its Javadoc records why it reads `getPrepareStatementCount()` instead of
+`getQueryExecutionCount()` — the latter misses `repository.findById()` calls entirely.
 
 **Why:** mocking a repository bypasses exactly the ownership chain and JPA behaviour these tests exist to catch regressions in, so a fully green, fully mocked test can sit directly on top of a broken access-control path or a reintroduced N+1 query.
 

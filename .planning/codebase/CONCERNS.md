@@ -65,11 +65,11 @@
 - Risk: Unexpected validation bypass or confusing error messages to clients.
 - Priority: Medium.
 
-**E2E Test Suite Skeleton Only:**
-- What's not tested: `BoardE2ETest` (line 7) is empty — it extends `AbstractAppE2ETest` but contains no test methods.
-- Files: `src/test/java/com/vrudenko/kanban_board/e2e/board/BoardE2ETest.java`
-- Risk: No end-to-end integration tests running; refactoring could break API contracts undetected.
-- Priority: Medium — unit/integration tests exist, but full flow validation is absent.
+**E2E Test Suite Skeleton Only: RESOLVED (Phase 7, plan 07-01)**
+- What was not tested: `BoardE2ETest` (line 7) was empty — it extended `AbstractAppE2ETest` but contained no test methods.
+- Files (deleted, no longer exist): `src/test/java/com/vrudenko/kanban_board/e2e/board/BoardE2ETest.java`
+- Resolution: deleted outright in Phase 7 plan 07-01 (TEST-04), after re-confirming zero `@Test` methods and zero external references with a fresh grep immediately before deletion. Full end-to-end coverage of board creation lives in `BoardCreationE2ETest` (real-socket tier) and `BoardFullReadE2ETest` (in-process tier); this was never their only board-level E2E coverage, so nothing else regressed. See `.planning/phases/07-restructure-test-folder-separate-setup-from-tests-evaluate-n/07-01-SUMMARY.md`.
+- Priority: N/A — closed.
 
 **Missing Subtask CRUD Tests:**
 - What's not tested: No controller tests for subtask endpoints (create, read, update, delete via HTTP).
