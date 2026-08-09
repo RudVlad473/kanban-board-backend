@@ -248,13 +248,32 @@ Plans:
 **Plans:** 9 plans (7 waves)
 
 Plans:
+**Wave 1**
 
 - [ ] 07.1-01-PLAN.md — Converge GlobalExceptionHandler on RFC 7807 ProblemDetail with a stable code taxonomy; remap ownership denials 401→403 (wave 1; D-01, D-02, D-03, D-05)
 - [ ] 07.1-02-PLAN.md — CorsConfigurationSource bean with credentialed, property-driven explicit origins (wave 1; D-10, D-11, D-12)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 07.1-03-PLAN.md — ProblemDetail-producing AuthenticationEntryPoint so unauthenticated requests return a real 401 (wave 2; D-04, D-05)
 - [ ] 07.1-04-PLAN.md — @Valid on signin/signup, duplicate-email 409, and the fixture hardening validation forces (wave 2; D-06, D-07, D-08, D-09, D-20)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 07.1-05-PLAN.md — Board optimistic locking: V7 migration, @Version, version on the board DTOs (wave 3; D-13, D-14, D-15)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 07.1-06-PLAN.md — Create-endpoint status consistency: column and subtask creation return 201 (wave 4; ROADMAP-201)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 07.1-07-PLAN.md — Retarget the pre-commit fastTest gate from name-suffix to JUnit @Tag; rename the 11 mistiered classes (wave 5; D-21, D-22, D-23)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 07.1-08-PLAN.md — InjectionAttemptTest and AuthorizationGatingTest, sweeping every protected route (wave 6; D-16, D-17, D-18, D-19, D-20)
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
 - [ ] 07.1-09-PLAN.md — /claude-security scan and triage, then four Mermaid sequence diagrams in docs/ARCHITECTURE.md (wave 7; D-24, D-25, D-26)
