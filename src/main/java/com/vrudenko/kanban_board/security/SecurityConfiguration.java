@@ -1,7 +1,6 @@
 package com.vrudenko.kanban_board.security;
 
 import com.vrudenko.kanban_board.constant.ApiPaths;
-import com.vrudenko.kanban_board.constant.SecurityConstants;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -46,6 +45,16 @@ public class SecurityConfiguration {
 
     @Value("${springdoc.api-docs.path}")
     private String SWAGGER_DOCS_PATH;
+
+    // /claude-security F3 (07.1-09): read directly via @Value on this Spring-managed
+    // @Configuration bean, not through SecurityConstants.SESSION_NAME -- a @Value on a public
+    // static field of a plain, non-Spring-managed class is inert (nothing ever processes it),
+    // so that field stayed null forever and every logout.deleteCookies(...) call below
+    // registered a handler that tried new Cookie(null, null), throwing IllegalArgumentException
+    // from inside LogoutFilter on every real POST /logout. SecurityConstants itself has been
+    // deleted; this was its only caller.
+    @Value("${server.servlet.session.cookie.name}")
+    private String sessionCookieName;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -102,7 +111,7 @@ public class SecurityConfiguration {
                             new HeaderWriterLogoutHandler(
                                     new ClearSiteDataHeaderWriter(
                                             ClearSiteDataHeaderWriter.Directive.COOKIES)));
-                    logout.deleteCookies(SecurityConstants.SESSION_NAME);
+                    logout.deleteCookies(sessionCookieName);
                     logout.logoutSuccessHandler(handlerLogout);
                 });
 

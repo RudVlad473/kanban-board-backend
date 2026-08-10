@@ -91,6 +91,13 @@ public class AuthenticationTest extends AbstractAppMockMvcTest {
     @Value("${server.servlet.session.cookie.name}")
     private String COOKIE_NAME;
 
+    // MockMvc does not apply server.servlet.context-path (CODE_STYLE.md rule 4), but
+    // SecurityConfiguration's LogoutFilter is registered against CONTEXT_PATH + ApiPaths.LOGOUT
+    // -- so the Logout group below must build the full prefixed URL itself, unlike every other
+    // group in this class, or the request silently never reaches LogoutFilter at all.
+    @Value("${server.servlet.context-path}")
+    private String CONTEXT_PATH;
+
     /**
      * Prefix common to every hash {@code BeanConfiguration}'s {@code BCryptPasswordEncoder}
      * produces. Derived as a constant here rather than fetched/read off a real user's hash, so
@@ -752,6 +759,49 @@ public class AuthenticationTest extends AbstractAppMockMvcTest {
                     jdbcTemplate.queryForObject(
                             "SELECT COUNT(*) FROM SPRING_SESSION", Integer.class);
             Assertions.assertThat(countAfter - countBefore).isEqualTo(1);
+        }
+    }
+
+    @Nested
+    class Logout {
+
+        /**
+         * {@code /claude-security} F3 (07.1-09): {@code SecurityConstants.SESSION_NAME} was a
+         * {@code @Value}-annotated {@code public static} field on a plain class with no
+         * {@code @Component}/{@code @Configuration} -- Spring never instantiates or injects it, so
+         * the field stayed {@code null} at runtime forever. {@code SecurityConfiguration}'s {@code
+         * logout.deleteCookies(SecurityConstants.SESSION_NAME)} therefore always registered a
+         * {@code CookieClearingLogoutHandler} with a single {@code null} cookie name; on every
+         * logout, that handler tried {@code new Cookie(null, null)}, which the Servlet API's {@code
+         * CookieNameValidator} rejects with {@code IllegalArgumentException("Cookie name must not
+         * be null or empty")} -- thrown from inside {@code LogoutFilter}, before {@code
+         * DispatcherServlet} ever sees the request, so every real {@code POST /api/logout} 500'd.
+         * This went uncaught by {@code ThemePersistenceTest}'s own logout call because that test
+         * posts to the bare {@code ApiPaths.LOGOUT} path with no context-path prefix -- which never
+         * matches {@code LogoutFilter}'s configured {@code CONTEXT_PATH + ApiPaths.LOGOUT} matcher
+         * under {@code MockMvc} (context-path is not auto-applied), so the handler chain, and this
+         * bug, was never actually exercised. This test builds the correctly-prefixed URL so it
+         * genuinely reaches {@code LogoutFilter}. Fixed by reading the cookie name through a real
+         * {@code @Value}-injected instance field on {@code SecurityConfiguration} instead of the
+         * dead static one; {@code SecurityConstants} itself was deleted as unreachable dead code
+         * with no other callers.
+         */
+        @Test
+        void shouldClearSessionCookieAndReturnOk_whenLogoutSucceeds() throws Exception {
+            // arrange: a real signed-in session, so the response actually has a cookie to clear
+            var cookie = signinCookie();
+
+            // act
+            var response =
+                    mockMvc.perform(post(CONTEXT_PATH + ApiPaths.LOGOUT).cookie(cookie))
+                            .andReturn()
+                            .getResponse();
+
+            // assert
+            Assertions.assertThat(response.getStatus()).isEqualTo(HttpStatus.OK.value());
+            var clearedCookie = response.getCookie(COOKIE_NAME);
+            Assertions.assertThat(clearedCookie).isNotNull();
+            Assertions.assertThat(clearedCookie.getMaxAge()).isZero();
         }
     }
 
