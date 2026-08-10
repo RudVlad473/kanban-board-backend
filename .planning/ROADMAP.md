@@ -152,6 +152,9 @@ Plans:
 | 4. Schema Registry | v1.2 | 4/4 | Complete    | 2026-08-04 |
 | 04.1. Flyway database migration implementation (INSERTED) | v1.2 | 3/3 | Complete | 2026-08-05 |
 | 04.2. Testcontainers Postgres, drop H2 (INSERTED) | v1.2 | 3/3 | Complete | 2026-08-06 |
+| 6. Mock-up Feature Gap Closure | v1.2 | 7/7 | Complete | 2026-08-09 |
+| 7. Restructure test folder | v1.2 | 7/7 | Complete | 2026-08-09 |
+| 07.1. Address hard blockers and inconsistencies from the frontend-integration-readiness audit (INSERTED) | v1.2 | 9/9 | Complete | 2026-08-10 |
 | 5. Infra Migration | v1.2 | 0/TBD | Not started | - |
 </content>
 
@@ -245,7 +248,7 @@ Plans:
 **Goal:** Every error the API returns is one consistent RFC 7807 envelope with a stable machine-readable code; 401 means unauthenticated and 403 means forbidden, with no overlap; a local frontend dev server can make credentialed cross-origin calls; signin/signup actually validate their request bodies; every resource-creating POST returns 201; Board carries the same optimistic locking Column/Task/Subtask already have; and adversarial injection resistance plus complete auth gating are proven by tests rather than assumed.
 **Requirements**: D-01..D-26 (CONTEXT.md decisions — this inserted phase has no REQUIREMENTS.md IDs), plus ROADMAP-201 (the create-endpoint 201 item named in this phase's title, which has no D-number)
 **Depends on:** Phase 7
-**Plans:** 8/9 plans executed (7 waves)
+**Plans:** 9/9 plans executed (7 waves)
 
 Plans:
 **Wave 1**
@@ -276,4 +279,4 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 07.1-09-PLAN.md — /claude-security scan and triage, then four Mermaid sequence diagrams in docs/ARCHITECTURE.md (wave 7; D-24, D-25, D-26)
+- [x] 07.1-09-PLAN.md — /claude-security scan and triage, then four Mermaid sequence diagrams in docs/ARCHITECTURE.md (wave 7; D-24, D-25, D-26)

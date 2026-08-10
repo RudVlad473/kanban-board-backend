@@ -5,16 +5,16 @@ milestone_name: Infra Migration & Schema Registry
 current_phase: 07.1
 current_phase_name: address-hard-blockers-and-inconsistencies-from-the-frontend
 status: executing
-stopped_at: Phase 07.1 context gathered
-last_updated: "2026-08-09T19:06:34.319Z"
-last_activity: 2026-08-09
-last_activity_desc: Phase 7 complete, transitioned to Phase 5
+stopped_at: Completed 07.1-09-PLAN.md -- Phase 07.1 fully complete (9/9 plans)
+last_updated: "2026-08-10T20:57:04.973Z"
+last_activity: 2026-08-10
+last_activity_desc: Plan 07.1-09 executed (scan triage, sequence diagrams, doc reconciliation)
 progress:
   total_phases: 7
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 39
-  completed_plans: 24
-  percent: 62
+  completed_plans: 33
+  percent: 85
 ---
 
 # Project State
@@ -28,12 +28,12 @@ See: .planning/PROJECT.md (updated 2026-08-03)
 
 ## Current Position
 
-Phase: 07.1 (address-hard-blockers-and-inconsistencies-from-the-frontend) — EXECUTING
-Plan: 1 of 9
-Status: Executing Phase 07.1
-Last activity: 2026-08-09 — Phase 07.1 execution started
+Phase: 07.1 (address-hard-blockers-and-inconsistencies-from-the-frontend) — COMPLETE
+Plan: 9 of 9
+Status: Phase 07.1 complete (9/9 plans, 7 waves); ready to transition to Phase 5 (Infra Migration)
+Last activity: 2026-08-10 — Plan 07.1-09 executed (scan triage, sequence diagrams, doc reconciliation)
 
-Progress: [████████░░] 80%
+Progress: [█████████░] 85%
 
 ## Performance Metrics
 
@@ -82,6 +82,7 @@ Progress: [████████░░] 80%
 | Phase 04.2 P01 | 50min | 2 tasks | 3 files |
 | Phase 04.2 P02 | 55min | 3 tasks | 10 files |
 | Phase 04.2 P03 | 50min | 3 tasks | 12 files |
+| Phase 07.1 P09 | 68min | 4 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -135,6 +136,7 @@ Recent decisions affecting current work:
 - [Phase ?]: [Phase 04.2 Plan 03]: Testcontainers reuse evaluated and NOT enabled -- measured container-start (~2.29s) is ~1% of fastTest wall-clock (232s/224s/242s across three runs), smaller than run-to-run variance; D-01's one-container-per-JVM-run design caps any benefit to a separate ./gradlew invocation; no zero-manual-step opt-in satisfies docs/CODE_STYLE.md rule 8. Full writeup in docs/LOCAL_DEV.md.
 - [Phase ?]: [Phase 04.2 Plan 03]: Duration finding confirmed by a second run -- this plan's own clean test (295s/210 tests) reproduced 04.2-02's post-cutover figure (291s/210), supporting the ~19s/6.1% improvement over the like-for-like H2 baseline (310s/208) as real. Phase 04.2 closed: Epic 5 ticked in docs/plans/backend-modernization/STATUS.md, every H2 claim in git-tracked docs, agent context, and .planning/codebase/ corrected, final gate green (spotlessCheck + clean test 210/0/0 + FlywaySchemaProvenanceTest).
 - [Phase 7]: Test folder restructured across 7 plans (3 waves): 5 shared fixture files split into `support/{containers,fixtures,listeners}`; auth/session trio (`AuthenticationControllerTest`, `SessionPersistenceE2ETest`, `UserPersistenceE2ETest`) merged into one `@Nested`-grouped `security/AuthenticationE2ETest` at the in-process tier; 13 of 22 `E2ETest`-suffixed classes downgraded from real-socket RestAssured to in-process MockMvc (9 Kafka-dependent classes plus `BoardCreationE2ETest`'s genuine-concurrency test stayed on the real-socket/Kafka tier); 2 empty test classes deleted. RESEARCH.md's Assumption A2 (MockMvc + `@AutoConfigureMockMvc` genuinely runs the full security filter chain, including `SessionAuthenticationStrategy`) was proven true twice — once generically (07-01) and once by falsification specifically for the session-strategy path (07-02: neutralized the strategy call, confirmed the ceiling/fixation tests went red, restored, confirmed zero net `src/main` diff). Full suite: 278/278 tests, zero shrinkage, zero production-code changes across the whole phase. `docs/CODE_STYLE.md` rule 4 extended with both a which-package (service = edge-case/business-logic coverage, controller = single-endpoint HTTP contract, e2e = cross-service/real-infra flow) and a which-base-class decision rule — verified against the existing `service/*ServiceTest.java` classes, which already matched the framing (no redundancy found, no fix needed). The Column/Task/Subtask/Board conditional `@Nested` merges (RESEARCH.md's Candidates 2-4) were deliberately descoped by the operator mid-phase and not executed. Surfaced and filed as a new todo rather than fixed: `build.gradle`'s `fastTest` task (run by the pre-commit hook) filters tests by the literal `E2ETest` name suffix, so the 12 renamed-in-tier-but-not-in-name classes stay excluded from the pre-commit gate — renaming is a build-behavior decision, not a tidy-up, and needed its own todo. Also surfaced: a stale comment in `UserAuthenticationProvider.java:38` still names the now-deleted `SessionPersistenceE2ETest` class — left unfixed (production-code changes were out of this phase's scope) and folded into the same follow-up todo.
+- [Phase ?]: [Phase 07.1 Plan 09]: Fixed a real POST /logout 500 the /claude-security scan found (SecurityConstants.SESSION_NAME dead-static-field bug -- @Value on a non-Spring-managed class never gets injected); the existing ThemePersistenceTest logout call never caught it because MockMvc doesn't apply the context-path prefix LogoutFilter's matcher needs. Deferred 5 other findings each with a written rationale and its own todo (2 session-cookie-Secure findings sharing one root cause targeted at Phase 5 INFRA-04, a signin timing side-channel kept distinct from the already-accepted D-07 signup-enumeration trade-off, a Kafka producer-authorization gap explicitly not assumed closed by Phase 5's INFRA-03/08, and a session-ceiling TOCTOU race). Closed both of phase 07.1's folded todos (sequence-diagram now; E2ETest-suffix/fastTest-filter already closed by 07.1-07) and reconciled 4 stale doc claims (ARCHITECTURE.md, CLAUDE.md, README.md, SESSION_LESSONS.md), including a SessionPersistenceE2ETest citation dead since phase 7's restructure. Phase 07.1 now fully complete, 9/9 plans.
 
 ### Pending Todos
 
@@ -222,9 +224,9 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-09T15:45:29.995Z
-Stopped at: Phase 07.1 context gathered
-Resume file: .planning/phases/07.1-address-hard-blockers-and-inconsistencies-from-the-frontend/07.1-CONTEXT.md
+Last session: 2026-08-10T20:57:04.932Z
+Stopped at: Completed 07.1-09-PLAN.md -- Phase 07.1 fully complete (9/9 plans)
+Resume file: None
 
 ## Operator Next Steps
 
