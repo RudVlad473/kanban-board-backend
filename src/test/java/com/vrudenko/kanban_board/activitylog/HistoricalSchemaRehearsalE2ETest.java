@@ -70,6 +70,7 @@ import org.springframework.boot.test.context.SpringBootTest;
  */
 @SpringBootTest
 @Tag("rehearsal")
+@Tag("kafka")
 class HistoricalSchemaRehearsalE2ETest extends AbstractKafkaContainerTest {
 
     private static final Logger log =

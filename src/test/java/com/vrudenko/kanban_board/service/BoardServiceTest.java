@@ -339,9 +339,18 @@ public class BoardServiceTest extends AbstractAppTest {
                     userService.addBoardByUserId(
                             userId,
                             SaveBoardRequestDTO.builder()
+                                    // RandomStringUtils, not dataFactory.getRandomWord -- this
+                                    // helper is called twice per test for the same user, and
+                                    // DataFactory's fixed, short word list makes a name collision
+                                    // (AppDuplicateResourceException) a real, recurring risk rather
+                                    // than a theoretical one. Matches the pattern already used
+                                    // elsewhere in this file
+                                    // (testUpdateById_shouldUpdateBoard_...).
                                     .name(
-                                            dataFactory.getRandomWord(
-                                                    ValidationConstants.MIN_BOARD_NAME_LENGTH + 4))
+                                            RandomStringUtils.randomAlphabetic(
+                                                    ValidationConstants.MAX_BOARD_NAME_LENGTH
+                                                            - ValidationConstants
+                                                                    .MIN_BOARD_NAME_LENGTH))
                                     .build());
 
             for (int c = 0; c < columnsCount; c++) {

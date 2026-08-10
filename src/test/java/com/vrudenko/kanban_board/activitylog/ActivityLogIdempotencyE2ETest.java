@@ -26,6 +26,7 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.assertj.core.api.Assertions;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -40,6 +41,7 @@ import org.springframework.boot.test.context.SpringBootTest;
  * the real broker.
  */
 @SpringBootTest
+@Tag("kafka")
 class ActivityLogIdempotencyE2ETest extends AbstractKafkaContainerTest {
 
     @Autowired private ActivityLogRepository activityLogRepository;

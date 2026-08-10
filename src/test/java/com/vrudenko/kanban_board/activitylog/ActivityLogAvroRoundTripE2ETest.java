@@ -19,6 +19,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.assertj.core.api.Assertions;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -30,6 +31,7 @@ import org.springframework.boot.test.context.SpringBootTest;
  * the existing exhaustive switch downstream of it completely unaware anything changed (SCHEMA-02).
  */
 @SpringBootTest
+@Tag("kafka")
 class ActivityLogAvroRoundTripE2ETest extends AbstractKafkaContainerTest {
 
     // Confluent's wire format: 1 magic byte + 4-byte schema id, ahead of the Avro binary payload.
