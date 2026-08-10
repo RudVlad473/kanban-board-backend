@@ -245,7 +245,7 @@ Plans:
 **Goal:** Every error the API returns is one consistent RFC 7807 envelope with a stable machine-readable code; 401 means unauthenticated and 403 means forbidden, with no overlap; a local frontend dev server can make credentialed cross-origin calls; signin/signup actually validate their request bodies; every resource-creating POST returns 201; Board carries the same optimistic locking Column/Task/Subtask already have; and adversarial injection resistance plus complete auth gating are proven by tests rather than assumed.
 **Requirements**: D-01..D-26 (CONTEXT.md decisions — this inserted phase has no REQUIREMENTS.md IDs), plus ROADMAP-201 (the create-endpoint 201 item named in this phase's title, which has no D-number)
 **Depends on:** Phase 7
-**Plans:** 7/9 plans executed (7 waves)
+**Plans:** 8/9 plans executed (7 waves)
 
 Plans:
 **Wave 1**
@@ -272,7 +272,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 07.1-08-PLAN.md — InjectionAttemptTest and AuthorizationGatingTest, sweeping every protected route (wave 6; D-16, D-17, D-18, D-19, D-20)
+- [x] 07.1-08-PLAN.md — InjectionAttemptTest and AuthorizationGatingTest, sweeping every protected route (wave 6; D-16, D-17, D-18, D-19, D-20)
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
