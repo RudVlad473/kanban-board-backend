@@ -31,8 +31,7 @@ import org.springframework.http.HttpStatus;
  * Tracer proving GAP-01 end to end: a POST to the boards collection route runs through the
  * controller, DTO validation, {@link
  * com.vrudenko.kanban_board.service.UserService#addBoardByUserId}, and back out through {@link
- * com.vrudenko.kanban_board.handler.GlobalExceptionHandler}. Modeled on {@link
- * SubtaskLockingE2ETest}.
+ * com.vrudenko.kanban_board.handler.GlobalExceptionHandler}. Modeled on {@link SubtaskLockingTest}.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Tag("realSocket")

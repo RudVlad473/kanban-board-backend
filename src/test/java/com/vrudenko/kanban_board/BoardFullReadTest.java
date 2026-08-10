@@ -32,11 +32,11 @@ import org.springframework.test.web.servlet.MockMvc;
  * ownership-verified fetch-join query, and the composed {@link
  * com.vrudenko.kanban_board.mapper.BoardFullMapper} chain, returning board, columns, tasks and
  * subtasks four levels deep in a single nested document. Modeled on {@link
- * BoardCreationE2ETest}/{@link SubtaskLockingE2ETest}.
+ * BoardCreationE2ETest}/{@link SubtaskLockingTest}.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-public class BoardFullReadE2ETest extends AbstractAppMockMvcTest {
+public class BoardFullReadTest extends AbstractAppMockMvcTest {
 
     @Autowired private MockMvc mockMvc;
 

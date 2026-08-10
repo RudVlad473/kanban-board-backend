@@ -26,8 +26,8 @@ import org.springframework.test.web.servlet.MockMvc;
 /**
  * Proves D-13/D-15 end to end: Board now shares the same explicit-version-compare concurrency model
  * as Column/Task/Subtask (no exceptions left, per this plan's success criteria). Modeled on {@link
- * com.vrudenko.kanban_board.e2e.column.ColumnLockingE2ETest} and {@link
- * com.vrudenko.kanban_board.e2e.task.TaskLockingE2ETest}'s structure, with {@code ProblemDetail}
+ * com.vrudenko.kanban_board.e2e.column.ColumnLockingTest} and {@link
+ * com.vrudenko.kanban_board.e2e.task.TaskLockingTest}'s structure, with {@code ProblemDetail}
  * fields asserted at their flattened top-level paths (matching {@code GlobalExceptionHandlerTest}'s
  * convention) rather than deserialized into a DTO, since the 409/400 cases under test are error
  * responses, not {@link BoardResponseDTO} bodies.

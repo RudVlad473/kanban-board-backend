@@ -25,7 +25,7 @@ import org.springframework.test.web.servlet.MockMvc;
  * Tracer proving GAP-05 end to end: a request travels controller ({@link
  * com.vrudenko.kanban_board.controller.UserController}) to session-resolved identity
  * ({@code @CurrentUserId}) to service ({@link com.vrudenko.kanban_board.service.UserService}) to
- * database and back, over real HTTP. Modeled on {@link SubtaskLockingE2ETest}.
+ * database and back, over real HTTP. Modeled on {@link SubtaskLockingTest}.
  *
  * <p>Downgraded to the in-process MockMvc tier (D-03, verdict-table row 15). This class keeps using
  * the real-signin cookie relay ({@link AbstractAppMockMvcTest#signinCookie()}) throughout, never
@@ -36,7 +36,7 @@ import org.springframework.test.web.servlet.MockMvc;
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-public class ThemePersistenceE2ETest extends AbstractAppMockMvcTest {
+public class ThemePersistenceTest extends AbstractAppMockMvcTest {
 
     @Autowired private MockMvc mockMvc;
 

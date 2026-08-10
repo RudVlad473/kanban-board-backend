@@ -80,7 +80,7 @@ import org.springframework.test.web.servlet.MockMvc;
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-public class AuthenticationE2ETest extends AbstractAppMockMvcTest {
+public class AuthenticationTest extends AbstractAppMockMvcTest {
 
     @Autowired private MockMvc mockMvc;
 

@@ -42,7 +42,7 @@ import org.springframework.test.web.servlet.MockMvc;
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-public class ActivityReadE2ETest extends AbstractAppMockMvcTest {
+public class ActivityReadTest extends AbstractAppMockMvcTest {
 
     @Autowired private MockMvc mockMvc;
 

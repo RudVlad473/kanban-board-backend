@@ -30,7 +30,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * Plan 04's board-scoped mirror of {@code TaskOrderingE2ETest}: proves column creation assigns
+ * Plan 04's board-scoped mirror of {@code TaskOrderingTest}: proves column creation assigns
  * contiguous positions, the new reorder route places a column at a chosen position under an
  * optimistic-lock guard, and deleting a column (plan 03's route) closes the gap it leaves.
  * Positions are asserted through {@link ColumnRepository} directly, since {@code ColumnResponseDTO}
@@ -38,7 +38,7 @@ import org.springframework.test.web.servlet.MockMvc;
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-public class ColumnOrderingE2ETest extends AbstractAppMockMvcTest {
+public class ColumnOrderingTest extends AbstractAppMockMvcTest {
 
     @Autowired private MockMvc mockMvc;
 

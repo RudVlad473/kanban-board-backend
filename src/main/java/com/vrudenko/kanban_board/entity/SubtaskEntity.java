@@ -24,7 +24,7 @@ import lombok.Setter;
 // HashSet population. The previous field-based equals/hashCode (title, isCompleted, task) could
 // NOT do that: two sibling subtasks under the same task with the same isCompleted value (the
 // common case -- every subtask defaults to false) collide unless their titles happen to differ,
-// which is not guaranteed. A real collision was observed directly: BoardFullReadE2ETest's
+// which is not guaranteed. A real collision was observed directly: BoardFullReadTest's
 // flat-vs-nested equivalence test lost a subtask this way before this fix. Falling back to
 // Object's identity-based equals/hashCode is safe here (and matches TaskEntity, which already
 // made this exact choice): Hibernate's session-level identity map guarantees the same Java
