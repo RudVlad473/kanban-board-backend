@@ -41,7 +41,7 @@ Two users dragging the same task at once is the realistic conflict in a kanban b
   cleanly over it, because the entity it loaded is current by the time it flushes. The explicit
   check is what turns a stale client read into a conflict.
 - `OptimisticLockingFailureException` maps to **HTTP 409** in `GlobalExceptionHandler`.
-- Proven end-to-end by `TaskLockingE2ETest` and `ColumnLockingE2ETest`, which drive two conflicting
+- Proven end-to-end by `TaskLockingTest` and `ColumnLockingTest`, which drive two conflicting
   updates from the same read version over real HTTP and assert the second gets a 409.
 
 ## Event-driven activity feed

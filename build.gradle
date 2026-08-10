@@ -174,22 +174,24 @@ tasks.named('test') {
 }
 
 // Pre-commit-hook-only fast test gate. `test` itself is untouched above -- CI and
-// any direct `./gradlew test` still run everything, E2E included. `fastTest` runs
-// the same suite minus the Testcontainers-backed E2E classes (every E2E class is
-// suffixed `E2ETest`), giving `.githooks/pre-commit` a local gate that still covers
-// ArchUnit's LayeringArchTest and all unit/service tests without paying for the
-// slower container-backed suite on every commit. Gradle's `test` task has no CLI
-// flag for exclusion patterns (only inclusion via `--tests`), so the filter has to
-// live here rather than as a command-line option.
+// any direct `./gradlew test` still run everything, Kafka- and real-socket-backed
+// classes included. `fastTest` runs the same suite minus classes that genuinely need
+// a real socket or a real Kafka broker, selected by explicit `@Tag("kafka")` /
+// `@Tag("realSocket")` declaration on the class -- not by name. Gate membership is
+// therefore an opt-in, per-class decision: a new test class runs in the pre-commit
+// gate by default and only earns a tag if it genuinely needs Kafka or a real socket
+// (D-21, D-22). This still covers ArchUnit's LayeringArchTest and all unit/service
+// tests without paying for the slower container-backed suite on every commit.
+// Gradle's `test` task has no CLI flag for exclusion patterns (only inclusion via
+// `--tests`), so the filter has to live here rather than as a command-line option.
 tasks.register('fastTest', Test) {
-    description = 'Runs the test suite excluding Testcontainers-backed E2E tests; used by the pre-commit hook only.'
+    description = 'Runs the test suite excluding classes tagged kafka or realSocket; used by the pre-commit hook only.'
     group = 'verification'
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath
     systemProperty "spring.profiles.active", "test"
-    useJUnitPlatform()
-    filter {
-        excludeTestsMatching '*E2ETest'
+    useJUnitPlatform {
+        excludeTags 'kafka', 'realSocket'
     }
 }
 

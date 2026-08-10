@@ -24,6 +24,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.assertj.core.api.Assertions;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -52,6 +53,7 @@ import org.springframework.boot.test.context.SpringBootTest;
  * destroying the one audit trail an operator needs most for exactly these messages.
  */
 @SpringBootTest
+@Tag("kafka")
 class ActivityLogAvroDeadLetterE2ETest extends AbstractKafkaContainerTest {
 
     /** Confluent wire-format magic byte marking a Schema-Registry-framed payload. */

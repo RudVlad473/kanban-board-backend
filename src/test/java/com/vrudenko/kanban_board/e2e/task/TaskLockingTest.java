@@ -19,7 +19,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest
 @AutoConfigureMockMvc
-public class TaskLockingE2ETest extends AbstractAppMockMvcTest {
+public class TaskLockingTest extends AbstractAppMockMvcTest {
 
     @Autowired private MockMvc mockMvc;
 

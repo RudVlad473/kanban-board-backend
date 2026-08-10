@@ -158,6 +158,14 @@ individual test classes. `AbstractAppTest.countQueries(Runnable)` is the only sa
 assert on query counts; its Javadoc records why it reads `getPrepareStatementCount()` instead of
 `getQueryExecutionCount()` — the latter misses `repository.findById()` calls entirely.
 
+**Pre-commit gate membership is by `@Tag`, not by class name.** `build.gradle`'s `fastTest` task
+(the pre-commit hook's gate) excludes tests by JUnit 5 `@Tag`, not by a name pattern: classes
+extending `AbstractKafkaContainerTest` carry `@Tag("kafka")`, and `AbstractAppE2ETest` subclasses
+carry `@Tag("realSocket")` only when the test genuinely needs a real socket (most
+`AbstractAppE2ETest`-tier concerns fit `AbstractAppMockMvcTest` instead). A class with no tag runs
+in `fastTest` by default — that is the safe default, and it is why a class's tier is decided by
+its base class and tag, never by whether its name happens to end in `E2ETest`.
+
 **Why:** mocking a repository bypasses exactly the ownership chain and JPA behaviour these tests exist to catch regressions in, so a fully green, fully mocked test can sit directly on top of a broken access-control path or a reintroduced N+1 query.
 
 Discouraged:

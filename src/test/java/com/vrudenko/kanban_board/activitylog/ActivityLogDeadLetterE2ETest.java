@@ -23,6 +23,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.assertj.core.api.Assertions;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -34,6 +35,7 @@ import org.springframework.boot.test.context.SpringBootTest;
  * dead-lettered record here proves the pipeline isolates real bad data, not that a hook works.
  */
 @SpringBootTest
+@Tag("kafka")
 class ActivityLogDeadLetterE2ETest extends AbstractKafkaContainerTest {
 
     @Autowired private ActivityLogRepository activityLogRepository;

@@ -39,7 +39,7 @@ import org.springframework.test.web.servlet.MockMvc;
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-public class TaskOrderingE2ETest extends AbstractAppMockMvcTest {
+public class TaskOrderingTest extends AbstractAppMockMvcTest {
 
     @Autowired private TaskRepository taskRepository;
 

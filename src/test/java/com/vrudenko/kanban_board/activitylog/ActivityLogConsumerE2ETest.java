@@ -17,6 +17,7 @@ import java.util.UUID;
 import org.assertj.core.api.Assertions;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -29,6 +30,7 @@ import org.springframework.boot.test.context.SpringBootTest;
  * every assertion below polls with {@link Awaitility} rather than sleeping a fixed duration.
  */
 @SpringBootTest
+@Tag("kafka")
 class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
 
     @Autowired private ActivityLogRepository activityLogRepository;

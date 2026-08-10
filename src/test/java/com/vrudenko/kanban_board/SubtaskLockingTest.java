@@ -29,11 +29,11 @@ import org.springframework.test.web.servlet.MockMvc;
  * Tracer proving GAP-06 end to end: a PUT to the subtask update route runs through the controller,
  * DTO validation, the ownership chain, the service's explicit version-compare-then-409-then-flush
  * guard, and back out through {@link com.vrudenko.kanban_board.handler.GlobalExceptionHandler}.
- * Modeled on {@code e2e.task.TaskLockingE2ETest} and {@code e2e.column.ColumnLockingE2ETest}.
+ * Modeled on {@code e2e.task.TaskLockingTest} and {@code e2e.column.ColumnLockingTest}.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-public class SubtaskLockingE2ETest extends AbstractAppMockMvcTest {
+public class SubtaskLockingTest extends AbstractAppMockMvcTest {
 
     @Autowired private MockMvc mockMvc;
 

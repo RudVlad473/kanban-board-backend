@@ -14,6 +14,7 @@ import java.util.UUID;
 import org.apache.avro.Schema;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
@@ -26,6 +27,7 @@ import org.springframework.boot.test.context.SpringBootTest;
  * distinguishes "compatibility is enforced" from "registration is broken for everything".
  */
 @SpringBootTest
+@Tag("kafka")
 class SchemaCompatibilityE2ETest extends AbstractKafkaContainerTest {
 
     private static final int IDENTITY_MAP_CAPACITY = 100;

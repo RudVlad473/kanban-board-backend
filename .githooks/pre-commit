@@ -14,11 +14,13 @@ if [ $? -ne 0 ]; then
 fi
 
 # `fastTest` (build.gradle) depends on compileJava/compileTestJava, so this single
-# invocation covers both "project compiles" and "non-E2E tests pass". E2E classes
-# (suffixed E2ETest) are excluded - see build.gradle's fastTest task. Still runs
-# ArchUnit's LayeringArchTest plus all unit/service tests, so ownership-layering
-# and Error Prone regressions are caught before the commit lands, not first in CI.
-echo "Compiling and running non-E2E tests..."
+# invocation covers both "project compiles" and "fast tests pass". Classes tagged
+# @Tag("kafka") or @Tag("realSocket") are excluded - see build.gradle's fastTest
+# task. A new test class runs in this gate by default; it only earns a tag if it
+# genuinely needs Kafka or a real socket. Still runs ArchUnit's LayeringArchTest
+# plus all unit/service tests, so ownership-layering and Error Prone regressions
+# are caught before the commit lands, not first in CI.
+echo "Compiling and running fast tests..."
 ./gradlew fastTest < /dev/null
 if [ $? -ne 0 ]; then
   echo "Compile or test failure. Commit aborted."

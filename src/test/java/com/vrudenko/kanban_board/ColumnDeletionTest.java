@@ -29,11 +29,11 @@ import org.springframework.test.web.servlet.MockMvc;
  * Tracer proving GAP-02's cascade end to end: a real HTTP DELETE travels controller to ownership
  * chain to the existing batched cascade ({@link TaskService#deleteAllByColumn}) to the database,
  * before the event-publishing expansion (plan 03's task 2) lands. Modeled on {@code
- * SubtaskLockingE2ETest}.
+ * SubtaskLockingTest}.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-public class ColumnDeletionE2ETest extends AbstractAppMockMvcTest {
+public class ColumnDeletionTest extends AbstractAppMockMvcTest {
 
     @Autowired private MockMvc mockMvc;
 

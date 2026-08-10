@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -30,10 +31,10 @@ import org.springframework.http.HttpStatus;
  * Tracer proving GAP-01 end to end: a POST to the boards collection route runs through the
  * controller, DTO validation, {@link
  * com.vrudenko.kanban_board.service.UserService#addBoardByUserId}, and back out through {@link
- * com.vrudenko.kanban_board.handler.GlobalExceptionHandler}. Modeled on {@link
- * SubtaskLockingE2ETest}.
+ * com.vrudenko.kanban_board.handler.GlobalExceptionHandler}. Modeled on {@link SubtaskLockingTest}.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Tag("realSocket")
 public class BoardCreationE2ETest extends AbstractAppE2ETest {
 
     @Autowired private BoardService boardService;

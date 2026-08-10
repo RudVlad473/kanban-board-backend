@@ -29,7 +29,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest
 @AutoConfigureMockMvc
-public class TaskMoveE2ETest extends AbstractAppMockMvcTest {
+public class TaskMoveTest extends AbstractAppMockMvcTest {
 
     @Autowired private RecordingActivityEventListener recorder;
 
