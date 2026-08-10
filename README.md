@@ -28,8 +28,9 @@ meant for the container. Full runbook: [docs/LOCAL_DEV.md](docs/LOCAL_DEV.md).
 
 Detail and reasoning for each of these is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-- **Optimistic locking** — concurrent edits to the same task or column return **409** instead of
-  silently overwriting → [how](docs/ARCHITECTURE.md#concurrency-optimistic-locking)
+- **Optimistic locking** — concurrent edits to the same board, column, task or subtask return
+  **409** instead of silently overwriting →
+  [how](docs/ARCHITECTURE.md#concurrency-optimistic-locking)
 - **Activity feed publishes after commit, off the request thread** — so recording history can never
   slow down or fail the mutation that caused it, and poison messages retry then dead-letter →
   [how](docs/ARCHITECTURE.md#event-driven-activity-feed)
@@ -67,7 +68,7 @@ signin. Child resources are created by `POST`ing to their parent.
 |---|---|---|
 | `POST` | `/signup` · `/signin` · `/logout` | Session cookie; max 2 concurrent sessions per user |
 | `GET` | `/boards` | Boards owned by the caller |
-| `PUT` `DELETE` | `/boards/{boardId}` | Delete cascades to columns, tasks, subtasks |
+| `PUT` `DELETE` | `/boards/{boardId}` | `PUT` requires the current `version`; delete cascades to columns, tasks, subtasks |
 | `GET` | `/boards/{boardId}/columns` | |
 | `POST` | `/boards/{boardId}/columns` | Create a column |
 | `PUT` | `/boards/{boardId}/columns/{columnId}` | Requires the current `version` |
@@ -85,9 +86,10 @@ cascade is only reachable by deleting the board.
 
 ## Testing
 
-210 test methods across 33 classes: unit tests for services and DTO validation, REST Assured
-integration tests for controllers, Testcontainers-backed E2E tests for the Kafka pipeline and
-locking, and ArchUnit rules over the whole class graph. Every test — not just the E2E classes —
+382 test methods: unit tests for services and DTO validation, REST Assured/MockMvc integration
+tests for controllers, Testcontainers-backed E2E tests for the Kafka pipeline and real-socket
+concurrency, dedicated `security/` classes for injection resistance and auth gating, and ArchUnit
+rules over the whole class graph. Every test — not just the Kafka/real-socket-tagged classes —
 runs against a real PostgreSQL 16 instance via Testcontainers, whose schema is built by the same
 Flyway migrations production runs, so Docker is required for `./gradlew test`. Entities and
 repositories are deliberately untested — they carry no custom logic. Full breakdown in

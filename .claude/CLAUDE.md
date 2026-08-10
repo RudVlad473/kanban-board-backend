@@ -130,7 +130,7 @@ A Spring Boot 3.5.0 / Java 21 REST API backend for a Kanban board application (u
 - Custom exception hierarchy: `AppAccessDeniedException` (extends `AccessDeniedException`), `AppEntityNotFoundException` (extends `EntityNotFoundException`)
 - Constructor-based messaging: `new AppAccessDeniedException("Board")` produces message "You do not have access to that board"
 - Exceptions thrown from service layer for domain logic violations (ownership verification, entity not found)
-- Global exception handler (`GlobalExceptionHandler.java`) maps exceptions to HTTP status codes:
+- Global exception handler (`GlobalExceptionHandler.java`, `@ControllerAdvice`) maps every exception to a single RFC 7807 `ProblemDetail` envelope (`code` + `detail`, and `errors` for field validation) rather than a mix of bare-string/map bodies. Ownership denials (`AppAccessDeniedException`/`AccessDeniedException`) map to **403**; a genuinely unauthenticated request never reaches this class at all — it is answered **401** by `ProblemDetailAuthenticationEntryPoint`, a separate producer wired into the Spring Security filter chain that emits the identical envelope shape (see `docs/ARCHITECTURE.md`'s "401 means unauthenticated, 403 means forbidden" note and its error-handling sequence diagram for the full four-way 401/403/400/409 split)
 - Jakarta Validation (`jakarta.validation.constraints`) used for DTO field validation
 - Custom validation annotations: `@BoardName`, `@TaskTitle`, `@SubtaskTitle`, `@DisplayName`, `@AppEmail`, `@Password`, `@Description`
 - Constants defined in `ValidationConstants.java` for all length constraints (MIN/MAX pairs)
@@ -304,16 +304,16 @@ A Spring Boot 3.5.0 / Java 21 REST API backend for a Kanban board application (u
 
 ### State Management
 
-- SecurityContext persisted via Spring Session JDBC (`spring.session.store-type=jdbc`) into the `spring_session_attributes` table; `spring_session` itself holds session metadata (id, timestamps, principal name), not the serialized context. Proven by `SessionPersistenceE2ETest`.
+- SecurityContext persisted via Spring Session JDBC (`spring.session.store-type=jdbc`) into the `spring_session_attributes` table; `spring_session` itself holds session metadata (id, timestamps, principal name), not the serialized context. Proven by `AuthenticationTest`.
 - SessionCreationPolicy.IF_REQUIRED: session created only on login (line 66)
-- `maximumSessions(2)` / `maxSessionsPreventsLogin=true` are enforced by a `CompositeSessionAuthenticationStrategy` bean (`SecurityConfiguration.sessionAuthenticationStrategy`) composing `ConcurrentSessionControlAuthenticationStrategy` (backed by a `SpringSessionBackedSessionRegistry` reading live `SPRING_SESSION` rows) and `ChangeSessionIdAuthenticationStrategy`, invoked explicitly from `AuthenticationController.authenticate` after `authenticationManager.authenticate(token)` succeeds and before the `SecurityContext` is saved — since Spring Security 6 no longer installs `SessionManagementFilter` on the default chain, and the custom signin path never ran one either, nothing else would call it. A third concurrent signin for one principal is rejected as HTTP 401 with the generic "Invalid username or password" body, deliberately indistinguishable from a wrong password (the `SessionAuthenticationException` collapses through the same Vavr `Try` and blanket catch as any other authentication failure) — proven by `SessionPersistenceE2ETest.ConcurrentSessionCeiling`. The same call site rotates the session id on every successful authentication, so `sessionFixation` protection is real too — proven by `SessionPersistenceE2ETest.SessionFixation`. Both controls apply to `signup` as well as `signin`, since both share this helper.
+- `maximumSessions(2)` / `maxSessionsPreventsLogin=true` are enforced by a `CompositeSessionAuthenticationStrategy` bean (`SecurityConfiguration.sessionAuthenticationStrategy`) composing `ConcurrentSessionControlAuthenticationStrategy` (backed by a `SpringSessionBackedSessionRegistry` reading live `SPRING_SESSION` rows) and `ChangeSessionIdAuthenticationStrategy`, invoked explicitly from `AuthenticationController.authenticate` after `authenticationManager.authenticate(token)` succeeds and before the `SecurityContext` is saved — since Spring Security 6 no longer installs `SessionManagementFilter` on the default chain, and the custom signin path never ran one either, nothing else would call it. A third concurrent signin for one principal is rejected as HTTP 401 with the generic "Invalid username or password" body, deliberately indistinguishable from a wrong password (the `SessionAuthenticationException` collapses through the same Vavr `Try` and blanket catch as any other authentication failure) — proven by `AuthenticationTest.ConcurrentSessionCeiling`. The same call site rotates the session id on every successful authentication, so `sessionFixation` protection is real too — proven by `AuthenticationTest.SessionFixation`. Both controls apply to `signup` as well as `signin`, since both share this helper.
 - Session timeout: `spring.session.timeout=180m` takes precedence over `server.servlet.session.timeout=1m` now that Spring Session JDBC is on the classpath, so the effective server-side idle timeout is 180 minutes (previously 1 minute, before that dependency was wired). `server.servlet.session.cookie.max-age=600` independently caps the cookie itself at 10 minutes, so the client-side and server-side lifetimes differ by design.
 - Every resource (Board, Column, Task, Subtask) traces back to UserEntity via foreign keys
 - OwnershipVerifierService chains verification: Subtask → Task → Column → Board → User
 - Ownership checks happen at service layer before any modification
 - Services use @Transactional to wrap operations in database transactions
 - Batch deletes use EntityManager.flush() + clear() to maintain Hibernate session consistency
-- Optimistic locking handled by GlobalExceptionHandler (line 81-84)
+- Optimistic locking (`@Version` + explicit compare-before-mutate) covers `BoardEntity`, `ColumnEntity`, `TaskEntity` and `SubtaskEntity`; `UserEntity` deliberately does not carry it (last-write-wins theme preference, a documented trade-off, not a gap). `OptimisticLockingFailureException` is mapped to HTTP 409 by `GlobalExceptionHandler.handleOptimisticLockingFailure` — see `docs/ARCHITECTURE.md#concurrency-optimistic-locking`
 
 ## Key Abstractions
 
@@ -374,7 +374,7 @@ A Spring Boot 3.5.0 / Java 21 REST API backend for a Kanban board application (u
 ## Error Handling
 
 - Custom exceptions (AppEntityNotFoundException, AppAccessDeniedException) thrown from service layer
-- GlobalExceptionHandler intercepts and maps to HTTP status codes:
+- GlobalExceptionHandler intercepts and maps every exception to one RFC 7807 ProblemDetail envelope with a stable `code`; 403 (not 401) for ownership denials, 409 for optimistic-lock conflicts, 400 for field validation. A genuinely unauthenticated request (401) never reaches this class — see `docs/ARCHITECTURE.md`'s error-handling sequence diagram for the full split.
 - Controllers do not catch exceptions — they propagate to handler
 - Vavr Try monad used in AuthenticationController (line 92-105) for functional error handling
 

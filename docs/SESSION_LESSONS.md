@@ -24,7 +24,7 @@ Record the recovery that worked, because it is the reusable part: a `git reset` 
 
 **The rule:** writing files into the working tree is always safe during an executor run. `git add`, `git commit`, `git reset`, and `git stash` are not — hold them until the executor's completion notification confirms the tree is quiet. If something must be captured mid-run, write the file then and stage it after.
 
-Timeout corollary, since it is what converted a safe commit into a recovery: a `git commit` in this repo triggers `.githooks/pre-commit` (`spotlessApply`, then `./gradlew test --exclude-tests '*E2ETest'`), which takes minutes — give it a generous timeout instead of letting a default kill it partway through.
+Timeout corollary, since it is what converted a safe commit into a recovery: a `git commit` in this repo triggers `.githooks/pre-commit` (`spotlessCheck`, then `./gradlew fastTest` — the `--exclude-tests '*E2ETest'` name-suffix filter this note originally described was retargeted to a `@Tag`-based exclusion in phase 07.1, D-21/D-22), which takes minutes — give it a generous timeout instead of letting a default kill it partway through.
 
 ### 3. Redirect stdin on any subprocess launched from a git hook
 

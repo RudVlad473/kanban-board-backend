@@ -17,6 +17,14 @@ ArchUnit rule rather than by convention (see [Testing](#testing)).
   custom `@CurrentUserId` argument resolver injecting the authenticated user id from the security
   context, `@Valid` DTOs in, `ResponseEntity<DTO>` out. Exceptions propagate to a single
   `GlobalExceptionHandler` that owns the exception → HTTP status mapping.
+- **401 means unauthenticated, 403 means forbidden — no overlap.** A request with no valid session
+  never reaches a controller at all: `ProblemDetailAuthenticationEntryPoint` answers it from inside
+  the Spring Security filter chain with **401**, in the same RFC 7807 `ProblemDetail` envelope every
+  other error uses. A request with a valid session that fails `OwnershipVerifierService`'s check
+  reaches `GlobalExceptionHandler` as an ordinary thrown exception and gets **403**. Every error
+  response — from either producer — carries the same shape and a stable `code` extension property
+  (`ErrorCode`). See the error-handling sequence diagram below for the full four-way split
+  including 400 and 409.
 - **MapStruct for entity ↔ DTO.** Generated at compile time, so mapping mistakes are compile
   errors and the service layer stays free of mapping boilerplate.
 - **Shared base interfaces** (`BaseBoard`, `BaseTask`, …) tie each DTO to the entity shape it
@@ -25,7 +33,9 @@ ArchUnit rule rather than by convention (see [Testing](#testing)).
   restart or a second instance doesn't discard logins. The two-concurrent-session ceiling is
   enforced by a `SpringSessionBackedSessionRegistry` reading live rows from that same store — so it
   holds across instances rather than relying on per-instance bookkeeping — and the session id
-  rotates on every successful authentication. Both are proven by `SessionPersistenceE2ETest`.
+  rotates on every successful authentication. Both are proven by `AuthenticationTest`'s
+  `ConcurrentSessionCeiling` and `SessionFixation` nested classes (renamed from the now-deleted
+  `SessionPersistenceE2ETest` in phase 7's test restructure).
 
 ### Scenario — signin and session establishment
 
@@ -153,19 +163,31 @@ structurally different from the other three.
 ## Concurrency: optimistic locking
 
 Two users dragging the same task at once is the realistic conflict in a kanban board, so writes on
-`TaskEntity` and `ColumnEntity` are version-checked rather than last-write-wins.
+`BoardEntity`, `ColumnEntity`, `TaskEntity` and `SubtaskEntity` are version-checked rather than
+last-write-wins. `UserEntity` is the deliberate exception — its one versionable field (theme
+preference) stays last-write-wins by explicit decision, not oversight (see below).
 
-- `@Version` on both entities, surfaced through the response DTOs; `UpdateTaskRequestDTO`,
-  `MoveTaskRequestDTO` and `UpdateColumnRequestDTO` require the client to send back the version it
-  read — a missing one is a 400, not a silent overwrite.
+- `@Version` on all four entities, surfaced through the response DTOs; `UpdateBoardRequestDTO`,
+  `UpdateTaskRequestDTO`, `MoveTaskRequestDTO`, `UpdateColumnRequestDTO` and
+  `UpdateSubtaskRequestDTO` all require the client to send back the version it read — a missing one
+  is a 400, not a silent overwrite. `BoardFullResponseDTO` exposes the board's own version alongside
+  its columns/tasks/subtasks, so a client that loads a board via the nested read still has what it
+  needs for a version-safe rename afterward. Board was the last of the four to gain this (V7
+  migration, closing an asymmetry a frontend-integration-readiness audit flagged — the other three
+  entities already had it).
 - The services also perform an **explicit** version comparison in addition to `@Version`. Hibernate's
   own check only catches a conflict between load and flush *within one transaction* — a
   load-then-modify-then-save request that reads a row someone already updated would otherwise write
   cleanly over it, because the entity it loaded is current by the time it flushes. The explicit
   check is what turns a stale client read into a conflict.
 - `OptimisticLockingFailureException` maps to **HTTP 409** in `GlobalExceptionHandler`.
-- Proven end-to-end by `TaskLockingTest` and `ColumnLockingTest`, which drive two conflicting
-  updates from the same read version over real HTTP and assert the second gets a 409.
+- Proven end-to-end by `BoardLockingTest`, `ColumnLockingTest`, `TaskLockingTest` and
+  `SubtaskLockingTest`, which drive two conflicting updates from the same read version over real
+  HTTP and assert the second gets a 409.
+- **`UserEntity` deliberately carries no `@Version`.** Its `theme` preference is a low-stakes,
+  single-user UI setting with no integrity requirement worth the extra request-shape burden a
+  mandatory `version` field imposes — a documented trade-off, not the same gap Board's asymmetry
+  was.
 
 ## Event-driven activity feed
 
@@ -333,29 +355,43 @@ without one is a distributed-systems liability the moment a producer and consume
 ## Schema management
 
 Flyway owns the domain schema: `V1__init` → `V2__add_optimistic_locking_version_columns` →
-`V3__add_activity_log` → `V4__add_password_hash_not_null`. The history deliberately reconstructs how
-the schema actually evolved rather than collapsing it into one snapshot, so a migration replay
-matches the real sequence.
+`V3__add_activity_log` → `V4__add_password_hash_not_null` →
+`V5__add_position_subtask_version_theme_board_name_uniqueness` →
+`V6__change_activity_log_event_id_to_varchar` →
+`V7__add_board_optimistic_locking_version_column`. The history deliberately reconstructs how the
+schema actually evolved rather than collapsing it into one snapshot, so a migration replay matches
+the real sequence. V7 (07.1-05) is what gives `boards` the same `@Version` column Column/Task/
+Subtask already had, closing the Board/User optimistic-locking asymmetry noted under
+[Concurrency: optimistic locking](#concurrency-optimistic-locking).
 
 Outside the test profile, `spring.jpa.hibernate.ddl-auto=validate` — Hibernate is not allowed to
 create or alter anything. Flyway builds the schema, Hibernate only checks that the entity mappings
 agree with it, and a mismatch is a loud startup failure instead of a silent auto-alter. The test
-profile now runs the same V1–V4 migrations against a Testcontainers-managed PostgreSQL instance
-with `ddl-auto=validate` — the identical posture to production — so CI executes the full migration
-history on every run.
+profile now runs the same full migration history against a Testcontainers-managed PostgreSQL
+instance with `ddl-auto=validate` — the identical posture to production — so CI executes the full
+migration history on every run.
 
 ## Testing
 
-210 test methods across 33 classes, split by what each layer can actually prove. Every test — not
-just the E2E classes — runs against a real PostgreSQL 16 instance via Testcontainers, whose schema
-is built by the same Flyway migrations production runs, so Docker is required for `./gradlew test`:
+382 test methods, split by what each layer can actually prove. Every test — not just the
+Kafka/real-socket-tagged classes — runs against a real PostgreSQL 16 instance via Testcontainers,
+whose schema is built by the same Flyway migrations production runs, so Docker is required for
+`./gradlew test`:
 
 | Category | Scope | Why |
 |---|---|---|
 | Unit | Services, DTO validation | Where the logic and the constraints live |
-| Integration (REST Assured) | Controllers | Routing, validation, and auth need a real request to be proven |
-| E2E (Testcontainers + Redpanda) | Kafka pipeline, locking, sessions | Broker/registry behaviour and races can't be mocked honestly |
+| Integration (REST Assured / MockMvc) | Controllers | Routing, validation, and auth need a real request to be proven |
+| E2E (Testcontainers + Redpanda) | Kafka pipeline, real-socket concurrency | Broker/registry behaviour and races can't be mocked honestly |
 | Architecture (ArchUnit) | The whole class graph | Turns two review-only conventions into build failures |
+
+Two dedicated `security/` classes added in phase 07.1 close out the security/injection and
+auth-gating coverage the audit that phase addressed asked for: `InjectionAttemptTest` (SQL
+injection, stored-XSS round-trip, oversized/boundary payloads, malformed path variables — every
+class proving JPA parameter binding holds rather than merely that a status code looked clean) and
+`AuthorizationGatingTest` (a reflective sweep over every protected route, asserting both
+unauthenticated-401 and cross-user-403 rejection, backstopped by a completeness guard so a future
+route can't silently ship unswept).
 
 Entities and repositories are deliberately untested — they carry no custom logic.
 
@@ -386,10 +422,17 @@ distinction is what made the N+1 work measurable rather than speculative:
   sources are held *stricter* than main: five named checks are promoted to ERROR after a 27-finding
   backlog was triaged to zero. Both the plugin and analyzer are pinned exactly, so an upstream
   release can't red the build on its own.
-- **`fastTest`** — the full suite minus the `*E2ETest` classes (the Kafka/Redpanda-backed ones), so
-  the pre-commit hook gets a real gate (ArchUnit and every unit/service test) without paying the
-  Kafka broker's container startup on each commit. It still starts the shared PostgreSQL container,
-  measured at ~2.3s (see [LOCAL_DEV.md](LOCAL_DEV.md)). CI still runs everything.
+- **`fastTest`** — the full suite minus classes tagged `@Tag("kafka")` or `@Tag("realSocket")`, so
+  the pre-commit hook gets a real gate (ArchUnit and every unit/service/controller test — including
+  both new `security/` classes above, which carry no tag and therefore run in the gate by default,
+  D-22) without paying the Kafka broker's or a real socket's startup cost on each commit. Gate
+  membership is selected by explicit per-class tag, not by class name (`build.gradle`'s `fastTest`
+  task) — a class earns exclusion only if it genuinely needs Kafka or a real socket; an untagged
+  class runs in the gate by default. This replaced an earlier name-suffix (`*E2ETest`) filter in
+  phase 07.1, which had silently excluded classes that no longer needed the expensive tier simply
+  because they still carried the suffix. It still starts the shared PostgreSQL container, measured
+  at ~2.3s (see [LOCAL_DEV.md](LOCAL_DEV.md)). CI still runs everything via the untouched `test`
+  task.
 - **Git hooks bootstrap on clone** — `core.hooksPath` is wired to the version-controlled
   `.githooks/` at Gradle configuration time, so a fresh checkout is armed with no manual setup step.
   It never fails the build and writes only when the value is wrong.
