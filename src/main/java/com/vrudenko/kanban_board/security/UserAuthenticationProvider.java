@@ -35,7 +35,7 @@ public class UserAuthenticationProvider implements AuthenticationProvider {
         // is what Spring Session serializes into the JDBC-backed spring_session_attributes
         // table on session change (not on every request), so passing the entity directly
         // would persist passwordHash to the database. Enforced by
-        // SessionPersistenceE2ETest.SigninPersistence#shouldNotPersistBcryptHash_whenSigninSucceeds.
+        // AuthenticationTest.SigninPersistence#shouldNotPersistBcryptHash_whenSigninSucceeds.
         var principal = new User(userDetails.getUsername(), "", new ArrayList<>());
 
         return new UsernamePasswordAuthenticationToken(principal, null, new ArrayList<>());

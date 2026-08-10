@@ -89,3 +89,41 @@ same collision-proofing reason. Column/task/subtask name generation in the same 
 -- the failure was specifically board-name uniqueness, not any other constraint. Committed as part of
 plan 07.1-07 task 1 (`BoardServiceTest.java` was not in task 1's originally-planned file list, but
 Rule 3 explicitly permits an unplanned fix once it blocks the current task).
+
+## 07.1-07: Recurring `ColumnLockingTest`/`ColumnLockingE2ETest` signin-400 flake and `EventIdGeneratorTest` uniqueness flake, both pre-existing and out of this plan's scope
+
+**Found during:** Verification passes across all three of this plan's tasks (`./gradlew test`),
+independent of any file this plan touches.
+
+**Symptom 1 -- `ColumnLockingTest.update_withoutVersion_returnsBadRequest()`** (named
+`ColumnLockingE2ETest` before task 2's rename): `AbstractAppMockMvcTest.signinCookie()` expects
+`200` from `POST /signin` and intermittently gets `400`. Reproduced across 3 separate full
+`./gradlew test` runs this session (out of ~6 total), never reproduced when the class is run in
+isolation (`./gradlew test --tests`, 2/2 clean). Investigated but not resolved: `@Password`'s regex
+is permissive enough (`.+$` tail) that no `dataFactory`-generated word content can fail it, and
+`@AppEmail` is a stock Jakarta `@Email` constraint unlikely to reject `dataFactory.getEmailAddress()`
+output, so a DTO-validation cause was ruled out rather than confirmed. Every reproduction's
+`testsuite timestamp` lands in the same second as Kafka consumer/producer "Node disconnected" /
+"Bootstrap broker ... could not be established" log lines from `KafkaEventPublisher`'s async publish
+path -- circumstantial but consistent evidence this is a Testcontainers-Kafka-broker-timing artifact
+specific to this class's Spring context startup window, not a defect in `ColumnLockingTest` or the
+signin path itself.
+
+**Symptom 2 -- `EventIdGeneratorTest$GenerateTest.shouldReturnDistinctValues_whenCalledManyTimesRapidly()`**:
+asserts 1000 rapid-fire `EventIdGenerator.generate()` calls are all distinct; intermittently observes
+999 (one collision). Reproduced twice this session. Neither `EventIdGenerator` nor
+`RandFlakeGenerator` (its delegate) is touched by any file this plan modifies.
+
+**Why not fixed here:** Neither file is in this plan's `files_modified` list, and both classes'
+production code (`ColumnController`/`AuthenticationController`/`UserAuthenticationProvider` for
+symptom 1, `EventIdGenerator`/`RandFlakeGenerator` for symptom 2) is unrelated to 07.1-07's actual
+diff (test tagging, 11 file renames, one comment fix). Unlike the `BoardServiceTest` flake fixed
+under Rule 3 in task 1, neither of these ever blocked a commit outright -- every occurrence cleared
+on the next `./gradlew test` invocation, so there was no unbypassable gate to escalate against.
+
+**Suggested next step:** File as a proper todo (done -- see
+`.planning/todos/pending/2026-08-10-investigate-two-recurring-pre-existing-test-flakes-surfa.md`) for
+someone to reproduce with `-Dspring.kafka.consumer.properties.session.timeout.ms` tracing (symptom 1)
+and a tighter collision-probability review of `RandFlakeGenerator` under rapid sequential calls
+(symptom 2), rather than continuing to absorb the ~5-6 minute full-suite cost of chasing either from
+inside an unrelated plan.

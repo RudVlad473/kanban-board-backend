@@ -1,5 +1,7 @@
 ---
 created: 2026-08-09T16:10:00.000Z
+resolved: 2026-08-10
+resolves_phase: 07.1
 title: Decide the E2ETest suffix vs. fastTest filter coupling
 area: testing
 severity: minor
@@ -83,3 +85,31 @@ the evidence above:
 Also fix the one-line stale `SessionPersistenceE2ETest` → `AuthenticationE2ETest` reference in
 `UserAuthenticationProvider.java:38` as part of whichever option is chosen (or as a standalone
 trivial edit if this todo is picked up purely for that line).
+
+## Resolution
+
+**Option 2 taken** (rename + retarget `fastTest` to JUnit 5 `@Tag`), delivered as
+`07.1-07-PLAN.md` across three tasks:
+
+- **Task 1** added `@Tag("kafka")` to the 8 Kafka-backed `activitylog/` classes and
+  `@Tag("realSocket")` to `BoardCreationE2ETest`, then retargeted `fastTest` from
+  `filter { excludeTestsMatching '*E2ETest' }` to
+  `useJUnitPlatform { excludeTags 'kafka', 'realSocket' }` — matching the `rehearsal` tag
+  precedent the `test` task already used. Both halves landed in the same commit; the old
+  name filter was deleted outright, not left alongside the new mechanism.
+- **Task 2** renamed all 11 in-process classes (the live count was 11, not the 12 estimated
+  when this todo was filed — re-derived by grep at execution time rather than trusted from
+  either this todo or CONTEXT.md) from `*E2ETest` to `*Test`, now safe because gate
+  membership is tag-driven rather than name-driven.
+- **Task 3** fixed the stale `UserAuthenticationProvider.java` comment (now citing
+  `AuthenticationTest.SigninPersistence#shouldNotPersistBcryptHash_whenSigninSucceeds`,
+  verified to exist and run standalone via `./gradlew test --tests`), and proved the tag
+  mechanism has teeth: temporarily tagging the 18-test `AuthenticationTest` class dropped
+  `fastTest`'s count from 266 to 248 (exactly 18), and removing the tag restored 266 —
+  confirming a typo in either half of the mechanism would be caught by count, not merely by
+  a green build.
+
+Option 2 was picked over Option 1 (rename only, let the untouched name filter widen)
+specifically because Option 1 reintroduces the same defect under a new name — the next tier
+change would hit an identical silent-coupling trap. Option 3 (comment fix only) was rejected
+because it leaves the 11 classes' names actively misleading indefinitely.
