@@ -245,30 +245,30 @@ Plans:
 **Goal:** Every error the API returns is one consistent RFC 7807 envelope with a stable machine-readable code; 401 means unauthenticated and 403 means forbidden, with no overlap; a local frontend dev server can make credentialed cross-origin calls; signin/signup actually validate their request bodies; every resource-creating POST returns 201; Board carries the same optimistic locking Column/Task/Subtask already have; and adversarial injection resistance plus complete auth gating are proven by tests rather than assumed.
 **Requirements**: D-01..D-26 (CONTEXT.md decisions — this inserted phase has no REQUIREMENTS.md IDs), plus ROADMAP-201 (the create-endpoint 201 item named in this phase's title, which has no D-number)
 **Depends on:** Phase 7
-**Plans:** 9 plans (7 waves)
+**Plans:** 7/9 plans executed (7 waves)
 
 Plans:
 **Wave 1**
 
-- [ ] 07.1-01-PLAN.md — Converge GlobalExceptionHandler on RFC 7807 ProblemDetail with a stable code taxonomy; remap ownership denials 401→403 (wave 1; D-01, D-02, D-03, D-05)
-- [ ] 07.1-02-PLAN.md — CorsConfigurationSource bean with credentialed, property-driven explicit origins (wave 1; D-10, D-11, D-12)
+- [x] 07.1-01-PLAN.md — Converge GlobalExceptionHandler on RFC 7807 ProblemDetail with a stable code taxonomy; remap ownership denials 401→403 (wave 1; D-01, D-02, D-03, D-05)
+- [x] 07.1-02-PLAN.md — CorsConfigurationSource bean with credentialed, property-driven explicit origins (wave 1; D-10, D-11, D-12)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 07.1-03-PLAN.md — ProblemDetail-producing AuthenticationEntryPoint so unauthenticated requests return a real 401 (wave 2; D-04, D-05)
-- [ ] 07.1-04-PLAN.md — @Valid on signin/signup, duplicate-email 409, and the fixture hardening validation forces (wave 2; D-06, D-07, D-08, D-09, D-20)
+- [x] 07.1-03-PLAN.md — ProblemDetail-producing AuthenticationEntryPoint so unauthenticated requests return a real 401 (wave 2; D-04, D-05)
+- [x] 07.1-04-PLAN.md — @Valid on signin/signup, duplicate-email 409, and the fixture hardening validation forces (wave 2; D-06, D-07, D-08, D-09, D-20)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 07.1-05-PLAN.md — Board optimistic locking: V7 migration, @Version, version on the board DTOs (wave 3; D-13, D-14, D-15)
+- [x] 07.1-05-PLAN.md — Board optimistic locking: V7 migration, @Version, version on the board DTOs (wave 3; D-13, D-14, D-15)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 07.1-06-PLAN.md — Create-endpoint status consistency: column and subtask creation return 201 (wave 4; ROADMAP-201)
+- [x] 07.1-06-PLAN.md — Create-endpoint status consistency: column and subtask creation return 201 (wave 4; ROADMAP-201)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 07.1-07-PLAN.md — Retarget the pre-commit fastTest gate from name-suffix to JUnit @Tag; rename the 11 mistiered classes (wave 5; D-21, D-22, D-23)
+- [x] 07.1-07-PLAN.md — Retarget the pre-commit fastTest gate from name-suffix to JUnit @Tag; rename the 11 mistiered classes (wave 5; D-21, D-22, D-23)
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
