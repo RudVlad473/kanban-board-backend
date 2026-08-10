@@ -6,6 +6,7 @@ import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import java.util.Locale;
 import java.util.Map;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.assertj.core.api.Assertions;
 import org.fluttercode.datafactory.impl.DataFactory;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,17 +16,28 @@ public class SignupRequestDTOTest {
     private Validator validator;
     DataFactory dataFactory = new DataFactory();
 
-    private final String validEmail = dataFactory.getEmailAddress();
+    // Guaranteed-valid: dataFactory.getEmailAddress()'s word-based local-part branch occasionally
+    // draws a multi-word entry from DataFactory's dirty corpus (e.g. the literal "or maybe") and
+    // concatenates it with a second word with no separator, producing an email with an embedded
+    // space that fails @AppEmail's @Email format check -- see
+    // AbstractAppTest.generateValidEmail()'s Javadoc for the full root-cause writeup. This was the
+    // exact, previously-unresolved cause of this file's own flakiness, documented below until now.
+    private final String validEmail =
+            RandomStringUtils.randomAlphabetic(10).toLowerCase(Locale.ROOT) + "@example.com";
     private final String validDisplayName = dataFactory.getName();
     // Locale.ROOT pinned explicitly: under a Turkish default locale, toLowerCase/toUpperCase
     // apply the dotted/dotless-I mapping, which would corrupt these password fixtures and
     // produce spurious failures in the "no uppercase char"/"no lowercase char" validation cases
     // below that depend on them.
+    //
+    // Guaranteed-bounded length: dataFactory.getRandomWord(MIN_PASSWORD_LENGTH) has no upper bound
+    // on the returned word's length, so concatenating it with the two suffixes below risked
+    // occasionally exceeding MAX_PASSWORD_LENGTH and failing @Password's @Size constraint --
+    // RandomStringUtils.randomAlphabetic gives a length guarantee dataFactory's word corpus cannot.
     private final String validPassword =
-            dataFactory
-                    .getRandomWord(ValidationConstants.MIN_PASSWORD_LENGTH)
+            RandomStringUtils.randomAlphabetic(ValidationConstants.MIN_PASSWORD_LENGTH)
                     .toLowerCase(Locale.ROOT)
-                    .concat(String.valueOf(dataFactory.getRandomWord(1)).toUpperCase(Locale.ROOT))
+                    .concat("A")
                     .concat(String.valueOf(dataFactory.getNumberBetween(0, 9)))
                     .concat("$");
     private SignupRequestDTO validDTO;
@@ -71,12 +83,6 @@ public class SignupRequestDTOTest {
                 .isEqualTo("email");
     }
 
-    // TODO: flaky — validEmail/validPassword are built from DataFactory random generation
-    // (see fields above) and occasionally produce a value that fails @AppEmail/@Password on its
-    // own, which shows up here as a non-zero violation count unrelated to displayName. Confirmed
-    // pre-existing via `git stash` (fails intermittently on unmodified code too, ~coin-flip rate
-    // across repeated full-suite runs). Fix by asserting on the specific violation's property path
-    // instead of raw count, or by using fixed known-valid values instead of random generation.
     @Test
     public void whenDisplayNameIsMissing_thenNoViolation() {
         // arrange

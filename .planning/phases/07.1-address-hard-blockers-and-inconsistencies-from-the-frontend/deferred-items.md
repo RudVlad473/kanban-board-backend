@@ -127,3 +127,33 @@ someone to reproduce with `-Dspring.kafka.consumer.properties.session.timeout.ms
 and a tighter collision-probability review of `RandFlakeGenerator` under rapid sequential calls
 (symptom 2), rather than continuing to absorb the ~5-6 minute full-suite cost of chasing either from
 inside an unrelated plan.
+
+## Update -- Symptom 1 resolved 2026-08-10 during plan 07.1-09
+
+The Kafka-broker-timing hypothesis above was wrong. Root-caused with a temporary diagnostic on
+`AbstractAppMockMvcTest.signinCookie()` (print status/body on any non-200 response, then revert),
+which caught the real failure: `{"code":"VALIDATION_FAILED","errors":{"email":"Email cannot be
+empty"}}` for the non-blank email `"or maybedreams@ma1lbox.org"`.
+
+The `@AppEmail`/`@Password` non-cause conclusion above was half right and half wrong: `@Password`'s
+permissive regex genuinely cannot fail (confirmed correct), but `@AppEmail`'s `@Email` format check
+*can* -- decompiling `datafactory-0.8.jar`'s `DefaultContentDataValues` constant pool found the
+literal two-word corpus entry `"or maybe"` (extending 07.1-07 Task 1's finding that this corpus is
+dirty story text, not clean single words, beyond just the duplicate-short-words case already found).
+`DataFactory.getEmailAddress()`'s word-based branch concatenates two drawn "words" with no separator;
+drawing `"or maybe"` produces an email with an embedded space, which fails `@Email`'s format check.
+`@AppEmail`'s `@ReportAsSingleViolation` then reports that failure using the composed annotation's
+generic default message ("Email cannot be empty") regardless of which sub-constraint actually
+failed -- which is why the error read as a blank-field problem rather than a format problem, and why
+the correlation with Kafka log noise (both are just "things happening around the same time in a long
+full-suite run") looked causal but wasn't.
+
+Fixed by replacing every `dataFactory.getEmailAddress()` fixture call (5 call sites across
+`AbstractAppTest.java`, `AuthorizationGatingTest.java`, `SchemaRegistryOutageE2ETest.java`, and
+`SignupRequestDTOTest.java`) with a guaranteed-valid `RandomStringUtils.randomAlphabetic(10) +
+"@example.com"` generator, matching 07.1-07 Task 1's established fix pattern for the analogous
+board-name collision bug. `SignupRequestDTOTest.java` had an independent, pre-existing `TODO` comment
+describing this exact flakiness, which corroborated the diagnosis and was resolved by the same fix.
+Symptom 2 (`EventIdGeneratorTest`) is unrelated (confirmed by this investigation, not merely assumed)
+and remains open -- todo retitled and refiled at
+`.planning/todos/pending/2026-08-10-investigate-recurring-eventidgeneratortest-uniqueness-fla.md`.

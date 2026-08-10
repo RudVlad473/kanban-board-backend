@@ -13,7 +13,9 @@ import com.vrudenko.kanban_board.repository.BoardRepository;
 import com.vrudenko.kanban_board.service.UserService;
 import com.vrudenko.kanban_board.support.containers.AbstractKafkaContainerTest;
 import java.time.Duration;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicReference;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.assertj.core.api.Assertions;
 import org.awaitility.Awaitility;
 import org.fluttercode.datafactory.impl.DataFactory;
@@ -131,6 +133,14 @@ class SchemaRegistryOutageE2ETest extends AbstractKafkaContainerTest {
 
     private final DataFactory dataFactory = new DataFactory();
 
+    // dataFactory.getEmailAddress() occasionally draws a multi-word entry from DataFactory's dirty
+    // word corpus (e.g. the literal "or maybe") and concatenates it with a second word with no
+    // separator, producing an email with an embedded space that fails @AppEmail's @Email format
+    // check -- see AbstractAppTest.generateValidEmail()'s Javadoc for the full root-cause writeup.
+    private String generateValidEmail() {
+        return RandomStringUtils.randomAlphabetic(10).toLowerCase(Locale.ROOT) + "@example.com";
+    }
+
     // Attached to the ROOT logger, not KafkaEventPublisher's own -- see this class's Javadoc for
     // why: the failure this test provokes never reaches KafkaEventPublisher's whenComplete
     // callback at all (it is a synchronous throw, caught by Spring's default @Async
@@ -165,7 +175,7 @@ class SchemaRegistryOutageE2ETest extends AbstractKafkaContainerTest {
             UserResponseDTO owningUser =
                     userService.save(
                             SignupRequestDTO.builder()
-                                    .email(dataFactory.getEmailAddress())
+                                    .email(generateValidEmail())
                                     .displayName(
                                             dataFactory.getRandomWord(
                                                     ValidationConstants

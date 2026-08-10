@@ -23,6 +23,7 @@ import jakarta.persistence.EntityManagerFactory;
 import java.util.Locale;
 import java.util.stream.Stream;
 import lombok.Getter;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.fluttercode.datafactory.impl.DataFactory;
 import org.hibernate.SessionFactory;
 import org.junit.jupiter.api.AfterEach;
@@ -219,6 +220,26 @@ public abstract class AbstractAppTest extends AbstractPostgresContainerTest {
         return base + "Aa1!";
     }
 
+    /**
+     * Returns an email value guaranteed to satisfy {@code @AppEmail}'s {@code @Email} format
+     * constraint. Deliberately does NOT use {@code dataFactory.getEmailAddress()}: its word-based
+     * local-part branch draws from the same small, dirty corpus already found (07.1-07 task 1) to
+     * contain literal multi-word phrases lifted from running story text -- e.g. the single array
+     * entry {@code "or maybe"} -- which {@code getEmailAddress()} then concatenates with a second
+     * word with no separator, occasionally producing an email with an embedded space (e.g. {@code
+     * "or maybedreams@ma1lbox.org"}). That fails {@code @Email}'s format check, but
+     * {@code @AppEmail}'s {@code @ReportAsSingleViolation} collapses the failure into the composed
+     * annotation's generic {@code "Email cannot be empty"} message regardless of which
+     * sub-constraint actually failed -- a real, confusing bug in this codebase's own test fixtures,
+     * not in {@code AuthenticationController} or the validation itself. Root-caused via a temporary
+     * diagnostic on {@link AbstractAppMockMvcTest#signinCookie(String, String)} that captured the
+     * exact malformed value from a live failure, and independently confirmed by decompiling {@code
+     * datafactory-0.8.jar}'s {@code DefaultContentDataValues} constant pool.
+     */
+    protected String generateValidEmail() {
+        return RandomStringUtils.randomAlphabetic(10).toLowerCase(Locale.ROOT) + "@example.com";
+    }
+
     protected UserResponseDTO createUser() {
         return createUser(generateValidPassword());
     }
@@ -226,7 +247,7 @@ public abstract class AbstractAppTest extends AbstractPostgresContainerTest {
     protected UserResponseDTO createUser(String password) {
         return userService.save(
                 SignupRequestDTO.builder()
-                        .email(dataFactory.getEmailAddress())
+                        .email(generateValidEmail())
                         .displayName(
                                 dataFactory.getRandomWord(
                                         ValidationConstants.MIN_USER_DISPLAY_NAME_LENGTH))

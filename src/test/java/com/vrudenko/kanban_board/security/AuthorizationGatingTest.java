@@ -506,7 +506,7 @@ public class AuthorizationGatingTest extends AbstractAppMockMvcTest {
             // (never a 401 from the security filter chain itself), not that it succeeds
             var body =
                     SigninRequestDTO.builder()
-                            .email(dataFactory.getEmailAddress())
+                            .email(generateValidEmail())
                             .password(generateValidPassword())
                             .build();
 
@@ -532,7 +532,7 @@ public class AuthorizationGatingTest extends AbstractAppMockMvcTest {
             // arrange
             var body =
                     SignupRequestDTO.builder()
-                            .email(dataFactory.getEmailAddress())
+                            .email(generateValidEmail())
                             .password(generateValidPassword())
                             .displayName(
                                     dataFactory.getRandomWord(
