@@ -4,8 +4,11 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.StreamSupport;
 
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
@@ -59,10 +62,15 @@ public class ActivityReadTest extends AbstractAppMockMvcTest {
     }
 
     private ActivityLogEntity seedRow(String boardId, String userId, Instant createdAt) {
+        return seedRow(boardId, userId, createdAt, ActivityAction.TASK_CREATED);
+    }
+
+    private ActivityLogEntity seedRow(
+            String boardId, String userId, Instant createdAt, ActivityAction action) {
         var entity = new ActivityLogEntity();
         entity.setBoardId(boardId);
         entity.setUserId(userId);
-        entity.setAction(ActivityAction.TASK_CREATED);
+        entity.setAction(action);
         entity.setDetail("{}");
         entity.setEventId(UUID.randomUUID().toString());
         entity.setCreatedAt(createdAt);
@@ -286,6 +294,75 @@ public class ActivityReadTest extends AbstractAppMockMvcTest {
             Assertions.assertThat(response.getStatus()).isEqualTo(HttpStatus.OK.value());
             var body = readBody(response);
             Assertions.assertThat(body.get("pageable").get("pageSize").asInt()).isEqualTo(100);
+        }
+
+        /**
+         * S5E: seeds one row per {@link ActivityAction} value this quick task added (everything
+         * beyond the six the read endpoint already covered), proving the endpoint exposes each new
+         * action string correctly rather than only exercising it at the write/consumer tier.
+         */
+        @Test
+        void shouldReturnEveryNewActivityActionValue_whenSeeded() throws Exception {
+            // arrange
+            Cookie cookie = signinCookie();
+            var boardId = mockPopulatedBoard.getId();
+            var userId = getOwningUser().getId();
+
+            var newActions =
+                    List.of(
+                            ActivityAction.TASK_UPDATED,
+                            ActivityAction.BOARD_UPDATED,
+                            ActivityAction.BOARD_DELETED,
+                            ActivityAction.COLUMN_UPDATED,
+                            ActivityAction.COLUMN_REORDERED,
+                            ActivityAction.SUBTASK_CREATED,
+                            ActivityAction.SUBTASK_UPDATED,
+                            ActivityAction.SUBTASK_DELETED);
+            var base = Instant.now();
+            Map<ActivityAction, String> eventIdByAction =
+                    IntStream.range(0, newActions.size())
+                            .boxed()
+                            .collect(
+                                    Collectors.toMap(
+                                            newActions::get,
+                                            i ->
+                                                    seedRow(
+                                                                    boardId,
+                                                                    userId,
+                                                                    base.plusSeconds(i),
+                                                                    newActions.get(i))
+                                                            .getEventId()
+                                                            .toString()));
+
+            // act
+            var response =
+                    mockMvc.perform(
+                                    get(activityUrl(boardId))
+                                            .cookie(cookie)
+                                            .queryParam("size", "20"))
+                            .andReturn()
+                            .getResponse();
+
+            // assert
+            Assertions.assertThat(response.getStatus()).isEqualTo(HttpStatus.OK.value());
+            var body = readBody(response);
+            Assertions.assertThat(body.get("content")).hasSize(newActions.size());
+
+            Map<String, String> actionByEventId =
+                    StreamSupport.stream(body.get("content").spliterator(), false)
+                            .collect(
+                                    Collectors.toMap(
+                                            item -> item.get("eventId").asText(),
+                                            item -> item.get("action").asText()));
+
+            for (var action : newActions) {
+                var expectedEventId = eventIdByAction.get(action);
+                Assertions.assertThat(actionByEventId)
+                        .as("row for action %s should be present in the response", action)
+                        .containsKey(expectedEventId);
+                Assertions.assertThat(actionByEventId.get(expectedEventId))
+                        .isEqualTo(action.name());
+            }
         }
 
         @Test

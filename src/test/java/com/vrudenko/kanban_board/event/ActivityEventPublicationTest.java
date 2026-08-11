@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -404,6 +405,38 @@ public class ActivityEventPublicationTest extends AbstractAppTest {
      */
     @Nested
     class TransactionalSuppressionTest {
+        /**
+         * S5E's must-have truth: "a rejected mutation — stale version, ownership denial, duplicate
+         * name — publishes nothing, because the transaction never commits." A stale-version update
+         * is the cheapest rejected-mutation case to construct and exercises the
+         * guard-before-publish ordering every S5E publish site depends on (Task 4's action text).
+         */
+        @Test
+        void shouldPublishNothing_whenTaskUpdateRejectedByStaleVersion() {
+            // arrange
+            recorder.clear();
+            var userId = getOwningUser().getId();
+            var taskId = mockPopulatedTask.getId();
+            var staleVersion = mockPopulatedTask.getVersion() - 1;
+            var newTitle = dataFactory.getRandomWord(ValidationConstants.MIN_TASK_TITLE_LENGTH + 2);
+
+            // act
+            var exception =
+                    Assertions.catchException(
+                            () ->
+                                    taskService.updateById(
+                                            userId,
+                                            taskId,
+                                            UpdateTaskRequestDTO.builder()
+                                                    .title(newTitle)
+                                                    .version(staleVersion)
+                                                    .build()));
+
+            // assert
+            Assertions.assertThat(exception).isInstanceOf(OptimisticLockingFailureException.class);
+            Assertions.assertThat(recorder.getRecorded()).isEmpty();
+        }
+
         @Test
         void shouldPublishNothing_whenMutationNeverPersists() {
             // arrange

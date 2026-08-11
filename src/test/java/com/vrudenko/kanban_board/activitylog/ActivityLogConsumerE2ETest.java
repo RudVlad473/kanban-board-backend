@@ -8,12 +8,15 @@ import java.util.UUID;
 import com.vrudenko.kanban_board.entity.ActivityAction;
 import com.vrudenko.kanban_board.entity.ActivityLogEntity;
 import com.vrudenko.kanban_board.event.BoardCreatedEvent;
+import com.vrudenko.kanban_board.event.BoardUpdatedEvent;
 import com.vrudenko.kanban_board.event.ColumnCreatedEvent;
 import com.vrudenko.kanban_board.event.ColumnDeletedEvent;
+import com.vrudenko.kanban_board.event.ColumnReorderedEvent;
 import com.vrudenko.kanban_board.event.SubtaskCreatedEvent;
 import com.vrudenko.kanban_board.event.TaskCreatedEvent;
 import com.vrudenko.kanban_board.event.TaskDeletedEvent;
 import com.vrudenko.kanban_board.event.TaskMovedEvent;
+import com.vrudenko.kanban_board.event.TaskUpdatedEvent;
 import com.vrudenko.kanban_board.repository.ActivityLogRepository;
 import com.vrudenko.kanban_board.support.containers.AbstractKafkaContainerTest;
 
@@ -409,6 +412,108 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
                                                         + taskId
                                                         + "\",\"subtaskId\":\""
                                                         + subtaskId
+                                                        + "\"}");
+                            });
+        }
+
+        /**
+         * S5E per-domain E2E proof (Task 5): one representative new event type per domain reaches a
+         * real {@code activity_log} row through the real broker and registry, complementing the
+         * tracer's {@code SubtaskCreatedEvent} coverage above (the subtask domain) with board,
+         * column and task representatives.
+         */
+        @Test
+        void shouldPersistBoardUpdated_withEmptyDetail() throws Exception {
+            // arrange
+            var eventId = UUID.randomUUID().toString();
+            var event = new BoardUpdatedEvent(eventId, randomId(), randomId(), Instant.now());
+
+            // act
+            sendAndAwaitAck(event);
+
+            // assert
+            Awaitility.await()
+                    .atMost(Duration.ofSeconds(30))
+                    .untilAsserted(
+                            () -> {
+                                var row = findByEventId(eventId);
+                                Assertions.assertThat(row.getAction())
+                                        .isEqualTo(ActivityAction.BOARD_UPDATED);
+                                Assertions.assertThat(row.getDetail()).isEqualTo("{}");
+                            });
+        }
+
+        @Test
+        void
+                shouldPersistColumnReordered_withColumnIdSourcePositionTargetPositionDetail_asStringifiedInts()
+                        throws Exception {
+            // arrange -- fork D-A's first non-opaque-identifier detail values, proven end-to-end
+            // through the real stringify (ActivityLogConsumer) / int wire encoding (Avro) path,
+            // not just the in-memory mapper round trip ActivityEventAvroMapperTest already covers.
+            var eventId = UUID.randomUUID().toString();
+            var columnId = randomId();
+            var sourcePosition = 4;
+            var targetPosition = 1;
+            var event =
+                    new ColumnReorderedEvent(
+                            eventId,
+                            randomId(),
+                            randomId(),
+                            columnId,
+                            sourcePosition,
+                            targetPosition,
+                            Instant.now());
+
+            // act
+            sendAndAwaitAck(event);
+
+            // assert
+            Awaitility.await()
+                    .atMost(Duration.ofSeconds(30))
+                    .untilAsserted(
+                            () -> {
+                                var row = findByEventId(eventId);
+                                Assertions.assertThat(row.getAction())
+                                        .isEqualTo(ActivityAction.COLUMN_REORDERED);
+                                Assertions.assertThat(row.getDetail())
+                                        .isEqualTo(
+                                                "{\"columnId\":\""
+                                                        + columnId
+                                                        + "\",\"sourcePosition\":\""
+                                                        + sourcePosition
+                                                        + "\",\"targetPosition\":\""
+                                                        + targetPosition
+                                                        + "\"}");
+                            });
+        }
+
+        @Test
+        void shouldPersistTaskUpdated_withColumnIdThenTaskIdDetail() throws Exception {
+            // arrange
+            var eventId = UUID.randomUUID().toString();
+            var columnId = randomId();
+            var taskId = randomId();
+            var event =
+                    new TaskUpdatedEvent(
+                            eventId, randomId(), randomId(), columnId, taskId, Instant.now());
+
+            // act
+            sendAndAwaitAck(event);
+
+            // assert
+            Awaitility.await()
+                    .atMost(Duration.ofSeconds(30))
+                    .untilAsserted(
+                            () -> {
+                                var row = findByEventId(eventId);
+                                Assertions.assertThat(row.getAction())
+                                        .isEqualTo(ActivityAction.TASK_UPDATED);
+                                Assertions.assertThat(row.getDetail())
+                                        .isEqualTo(
+                                                "{\"columnId\":\""
+                                                        + columnId
+                                                        + "\",\"taskId\":\""
+                                                        + taskId
                                                         + "\"}");
                             });
         }

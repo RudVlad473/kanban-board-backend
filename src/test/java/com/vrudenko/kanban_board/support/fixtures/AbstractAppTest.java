@@ -21,6 +21,7 @@ import com.vrudenko.kanban_board.service.ColumnService;
 import com.vrudenko.kanban_board.service.TaskService;
 import com.vrudenko.kanban_board.service.UserService;
 import com.vrudenko.kanban_board.support.containers.AbstractPostgresContainerTest;
+import com.vrudenko.kanban_board.support.listeners.RecordingActivityEventListener;
 
 import com.google.common.collect.ImmutableList;
 import jakarta.persistence.EntityManagerFactory;
@@ -52,6 +53,8 @@ public abstract class AbstractAppTest extends AbstractPostgresContainerTest {
     private @Autowired ColumnService columnService;
     private @Autowired TaskService taskService;
     private @Autowired ActivityLogRepository activityLogRepository;
+
+    private @Autowired RecordingActivityEventListener recordingActivityEventListener;
 
     private @Autowired EntityManagerFactory entityManagerFactory;
 
@@ -195,11 +198,23 @@ public abstract class AbstractAppTest extends AbstractPostgresContainerTest {
      * a test-managed {@code @Transactional} rollback, is this codebase's single isolation model
      * (D-02) -- a future author should extend this method for a new FK-less table, not add a second
      * isolation mechanism alongside it.
+     *
+     * <p>The third call clears {@link RecordingActivityEventListener}'s singleton {@code
+     * CopyOnWriteArrayList}, shared across every test class in a JVM fork (S5E). Safe here because
+     * {@link RecordingActivityEventListener#onActivityEvent} carries no {@code @Async} annotation
+     * (confirmed by reading the class, contrasted with {@code KafkaEventPublisher.onActivityEvent},
+     * which does) -- it runs synchronously on the committing thread immediately after commit, so
+     * every event this test method's fixtures and body produced has already been recorded by the
+     * time this {@code @AfterEach} hook runs; nothing queued on another thread can be lost by
+     * clearing here. Every test that asserts on the recorder already clears it in its own arrange
+     * block first, so this addition changes accumulation across the whole run, not what any
+     * individual test observes.
      */
     @AfterEach
     void cleanup() {
         userService.deleteAll();
         activityLogRepository.deleteAll();
+        recordingActivityEventListener.clear();
     }
 
     /**
