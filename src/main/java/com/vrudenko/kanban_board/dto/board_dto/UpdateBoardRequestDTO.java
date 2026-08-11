@@ -23,7 +23,10 @@ public class UpdateBoardRequestDTO implements BaseBoard {
 
     // D-13: required so BoardService.updateById can reject a stale write, matching
     // UpdateColumnRequestDTO/UpdateTaskRequestDTO/UpdateSubtaskRequestDTO's shape. No
-    // atLeastOneFieldPopulated() cross-check -- name is the only independently optional field,
-    // same as UpdateColumnRequestDTO (docs/CODE_STYLE.md rule 6).
+    // atLeastOneFieldPopulated() cross-check -- name is this DTO's only field besides version, so
+    // there is nothing to cross-check it against (docs/CODE_STYLE.md rule 6). As of quick task
+    // 260811-ufu (D-02), this DTO's shape no longer matches UpdateColumnRequestDTO: name here may
+    // genuinely be omitted (a version-only board update is accepted), whereas
+    // UpdateColumnRequestDTO.name is deliberately mandatory -- see that class's Javadoc for why.
     @NotNull private Long version;
 }
