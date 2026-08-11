@@ -6,6 +6,7 @@ import java.util.UUID;
 
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
+import com.vrudenko.kanban_board.dto.subtask_dto.SaveSubtaskRequestDTO;
 import com.vrudenko.kanban_board.dto.subtask_dto.SubtaskResponseDTO;
 import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
@@ -307,7 +308,7 @@ class TaskControllerTest extends AbstractAppTest {
         @Autowired private SubtaskService subtaskService;
 
         @Test
-        void testWithAuthenticatedUser_shouldAddSubtask_whenTaskExists() throws Exception {
+        void testWithAuthenticatedUser_shouldAddSubtask_whenJsonBodyIsPosted() throws Exception {
             // Arrange
             var userId = getOwningUser().getId();
             var boardId = mockPopulatedBoard.getId();
@@ -315,12 +316,15 @@ class TaskControllerTest extends AbstractAppTest {
             var taskId = mockPopulatedTask.getId();
             var url = getTaskPrefix(boardId, columnId) + "/" + taskId + ApiPaths.SUBTASKS;
             var title = dataFactory.getRandomText(ValidationConstants.MIN_SUBTASK_TITLE_LENGTH + 3);
+            var saveDto = SaveSubtaskRequestDTO.builder().title(title).build();
 
             // Act
-            // addSubtaskByTaskId's DTO parameter carries no @RequestBody (see filed todo), so
-            // Spring binds it as a model attribute from request parameters, not a JSON body.
             var response =
-                    mockMvc.perform(post(url).with(user(userId)).param("title", title))
+                    mockMvc.perform(
+                                    post(url)
+                                            .with(user(userId))
+                                            .contentType(APPLICATION_JSON)
+                                            .content(objectMapper.writeValueAsString(saveDto)))
                             .andDo(print())
                             .andExpect(status().isCreated())
                             .andReturn();
@@ -334,6 +338,26 @@ class TaskControllerTest extends AbstractAppTest {
                     .anyMatch(subtask -> subtask.getId().equals(responseBody.getId()));
             Assertions.assertThat(responseBody.getTitle()).isEqualTo(title);
             Assertions.assertThat(response.getResponse().getHeader("Location")).isNotBlank();
+        }
+
+        @Test
+        void
+                testWithAuthenticatedUser_shouldReturnBadRequest_whenTitleIsSentAsQueryParamWithNoBody()
+                        throws Exception {
+            // Arrange
+            var userId = getOwningUser().getId();
+            var boardId = mockPopulatedBoard.getId();
+            var columnId = mockPopulatedColumn.getId();
+            var taskId = mockPopulatedTask.getId();
+            var url = getTaskPrefix(boardId, columnId) + "/" + taskId + ApiPaths.SUBTASKS;
+            var title = dataFactory.getRandomText(ValidationConstants.MIN_SUBTASK_TITLE_LENGTH + 3);
+
+            // Act
+            // Assert
+            mockMvc.perform(post(url).with(user(userId)).param("title", title))
+                    .andDo(print())
+                    .andExpect(status().isBadRequest())
+                    .andReturn();
         }
     }
 }
