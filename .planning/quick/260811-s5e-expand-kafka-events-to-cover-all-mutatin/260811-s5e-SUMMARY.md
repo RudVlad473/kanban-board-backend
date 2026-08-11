@@ -169,7 +169,7 @@ status: complete
 1. **Task 3 (tracer — SubtaskCreatedEvent end-to-end):** `1d06f63` (`feat`)
 2. **Task 4 (expand — remaining 7 event types + publish sites):** `d078bf2` (`feat`)
 3. **Task 5 (test-coverage sweep, recorder-clear fix):** `000f889` (`test`)
-4. **Task 6 (docs/todo reconciliation, STATE.md, close source todo):** *pending, committed immediately after this SUMMARY*
+4. **Task 6 (docs/todo reconciliation, STATE.md, close source todo):** `c15a434` (`docs`)
 
 ## Files Created/Modified
 
