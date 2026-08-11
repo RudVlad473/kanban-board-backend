@@ -3,6 +3,7 @@ package com.vrudenko.kanban_board.dto.subtask_dto;
 import java.util.Optional;
 
 import com.vrudenko.kanban_board.base.entity.BaseSubtask;
+import com.vrudenko.kanban_board.dto.annotation.OptionalNotBlank;
 import com.vrudenko.kanban_board.dto.annotation.SubtaskTitle;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -19,7 +20,7 @@ import lombok.Setter;
 @EqualsAndHashCode
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class UpdateSubtaskRequestDTO implements BaseSubtask {
-    @SubtaskTitle private String title;
+    @SubtaskTitle @OptionalNotBlank private String title;
 
     private Boolean isCompleted;
 

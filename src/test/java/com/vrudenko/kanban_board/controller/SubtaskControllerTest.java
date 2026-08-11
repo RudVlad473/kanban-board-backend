@@ -264,5 +264,32 @@ class SubtaskControllerTest extends AbstractAppTest {
                     .andExpect(status().isBadRequest())
                     .andReturn();
         }
+
+        @Test
+        void testWithAuthenticatedUser_shouldReturnBadRequest_whenTitleIsWhitespaceOnly()
+                throws Exception {
+            // Arrange
+            var userId = getOwningUser().getId();
+            var taskId = mockPopulatedTask.getId();
+            var subtaskId = mockSubtasks.getFirst().getId();
+            var boardId = mockPopulatedBoard.getId();
+            var columnId = mockPopulatedColumn.getId();
+            var url = getSubtaskPrefix(boardId, columnId, taskId) + "/" + subtaskId;
+            var updateDto =
+                    UpdateSubtaskRequestDTO.builder()
+                            .title("   ")
+                            .version(mockSubtasks.getFirst().getVersion())
+                            .build();
+
+            // Act
+            // Assert
+            mockMvc.perform(
+                            put(url).with(user(userId))
+                                    .contentType(APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(updateDto)))
+                    .andDo(print())
+                    .andExpect(status().isBadRequest())
+                    .andReturn();
+        }
     }
 }

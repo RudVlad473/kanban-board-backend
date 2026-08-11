@@ -1,6 +1,9 @@
 package com.vrudenko.kanban_board.dto;
 
 import com.vrudenko.kanban_board.dto.board_dto.UpdateBoardRequestDTO;
+import com.vrudenko.kanban_board.dto.subtask_dto.UpdateSubtaskRequestDTO;
+import com.vrudenko.kanban_board.dto.task_dto.UpdateTaskRequestDTO;
+import com.vrudenko.kanban_board.dto.user_dto.SignupRequestDTO;
 
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
@@ -56,6 +59,116 @@ public class OptionalNotBlankTest {
         void shouldReturnNoViolations_whenNameHasContentPaddedByWhitespace() {
             // arrange
             var dto = UpdateBoardRequestDTO.builder().name(" Valid Name ").version(1L).build();
+
+            // act
+            var violations = validator.validate(dto);
+
+            // assert
+            Assertions.assertThat(violations).isEmpty();
+        }
+    }
+
+    @Nested
+    class UpdateTaskRequestDTOTest {
+        @Test
+        void shouldReturnOneViolationOnTitle_whenTitleIsWhitespaceOnly() {
+            // arrange
+            var dto = UpdateTaskRequestDTO.builder().title("   ").version(1L).build();
+
+            // act
+            var violations = validator.validate(dto);
+
+            // assert
+            Assertions.assertThat(violations).hasSize(1);
+            Assertions.assertThat(
+                            violations.stream().findFirst().get().getPropertyPath().toString())
+                    .isEqualTo("title");
+        }
+
+        @Test
+        void shouldReturnNoViolations_whenTitleIsNullAndDescriptionIsPresent() {
+            // arrange
+            var dto =
+                    UpdateTaskRequestDTO.builder()
+                            .title(null)
+                            .description("Valid Description")
+                            .version(1L)
+                            .build();
+
+            // act
+            var violations = validator.validate(dto);
+
+            // assert
+            Assertions.assertThat(violations).isEmpty();
+        }
+    }
+
+    @Nested
+    class UpdateSubtaskRequestDTOTest {
+        @Test
+        void shouldReturnOneViolationOnTitle_whenTitleIsWhitespaceOnly() {
+            // arrange
+            var dto = UpdateSubtaskRequestDTO.builder().title("   ").version(1L).build();
+
+            // act
+            var violations = validator.validate(dto);
+
+            // assert
+            Assertions.assertThat(violations).hasSize(1);
+            Assertions.assertThat(
+                            violations.stream().findFirst().get().getPropertyPath().toString())
+                    .isEqualTo("title");
+        }
+
+        @Test
+        void shouldReturnNoViolations_whenTitleIsNullAndIsCompletedIsPresent() {
+            // arrange
+            var dto =
+                    UpdateSubtaskRequestDTO.builder()
+                            .title(null)
+                            .isCompleted(true)
+                            .version(1L)
+                            .build();
+
+            // act
+            var violations = validator.validate(dto);
+
+            // assert
+            Assertions.assertThat(violations).isEmpty();
+        }
+    }
+
+    @Nested
+    class SignupRequestDTOTest {
+        @Test
+        void shouldReturnOneViolationOnDisplayName_whenDisplayNameIsWhitespaceOnly() {
+            // arrange
+            var dto =
+                    SignupRequestDTO.builder()
+                            .displayName("   ")
+                            .email("valid.email@example.com")
+                            .password("Valid1Password$")
+                            .build();
+
+            // act
+            var violations = validator.validate(dto);
+
+            // assert
+            Assertions.assertThat(violations).hasSize(1);
+            Assertions.assertThat(
+                            violations.stream().findFirst().get().getPropertyPath().toString())
+                    .isEqualTo("displayName");
+        }
+
+        @Test
+        void shouldReturnNoViolations_whenDisplayNameIsNull() {
+            // arrange
+            var dto =
+                    SignupRequestDTO.builder()
+                            .displayName(null)
+                            .email("valid.email@example.com")
+                            .password("Valid1Password$")
+                            .build();
 
             // act
             var violations = validator.validate(dto);
