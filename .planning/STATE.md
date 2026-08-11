@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-08-03)
 Phase: 07.1 (address-hard-blockers-and-inconsistencies-from-the-frontend) — COMPLETE
 Plan: 9 of 9
 Status: Phase 07.1 complete (9/9 plans, 7 waves); ready to transition to Phase 5 (Infra Migration)
-Last activity: 2026-08-11 — Completed quick task 260811-ffs: Reconfigured Spotless importOrder() to five blank-line-separated groups (java, javax, com.vrudenko first-party, third-party, static last); reformatted 131 Java files via spotlessApply and documented the convention as CODE_STYLE.md rule 10
+Last activity: 2026-08-11 — Completed quick task 260811-h2v: Fixed TOCTOU race in concurrent-session-ceiling enforcement (F6) by measuring that a transaction-scoped advisory lock cannot work, then documenting the accepted bounded overshoot instead, with a real-concurrency regression test
 
 Progress: [█████████░] 85%
 
@@ -194,6 +194,7 @@ Carried from research (address during Phase 4/5 planning):
 | 21 | Split the README's depth into a new docs/ARCHITECTURE.md and trim README to a 116-line front door in standard-readme section order; reverses task 20's inline-depth decision | 2026-08-06 | 245ad63 | | — |
 | 260811-ezy | Fix signin timing side-channel (F1, from the 2026-08-10 /claude-security scan): equalize BCrypt cost on the unknown-email signin branch via a @PostConstruct-derived dummy hash, proven RED-first with a counting-encoder structural test (no Mockito); closed the source todo and updated the ARCHITECTURE.md signin sequence diagram | 2026-08-11 | d8ff685,1951b66,5d70a30 | Verified | [260811-ezy-fix-signin-timing-side-channel-f1-consta](./quick/260811-ezy-fix-signin-timing-side-channel-f1-consta/) |
 | 260811-ffs | Reconfigured Spotless importOrder() to five blank-line-separated groups (java, javax, com.vrudenko first-party, third-party, static last); reformatted 131 Java files via spotlessApply and documented the convention as CODE_STYLE.md rule 10 | 2026-08-11 | 9668ba7,3f4784a | Verified | [260811-ffs-add-import-group-blank-line-separation-t](./quick/260811-ffs-add-import-group-blank-line-separation-t/) |
+| 260811-h2v | Fix TOCTOU race in concurrent-session-ceiling enforcement (F6, from the 2026-08-10 /claude-security scan): measured that a transaction-scoped Postgres advisory lock cannot serialize the race (SPRING_SESSION row not yet visible to another connection when authenticate() returns), so accepted the bounded self-healing overshoot instead — documented in SecurityConfiguration's Javadoc, ARCHITECTURE.md, and CLAUDE.md; added ConcurrentSigninCeilingE2ETest (real-socket concurrency, invariant+range assertions, teeth-checked); closed the source todo | 2026-08-11 | 7f01dbc,f5fb11a | Verified | [260811-h2v-fix-toctou-race-in-concurrent-session-ce](./quick/260811-h2v-fix-toctou-race-in-concurrent-session-ce/) |
 
 ### Roadmap Evolution
 
