@@ -201,6 +201,105 @@ into double-digit seconds *and* a version-controlled, zero-manual-step opt-in be
 `~/.testcontainers.properties`). Until then, the numbers above are the reason this stays off, not
 an assumption.
 
+## Test-suite speed: BCrypt cost factor lowered, fork-level parallelism adopted, in-JVM parallelism and per-tier splitting rejected
+
+Quick task 260811-ixj investigated the pending "test parallelization and other suite speed"
+todo. Measured, not assumed, on this machine (8 CPUs, 7.728 GiB Docker memory):
+
+| Task | Before (1 fork, cost factor 10) | After (2 forks, cost factor 4) | Delta |
+|---|---|---|---|
+| `./gradlew test` | 433.5s avg (440s, 427s), 385 tests | 276.5s avg (283s, 270s), 388 tests | -157.0s / -36.2% |
+| `./gradlew fastTest` | 337.5s avg (334s, 341s), 348 tests | 242.5s avg (233s, 252s), 351 tests | -95.0s / -28.1% |
+
+(388/351 vs. 385/348 is 3 new `PasswordEncoderStrengthTest` methods, not shrinkage — every run
+above is cross-checked against its own test count.) Full run-by-run data, including the
+intermediate lever-1-only numbers and the rejected 4-fork measurements, lives in
+`.planning/quick/260811-ixj-investigate-and-implement-test-suite-spe/260811-ixj-MEASUREMENTS.md`.
+
+**What was pulled — the test-profile BCrypt cost factor (lever 1).** `AbstractAppTest.setup()` ran
+three real BCrypt encodes (`createUser()` x3) at Spring Security's default cost factor of 10 before
+every one of 318 fixture-bearing test methods, plus one more per `signinCookie(` call site (~117
+sites) — measured at ~89s / 37% of total test-execution time, the single largest cost in the suite.
+`BeanConfiguration.passwordEncoder()` now takes an injectable
+`@Value("${security.bcrypt.strength:10}") int strength`, and only
+`src/main/resources/application-test.properties` overrides it, to 4 (`BCryptPasswordEncoder`'s
+minimum permitted value). The fallback of 10 IS the production value, so any deployment that never
+activates the `test` Spring profile — every real deployment — is unchanged; that fallback lives in
+a version-controlled properties file, not a developer's machine, satisfying
+[`docs/CODE_STYLE.md` rule
+8](CODE_STYLE.md#8-test-setup-must-be-fully-automated--never-a-manual-step-for-the-developer).
+`PasswordEncoderStrengthTest` asserts the fallback string and the key's absence from
+`application.properties` reflectively, so an accidental production-side change goes red, not
+unnoticed.
+
+**The security trade-off, stated plainly, not glossed.** The `test` profile now exercises a weaker
+BCrypt cost factor (4) than production (10), so a hypothetical regression that only manifests at
+strength 10 would go unseen by this suite. BCrypt's cost parameter changes only the number of
+key-expansion rounds — never the output format or `matches()` semantics — so this is a theoretical
+rather than practical gap. The structural mitigations: the `@Value` fallback is the production
+value (absence of configuration fails safe), and `PasswordEncoderStrengthTest` asserts both that
+fallback and the key's absence from the default properties file. Neither mitigation covers a
+deploy-time environment variable or `SPRING_APPLICATION_JSON` override setting the key in
+production — that residual is accepted and stated here, not claimed closed, because the property
+name is new and appears nowhere in deployment configuration today.
+
+**What was measured for fork-level parallelism (lever 2), and what was decided.** `maxParallelForks`
+was measured on `fastTest` at 2 and 4, after lever 1 landed (the optimal fork count differs once
+BCrypt's CPU-bound cost is gone, so measuring before would have answered a stale question). 2 forks
+averaged 242.5s (233s, 252s) against a 1-fork average of 285.0s — both runs beat it by far more than
+this project's documented ~18s run-to-run variance. 4 forks averaged 267.0s (277s, 257s) — slower
+than 2 forks, and only one of its two runs cleared the variance bar, so it was not adopted. 2 forks
+was then measured on `test` too (which runs the full Kafka tier, a different container-memory
+profile) and won there as well: 276.5s avg vs. a 370.5s 1-fork baseline, both runs clearing variance
+by 87.5s and 100.5s. `maxParallelForks = 2` is now committed on both `test` and `fastTest` in
+`build.gradle`, with the measured numbers recorded as a comment above each assignment. `forkEvery`
+remains unset (default 0) — a non-zero value restarts the JVM, and therefore the static
+Testcontainers initializer, per class, which on this codebase would be catastrophic rather than
+merely slower. Safe here specifically because each Gradle test-worker fork is a separate JVM with
+its own classloader: `AbstractPostgresContainerTest`'s `static { postgres.start(); }` runs once per
+fork, so N forks means N independent PostgreSQL containers and N independent databases — the D-02
+`@AfterEach`-deletion isolation model, which only ever wipes its own fork's database, is untouched.
+Live container census during both fork-count runs confirmed exactly N `postgres:16` containers (one
+per fork) with no startup or memory failures against this machine's 7.728 GiB Docker budget.
+
+**JUnit 5 in-JVM parallel execution — evaluated, rejected.** `junit.jupiter.execution.parallel.*`
+shares one JVM, one classloader, one static Testcontainers instance, one cached Spring context, and
+therefore one live database across every concurrently-running test — categorically different from
+fork-level parallelism above. Five independent blockers, any one sufficient to reject it: (1)
+`AbstractAppTest.cleanup()`'s `userService.deleteAll()` is an unscoped global wipe — one test's
+`@AfterEach` firing mid-execution of another test destroys that test's fixtures; (2) the
+`countQueries()` helper reads Hibernate's `Statistics.getPrepareStatementCount()`, which is
+`SessionFactory`-global, not per-thread, so any concurrent query pollutes the count every
+query-count assertion in `TaskServiceTest`/`OwnershipVerifierServiceTest` relies on; (3)
+`AbstractKafkaContainerTest.producerSchemaRegistryUrlOverride` is a mutable `volatile` field whose
+own Javadoc names sequential execution as a precondition; (4) every Kafka E2E class shares one
+`kanban.activity` topic and one `activity-log` consumer group, so concurrent classes would consume
+each other's records; (5) positional assertions over shared tables (e.g. `BoardServiceTest`'s
+`findAll().getFirst()`) depend on fixture-creation order staying stable. `@ResourceLock` does not
+rescue this: its shared resource would have to be the database itself, which all 318
+fixture-bearing tests write to, so correct locking re-serializes precisely the 188.4s of
+test-execution time that constitutes the cost — a correct but pointless suite.
+
+**Per-tier Gradle task splitting — evaluated, rejected.** Splitting `test` into per-tier tasks
+(unit / MockMvc / Kafka-backed) is mechanically additive — `fastTest` already proves the pattern —
+but buys no parallelism: Gradle's `--parallel` flag executes tasks from different *subprojects* in
+parallel, and this is a single-project build, so N tier tasks would run sequentially, each paying
+its own JVM startup, its own PostgreSQL container start, and its own Spring context boots. Strictly
+worse than today; `maxParallelForks` above is Gradle's actual supported intra-task parallelism
+mechanism and achieves the same distribute-classes-across-JVMs effect without the multiplied fixed
+costs.
+
+**Remaining headroom, deliberately not taken.** `AbstractAppTest.setup()`'s per-test fixture build
+(31 entities: 3 users, 4 boards, 9 columns, 8 tasks, 7 subtasks) still costs roughly 29s
+suite-wide net of the now-removed BCrypt cost, and ~29 test classes depend on its current shape,
+including positional assertions — trimming it to only what each test needs is a real remaining
+lever but a large refactor, out of this quick task's scope.
+
+**Revisit if:** the remaining ~29s fixture-cost headroom above becomes worth pursuing, or if a
+future Docker/host memory increase makes re-measuring `maxParallelForks` at higher counts (6, 8)
+worthwhile — this session capped exploration at 4 per Gradle's own cores/2 starting-point guidance
+on an 8-CPU machine.
+
 ## What happens if Kafka is unreachable
 
 Task/Board/Column mutations never fail because Kafka is down — the write path to Postgres and the
