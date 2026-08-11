@@ -1,0 +1,44 @@
+# Denylist, not an allowlist (see 260811-nh1-PLAN.md's trade-off matrix): a newly added
+# directory that the Gradle build needs is included by default here, so this file can only ever
+# make the build context slightly larger than necessary, never silently starve `./gradlew
+# bootJar` of an input it reads. Do NOT exclude anything the build actually reads: gradlew,
+# gradle/ (including gradle/wrapper/gradle-wrapper.jar), build.gradle, settings.gradle, src/.
+
+# Version control and agent/planning state -- never read by the build, and .claude/.planning/.gsd
+# routinely hold local worktree state (including live Gradle lock files) that once caused an
+# outright `docker build` failure when a concurrent process held one.
+.git
+.gradle
+.claude
+.planning
+.gsd
+.dev
+
+# Build output -- regenerated fresh inside the build stage; shipping the host's stale copy in
+# would be wasted context transfer at best and stale-artifact confusion at worst.
+build
+
+# Editor/IDE state -- never read by the build.
+.idea
+.vscode
+
+# Repo tooling not read by the Gradle build itself.
+.githooks
+.github
+.gitattributes
+
+# Documentation -- large, frequently-changing, and never consulted by `./gradlew bootJar`.
+docs
+*.md
+CLAUDE-SECURITY-*
+
+# Credentials. build.gradle's git-hooks bootstrap block is already guarded by a
+# rootProject.file('.git').exists() check, so excluding .git above makes it skip cleanly rather
+# than fail -- same idea here: .env* carries DB_USER/DB_PASS and, absent this line, is swept into
+# the build-stage layer by the Dockerfile's `COPY . .` (T-NH1-01). The runtime stage only copies
+# the built jar, so .env never reaches the final image either way, but it still sits in an
+# intermediate/cached build-stage layer without this exclusion -- a real, if modest,
+# credential-hygiene win. This does NOT affect `docker compose up`: Compose reads .env from the
+# HOST for variable substitution, never from the build context, so excluding it here has zero
+# effect on Compose's own env-var resolution.
+.env*

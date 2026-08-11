@@ -139,8 +139,22 @@ dependencies {
     // The kafka-clients exclude exists so Spring Boot's BOM-managed kafka-clients (already
     // pulled in via spring-kafka above) stays the single resolved version on the classpath --
     // without it, Confluent's own transitive kafka-clients could fork the dependency tree.
+    //
+    // The swagger-annotations exclude (todo 2026-08-09-fix-broken-api-docs-swagger-endpoint-
+    // swagger-annotations-ver.md) fixes a real production defect: this dependency's own
+    // transitive kafka-schema-registry-client:7.8.9 depends on the pre-jakarta
+    // io.swagger.core.v3:swagger-annotations:2.1.10, which shares the exact package
+    // (io.swagger.v3.oas.annotations) with io.swagger.core.v3:swagger-annotations-jakarta:2.2.30
+    // that SpringDoc 2.8.8 (below) actually needs. Gradle cannot dedupe them because their
+    // artifact IDs differ, so both landed on the runtime classpath and whichever jar's Parameter
+    // class the JVM classloader happened to load first won -- in practice the older 2.1.10 class,
+    // which is missing the validationGroups() method SpringDoc calls, causing every
+    // GET /api/docs request to 500 with NoSuchMethodError. Removing the pre-jakarta artifact is
+    // safe precisely because swagger-annotations-jakarta supplies the same package and class
+    // names, so kafka-schema-registry-client's references still resolve, just from the other jar.
     implementation('io.confluent:kafka-avro-serializer:7.8.9') {
         exclude group: 'org.apache.kafka', module: 'kafka-clients'
+        exclude group: 'io.swagger.core.v3', module: 'swagger-annotations'
     }
 
     // RedpandaContainer exposes both getBootstrapServers() and getSchemaRegistryAddress()
