@@ -73,3 +73,63 @@ actually waits on locally and what these tables report.
   elapsed-time assertions — confirmed by reading the class before relying on RESEARCH.md's Assumption
   A1, not merely assuming it. A cheaper cost factor changes what the one counted `matches()` call
   costs, not the count itself, so this class needed no change.
+
+## Lever 2: maxParallelForks
+
+Measured on `fastTest` after lever 1 landed (measuring before would have answered a question about
+a tree that no longer exists — the optimal fork count differs once BCrypt's CPU-bound cost is
+removed). `forkEvery` was never set (default 0 -- one JVM handles every class assigned to a fork).
+
+### fastTest at 2 forks
+
+| Run | Duration | Test count | Live container census (mid-run) |
+|---|---|---|---|
+| 1 | 3m 53s (233s) | 351 | 2x `postgres:16`, 1x `redpanda` (2 samples, both showed 1 Redpanda -- `HistoricalActivityEventReconstructorTest` is untagged, see the filed todo) |
+| 2 | 4m 12s (252s) | 351 | not re-censused (same task, same tag filter as run 1) |
+
+No run failed on container startup, port exhaustion, or memory.
+
+### fastTest at 4 forks
+
+| Run | Duration | Test count | Live container census (mid-run) |
+|---|---|---|---|
+| 1 | 4m 37s (277s) | 351 | 4x `postgres:16` (one per fork, confirmed), 1x `redpanda` observed live |
+| 2 | 4m 17s (257s) | 351 | not re-censused |
+
+No run failed on container startup, port exhaustion, or memory -- 4 forks against this machine's
+7.728 GiB Docker budget did not exhaust it, it was simply slower than 2 forks.
+
+### Decision: adopt maxParallelForks = 2 on both `fastTest` and `test`
+
+Baseline (1 fork, after lever 1) averages: `fastTest` 285.0s, `test` 370.5s.
+
+| Fork count | `fastTest` avg | Beats 1-fork avg by (both runs individually) | Adopt? |
+|---|---|---|---|
+| 1 (baseline) | 285.0s | -- | -- |
+| 2 | 242.5s (233s, 252s) | 52.0s and 33.0s -- both > 18s variance | **YES** |
+| 4 | 267.0s (277s, 257s) | 8.0s and 28.0s -- only ONE run > 18s variance | NO |
+
+4 forks is both slower than 2 forks on average (267.0s vs 242.5s) and fails the plan's "beats
+variance on both of its runs" bar (its first run's 8s margin is inside the ~18s variance window),
+so it is not adopted. 2 forks clears that bar decisively on both runs.
+
+`test` was then measured at 2 forks (not at 4 -- 2 already won decisively on `fastTest`, and `test`
+additionally runs the full Kafka tier, a different container-memory profile the plan calls out
+explicitly, so re-testing 4 there would only widen an already-settled gap):
+
+| Task | Run | Duration | Test count |
+|---|---|---|---|
+| `test` @ 2 forks | 1 | 4m 43s (283s) | 388 |
+| `test` @ 2 forks | 2 | 4m 30s (270s) | 388 |
+
+`test` @ 2 forks averages 276.5s against the 1-fork baseline of 370.5s -- both runs beat it by 87.5s
+and 100.5s respectively, both far past the variance bar. Container census mid-run showed exactly 2
+`postgres:16` containers (one per fork); no Redpanda container was observed in either sample taken,
+though `test`'s Kafka-tagged classes are spread across the run and a sample can miss a
+short-lived container. No run failed.
+
+**Decision: `maxParallelForks = 2` is committed on both `fastTest` and `test` in `build.gradle`**,
+with the measured numbers and the reason fork-level parallelism is safe here (each fork is a
+separate JVM, therefore a separate static Testcontainers Postgres instance, therefore an
+independent database -- D-02's `@AfterEach`-deletion isolation model is untouched) recorded as
+comments above each `maxParallelForks` assignment.

@@ -181,6 +181,18 @@ tasks.named('test') {
     useJUnitPlatform {
         excludeTags 'rehearsal'
     }
+    // maxParallelForks = 2 (quick task 260811-ixj, lever 2): measured against this codebase, not
+    // guessed. After lever 1 (BCrypt cost factor, above) landed, `./gradlew test --rerun-tasks`
+    // averaged 370.5s over 2 runs at the Gradle default of 1 fork; at 2 forks it averaged 276.5s
+    // (283s, 270s) -- both runs beat the 1-fork average by far more than this project's
+    // documented ~18s run-to-run variance. Measured at 4 forks too: worse (277s, 267s avg), and
+    // only one of its two runs cleared the variance bar against the 1-fork baseline, so 4 was not
+    // adopted. Safe here specifically because each Gradle test-worker fork is a separate JVM with
+    // its own classloader, so AbstractPostgresContainerTest's `static { postgres.start(); }` runs
+    // once per fork -- N forks means N independent PostgreSQL containers and N independent
+    // databases, so the D-02 `@AfterEach`-deletion isolation model (which only ever wipes its own
+    // fork's database) is untouched. See 260811-ixj-MEASUREMENTS.md for every run.
+    maxParallelForks = 2
 }
 
 // Pre-commit-hook-only fast test gate. `test` itself is untouched above -- CI and
@@ -203,6 +215,26 @@ tasks.register('fastTest', Test) {
     useJUnitPlatform {
         excludeTags 'kafka', 'realSocket'
     }
+    // maxParallelForks = 2 (quick task 260811-ixj, lever 2): measured against this codebase, not
+    // guessed. After lever 1 landed, `./gradlew fastTest --rerun-tasks` averaged 285.0s over 2
+    // runs at the Gradle default of 1 fork; at 2 forks it averaged 242.5s (233s, 252s) -- both
+    // runs beat the 1-fork average by far more than this project's documented ~18s run-to-run
+    // variance. Live container census during a 2-fork run showed exactly 2 PostgreSQL containers
+    // (one per fork) and, since `fastTest` is not Redpanda-free (HistoricalActivityEventReconstructorTest
+    // extends AbstractKafkaContainerTest with no @Tag -- see the todo filed for that), up to 1
+    // Redpanda container observed live against this machine's 7.728 GiB Docker budget; no run
+    // failed on container startup or memory. Measured at 4 forks too: worse (277s, 267s avg) and
+    // only one of its two runs cleared the variance bar against the 1-fork baseline, so 4 was not
+    // adopted. Safe here specifically because each Gradle test-worker fork is a separate JVM with
+    // its own classloader, so AbstractPostgresContainerTest's `static { postgres.start(); }` runs
+    // once per fork -- N forks means N independent PostgreSQL containers and N independent
+    // databases, so the D-02 `@AfterEach`-deletion isolation model (which only ever wipes its own
+    // fork's database) is untouched. See 260811-ixj-MEASUREMENTS.md for every run.
+    maxParallelForks = 2
+    // forkEvery is deliberately left at its default of 0 (one JVM handles every class assigned
+    // to it) -- any non-zero value restarts the JVM per class, and therefore restarts
+    // AbstractPostgresContainerTest's static Testcontainers initializer per class too, which on
+    // this codebase is catastrophic rather than merely slower (260811-ixj-RESEARCH.md).
 }
 
 // --- Schema Registry registration (SCHEMA-01) ---------------------------------
