@@ -202,14 +202,20 @@ preference) stays last-write-wins by explicit decision, not oversight (see below
 
 ## Event-driven activity feed
 
-Board/column/task mutations produce a durable, per-board activity log — built as an event pipeline
-rather than an audit-row write in the request path, so recording history cannot slow down or fail
-the mutation that caused it.
+Board/column/task/subtask mutations produce a durable, per-board activity log — built as an event
+pipeline rather than an audit-row write in the request path, so recording history cannot slow down
+or fail the mutation that caused it. Every mutating operation on a board, column, task or subtask
+either publishes one of these events or is a documented exception (S5E) — the theme-preference
+update is the sole exception, since `ActivityEvent` mandates a non-null `boardId` and a theme
+preference is user-scoped, not board-scoped.
 
-Services publish one of five records implementing the sealed `ActivityEvent` interface through
+Services publish one of 14 records implementing the sealed `ActivityEvent` interface through
 Spring's `ApplicationEventPublisher`. `KafkaEventPublisher` — the only class in `src/main` that
 touches the Kafka client API — picks them up on `@TransactionalEventListener(AFTER_COMMIT)`, so
-nothing is ever published for a transaction that rolled back.
+nothing is ever published for a transaction that rolled back. Only the directly-requested mutation
+on a resource publishes; cascaded child deletes (e.g. a board delete's cascaded columns, tasks and
+subtasks) stay silent by design — see `ColumnService.deleteAllByBoardId`'s Javadoc for the full
+reasoning.
 
 ### Process View — path of a mutation
 
@@ -322,7 +328,7 @@ The failure-path decisions are the substance here:
   default, so an unreachable broker can't turn into a self-inflicted request hang. A failed send is
   logged, never swallowed — the mutation itself already succeeded and returned.
 - **A new event type is a compile error.** `ActivityLogConsumer` switches exhaustively over the
-  sealed interface with no `default` arm, so adding a sixth event record fails the build until the
+  sealed interface with no `default` arm, so adding another event record fails the build until the
   consumer handles it, instead of being silently absorbed at runtime.
 - **Redelivery is absorbed, not retried.** `ActivityLogRecorder` takes an `existsByEventId` fast
   path, and backstops the narrow race between that check and the insert by catching
@@ -344,10 +350,10 @@ The failure-path decisions are the substance here:
 
 ## Schema governance
 
-The five event types are governed by explicit, versioned Avro schemas, because an event topic
+The 14 event types are governed by explicit, versioned Avro schemas, because an event topic
 without one is a distributed-systems liability the moment a producer and consumer deploy apart.
 
-- Five `.avsc` files under `src/main/avro/` are the source of truth, compiled to `SpecificRecord`
+- 14 `.avsc` files under `src/main/avro/` are the source of truth, compiled to `SpecificRecord`
   classes by the Gradle Avro plugin. A mapping layer (`ActivityEventAvroMapper`) converts to and
   from the domain records, so the sealed interface and exhaustive switch above are unaffected by
   the wire format.
@@ -355,7 +361,10 @@ without one is a distributed-systems liability the moment a producer and consume
   the `registerSchemas` Gradle task (`AvroSchemaRegistrar`). A drifted producer fails loudly instead
   of quietly registering an unreviewed schema version.
 - `RecordNameStrategy` subjects the schema by record name rather than topic, which is what lets all
-  five event types coexist as five independently-versioned subjects on one topic.
+  14 event types coexist as 14 independently-versioned subjects on one topic — each new event type
+  added since Phase 4 (S5E) is a brand-new subject at version 1, never a new version of an existing
+  one, so BACKWARD compatibility only ever needed to hold within a subject that has genuinely
+  evolved (only `eventId`'s GAP-07 type change, 2026-08-09, has ever done so).
 - **BACKWARD compatibility is enforced, not assumed** — `SchemaCompatibilityE2ETest` proves the
   registry actually *rejects* an incompatible change, rather than asserting a config value.
 - Failure paths carry their own tests: `SchemaRegistryOutageE2ETest` (a mutation survives a registry

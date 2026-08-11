@@ -78,3 +78,39 @@ If option 2 is taken, it is a one-constant change in `AvroSchemaRegistrar` (`BAC
 plus the `BACKWARD` assertion in `SchemaCompatibilityE2ETest.ConfiguredCompatibilityTest`, and it
 should be done **before** Phase 5 repoints `schema.registry.url` at the production Redpanda registry,
 so the production subjects are created under the final mode rather than migrated into it.
+
+## Correction (quick task 260811-s5e, 2026-08-11) — factual, not a resolution
+
+**Option 2's supporting premise above is now factually false and has been since 2026-08-09.**
+As of commit `11fb2ad` (2026-08-09, `feat(06-07): switch activity-log eventId to a RandFlake-generated
+string`, GAP-07), **all 6 pre-existing `.avsc` schemas were modified** — `eventId`'s Avro type
+changed from `{"type":"string","logicalType":"uuid"}` to plain `"string"` (the underlying Avro wire
+type stayed `string` throughout; only the `uuid` logical-type annotation was dropped). This
+directly contradicts the claim above that "`git log --diff-filter=M -- src/main/avro/` returns
+nothing" and "the schemas... have never been modified" — that was true on 2026-08-06 when this todo
+was filed, and became false three days later, before this todo was ever revisited.
+
+Discovered during 260811-s5e's Task 1 audit (`260811-s5e-FINDINGS.md` Section 3) while adding 8 new
+event types to the `kanban.activity` pipeline. **Whoever picks up this todo next should re-run
+`git log --diff-filter=M -- src/main/avro/` and re-verify current schema history from scratch
+before acting on option 2's "free today" cost claim — do not trust the count above as still
+accurate.** In practice this correction likely does not change option 2's actual cost much: every
+registry instance to date (Testcontainers-backed test runs, local `docker-compose`) has been
+ephemeral or periodically wiped, so no live registry has ever held two coexisting versions of any
+subject — but the "zero modifications, ever" framing that made this look like a uniquely clean,
+zero-audit-cost moment is no longer accurate, and the actual audit (checking whether any subject
+now has more than one version in whatever registry BACKWARD_TRANSITIVE would be evaluated against)
+was not re-run as part of this correction.
+
+**This todo's actual open question (BACKWARD vs. BACKWARD_TRANSITIVE) remains unresolved** — this
+correction only updates option 2's supporting evidence, deliberately, per 260811-s5e's own scope
+boundary (that quick task's audit is not a mandate to resolve every schema-governance question it
+brushes past). 260811-s5e's own new event types (14 subjects total now, up from 6) are unaffected by
+either this correction or by whichever mode is eventually chosen here: under `RecordNameStrategy`
+each is a brand-new subject at version 1, so this todo's non-transitivity concern does not apply to
+any of them — see `260811-s5e-FINDINGS.md` Section 3 for the full reasoning. The one place this
+todo's question would become genuinely live is the deferred `TaskMovedEvent` position-asymmetry
+todo (fork D-E, resolved E1) — filed separately, see
+`.planning/todos/pending/2026-08-11-taskmovedevent-position-asymmetry-not-fixed-in-s5e-fork-d-e.md`
+— since evolving an *existing* subject (option E2 there) is exactly the scenario this todo's
+question governs.

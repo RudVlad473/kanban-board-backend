@@ -303,7 +303,10 @@ protected long countQueries(Runnable action) {
 - Isolation between test *methods* comes from `AbstractAppTest`'s `@AfterEach` cleanup, not from
   the database being recreated: `userService.deleteAll()` (cascading to boards/columns/tasks/
   subtasks) plus a second, explicit `activityLogRepository.deleteAll()` call — `activity_log` has
-  no FK back to `UserEntity` (`V3__add_activity_log.sql`), so the cascade alone cannot reach it.
+  no FK back to `UserEntity` (`V3__add_activity_log.sql`), so the cascade alone cannot reach it —
+  plus a third call, `RecordingActivityEventListener.clear()` (S5E), clearing the shared
+  `CopyOnWriteArrayList` every published `ActivityEvent` this JVM fork has produced accumulates
+  into, not just the DB rows.
 - Isolation between test *runs* comes from the shared PostgreSQL container being fresh (schema
   rebuilt by Flyway from empty) once per JVM run, not per test.
 - No data factories needed for complex scenarios; services create realistic entity graphs
