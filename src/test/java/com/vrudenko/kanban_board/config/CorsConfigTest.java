@@ -1,6 +1,7 @@
 package com.vrudenko.kanban_board.config;
 
 import com.vrudenko.kanban_board.support.containers.AbstractPostgresContainerTest;
+
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

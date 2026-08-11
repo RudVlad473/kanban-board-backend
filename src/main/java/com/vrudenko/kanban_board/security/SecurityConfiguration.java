@@ -1,7 +1,9 @@
 package com.vrudenko.kanban_board.security;
 
-import com.vrudenko.kanban_board.constant.ApiPaths;
 import java.util.List;
+
+import com.vrudenko.kanban_board.constant.ApiPaths;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;

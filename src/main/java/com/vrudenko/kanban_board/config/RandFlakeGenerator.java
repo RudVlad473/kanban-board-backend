@@ -2,6 +2,7 @@ package com.vrudenko.kanban_board.config;
 
 import java.time.Instant;
 import java.util.concurrent.ThreadLocalRandom;
+
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
 import org.hibernate.id.IdentifierGenerator;
 

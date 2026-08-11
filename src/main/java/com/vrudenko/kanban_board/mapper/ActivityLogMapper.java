@@ -2,6 +2,7 @@ package com.vrudenko.kanban_board.mapper;
 
 import com.vrudenko.kanban_board.dto.activity_dto.ActivityLogResponseDTO;
 import com.vrudenko.kanban_board.entity.ActivityLogEntity;
+
 import org.mapstruct.Mapper;
 import org.mapstruct.MappingConstants;
 import org.mapstruct.ReportingPolicy;

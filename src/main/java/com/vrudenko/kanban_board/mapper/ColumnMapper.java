@@ -1,9 +1,11 @@
 package com.vrudenko.kanban_board.mapper;
 
+import java.util.List;
+
 import com.vrudenko.kanban_board.dto.column_dto.ColumnResponseDTO;
 import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
 import com.vrudenko.kanban_board.entity.ColumnEntity;
-import java.util.List;
+
 import org.mapstruct.Mapper;
 import org.mapstruct.MappingConstants;
 import org.mapstruct.ReportingPolicy;

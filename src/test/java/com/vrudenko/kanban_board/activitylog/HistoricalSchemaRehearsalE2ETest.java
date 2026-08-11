@@ -1,14 +1,5 @@
 package com.vrudenko.kanban_board.activitylog;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.vrudenko.kanban_board.constant.KafkaTopics;
-import com.vrudenko.kanban_board.entity.ActivityAction;
-import com.vrudenko.kanban_board.entity.ActivityLogEntity;
-import com.vrudenko.kanban_board.event.ActivityEvent;
-import com.vrudenko.kanban_board.repository.ActivityLogRepository;
-import com.vrudenko.kanban_board.support.containers.AbstractKafkaContainerTest;
-import io.confluent.kafka.serializers.KafkaAvroDeserializer;
-import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -21,6 +12,17 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+
+import com.vrudenko.kanban_board.constant.KafkaTopics;
+import com.vrudenko.kanban_board.entity.ActivityAction;
+import com.vrudenko.kanban_board.entity.ActivityLogEntity;
+import com.vrudenko.kanban_board.event.ActivityEvent;
+import com.vrudenko.kanban_board.repository.ActivityLogRepository;
+import com.vrudenko.kanban_board.support.containers.AbstractKafkaContainerTest;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.confluent.kafka.serializers.KafkaAvroDeserializer;
+import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;

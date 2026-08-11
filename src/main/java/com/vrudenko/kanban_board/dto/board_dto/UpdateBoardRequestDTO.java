@@ -1,8 +1,9 @@
 package com.vrudenko.kanban_board.dto.board_dto;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.vrudenko.kanban_board.base.entity.BaseBoard;
 import com.vrudenko.kanban_board.dto.annotation.BoardName;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 

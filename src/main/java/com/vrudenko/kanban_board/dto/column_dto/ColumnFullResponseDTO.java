@@ -1,9 +1,11 @@
 package com.vrudenko.kanban_board.dto.column_dto;
 
+import java.util.List;
+
 import com.vrudenko.kanban_board.base.entity.BaseColumn;
 import com.vrudenko.kanban_board.base.entity.BaseId;
 import com.vrudenko.kanban_board.dto.task_dto.TaskFullResponseDTO;
-import java.util.List;
+
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;

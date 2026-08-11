@@ -1,11 +1,13 @@
 package com.vrudenko.kanban_board;
 
-import com.vrudenko.kanban_board.config.EventIdGenerator;
-import com.vrudenko.kanban_board.support.containers.AbstractPostgresContainerTest;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import com.vrudenko.kanban_board.config.EventIdGenerator;
+import com.vrudenko.kanban_board.support.containers.AbstractPostgresContainerTest;
+
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

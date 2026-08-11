@@ -1,6 +1,7 @@
 package com.vrudenko.kanban_board.security;
 
 import java.util.ArrayList;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.BadCredentialsException;

@@ -1,9 +1,11 @@
 package com.vrudenko.kanban_board.mapper;
 
+import java.util.List;
+
 import com.vrudenko.kanban_board.dto.subtask_dto.SaveSubtaskRequestDTO;
 import com.vrudenko.kanban_board.dto.subtask_dto.SubtaskResponseDTO;
 import com.vrudenko.kanban_board.entity.SubtaskEntity;
-import java.util.List;
+
 import org.mapstruct.Mapper;
 import org.mapstruct.MappingConstants;
 import org.mapstruct.ReportingPolicy;

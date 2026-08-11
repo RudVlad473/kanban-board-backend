@@ -4,6 +4,7 @@ import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.dto.activity_dto.ActivityLogResponseDTO;
 import com.vrudenko.kanban_board.security.CurrentUserId;
 import com.vrudenko.kanban_board.service.ActivityLogService;
+
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;

@@ -3,6 +3,7 @@ package com.vrudenko.kanban_board.service;
 import com.vrudenko.kanban_board.dto.activity_dto.ActivityLogResponseDTO;
 import com.vrudenko.kanban_board.mapper.ActivityLogMapper;
 import com.vrudenko.kanban_board.repository.ActivityLogRepository;
+
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;

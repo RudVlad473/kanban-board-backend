@@ -5,6 +5,7 @@ import com.vrudenko.kanban_board.dto.user_dto.UpdateThemeRequestDTO;
 import com.vrudenko.kanban_board.dto.user_dto.UserResponseDTO;
 import com.vrudenko.kanban_board.security.CurrentUserId;
 import com.vrudenko.kanban_board.service.UserService;
+
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;

@@ -1,11 +1,5 @@
 package com.vrudenko.kanban_board.activitylog;
 
-import com.vrudenko.kanban_board.constant.KafkaTopics;
-import com.vrudenko.kanban_board.entity.ActivityAction;
-import com.vrudenko.kanban_board.entity.ActivityLogEntity;
-import com.vrudenko.kanban_board.event.TaskMovedEvent;
-import com.vrudenko.kanban_board.repository.ActivityLogRepository;
-import com.vrudenko.kanban_board.support.containers.AbstractKafkaContainerTest;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -20,6 +14,14 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+
+import com.vrudenko.kanban_board.constant.KafkaTopics;
+import com.vrudenko.kanban_board.entity.ActivityAction;
+import com.vrudenko.kanban_board.entity.ActivityLogEntity;
+import com.vrudenko.kanban_board.event.TaskMovedEvent;
+import com.vrudenko.kanban_board.repository.ActivityLogRepository;
+import com.vrudenko.kanban_board.support.containers.AbstractKafkaContainerTest;
+
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;

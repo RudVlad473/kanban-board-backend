@@ -1,12 +1,14 @@
 package com.vrudenko.kanban_board.dto.annotation;
 
+import java.lang.annotation.*;
+
 import com.vrudenko.kanban_board.constant.ValidationConstants;
+
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
 import jakarta.validation.ReportAsSingleViolation;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
-import java.lang.annotation.*;
 
 @Documented
 @Target({ElementType.FIELD})

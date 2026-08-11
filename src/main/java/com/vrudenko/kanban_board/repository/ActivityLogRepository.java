@@ -1,6 +1,7 @@
 package com.vrudenko.kanban_board.repository;
 
 import com.vrudenko.kanban_board.entity.ActivityLogEntity;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;

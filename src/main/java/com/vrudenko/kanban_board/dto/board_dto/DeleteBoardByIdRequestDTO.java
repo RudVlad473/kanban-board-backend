@@ -1,6 +1,7 @@
 package com.vrudenko.kanban_board.dto.board_dto;
 
 import com.vrudenko.kanban_board.base.entity.BaseId;
+
 import jakarta.validation.constraints.NotNull;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;

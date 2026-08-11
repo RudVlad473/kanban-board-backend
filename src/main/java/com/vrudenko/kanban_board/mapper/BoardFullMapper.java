@@ -2,6 +2,7 @@ package com.vrudenko.kanban_board.mapper;
 
 import com.vrudenko.kanban_board.dto.board_dto.BoardFullResponseDTO;
 import com.vrudenko.kanban_board.entity.BoardEntity;
+
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingConstants;

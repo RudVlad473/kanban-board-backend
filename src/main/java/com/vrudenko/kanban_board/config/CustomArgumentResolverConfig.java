@@ -1,7 +1,9 @@
 package com.vrudenko.kanban_board.config;
 
-import com.vrudenko.kanban_board.security.CurrentUserIdResolver;
 import java.util.List;
+
+import com.vrudenko.kanban_board.security.CurrentUserIdResolver;
+
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;

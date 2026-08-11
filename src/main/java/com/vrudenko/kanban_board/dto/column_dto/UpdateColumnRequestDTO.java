@@ -1,8 +1,9 @@
 package com.vrudenko.kanban_board.dto.column_dto;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import com.vrudenko.kanban_board.base.entity.BaseColumn;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;

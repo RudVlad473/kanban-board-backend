@@ -3,6 +3,7 @@ package com.vrudenko.kanban_board.dto.user_dto;
 import com.vrudenko.kanban_board.base.entity.BaseId;
 import com.vrudenko.kanban_board.base.entity.BaseUser;
 import com.vrudenko.kanban_board.entity.ThemePreference;
+
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;

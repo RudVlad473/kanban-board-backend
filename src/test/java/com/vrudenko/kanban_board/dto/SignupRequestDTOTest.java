@@ -1,11 +1,13 @@
 package com.vrudenko.kanban_board.dto;
 
-import com.vrudenko.kanban_board.constant.ValidationConstants;
-import com.vrudenko.kanban_board.dto.user_dto.SignupRequestDTO;
-import jakarta.validation.Validation;
-import jakarta.validation.Validator;
 import java.util.Locale;
 import java.util.Map;
+
+import com.vrudenko.kanban_board.constant.ValidationConstants;
+import com.vrudenko.kanban_board.dto.user_dto.SignupRequestDTO;
+
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.assertj.core.api.Assertions;
 import org.fluttercode.datafactory.impl.DataFactory;

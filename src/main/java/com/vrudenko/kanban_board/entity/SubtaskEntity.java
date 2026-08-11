@@ -1,6 +1,7 @@
 package com.vrudenko.kanban_board.entity;
 
 import com.vrudenko.kanban_board.base.entity.BaseSubtask;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.JoinColumn;

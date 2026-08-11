@@ -1,7 +1,9 @@
 package com.vrudenko.kanban_board.activitylog;
 
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
+import java.time.Duration;
+import java.util.Locale;
+import java.util.concurrent.atomic.AtomicReference;
+
 import com.vrudenko.kanban_board.config.KafkaEventPublisher;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.board_dto.BoardResponseDTO;
@@ -12,9 +14,9 @@ import com.vrudenko.kanban_board.repository.ActivityLogRepository;
 import com.vrudenko.kanban_board.repository.BoardRepository;
 import com.vrudenko.kanban_board.service.UserService;
 import com.vrudenko.kanban_board.support.containers.AbstractKafkaContainerTest;
-import java.time.Duration;
-import java.util.Locale;
-import java.util.concurrent.atomic.AtomicReference;
+
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.assertj.core.api.Assertions;
 import org.awaitility.Awaitility;

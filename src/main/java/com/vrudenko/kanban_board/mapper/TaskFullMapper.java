@@ -2,6 +2,7 @@ package com.vrudenko.kanban_board.mapper;
 
 import com.vrudenko.kanban_board.dto.task_dto.TaskFullResponseDTO;
 import com.vrudenko.kanban_board.entity.TaskEntity;
+
 import org.mapstruct.Mapper;
 import org.mapstruct.MappingConstants;
 import org.mapstruct.ReportingPolicy;

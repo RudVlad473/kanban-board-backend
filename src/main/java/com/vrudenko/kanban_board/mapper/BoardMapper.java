@@ -1,10 +1,12 @@
 package com.vrudenko.kanban_board.mapper;
 
+import java.util.List;
+
 import com.vrudenko.kanban_board.dto.board_dto.BoardResponseDTO;
 import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.board_dto.UpdateBoardRequestDTO;
 import com.vrudenko.kanban_board.entity.BoardEntity;
-import java.util.List;
+
 import org.mapstruct.Mapper;
 import org.mapstruct.MappingConstants;
 import org.mapstruct.ReportingPolicy;
