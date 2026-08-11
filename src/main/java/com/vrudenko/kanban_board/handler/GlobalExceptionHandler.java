@@ -11,6 +11,7 @@ import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.vavr.control.Try;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.validation.ConstraintViolationException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -95,6 +96,16 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(problem.getStatus()).body(problem);
     }
 
+    // quick task 260811-p9c: class-level @Validated (now on every @RestController, see
+    // LayeringArchTest) makes Spring's HandlerMethod.MethodValidationInitializer skip its own
+    // built-in MVC method validation for that controller, routing @PathVariable/@RequestParam
+    // constraint failures through the AOP MethodValidationInterceptor instead -- which raises
+    // jakarta.validation.ConstraintViolationException (handleConstraintViolation below), not this
+    // exception. This arm must not be deleted as dead code even though every controller in this
+    // codebase currently carries @Validated: it is what keeps a constrained handler method a clean
+    // 400 with CONSTRAINT_VIOLATION if it is ever reached without class-level @Validated (Spring
+    // MVC's own built-in path, which this codebase's ArchUnit rule prevents but does not make
+    // structurally impossible for a handler outside @RestController scope).
     @ExceptionHandler(HandlerMethodValidationException.class)
     public ResponseEntity<ProblemDetail> handleMethodValidationException(
             HandlerMethodValidationException ex) {
@@ -116,6 +127,22 @@ public class GlobalExceptionHandler {
         var problem =
                 ProblemDetail.forStatusAndDetail(
                         stringHttpStatusPair.getSecond(), stringHttpStatusPair.getFirst());
+        problem.setProperty(ErrorCode.CODE_PROPERTY, ErrorCode.CONSTRAINT_VIOLATION.name());
+
+        return ResponseEntity.status(problem.getStatus()).body(problem);
+    }
+
+    // quick task 260811-p9c: closes a pre-existing latent defect, not one introduced by this
+    // change -- measured empirically (see 260811-p9c-SUMMARY.md) that a blank/malformed
+    // @PathVariable @NotBlank on an already-@Validated controller (BoardController, before this
+    // task the only one) raised this exception unhandled, falling through to the Exception.class
+    // catch-all below and surfacing as a 500 on trivially-craftable input. Now that every
+    // @RestController carries class-level @Validated (LayeringArchTest), this is the arm that keeps
+    // that path-variable-constraint failure a clean 400 with CONSTRAINT_VIOLATION everywhere.
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ProblemDetail> handleConstraintViolation(
+            ConstraintViolationException ex) {
+        var problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
         problem.setProperty(ErrorCode.CODE_PROPERTY, ErrorCode.CONSTRAINT_VIOLATION.name());
 
         return ResponseEntity.status(problem.getStatus()).body(problem);

@@ -511,20 +511,16 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
         // succeed) and MAX + 1 (must be a 400 field error) -- proving the constraint sits exactly
         // where ValidationConstants says it does, not merely that some limit exists.
         //
-        // Two of this application's seven controllers (BoardController, UserController,
-        // ActivityController) carry a class-level @Validated; the other four (ColumnController,
-        // TaskController, SubtaskController, TaskMoveController) do not. That asymmetry changes
-        // WHICH exception Spring throws for the exact same kind of @Valid @RequestBody field
-        // failure: @Validated-carrying controllers throw MethodArgumentNotValidException (this
-        // plan's converged VALIDATION_FAILED code, with a per-field "errors" map), while the
-        // others throw HandlerMethodValidationException (the pre-existing CONSTRAINT_VIOLATION
-        // code, with no "errors" map) -- discovered empirically while writing this group, not
-        // assumed. Both are still clean 400s, matching D-16's "clean rejection" claim; only the
-        // envelope shape differs. Each case below asserts the code its own controller ACTUALLY
-        // returns, and this finding is recorded in this plan's SUMMARY as a real, pre-existing
-        // envelope inconsistency this plan's test-only scope does not fix (verification's "no
-        // production code changed" constraint applies) -- not something this class introduces or
-        // papers over.
+        // Quick task 260811-p9c converged the VALIDATION_FAILED vs CONSTRAINT_VIOLATION split
+        // this comment used to describe: all seven controller/ classes now carry class-level
+        // @Validated (enforced by LayeringArchTest), so a @Valid @RequestBody field-constraint
+        // failure -- the case exercised below -- throws MethodArgumentNotValidException and
+        // returns VALIDATION_FAILED with a per-field "errors" map identically everywhere, not
+        // just on the three controllers (BoardController, UserController, ActivityController)
+        // that carried @Validated before this task. CONSTRAINT_VIOLATION remains the code for
+        // the OTHER kind of failure -- a @PathVariable @NotBlank constraint violation -- covered
+        // separately by MalformedPathVariable below and by
+        // ErrorEnvelopeConsistencyTest#PathVariableConstraintEnvelope.
 
         private String lettersOfLength(int length) {
             return "A".repeat(length);
@@ -638,10 +634,10 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
         }
 
         @Test
-        void shouldRejectWithConstraintViolation_whenTaskTitleExceedsMaxLengthByOne()
+        void shouldRejectWithValidationFailed_whenTaskTitleExceedsMaxLengthByOne()
                 throws Exception {
-            // arrange: this creation route is on ColumnController, which is NOT @Validated -- see
-            // this group's class comment for why the code differs from Board/Column name above
+            // arrange: this creation route is on ColumnController, which now carries @Validated
+            // like every other controller (260811-p9c) -- same envelope as Board/Column name above
             var cookie = signinCookie();
             var boardId = mockPopulatedBoard.getId();
             var columnId = mockPopulatedColumn.getId();
@@ -659,7 +655,8 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
                                                             .description("boundary test")
                                                             .build())))
                     .andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.code").value("CONSTRAINT_VIOLATION"));
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.errors.title").exists());
         }
 
         @Test
@@ -685,9 +682,10 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
         }
 
         @Test
-        void shouldRejectWithConstraintViolation_whenTaskDescriptionExceedsMaxLengthByOne()
+        void shouldRejectWithValidationFailed_whenTaskDescriptionExceedsMaxLengthByOne()
                 throws Exception {
-            // arrange
+            // arrange: ColumnController now carries @Validated (260811-p9c) -- same envelope as
+            // every other controller
             var cookie = signinCookie();
             var boardId = mockPopulatedBoard.getId();
             var columnId = mockPopulatedColumn.getId();
@@ -705,7 +703,8 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
                                                             .description(description)
                                                             .build())))
                     .andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.code").value("CONSTRAINT_VIOLATION"));
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.errors.description").exists());
         }
 
         @Test
@@ -733,9 +732,10 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
         }
 
         @Test
-        void shouldRejectWithConstraintViolation_whenSubtaskTitleExceedsMaxLengthByOne()
+        void shouldRejectWithValidationFailed_whenSubtaskTitleExceedsMaxLengthByOne()
                 throws Exception {
-            // arrange: SubtaskController is also not @Validated -- same envelope as Task above
+            // arrange: SubtaskController now carries @Validated (260811-p9c) -- same envelope as
+            // Task above
             var cookie = signinCookie();
             var boardId = mockPopulatedBoard.getId();
             var columnId = mockPopulatedColumn.getId();
@@ -755,7 +755,8 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
                                                             .version(subtask.getVersion())
                                                             .build())))
                     .andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.code").value("CONSTRAINT_VIOLATION"));
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.errors.title").exists());
         }
     }
 
