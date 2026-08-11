@@ -3,8 +3,11 @@ package com.vrudenko.kanban_board.security;
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.dto.user_dto.SigninRequestDTO;
 import com.vrudenko.kanban_board.dto.user_dto.SignupRequestDTO;
+import com.vrudenko.kanban_board.entity.UserEntity;
+import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
 import com.vrudenko.kanban_board.service.UserService;
 import io.vavr.control.Try;
+import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -18,6 +21,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.context.SecurityContextHolderStrategy;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.validation.annotation.Validated;
@@ -36,8 +40,29 @@ public class AuthenticationController {
             SecurityContextHolder.getContextHolderStrategy();
     private final SecurityContextRepository securityContextRepository;
     private final SessionAuthenticationStrategy sessionAuthenticationStrategy;
+    private final PasswordEncoder passwordEncoder;
 
     @Autowired private UserService userService;
+
+    private static final String INVALID_CREDENTIALS_MESSAGE = "Invalid username or password";
+
+    // Fixed plaintext hashed once at startup (see equalizerHash below) purely to give the
+    // unknown-email signin branch a real BCrypt comparison to perform. Never compared against
+    // any real user's credentials.
+    private static final String EQUALIZER_PLAINTEXT = "signin-timing-equalizer";
+
+    // Written exactly once, in initializeEqualizerHash() below, which runs during container
+    // initialization -- happens-before any request is served -- and is read-only thereafter.
+    // No synchronization is needed for that reason, and this field must not be "tidied" into a
+    // constant (D-01): deriving it from the injected PasswordEncoder bean is what makes its
+    // BCrypt work factor automatically track whatever strength BeanConfiguration configures,
+    // instead of freezing today's cost into a source literal that could silently drift from it.
+    private String equalizerHash;
+
+    @PostConstruct
+    private void initializeEqualizerHash() {
+        equalizerHash = passwordEncoder.encode(EQUALIZER_PLAINTEXT);
+    }
 
     // only these authentication routes yield session cookie
     @PostMapping(ApiPaths.SIGNIN)
@@ -45,9 +70,26 @@ public class AuthenticationController {
             @Valid @RequestBody SigninRequestDTO dto,
             HttpServletRequest request,
             HttpServletResponse response) {
+        UserEntity user;
         try {
-            var user = userService.findByEmail(dto.getEmail());
+            user = userService.findByEmail(dto.getEmail());
+        } catch (AppEntityNotFoundException e) {
+            // Closes finding F1 (2026-08-10 /claude-security scan): without this, an unknown
+            // email fast-fails with zero BCrypt work while a registered email below always pays
+            // one, so response *latency* enumerated registered accounts even though D-08 already
+            // made the response *body* byte-identical. Performing the same comparison here makes
+            // both branches pay the same dominant cost. The result is intentionally discarded --
+            // this call exists for its cost, not its answer, and must not be removed as dead
+            // code. Residual, not a full fix: the registered-email path below still performs one
+            // extra indexed DB read (loadUserByUsername), sub-millisecond against BCrypt's tens
+            // of milliseconds -- this narrows the channel by a large constant factor, it does not
+            // make the endpoint provably constant-time.
+            passwordEncoder.matches(dto.getPassword(), equalizerHash);
 
+            throw new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE);
+        }
+
+        try {
             var successfullyAuthenticated =
                     authenticate(user.getId(), dto.getPassword(), request, response);
 
@@ -55,7 +97,7 @@ public class AuthenticationController {
                 throw new AccessDeniedException("Was not able to sign in");
             }
         } catch (Exception e) {
-            throw new BadCredentialsException("Invalid username or password");
+            throw new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE);
         }
 
         return ResponseEntity.ok().build();
@@ -84,7 +126,7 @@ public class AuthenticationController {
                 throw new AccessDeniedException("Was not able to sign up");
             }
         } catch (Exception e) {
-            throw new BadCredentialsException("Invalid username or password");
+            throw new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE);
         }
 
         return ResponseEntity.created(URI.create(request.getRequestURI())).build();
