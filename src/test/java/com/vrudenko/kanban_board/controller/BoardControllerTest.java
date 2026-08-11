@@ -27,6 +27,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -263,6 +264,43 @@ public class BoardControllerTest extends AbstractAppTest {
                                     .content(objectMapper.writeValueAsString(saveDTO)))
                     .andDo(print())
                     .andExpect(status().isNotFound());
+        }
+
+        // Regression test for 260811-qru finding F-04: SaveColumnRequestDTO.name's @Size
+        // constraint carried the wrong message constant (ValidationConstants.
+        // NAME_LENGTH_VALIDATION_MESSAGE, the board-name-flavored text with board-name
+        // bounds 1-64) instead of COLUMN_NAME_LENGTH_VALIDATION_MESSAGE (column bounds
+        // 3-32) -- confirmed live (unlike the sibling SubtaskTitle mismatch, F-05, this
+        // field is not wrapped in a composed @ReportAsSingleViolation annotation, so the
+        // wrong message text really does reach the client).
+        @Test
+        void testWithAuthenticatedUser_shouldReturnColumnSpecificMessage_whenNameIsTooShort()
+                throws Exception {
+            // Arrange
+            var userId = getOwningUser().getId();
+            var boardId = mockPopulatedBoard.getId();
+            var url = getBoardPrefix() + "/" + boardId + ApiPaths.COLUMNS;
+            var saveDTO =
+                    SaveColumnRequestDTO.builder()
+                            .name(
+                                    dataFactory.getRandomText(
+                                            ValidationConstants.MIN_COLUMN_NAME_LENGTH - 1))
+                            .build();
+
+            // Act
+            // Assert
+            mockMvc.perform(
+                            post(url)
+                                    .with(user(userId))
+                                    .contentType(APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(saveDTO)))
+                    .andDo(print())
+                    .andExpect(status().isBadRequest())
+                    .andExpect(
+                            jsonPath("$.errors.name")
+                                    .value(
+                                            ValidationConstants
+                                                    .COLUMN_NAME_LENGTH_VALIDATION_MESSAGE));
         }
     }
 }

@@ -18,6 +18,6 @@ public class SaveColumnRequestDTO implements BaseColumn {
     @NotBlank(message = "Column name cannot be empty") @Size(
             min = ValidationConstants.MIN_COLUMN_NAME_LENGTH,
             max = ValidationConstants.MAX_COLUMN_NAME_LENGTH,
-            message = ValidationConstants.NAME_LENGTH_VALIDATION_MESSAGE)
+            message = ValidationConstants.COLUMN_NAME_LENGTH_VALIDATION_MESSAGE)
     private String name;
 }
