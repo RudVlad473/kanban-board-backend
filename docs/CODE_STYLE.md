@@ -375,6 +375,84 @@ public TaskResponseDTO updateById(String userId, String taskId, UpdateTaskReques
 }
 ```
 
+### 10. Import blocks are grouped java / javax / com.vrudenko / third-party / static, one blank line between groups
+
+Every `.java` file's import block is organized into five groups, each separated by exactly one blank line, in this fixed order: `java.*`, `javax.*`, `com.vrudenko.*` (first-party), everything else third-party (`jakarta.*`, `org.springframework.*`, `io.*`, `com.github.*`, `com.fasterxml.*`, and so on), then static imports last. `build.gradle`'s `spotless { java { importOrder(...) } }` call is the enforcing mechanism — it names the five groups explicitly (`importOrder('java', 'javax', 'com.vrudenko', '', '\\#')`, where the `''` catch-all group is everything not otherwise matched and the doubled-backslash `'\\#'` is Groovy's escaping for Spotless's literal static-import token). The `javax.*` group currently matches zero imports in this codebase — Spring Boot 3 uses `jakarta.*` throughout — and is retained deliberately as future-proofing rather than removed as dead configuration.
+
+A developer never hand-maintains these blocks: `./gradlew spotlessApply` (and the `.githooks/pre-commit` hook, which runs it automatically) rewrites every import block to this shape on every commit. Hand-ordering imports to match is unnecessary and will be silently overwritten.
+
+**Why:** unlike rules 1-9, this one is mechanically enforced — `./gradlew spotlessCheck` genuinely rejects imports in the wrong group or missing a blank-line separator, which puts it outside this file's own preamble scope of "judgement calls Spotless cannot check." It is recorded here anyway because the build enforces *what* the order is but nothing about *why* first-party (`com.vrudenko.*`) sits third, ahead of third-party, rather than after it in the more common first-party-last convention some contributors expect. That placement is a deliberate choice, not an accident Spotless happened to produce, and a contributor unaware of that would be tempted to "correct" it toward the more familiar ordering — which `spotlessCheck` would then reject, with no explanation of why visible anywhere in the build script itself. Recording the rationale here, next to the other judgement-level conventions, is what makes the choice legible instead of just enforced.
+
+Discouraged (single undifferentiated ASCII-sorted block, static imports first — the pre-reformat shape of `TaskControllerTest.java`):
+
+```java
+import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.vrudenko.kanban_board.constant.ApiPaths;
+import com.vrudenko.kanban_board.constant.ValidationConstants;
+import com.vrudenko.kanban_board.dto.subtask_dto.SubtaskResponseDTO;
+import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
+import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
+import com.vrudenko.kanban_board.dto.task_dto.UpdateTaskRequestDTO;
+import com.vrudenko.kanban_board.service.SubtaskService;
+import com.vrudenko.kanban_board.support.fixtures.AbstractAppTest;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import org.apache.commons.collections4.ListUtils;
+import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.web.servlet.MockMvc;
+```
+
+Preferred (post-reformat content of the same file — java, com.vrudenko, third-party, static, one blank line between each group):
+
+```java
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import com.vrudenko.kanban_board.constant.ApiPaths;
+import com.vrudenko.kanban_board.constant.ValidationConstants;
+import com.vrudenko.kanban_board.dto.subtask_dto.SubtaskResponseDTO;
+import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
+import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
+import com.vrudenko.kanban_board.dto.task_dto.UpdateTaskRequestDTO;
+import com.vrudenko.kanban_board.service.SubtaskService;
+import com.vrudenko.kanban_board.support.fixtures.AbstractAppTest;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.commons.collections4.ListUtils;
+import org.assertj.core.api.Assertions;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.web.servlet.MockMvc;
+
+import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+```
+
+`TaskControllerTest` is the reference — its import block is one of the few files in the codebase exercising four of the five groups (java, com.vrudenko, third-party, static) at once.
+
 ## Adding a rule
 
 New rules are appended as a new `###` section under `## Rules`, numbered with the next integer. Each rule must carry the same three parts: a rule statement, a bolded **Why** line, and a bad-vs-good code example.
