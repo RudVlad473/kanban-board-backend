@@ -6,6 +6,7 @@ import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.RestController;
 
 import static com.tngtech.archunit.core.domain.JavaCall.Predicates.target;
@@ -13,10 +14,11 @@ import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPac
 import static com.tngtech.archunit.core.domain.properties.HasName.Predicates.name;
 import static com.tngtech.archunit.core.domain.properties.HasOwner.Predicates.With.owner;
 import static com.tngtech.archunit.lang.conditions.ArchConditions.callMethodWhere;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 /**
- * Turns two rules this repository currently enforces only by convention and code review into
+ * Turns three rules this repository currently enforces only by convention and code review into
  * build-failing checks:
  *
  * <ol>
@@ -24,10 +26,12 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
  *   <li>The domain services must load entities through their own ownership-verified {@code
  *       findById(userId, id)}, never through a direct {@code repository.findById(id)} (see
  *       docs/CODE_STYLE.md rule 2).
+ *   <li>Every {@code @RestController} must carry class-level {@code
+ *       org.springframework.validation.annotation.Validated} (see docs/CODE_STYLE.md rule 11).
  * </ol>
  *
- * <p>Both rules are declared on this single {@code @AnalyzeClasses} class so they share one cached
- * import of the {@code com.vrudenko.kanban_board} class graph — the import, not the rule
+ * <p>All three rules are declared on this single {@code @AnalyzeClasses} class so they share one
+ * cached import of the {@code com.vrudenko.kanban_board} class graph — the import, not the rule
  * evaluation, is the expensive part of running an ArchUnit test. {@link
  * ImportOption.DoNotIncludeTests} keeps the test source set itself out of the imported graph.
  *
@@ -99,4 +103,27 @@ public class LayeringArchTest {
                                     + " downstream call's id from the raw path-variable parameter"
                                     + " instead of the verified entity, nor other unverified loaders"
                                     + " such as a hand-written repository.findByX query.");
+
+    @ArchTest
+    static final ArchRule rest_controllers_must_carry_class_level_validated =
+            classes()
+                    .that()
+                    .areAnnotatedWith(RestController.class)
+                    .should()
+                    .beAnnotatedWith(Validated.class)
+                    .because(
+                            "class-level @Validated does not merely enable extra validation — it"
+                                    + " decides which exception Spring throws for a @Valid @RequestBody"
+                                    + " field-constraint failure, and therefore which error envelope the"
+                                    + " client receives (quick task 260811-p9c). A @RestController"
+                                    + " carrying @Validated throws MethodArgumentNotValidException,"
+                                    + " which GlobalExceptionHandler converts to VALIDATION_FAILED with a"
+                                    + " per-field errors map; one missing @Validated throws"
+                                    + " HandlerMethodValidationException instead, converted to"
+                                    + " CONSTRAINT_VIOLATION with no errors map — silently reopening the"
+                                    + " envelope split 260811-p9c closed. The areAnnotatedWith(RestController.class)"
+                                    + " selector (rather than a package glob) is what brings"
+                                    + " AuthenticationController into scope even though it lives in the"
+                                    + " security package rather than controller, mirroring the first rule"
+                                    + " above.");
 }

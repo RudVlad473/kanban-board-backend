@@ -453,6 +453,41 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 `TaskControllerTest` is the reference — its import block is one of the few files in the codebase exercising four of the five groups (java, com.vrudenko, third-party, static) at once.
 
+### 11. Every `@RestController` carries class-level `@Validated`
+
+Every `@RestController` class — including `AuthenticationController`, which lives in the `security` package rather than `controller` — must carry class-level `org.springframework.validation.annotation.Validated`, even on controllers with no currently-constrained `@PathVariable`/`@RequestParam`. This is mechanically enforced by `src/test/java/com/vrudenko/kanban_board/architecture/LayeringArchTest.java`'s `rest_controllers_must_carry_class_level_validated` rule, which fails `./gradlew test` for any `@RestController` missing the annotation.
+
+**Why:** the annotation does not merely *add* validation — its presence decides *which exception Spring throws* for a `@Valid @RequestBody` field-constraint failure, and therefore which error envelope the client receives. A controller carrying `@Validated` throws `MethodArgumentNotValidException`, which `GlobalExceptionHandler` converts to `VALIDATION_FAILED` with a per-field `errors` map; the same kind of failure on a controller missing `@Validated` instead throws `HandlerMethodValidationException`, converted to `CONSTRAINT_VIOLATION` with no `errors` map. Quick task 260811-p9c discovered this split empirically — three of seven controllers carried `@Validated` and four did not, so a frontend built against `$.errors.<field>` silently got nothing to render on four of seven controllers even though every response looked uniform at a glance (a single closed `code` enum). This rule, plus the ArchUnit guard that enforces it, is what keeps that split from silently reopening the next time a controller is added.
+
+Discouraged:
+
+```java
+@RestController
+@RequestMapping(ApiPaths.BOARDS + ApiPaths.BOARD_ID + ApiPaths.COLUMNS)
+@PreAuthorize("isAuthenticated()")
+public class ColumnController {
+    // a @Valid @RequestBody failure here throws HandlerMethodValidationException,
+    // not MethodArgumentNotValidException -- CONSTRAINT_VIOLATION, no errors map
+}
+```
+
+Preferred:
+
+```java
+import org.springframework.validation.annotation.Validated;
+
+@RestController
+@RequestMapping(ApiPaths.BOARDS + ApiPaths.BOARD_ID + ApiPaths.COLUMNS)
+@Validated
+@PreAuthorize("isAuthenticated()")
+public class ColumnController {
+    // a @Valid @RequestBody failure here throws MethodArgumentNotValidException --
+    // VALIDATION_FAILED, with a populated $.errors.<field> map
+}
+```
+
+`BoardController` is the original reference for this pattern; `LayeringArchTest` is the enforcing mechanism.
+
 ## Adding a rule
 
 New rules are appended as a new `###` section under `## Rules`, numbered with the next integer. Each rule must carry the same three parts: a rule statement, a bolded **Why** line, and a bad-vs-good code example.

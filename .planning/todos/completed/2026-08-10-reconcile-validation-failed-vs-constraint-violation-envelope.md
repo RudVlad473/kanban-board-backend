@@ -69,3 +69,29 @@ Either way, add or extend regression coverage (this phase's `InjectionAttemptTes
 positioned to catch a regression here) asserting the SAME code/shape across at least one
 `@Validated` and one non-`@Validated` controller, so a future controller added without `@Validated`
 doesn't silently reopen this split.
+
+## Resolution (quick task 260811-p9c, 2026-08-11)
+
+**Option 1** was taken: class-level `@Validated` added to `ColumnController`, `TaskController`,
+`SubtaskController`, and `TaskMoveController`, converging all seven `controller/` classes (plus
+`AuthenticationController`) onto `MethodArgumentNotValidException`/`VALIDATION_FAILED`/`errors` map
+for `@Valid @RequestBody` field failures.
+
+The todo's own caveat — "verify this doesn't also change validation behavior for method-level
+`@PathVariable @NotBlank` constraints on these same controllers" — was measured empirically before
+any `src/main` edit (`ErrorEnvelopeConsistencyTest`, committed as this task's Task 1 measurement),
+not assumed either way. The measurement confirmed the caveat's concern was real and worse than
+scoped: the already-`@Validated` `BoardController`'s blank-path-variable case degraded to a
+**500** (unhandled `jakarta.validation.ConstraintViolationException`), not merely a wrong error
+code. Adding `@Validated` to the four target controllers reproduced the same 500 on them. Fixed by
+adding a `ConstraintViolationException` arm to `GlobalExceptionHandler` (kept alongside the
+existing `HandlerMethodValidationException` arm, documented as still load-bearing for any handler
+reached without class-level `@Validated`), closing this as a pre-existing latent defect on
+`BoardController`/`UserController`/`ActivityController` that predates this task, not one it
+introduced.
+
+A third `LayeringArchTest` `@ArchTest` rule (`rest_controllers_must_carry_class_level_validated`)
+and `docs/CODE_STYLE.md` rule 11 make the split structurally unreopenable — a future
+`@RestController` added without `@Validated` now fails the build. See
+`.planning/quick/260811-p9c-reconcile-validation-failed-vs-constrain/260811-p9c-SUMMARY.md` for the
+full measurement table and test-count accounting.
