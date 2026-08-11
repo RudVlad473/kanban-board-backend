@@ -1,6 +1,7 @@
 package com.vrudenko.kanban_board;
 
 import com.vrudenko.kanban_board.support.containers.AbstractPostgresContainerTest;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 

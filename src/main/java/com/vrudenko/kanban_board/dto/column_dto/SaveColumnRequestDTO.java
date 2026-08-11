@@ -2,6 +2,7 @@ package com.vrudenko.kanban_board.dto.column_dto;
 
 import com.vrudenko.kanban_board.base.entity.BaseColumn;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Builder;

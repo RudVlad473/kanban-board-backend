@@ -1,10 +1,8 @@
 package com.vrudenko.kanban_board;
 
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import java.util.Comparator;
+import java.util.List;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.column_dto.ColumnResponseDTO;
@@ -16,9 +14,9 @@ import com.vrudenko.kanban_board.entity.ColumnEntity;
 import com.vrudenko.kanban_board.repository.ColumnRepository;
 import com.vrudenko.kanban_board.repository.TaskRepository;
 import com.vrudenko.kanban_board.support.fixtures.AbstractAppMockMvcTest;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
-import java.util.Comparator;
-import java.util.List;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -28,6 +26,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 /**
  * Plan 04's board-scoped mirror of {@code TaskOrderingTest}: proves column creation assigns

@@ -1,6 +1,7 @@
 package com.vrudenko.kanban_board.exception;
 
 import java.util.Locale;
+
 import org.springframework.security.access.AccessDeniedException;
 
 public class AppAccessDeniedException extends AccessDeniedException {

@@ -1,6 +1,7 @@
 package com.vrudenko.kanban_board.security;
 
 import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
+
 import org.springframework.core.MethodParameter;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;

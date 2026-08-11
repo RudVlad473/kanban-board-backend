@@ -1,7 +1,9 @@
 package com.vrudenko.kanban_board.config;
 
-import com.vrudenko.kanban_board.constant.KafkaTopics;
 import java.util.LinkedHashMap;
+
+import com.vrudenko.kanban_board.constant.KafkaTopics;
+
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;

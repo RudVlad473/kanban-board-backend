@@ -1,6 +1,7 @@
 package com.vrudenko.kanban_board.service;
 
-import com.google.common.annotations.VisibleForTesting;
+import java.util.List;
+
 import com.vrudenko.kanban_board.dto.board_dto.BoardResponseDTO;
 import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.user_dto.SignupRequestDTO;
@@ -12,8 +13,9 @@ import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
 import com.vrudenko.kanban_board.mapper.UserMapper;
 import com.vrudenko.kanban_board.repository.BoardRepository;
 import com.vrudenko.kanban_board.repository.UserRepository;
+
+import com.google.common.annotations.VisibleForTesting;
 import jakarta.transaction.Transactional;
-import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;

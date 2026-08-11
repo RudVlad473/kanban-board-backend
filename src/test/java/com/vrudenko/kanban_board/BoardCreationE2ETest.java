@@ -1,6 +1,12 @@
 package com.vrudenko.kanban_board;
 
-import static io.restassured.RestAssured.given;
+import java.util.Arrays;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
@@ -10,14 +16,8 @@ import com.vrudenko.kanban_board.dto.board_dto.UpdateBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.user_dto.SigninRequestDTO;
 import com.vrudenko.kanban_board.service.BoardService;
 import com.vrudenko.kanban_board.support.fixtures.AbstractAppE2ETest;
+
 import io.restassured.http.ContentType;
-import java.util.Arrays;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
@@ -26,6 +26,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.util.Pair;
 import org.springframework.http.HttpStatus;
+
+import static io.restassured.RestAssured.given;
 
 /**
  * Tracer proving GAP-01 end to end: a POST to the boards collection route runs through the

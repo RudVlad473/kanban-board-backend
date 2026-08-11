@@ -7,6 +7,7 @@ import com.vrudenko.kanban_board.event.ColumnDeletedEvent;
 import com.vrudenko.kanban_board.event.TaskCreatedEvent;
 import com.vrudenko.kanban_board.event.TaskDeletedEvent;
 import com.vrudenko.kanban_board.event.TaskMovedEvent;
+
 import org.apache.avro.specific.SpecificRecord;
 import org.springframework.stereotype.Component;
 

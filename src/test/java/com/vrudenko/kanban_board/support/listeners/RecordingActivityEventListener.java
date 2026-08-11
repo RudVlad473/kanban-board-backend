@@ -1,8 +1,10 @@
 package com.vrudenko.kanban_board.support.listeners;
 
-import com.vrudenko.kanban_board.event.ActivityEvent;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+
+import com.vrudenko.kanban_board.event.ActivityEvent;
+
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;

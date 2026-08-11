@@ -1,16 +1,18 @@
 package com.vrudenko.kanban_board.config;
 
+import java.io.IOException;
+import java.util.List;
+
 import com.vrudenko.kanban_board.event.avro.AvroBoardCreatedEvent;
 import com.vrudenko.kanban_board.event.avro.AvroColumnCreatedEvent;
 import com.vrudenko.kanban_board.event.avro.AvroColumnDeletedEvent;
 import com.vrudenko.kanban_board.event.avro.AvroTaskCreatedEvent;
 import com.vrudenko.kanban_board.event.avro.AvroTaskDeletedEvent;
 import com.vrudenko.kanban_board.event.avro.AvroTaskMovedEvent;
+
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
-import java.io.IOException;
-import java.util.List;
 import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

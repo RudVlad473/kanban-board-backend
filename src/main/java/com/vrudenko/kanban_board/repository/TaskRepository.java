@@ -1,7 +1,9 @@
 package com.vrudenko.kanban_board.repository;
 
-import com.vrudenko.kanban_board.entity.TaskEntity;
 import java.util.List;
+
+import com.vrudenko.kanban_board.entity.TaskEntity;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;

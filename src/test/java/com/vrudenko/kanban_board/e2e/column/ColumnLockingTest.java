@@ -1,12 +1,11 @@
 package com.vrudenko.kanban_board.e2e.column;
 
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.dto.column_dto.ColumnResponseDTO;
 import com.vrudenko.kanban_board.dto.column_dto.UpdateColumnRequestDTO;
 import com.vrudenko.kanban_board.support.fixtures.AbstractAppMockMvcTest;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -16,6 +15,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
 @SpringBootTest
 @AutoConfigureMockMvc

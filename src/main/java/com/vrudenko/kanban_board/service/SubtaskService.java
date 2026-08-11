@@ -1,5 +1,8 @@
 package com.vrudenko.kanban_board.service;
 
+import java.util.List;
+import java.util.Optional;
+
 import com.vrudenko.kanban_board.dto.subtask_dto.SaveSubtaskRequestDTO;
 import com.vrudenko.kanban_board.dto.subtask_dto.SubtaskResponseDTO;
 import com.vrudenko.kanban_board.dto.subtask_dto.UpdateSubtaskRequestDTO;
@@ -7,10 +10,9 @@ import com.vrudenko.kanban_board.entity.SubtaskEntity;
 import com.vrudenko.kanban_board.entity.TaskEntity;
 import com.vrudenko.kanban_board.mapper.SubtaskMapper;
 import com.vrudenko.kanban_board.repository.SubtaskRepository;
+
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
-import java.util.List;
-import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;

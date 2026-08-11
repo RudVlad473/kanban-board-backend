@@ -1,5 +1,9 @@
 package com.vrudenko.kanban_board.service;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.user_dto.UpdateThemeRequestDTO;
@@ -7,9 +11,7 @@ import com.vrudenko.kanban_board.dto.user_dto.UserResponseDTO;
 import com.vrudenko.kanban_board.entity.ThemePreference;
 import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
 import com.vrudenko.kanban_board.support.fixtures.AbstractAppTest;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;

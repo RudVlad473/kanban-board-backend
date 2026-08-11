@@ -5,6 +5,7 @@ import com.vrudenko.kanban_board.dto.task_dto.MoveTaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
 import com.vrudenko.kanban_board.security.CurrentUserId;
 import com.vrudenko.kanban_board.service.TaskService;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.beans.factory.annotation.Autowired;

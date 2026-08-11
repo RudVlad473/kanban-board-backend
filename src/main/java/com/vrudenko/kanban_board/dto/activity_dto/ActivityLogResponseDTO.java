@@ -1,7 +1,9 @@
 package com.vrudenko.kanban_board.dto.activity_dto;
 
-import com.vrudenko.kanban_board.entity.ActivityAction;
 import java.time.Instant;
+
+import com.vrudenko.kanban_board.entity.ActivityAction;
+
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;

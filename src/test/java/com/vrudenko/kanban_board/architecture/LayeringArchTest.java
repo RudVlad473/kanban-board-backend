@@ -1,12 +1,5 @@
 package com.vrudenko.kanban_board.architecture;
 
-import static com.tngtech.archunit.core.domain.JavaCall.Predicates.target;
-import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage;
-import static com.tngtech.archunit.core.domain.properties.HasName.Predicates.name;
-import static com.tngtech.archunit.core.domain.properties.HasOwner.Predicates.With.owner;
-import static com.tngtech.archunit.lang.conditions.ArchConditions.callMethodWhere;
-import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
-
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaCall;
 import com.tngtech.archunit.core.importer.ImportOption;
@@ -14,6 +7,13 @@ import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
 import org.springframework.web.bind.annotation.RestController;
+
+import static com.tngtech.archunit.core.domain.JavaCall.Predicates.target;
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage;
+import static com.tngtech.archunit.core.domain.properties.HasName.Predicates.name;
+import static com.tngtech.archunit.core.domain.properties.HasOwner.Predicates.With.owner;
+import static com.tngtech.archunit.lang.conditions.ArchConditions.callMethodWhere;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 /**
  * Turns two rules this repository currently enforces only by convention and code review into

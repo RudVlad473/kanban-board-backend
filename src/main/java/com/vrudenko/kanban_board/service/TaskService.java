@@ -1,7 +1,9 @@
 package com.vrudenko.kanban_board.service;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.primitives.Ints;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+
 import com.vrudenko.kanban_board.config.EventIdGenerator;
 import com.vrudenko.kanban_board.dto.subtask_dto.SaveSubtaskRequestDTO;
 import com.vrudenko.kanban_board.dto.subtask_dto.SubtaskResponseDTO;
@@ -16,11 +18,11 @@ import com.vrudenko.kanban_board.event.TaskDeletedEvent;
 import com.vrudenko.kanban_board.event.TaskMovedEvent;
 import com.vrudenko.kanban_board.mapper.TaskMapper;
 import com.vrudenko.kanban_board.repository.TaskRepository;
+
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.primitives.Ints;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.OptimisticLockingFailureException;

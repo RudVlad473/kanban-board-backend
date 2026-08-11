@@ -2,6 +2,7 @@ package com.vrudenko.kanban_board.dto.column_dto;
 
 import com.vrudenko.kanban_board.base.entity.BaseColumn;
 import com.vrudenko.kanban_board.base.entity.BaseId;
+
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;

@@ -1,9 +1,5 @@
 package com.vrudenko.kanban_board.activitylog;
 
-import com.vrudenko.kanban_board.constant.KafkaTopics;
-import com.vrudenko.kanban_board.event.TaskMovedEvent;
-import com.vrudenko.kanban_board.repository.ActivityLogRepository;
-import com.vrudenko.kanban_board.support.containers.AbstractKafkaContainerTest;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -13,6 +9,12 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
+
+import com.vrudenko.kanban_board.constant.KafkaTopics;
+import com.vrudenko.kanban_board.event.TaskMovedEvent;
+import com.vrudenko.kanban_board.repository.ActivityLogRepository;
+import com.vrudenko.kanban_board.support.containers.AbstractKafkaContainerTest;
+
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;

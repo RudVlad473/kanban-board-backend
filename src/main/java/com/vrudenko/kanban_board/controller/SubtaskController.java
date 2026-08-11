@@ -1,13 +1,15 @@
 package com.vrudenko.kanban_board.controller;
 
+import java.util.List;
+
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.dto.subtask_dto.SubtaskResponseDTO;
 import com.vrudenko.kanban_board.dto.subtask_dto.UpdateSubtaskRequestDTO;
 import com.vrudenko.kanban_board.security.CurrentUserId;
 import com.vrudenko.kanban_board.service.SubtaskService;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
-import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;

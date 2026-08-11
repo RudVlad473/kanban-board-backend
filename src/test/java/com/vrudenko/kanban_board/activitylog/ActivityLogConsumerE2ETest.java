@@ -1,5 +1,10 @@
 package com.vrudenko.kanban_board.activitylog;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.UUID;
+
 import com.vrudenko.kanban_board.entity.ActivityAction;
 import com.vrudenko.kanban_board.entity.ActivityLogEntity;
 import com.vrudenko.kanban_board.event.BoardCreatedEvent;
@@ -10,10 +15,7 @@ import com.vrudenko.kanban_board.event.TaskDeletedEvent;
 import com.vrudenko.kanban_board.event.TaskMovedEvent;
 import com.vrudenko.kanban_board.repository.ActivityLogRepository;
 import com.vrudenko.kanban_board.support.containers.AbstractKafkaContainerTest;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.UUID;
+
 import org.assertj.core.api.Assertions;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Nested;

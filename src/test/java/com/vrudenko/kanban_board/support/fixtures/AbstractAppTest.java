@@ -1,6 +1,8 @@
 package com.vrudenko.kanban_board.support.fixtures;
 
-import com.google.common.collect.ImmutableList;
+import java.util.Locale;
+import java.util.stream.Stream;
+
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.annotation.Password;
 import com.vrudenko.kanban_board.dto.board_dto.BoardResponseDTO;
@@ -19,9 +21,9 @@ import com.vrudenko.kanban_board.service.ColumnService;
 import com.vrudenko.kanban_board.service.TaskService;
 import com.vrudenko.kanban_board.service.UserService;
 import com.vrudenko.kanban_board.support.containers.AbstractPostgresContainerTest;
+
+import com.google.common.collect.ImmutableList;
 import jakarta.persistence.EntityManagerFactory;
-import java.util.Locale;
-import java.util.stream.Stream;
 import lombok.Getter;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.fluttercode.datafactory.impl.DataFactory;

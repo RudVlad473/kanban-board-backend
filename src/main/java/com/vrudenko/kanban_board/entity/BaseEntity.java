@@ -2,6 +2,7 @@ package com.vrudenko.kanban_board.entity;
 
 import com.vrudenko.kanban_board.base.entity.BaseId;
 import com.vrudenko.kanban_board.config.RandFlakeId;
+
 import jakarta.persistence.Id;
 import jakarta.persistence.MappedSuperclass;
 import lombok.Getter;

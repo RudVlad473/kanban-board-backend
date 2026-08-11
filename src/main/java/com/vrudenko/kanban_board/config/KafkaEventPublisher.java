@@ -3,6 +3,7 @@ package com.vrudenko.kanban_board.config;
 import com.vrudenko.kanban_board.constant.KafkaTopics;
 import com.vrudenko.kanban_board.event.ActivityEvent;
 import com.vrudenko.kanban_board.event.avro.ActivityEventAvroMapper;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;

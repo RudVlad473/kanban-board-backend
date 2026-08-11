@@ -1,15 +1,16 @@
 package com.vrudenko.kanban_board.support.fixtures;
 
-import static io.restassured.RestAssured.given;
-
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.dto.user_dto.SigninRequestDTO;
+
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.data.util.Pair;
+
+import static io.restassured.RestAssured.given;
 
 public abstract class AbstractAppE2ETest extends AbstractAppTest {
     /** Env variables */

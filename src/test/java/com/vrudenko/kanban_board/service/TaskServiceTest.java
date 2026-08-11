@@ -1,5 +1,7 @@
 package com.vrudenko.kanban_board.service;
 
+import java.util.UUID;
+
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.subtask_dto.SaveSubtaskRequestDTO;
 import com.vrudenko.kanban_board.dto.subtask_dto.SubtaskResponseDTO;
@@ -11,7 +13,7 @@ import com.vrudenko.kanban_board.entity.TaskEntity;
 import com.vrudenko.kanban_board.exception.AppAccessDeniedException;
 import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
 import com.vrudenko.kanban_board.support.fixtures.AbstractAppTest;
-import java.util.UUID;
+
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

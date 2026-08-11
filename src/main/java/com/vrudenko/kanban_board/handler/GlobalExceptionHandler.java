@@ -1,14 +1,16 @@
 package com.vrudenko.kanban_board.handler;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.HashMap;
+import java.util.Map;
+
 import com.vrudenko.kanban_board.constant.ErrorCode;
 import com.vrudenko.kanban_board.exception.AppAccessDeniedException;
 import com.vrudenko.kanban_board.exception.AppDuplicateResourceException;
 import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.vavr.control.Try;
 import jakarta.persistence.EntityNotFoundException;
-import java.util.HashMap;
-import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;

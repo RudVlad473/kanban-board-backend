@@ -27,7 +27,17 @@ spotless {
         googleJavaFormat().aosp()
         target 'src/**/*.java'
         formatAnnotations()
-        importOrder()
+
+        // Explicit 5-group import order, each group blank-line separated: java.*, javax.*,
+        // com.vrudenko.* (first-party), everything else third-party (the '' catch-all --
+        // jakarta.*, org.springframework.*, io.*, com.github.*, com.fasterxml.*, ...), then
+        // static imports last. The doubled backslash in '\\#' is Groovy string-escaping
+        // producing the single literal token '\#' that Spotless's ImportSorterImpl actually
+        // matches static imports on (verified against spotless-lib-3.0.2.jar's constant pool).
+        // The javax group currently matches zero imports -- Spring Boot 3 uses jakarta.* --
+        // and is retained as deliberate future-proofing, not a mistake to tidy away.
+        importOrder('java', 'javax', 'com.vrudenko', '', '\\#')
+
         removeUnusedImports()
     }
 }

@@ -1,5 +1,9 @@
 package com.vrudenko.kanban_board.event.avro;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.UUID;
+
 import com.vrudenko.kanban_board.event.ActivityEvent;
 import com.vrudenko.kanban_board.event.BoardCreatedEvent;
 import com.vrudenko.kanban_board.event.ColumnCreatedEvent;
@@ -7,9 +11,7 @@ import com.vrudenko.kanban_board.event.ColumnDeletedEvent;
 import com.vrudenko.kanban_board.event.TaskCreatedEvent;
 import com.vrudenko.kanban_board.event.TaskDeletedEvent;
 import com.vrudenko.kanban_board.event.TaskMovedEvent;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.UUID;
+
 import org.apache.avro.Schema;
 import org.apache.avro.specific.SpecificRecord;
 import org.assertj.core.api.Assertions;

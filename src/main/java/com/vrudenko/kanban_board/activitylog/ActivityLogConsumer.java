@@ -1,6 +1,7 @@
 package com.vrudenko.kanban_board.activitylog;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.LinkedHashMap;
+
 import com.vrudenko.kanban_board.constant.KafkaTopics;
 import com.vrudenko.kanban_board.entity.ActivityAction;
 import com.vrudenko.kanban_board.entity.ActivityLogEntity;
@@ -12,7 +13,8 @@ import com.vrudenko.kanban_board.event.TaskCreatedEvent;
 import com.vrudenko.kanban_board.event.TaskDeletedEvent;
 import com.vrudenko.kanban_board.event.TaskMovedEvent;
 import com.vrudenko.kanban_board.event.avro.ActivityEventAvroMapper;
-import java.util.LinkedHashMap;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.avro.specific.SpecificRecord;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;

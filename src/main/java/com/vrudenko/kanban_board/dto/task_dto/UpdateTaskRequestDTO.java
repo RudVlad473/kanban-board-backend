@@ -1,12 +1,14 @@
 package com.vrudenko.kanban_board.dto.task_dto;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
+import java.util.Optional;
+
 import com.vrudenko.kanban_board.base.entity.BaseTask;
 import com.vrudenko.kanban_board.dto.annotation.Description;
 import com.vrudenko.kanban_board.dto.annotation.TaskTitle;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotNull;
-import java.util.Optional;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;

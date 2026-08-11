@@ -2,6 +2,7 @@ package com.vrudenko.kanban_board.mapper;
 
 import com.vrudenko.kanban_board.dto.column_dto.ColumnFullResponseDTO;
 import com.vrudenko.kanban_board.entity.ColumnEntity;
+
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingConstants;

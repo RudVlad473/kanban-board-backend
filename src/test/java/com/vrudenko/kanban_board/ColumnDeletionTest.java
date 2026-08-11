@@ -1,6 +1,6 @@
 package com.vrudenko.kanban_board;
 
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import java.util.UUID;
 
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
@@ -14,8 +14,8 @@ import com.vrudenko.kanban_board.service.BoardService;
 import com.vrudenko.kanban_board.service.ColumnService;
 import com.vrudenko.kanban_board.service.TaskService;
 import com.vrudenko.kanban_board.support.fixtures.AbstractAppMockMvcTest;
+
 import jakarta.servlet.http.Cookie;
-import java.util.UUID;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -24,6 +24,8 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.web.servlet.MockMvc;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 
 /**
  * Tracer proving GAP-02's cascade end to end: a real HTTP DELETE travels controller to ownership
