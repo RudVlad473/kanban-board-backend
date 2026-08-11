@@ -20,10 +20,17 @@ public sealed interface ActivityEvent
         permits TaskCreatedEvent,
                 TaskMovedEvent,
                 TaskDeletedEvent,
+                TaskUpdatedEvent,
                 BoardCreatedEvent,
+                BoardUpdatedEvent,
+                BoardDeletedEvent,
                 ColumnCreatedEvent,
                 ColumnDeletedEvent,
-                SubtaskCreatedEvent {
+                ColumnUpdatedEvent,
+                ColumnReorderedEvent,
+                SubtaskCreatedEvent,
+                SubtaskUpdatedEvent,
+                SubtaskDeletedEvent {
     String eventId();
 
     String userId();

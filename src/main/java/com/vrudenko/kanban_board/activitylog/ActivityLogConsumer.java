@@ -7,12 +7,19 @@ import com.vrudenko.kanban_board.entity.ActivityAction;
 import com.vrudenko.kanban_board.entity.ActivityLogEntity;
 import com.vrudenko.kanban_board.event.ActivityEvent;
 import com.vrudenko.kanban_board.event.BoardCreatedEvent;
+import com.vrudenko.kanban_board.event.BoardDeletedEvent;
+import com.vrudenko.kanban_board.event.BoardUpdatedEvent;
 import com.vrudenko.kanban_board.event.ColumnCreatedEvent;
 import com.vrudenko.kanban_board.event.ColumnDeletedEvent;
+import com.vrudenko.kanban_board.event.ColumnReorderedEvent;
+import com.vrudenko.kanban_board.event.ColumnUpdatedEvent;
 import com.vrudenko.kanban_board.event.SubtaskCreatedEvent;
+import com.vrudenko.kanban_board.event.SubtaskDeletedEvent;
+import com.vrudenko.kanban_board.event.SubtaskUpdatedEvent;
 import com.vrudenko.kanban_board.event.TaskCreatedEvent;
 import com.vrudenko.kanban_board.event.TaskDeletedEvent;
 import com.vrudenko.kanban_board.event.TaskMovedEvent;
+import com.vrudenko.kanban_board.event.TaskUpdatedEvent;
 import com.vrudenko.kanban_board.event.avro.ActivityEventAvroMapper;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -100,8 +107,18 @@ public class ActivityLogConsumer {
                 ids.put("taskId", e.taskId());
                 yield new ActionAndDetailIds(ActivityAction.TASK_DELETED, ids);
             }
+            case TaskUpdatedEvent e -> {
+                var ids = new LinkedHashMap<String, String>();
+                ids.put("columnId", e.columnId());
+                ids.put("taskId", e.taskId());
+                yield new ActionAndDetailIds(ActivityAction.TASK_UPDATED, ids);
+            }
             case BoardCreatedEvent e ->
                     new ActionAndDetailIds(ActivityAction.BOARD_CREATED, new LinkedHashMap<>());
+            case BoardUpdatedEvent e ->
+                    new ActionAndDetailIds(ActivityAction.BOARD_UPDATED, new LinkedHashMap<>());
+            case BoardDeletedEvent e ->
+                    new ActionAndDetailIds(ActivityAction.BOARD_DELETED, new LinkedHashMap<>());
             case ColumnCreatedEvent e -> {
                 var ids = new LinkedHashMap<String, String>();
                 ids.put("columnId", e.columnId());
@@ -112,11 +129,42 @@ public class ActivityLogConsumer {
                 ids.put("columnId", e.columnId());
                 yield new ActionAndDetailIds(ActivityAction.COLUMN_DELETED, ids);
             }
+            case ColumnUpdatedEvent e -> {
+                var ids = new LinkedHashMap<String, String>();
+                ids.put("columnId", e.columnId());
+                yield new ActionAndDetailIds(ActivityAction.COLUMN_UPDATED, ids);
+            }
+            case ColumnReorderedEvent e -> {
+                // First non-opaque-identifier detail values in this codebase (fork D-A, resolved
+                // A1): sourcePosition/targetPosition are ints, stringified here and parsed back by
+                // HistoricalActivityEventReconstructor with the exact inverse conversion.
+                var ids = new LinkedHashMap<String, String>();
+                ids.put("columnId", e.columnId());
+                ids.put("sourcePosition", String.valueOf(e.sourcePosition()));
+                ids.put("targetPosition", String.valueOf(e.targetPosition()));
+                yield new ActionAndDetailIds(ActivityAction.COLUMN_REORDERED, ids);
+            }
             case SubtaskCreatedEvent e -> {
                 var ids = new LinkedHashMap<String, String>();
                 ids.put("taskId", e.taskId());
                 ids.put("subtaskId", e.subtaskId());
                 yield new ActionAndDetailIds(ActivityAction.SUBTASK_CREATED, ids);
+            }
+            case SubtaskUpdatedEvent e -> {
+                // isCompleted is a stringified boolean (fork D-B, resolved B2) -- the second
+                // non-opaque-identifier detail value in this codebase, alongside
+                // ColumnReorderedEvent's positions above.
+                var ids = new LinkedHashMap<String, String>();
+                ids.put("taskId", e.taskId());
+                ids.put("subtaskId", e.subtaskId());
+                ids.put("isCompleted", String.valueOf(e.isCompleted()));
+                yield new ActionAndDetailIds(ActivityAction.SUBTASK_UPDATED, ids);
+            }
+            case SubtaskDeletedEvent e -> {
+                var ids = new LinkedHashMap<String, String>();
+                ids.put("taskId", e.taskId());
+                ids.put("subtaskId", e.subtaskId());
+                yield new ActionAndDetailIds(ActivityAction.SUBTASK_DELETED, ids);
             }
         };
     }

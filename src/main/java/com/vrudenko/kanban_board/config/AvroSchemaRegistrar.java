@@ -4,12 +4,19 @@ import java.io.IOException;
 import java.util.List;
 
 import com.vrudenko.kanban_board.event.avro.AvroBoardCreatedEvent;
+import com.vrudenko.kanban_board.event.avro.AvroBoardDeletedEvent;
+import com.vrudenko.kanban_board.event.avro.AvroBoardUpdatedEvent;
 import com.vrudenko.kanban_board.event.avro.AvroColumnCreatedEvent;
 import com.vrudenko.kanban_board.event.avro.AvroColumnDeletedEvent;
+import com.vrudenko.kanban_board.event.avro.AvroColumnReorderedEvent;
+import com.vrudenko.kanban_board.event.avro.AvroColumnUpdatedEvent;
 import com.vrudenko.kanban_board.event.avro.AvroSubtaskCreatedEvent;
+import com.vrudenko.kanban_board.event.avro.AvroSubtaskDeletedEvent;
+import com.vrudenko.kanban_board.event.avro.AvroSubtaskUpdatedEvent;
 import com.vrudenko.kanban_board.event.avro.AvroTaskCreatedEvent;
 import com.vrudenko.kanban_board.event.avro.AvroTaskDeletedEvent;
 import com.vrudenko.kanban_board.event.avro.AvroTaskMovedEvent;
+import com.vrudenko.kanban_board.event.avro.AvroTaskUpdatedEvent;
 
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -19,7 +26,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Registers all 7 Avro schemas (D-03) against a Confluent-API-compatible Schema Registry, setting
+ * Registers all 14 Avro schemas (D-03) against a Confluent-API-compatible Schema Registry, setting
  * BACKWARD compatibility (D-02, SCHEMA-04) explicitly on each subject before that subject's first
  * version is registered.
  *
@@ -57,15 +64,22 @@ public final class AvroSchemaRegistrar {
                     AvroTaskCreatedEvent.getClassSchema(),
                     AvroTaskMovedEvent.getClassSchema(),
                     AvroTaskDeletedEvent.getClassSchema(),
+                    AvroTaskUpdatedEvent.getClassSchema(),
                     AvroBoardCreatedEvent.getClassSchema(),
+                    AvroBoardUpdatedEvent.getClassSchema(),
+                    AvroBoardDeletedEvent.getClassSchema(),
                     AvroColumnCreatedEvent.getClassSchema(),
                     AvroColumnDeletedEvent.getClassSchema(),
-                    AvroSubtaskCreatedEvent.getClassSchema());
+                    AvroColumnUpdatedEvent.getClassSchema(),
+                    AvroColumnReorderedEvent.getClassSchema(),
+                    AvroSubtaskCreatedEvent.getClassSchema(),
+                    AvroSubtaskUpdatedEvent.getClassSchema(),
+                    AvroSubtaskDeletedEvent.getClassSchema());
 
     private AvroSchemaRegistrar() {}
 
     /**
-     * Registers all 7 schemas against {@code schemaRegistryUrl}, explicitly setting BACKWARD
+     * Registers all 14 schemas against {@code schemaRegistryUrl}, explicitly setting BACKWARD
      * compatibility on each subject first. Idempotent: re-running this against an
      * already-configured registry is a no-op, since registering an unchanged schema returns the
      * existing schema id and re-setting an unchanged compatibility level is itself a no-op write —

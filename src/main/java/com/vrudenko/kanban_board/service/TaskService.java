@@ -16,6 +16,7 @@ import com.vrudenko.kanban_board.entity.TaskEntity;
 import com.vrudenko.kanban_board.event.TaskCreatedEvent;
 import com.vrudenko.kanban_board.event.TaskDeletedEvent;
 import com.vrudenko.kanban_board.event.TaskMovedEvent;
+import com.vrudenko.kanban_board.event.TaskUpdatedEvent;
 import com.vrudenko.kanban_board.mapper.TaskMapper;
 import com.vrudenko.kanban_board.repository.TaskRepository;
 
@@ -137,6 +138,18 @@ public class TaskService {
         // that UPDATE (and the version increment) to happen before the response DTO is built, so
         // the caller sees the new version instead of the stale pre-update one (D-01).
         entityManager.flush();
+
+        // Published only after the version guard above has passed, so a rejected update publishes
+        // nothing. columnId derived from the verified task's own column, never a raw path variable
+        // (docs/CODE_STYLE.md rule 2).
+        eventPublisher.publishEvent(
+                new TaskUpdatedEvent(
+                        eventIdGenerator.generate(),
+                        task.getColumn().getBoard().getUser().getId(),
+                        task.getColumn().getBoard().getId(),
+                        task.getColumn().getId(),
+                        task.getId(),
+                        Instant.now()));
 
         return taskMapper.toTaskResponseDTO(task);
     }
@@ -299,6 +312,13 @@ public class TaskService {
      * {@link ColumnService#deleteAllByBoardId}, whose column-delete step is a <i>derived</i>
      * (fetch-then- remove-per-entity) delete and therefore DOES honor {@code @Version} — the two
      * sibling delete paths are deliberately asymmetric.
+     *
+     * <p><b>No per-task or per-subtask event is published here (fork D-D, resolved D1):</b> this
+     * cascade fires from {@link ColumnService#deleteById} or {@link
+     * ColumnService#deleteAllByBoardId}, whose own {@code ColumnDeletedEvent}/{@code
+     * BoardDeletedEvent} is the event a caller sees. Deliberate — see {@link
+     * ColumnService#deleteAllByBoardId}'s Javadoc for why fanning out per-child events here would
+     * reintroduce the N+1 this batch delete exists to avoid.
      */
     @Transactional
     void deleteAllByColumn(ColumnEntity column) {

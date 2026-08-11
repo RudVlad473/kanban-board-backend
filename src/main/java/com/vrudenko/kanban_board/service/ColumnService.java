@@ -14,6 +14,8 @@ import com.vrudenko.kanban_board.entity.BoardEntity;
 import com.vrudenko.kanban_board.entity.ColumnEntity;
 import com.vrudenko.kanban_board.event.ColumnCreatedEvent;
 import com.vrudenko.kanban_board.event.ColumnDeletedEvent;
+import com.vrudenko.kanban_board.event.ColumnReorderedEvent;
+import com.vrudenko.kanban_board.event.ColumnUpdatedEvent;
 import com.vrudenko.kanban_board.mapper.ColumnMapper;
 import com.vrudenko.kanban_board.repository.ColumnRepository;
 
@@ -59,6 +61,13 @@ public class ColumnService {
      * mid-batch, whereas the equivalent race on the task-delete path above it silently proceeds.
      * The two delete paths are intentionally inconsistent with each other; this is documented here
      * rather than reconciled, per the accepted tradeoff carried from research.
+     *
+     * <p><b>No per-column {@code ColumnDeletedEvent} is published here (fork D-D, resolved D1):</b>
+     * this cascade fires from {@link BoardService#deleteById}, whose own {@code BoardDeletedEvent}
+     * is the single event a board delete emits. Deliberate, not an oversight — fanning out one
+     * event per cascaded column (and, transitively, per task and subtask) would mean loading every
+     * child purely to publish, reintroducing the N+1 the batch delete below exists to avoid, and
+     * could emit hundreds of events from one request into a bounded publish queue.
      */
     @Transactional
     public void deleteAllByBoardId(String userId, String boardId) {
@@ -150,6 +159,17 @@ public class ColumnService {
         // the caller sees the new version instead of the stale pre-update one (D-01).
         entityManager.flush();
 
+        // Published only after the version guard above has passed, so a rejected update publishes
+        // nothing. Ids derived from the verified entity, never a raw path variable
+        // (docs/CODE_STYLE.md rule 2).
+        eventPublisher.publishEvent(
+                new ColumnUpdatedEvent(
+                        eventIdGenerator.generate(),
+                        column.getBoard().getUser().getId(),
+                        column.getBoard().getId(),
+                        column.getId(),
+                        Instant.now()));
+
         return columnMapper.toColumnResponseDTO(column);
     }
 
@@ -200,6 +220,19 @@ public class ColumnService {
         // Same reason as updateById: force the UPDATE (and version increment) to happen now, so
         // the response DTO carries the new version instead of the stale pre-reorder one.
         entityManager.flush();
+
+        // Fork D-A, resolved A1: a dedicated event carrying both positions. targetPosition is the
+        // clamped effectivePosition, never the raw requested value -- see this method's own
+        // Javadoc and ColumnReorderedEvent's.
+        eventPublisher.publishEvent(
+                new ColumnReorderedEvent(
+                        eventIdGenerator.generate(),
+                        column.getBoard().getUser().getId(),
+                        boardId,
+                        column.getId(),
+                        oldPosition,
+                        effectivePosition,
+                        Instant.now()));
 
         return columnMapper.toColumnResponseDTO(column);
     }

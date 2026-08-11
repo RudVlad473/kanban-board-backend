@@ -5,14 +5,17 @@ import java.util.UUID;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.board_dto.UpdateBoardRequestDTO;
+import com.vrudenko.kanban_board.dto.column_dto.ReorderColumnRequestDTO;
 import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
 import com.vrudenko.kanban_board.dto.column_dto.UpdateColumnRequestDTO;
 import com.vrudenko.kanban_board.dto.subtask_dto.SaveSubtaskRequestDTO;
+import com.vrudenko.kanban_board.dto.subtask_dto.UpdateSubtaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.UpdateTaskRequestDTO;
 import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
 import com.vrudenko.kanban_board.service.BoardService;
 import com.vrudenko.kanban_board.service.ColumnService;
+import com.vrudenko.kanban_board.service.SubtaskService;
 import com.vrudenko.kanban_board.service.TaskService;
 import com.vrudenko.kanban_board.service.UserService;
 import com.vrudenko.kanban_board.support.fixtures.AbstractAppTest;
@@ -42,6 +45,8 @@ public class ActivityEventPublicationTest extends AbstractAppTest {
     @Autowired UserService userService;
 
     @Autowired BoardService boardService;
+
+    @Autowired SubtaskService subtaskService;
 
     @Autowired PlatformTransactionManager transactionManager;
 
@@ -105,7 +110,7 @@ public class ActivityEventPublicationTest extends AbstractAppTest {
     @Nested
     class UpdateByIdTest {
         @Test
-        void shouldPublishNothing_whenTaskUpdated() {
+        void shouldPublishTaskUpdatedEvent_whenTaskUpdated() {
             // arrange
             recorder.clear();
             var userId = getOwningUser().getId();
@@ -122,7 +127,15 @@ public class ActivityEventPublicationTest extends AbstractAppTest {
                             .build());
 
             // assert
-            Assertions.assertThat(recorder.getRecorded()).isEmpty();
+            Assertions.assertThat(recorder.getRecorded()).hasSize(1);
+            var event = recorder.getRecorded().getFirst();
+            Assertions.assertThat(event).isInstanceOf(TaskUpdatedEvent.class);
+            var taskUpdatedEvent = (TaskUpdatedEvent) event;
+            Assertions.assertThat(taskUpdatedEvent.taskId()).isEqualTo(taskId);
+            Assertions.assertThat(taskUpdatedEvent.columnId())
+                    .isEqualTo(mockPopulatedColumn.getId());
+            Assertions.assertThat(taskUpdatedEvent.boardId()).isEqualTo(mockPopulatedBoard.getId());
+            Assertions.assertThat(taskUpdatedEvent.userId()).isEqualTo(userId);
         }
     }
 
@@ -155,6 +168,68 @@ public class ActivityEventPublicationTest extends AbstractAppTest {
     }
 
     @Nested
+    class SubtaskUpdateAndDeleteTest {
+        @Test
+        void shouldPublishSubtaskUpdatedEvent_withDerivedIsCompleted_whenSubtaskUpdated() {
+            // arrange
+            recorder.clear();
+            var userId = getOwningUser().getId();
+            var subtask = mockSubtasks.getFirst();
+
+            // act
+            var updated =
+                    subtaskService.updateById(
+                            userId,
+                            subtask.getId(),
+                            UpdateSubtaskRequestDTO.builder()
+                                    .isCompleted(true)
+                                    .version(subtask.getVersion())
+                                    .build());
+
+            // assert
+            Assertions.assertThat(recorder.getRecorded()).hasSize(1);
+            var event = recorder.getRecorded().getFirst();
+            Assertions.assertThat(event).isInstanceOf(SubtaskUpdatedEvent.class);
+            var subtaskUpdatedEvent = (SubtaskUpdatedEvent) event;
+            Assertions.assertThat(subtaskUpdatedEvent.subtaskId()).isEqualTo(subtask.getId());
+            Assertions.assertThat(subtaskUpdatedEvent.taskId())
+                    .isEqualTo(mockPopulatedTask.getId());
+            Assertions.assertThat(subtaskUpdatedEvent.boardId())
+                    .isEqualTo(mockPopulatedBoard.getId());
+            Assertions.assertThat(subtaskUpdatedEvent.userId()).isEqualTo(userId);
+            // Derived from the managed entity's post-mutation state (D-B, resolved B2), never
+            // echoed from the request DTO -- proven true here since it equals the persisted
+            // outcome, not merely the request value (they happen to match, which is the point).
+            Assertions.assertThat(subtaskUpdatedEvent.isCompleted())
+                    .isEqualTo(updated.getIsCompleted())
+                    .isTrue();
+        }
+
+        @Test
+        void shouldPublishSubtaskDeletedEvent_whenSubtaskDeleted() {
+            // arrange
+            recorder.clear();
+            var userId = getOwningUser().getId();
+            var subtask = mockSubtasks.getFirst();
+
+            // act
+            subtaskService.deleteById(userId, subtask.getId());
+
+            // assert
+            Assertions.assertThat(recorder.getRecorded()).hasSize(1);
+            var event = recorder.getRecorded().getFirst();
+            Assertions.assertThat(event).isInstanceOf(SubtaskDeletedEvent.class);
+            var subtaskDeletedEvent = (SubtaskDeletedEvent) event;
+            Assertions.assertThat(subtaskDeletedEvent.subtaskId()).isEqualTo(subtask.getId());
+            Assertions.assertThat(subtaskDeletedEvent.taskId())
+                    .isEqualTo(mockPopulatedTask.getId());
+            Assertions.assertThat(subtaskDeletedEvent.boardId())
+                    .isEqualTo(mockPopulatedBoard.getId());
+            Assertions.assertThat(subtaskDeletedEvent.userId()).isEqualTo(userId);
+        }
+    }
+
+    @Nested
     class AddBoardByUserIdTest {
         @Test
         void shouldPublishBoardCreatedEvent_whenBoardCreated() {
@@ -179,7 +254,7 @@ public class ActivityEventPublicationTest extends AbstractAppTest {
         }
 
         @Test
-        void shouldPublishNothing_whenBoardUpdated() {
+        void shouldPublishBoardUpdatedEvent_whenBoardUpdated() {
             // arrange
             recorder.clear();
             var userId = getOwningUser().getId();
@@ -195,7 +270,37 @@ public class ActivityEventPublicationTest extends AbstractAppTest {
                             .build());
 
             // assert
-            Assertions.assertThat(recorder.getRecorded()).isEmpty();
+            Assertions.assertThat(recorder.getRecorded()).hasSize(1);
+            var event = recorder.getRecorded().getFirst();
+            Assertions.assertThat(event).isInstanceOf(BoardUpdatedEvent.class);
+            var boardUpdatedEvent = (BoardUpdatedEvent) event;
+            Assertions.assertThat(boardUpdatedEvent.boardId())
+                    .isEqualTo(mockPopulatedBoard.getId());
+            Assertions.assertThat(boardUpdatedEvent.userId()).isEqualTo(userId);
+        }
+
+        @Test
+        void shouldPublishBoardDeletedEvent_whenBoardDeleted() {
+            // arrange
+            recorder.clear();
+            var userId = getOwningUser().getId();
+            var boardName =
+                    dataFactory.getRandomWord(ValidationConstants.MIN_BOARD_NAME_LENGTH + 2);
+            var board =
+                    userService.addBoardByUserId(
+                            userId, SaveBoardRequestDTO.builder().name(boardName).build());
+            recorder.clear();
+
+            // act
+            boardService.deleteById(userId, board.getId());
+
+            // assert
+            Assertions.assertThat(recorder.getRecorded()).hasSize(1);
+            var event = recorder.getRecorded().getFirst();
+            Assertions.assertThat(event).isInstanceOf(BoardDeletedEvent.class);
+            var boardDeletedEvent = (BoardDeletedEvent) event;
+            Assertions.assertThat(boardDeletedEvent.boardId()).isEqualTo(board.getId());
+            Assertions.assertThat(boardDeletedEvent.userId()).isEqualTo(userId);
         }
     }
 
@@ -228,7 +333,7 @@ public class ActivityEventPublicationTest extends AbstractAppTest {
         }
 
         @Test
-        void shouldPublishNothing_whenColumnUpdated() {
+        void shouldPublishColumnUpdatedEvent_whenColumnUpdated() {
             // arrange
             recorder.clear();
             var userId = getOwningUser().getId();
@@ -244,7 +349,49 @@ public class ActivityEventPublicationTest extends AbstractAppTest {
                             .build());
 
             // assert
-            Assertions.assertThat(recorder.getRecorded()).isEmpty();
+            Assertions.assertThat(recorder.getRecorded()).hasSize(1);
+            var event = recorder.getRecorded().getFirst();
+            Assertions.assertThat(event).isInstanceOf(ColumnUpdatedEvent.class);
+            var columnUpdatedEvent = (ColumnUpdatedEvent) event;
+            Assertions.assertThat(columnUpdatedEvent.columnId())
+                    .isEqualTo(mockPopulatedColumn.getId());
+            Assertions.assertThat(columnUpdatedEvent.boardId())
+                    .isEqualTo(mockPopulatedBoard.getId());
+            Assertions.assertThat(columnUpdatedEvent.userId()).isEqualTo(userId);
+        }
+    }
+
+    @Nested
+    class ReorderTest {
+        @Test
+        void shouldPublishColumnReorderedEvent_whenColumnReordered() {
+            // arrange
+            recorder.clear();
+            var userId = getOwningUser().getId();
+            var columnId = mockPopulatedColumn.getId();
+            var sourcePosition = mockPopulatedColumn.getPosition();
+            var targetPosition = 0;
+
+            // act
+            columnService.reorder(
+                    userId,
+                    columnId,
+                    ReorderColumnRequestDTO.builder()
+                            .targetPosition(targetPosition)
+                            .version(mockPopulatedColumn.getVersion())
+                            .build());
+
+            // assert
+            Assertions.assertThat(recorder.getRecorded()).hasSize(1);
+            var event = recorder.getRecorded().getFirst();
+            Assertions.assertThat(event).isInstanceOf(ColumnReorderedEvent.class);
+            var columnReorderedEvent = (ColumnReorderedEvent) event;
+            Assertions.assertThat(columnReorderedEvent.columnId()).isEqualTo(columnId);
+            Assertions.assertThat(columnReorderedEvent.sourcePosition()).isEqualTo(sourcePosition);
+            Assertions.assertThat(columnReorderedEvent.targetPosition()).isEqualTo(targetPosition);
+            Assertions.assertThat(columnReorderedEvent.boardId())
+                    .isEqualTo(mockPopulatedBoard.getId());
+            Assertions.assertThat(columnReorderedEvent.userId()).isEqualTo(userId);
         }
     }
 

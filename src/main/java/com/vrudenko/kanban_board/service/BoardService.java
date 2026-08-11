@@ -13,6 +13,8 @@ import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
 import com.vrudenko.kanban_board.entity.BoardEntity;
 import com.vrudenko.kanban_board.entity.UserEntity;
 import com.vrudenko.kanban_board.event.BoardCreatedEvent;
+import com.vrudenko.kanban_board.event.BoardDeletedEvent;
+import com.vrudenko.kanban_board.event.BoardUpdatedEvent;
 import com.vrudenko.kanban_board.exception.AppDuplicateResourceException;
 import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
 import com.vrudenko.kanban_board.mapper.BoardFullMapper;
@@ -57,13 +59,27 @@ public class BoardService {
         return columnService.save(columnDTO, board);
     }
 
+    /**
+     * The id below is captured into a local BEFORE the cascade and the delete run, on purpose —
+     * same reason as {@code TaskService#deleteById}'s Javadoc: once {@code
+     * boardRepository.deleteById(...)} executes there is nothing left to derive {@code boardId}
+     * from for the {@code BoardDeletedEvent}. Fires exactly once per directly-requested delete —
+     * cascaded columns/tasks/subtasks underneath publish nothing of their own (fork D-D, resolved
+     * D1); {@link #deleteAllByUserId} therefore emits one {@code BoardDeletedEvent} per board, not
+     * one combined account-deletion event.
+     */
     @Transactional
     public void deleteById(String userId, String boardId) {
         var board = findById(userId, boardId);
+        var deletedBoardId = board.getId();
 
-        columnService.deleteAllByBoardId(userId, board.getId());
+        columnService.deleteAllByBoardId(userId, deletedBoardId);
 
-        boardRepository.deleteById(board.getId());
+        boardRepository.deleteById(deletedBoardId);
+
+        eventPublisher.publishEvent(
+                new BoardDeletedEvent(
+                        eventIdGenerator.generate(), userId, deletedBoardId, Instant.now()));
     }
 
     @Transactional
@@ -149,6 +165,16 @@ public class BoardService {
         // the caller sees the new version instead of the stale pre-update one -- same reasoning as
         // ColumnService.updateById.
         entityManager.flush();
+
+        // Published only after both guards above have passed, so a rejected update (stale
+        // version, duplicate name) publishes nothing. Ids derived from the verified entity, never
+        // a raw path variable (docs/CODE_STYLE.md rule 2).
+        eventPublisher.publishEvent(
+                new BoardUpdatedEvent(
+                        eventIdGenerator.generate(),
+                        savedBoard.getUser().getId(),
+                        savedBoard.getId(),
+                        Instant.now()));
 
         return boardMapper.toResponseDTO(savedBoard);
     }

@@ -4,12 +4,19 @@ import java.util.List;
 import java.util.UUID;
 
 import com.vrudenko.kanban_board.event.avro.AvroBoardCreatedEvent;
+import com.vrudenko.kanban_board.event.avro.AvroBoardDeletedEvent;
+import com.vrudenko.kanban_board.event.avro.AvroBoardUpdatedEvent;
 import com.vrudenko.kanban_board.event.avro.AvroColumnCreatedEvent;
 import com.vrudenko.kanban_board.event.avro.AvroColumnDeletedEvent;
+import com.vrudenko.kanban_board.event.avro.AvroColumnReorderedEvent;
+import com.vrudenko.kanban_board.event.avro.AvroColumnUpdatedEvent;
 import com.vrudenko.kanban_board.event.avro.AvroSubtaskCreatedEvent;
+import com.vrudenko.kanban_board.event.avro.AvroSubtaskDeletedEvent;
+import com.vrudenko.kanban_board.event.avro.AvroSubtaskUpdatedEvent;
 import com.vrudenko.kanban_board.event.avro.AvroTaskCreatedEvent;
 import com.vrudenko.kanban_board.event.avro.AvroTaskDeletedEvent;
 import com.vrudenko.kanban_board.event.avro.AvroTaskMovedEvent;
+import com.vrudenko.kanban_board.event.avro.AvroTaskUpdatedEvent;
 import com.vrudenko.kanban_board.support.containers.AbstractKafkaContainerTest;
 
 import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
@@ -24,10 +31,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 
 /**
  * Turns D-02's BACKWARD compatibility choice from a configured setting into a demonstrated
- * behaviour. The first nested group asserts configuration (SCHEMA-04: every one of the 7 production
- * subjects reports BACKWARD, and it is genuinely subject-level, not just an inherited read of the
- * registry's global default). The second asserts enforcement: a backward-incompatible schema
- * evolution is rejected, and a backward-compatible one is accepted -- the control case that
+ * behaviour. The first nested group asserts configuration (SCHEMA-04: every one of the 14
+ * production subjects reports BACKWARD, and it is genuinely subject-level, not just an inherited
+ * read of the registry's global default). The second asserts enforcement: a backward-incompatible
+ * schema evolution is rejected, and a backward-compatible one is accepted -- the control case that
  * distinguishes "compatibility is enforced" from "registration is broken for everything".
  */
 @SpringBootTest
@@ -49,10 +56,17 @@ class SchemaCompatibilityE2ETest extends AbstractKafkaContainerTest {
                 AvroTaskCreatedEvent.getClassSchema().getFullName(),
                 AvroTaskMovedEvent.getClassSchema().getFullName(),
                 AvroTaskDeletedEvent.getClassSchema().getFullName(),
+                AvroTaskUpdatedEvent.getClassSchema().getFullName(),
                 AvroBoardCreatedEvent.getClassSchema().getFullName(),
+                AvroBoardUpdatedEvent.getClassSchema().getFullName(),
+                AvroBoardDeletedEvent.getClassSchema().getFullName(),
                 AvroColumnCreatedEvent.getClassSchema().getFullName(),
                 AvroColumnDeletedEvent.getClassSchema().getFullName(),
-                AvroSubtaskCreatedEvent.getClassSchema().getFullName());
+                AvroColumnUpdatedEvent.getClassSchema().getFullName(),
+                AvroColumnReorderedEvent.getClassSchema().getFullName(),
+                AvroSubtaskCreatedEvent.getClassSchema().getFullName(),
+                AvroSubtaskUpdatedEvent.getClassSchema().getFullName(),
+                AvroSubtaskDeletedEvent.getClassSchema().getFullName());
     }
 
     @Nested
@@ -77,7 +91,7 @@ class SchemaCompatibilityE2ETest extends AbstractKafkaContainerTest {
                 shouldFailWithoutFallback_whenSubjectHasNoExplicitOverride_provingProductionSubjectsAreNotJustInheritingGlobal()
                         throws Exception {
             // arrange -- AvroSchemaRegistrar never touches this subject, so it carries no
-            // subject-level compatibility override at all, unlike the 5 production subjects
+            // subject-level compatibility override at all, unlike the production subjects
             // above. Registering a schema does not itself create a compatibility override.
             var client = buildSchemaRegistryClient();
             var throwawaySubject = "compatibility-probe-no-override-" + UUID.randomUUID();

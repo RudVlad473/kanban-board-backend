@@ -1,0 +1,14 @@
+{
+  "type": "record",
+  "name": "AvroColumnReorderedEvent",
+  "namespace": "com.vrudenko.kanban_board.event.avro",
+  "fields": [
+    { "name": "eventId", "type": "string" },
+    { "name": "userId", "type": "string" },
+    { "name": "boardId", "type": "string" },
+    { "name": "columnId", "type": "string" },
+    { "name": "sourcePosition", "type": "int" },
+    { "name": "targetPosition", "type": "int" },
+    { "name": "timestamp", "type": { "type": "long", "logicalType": "timestamp-millis" } }
+  ]
+}

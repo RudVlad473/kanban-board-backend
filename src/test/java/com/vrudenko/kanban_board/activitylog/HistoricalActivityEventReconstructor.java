@@ -5,12 +5,19 @@ import java.util.Map;
 import com.vrudenko.kanban_board.entity.ActivityLogEntity;
 import com.vrudenko.kanban_board.event.ActivityEvent;
 import com.vrudenko.kanban_board.event.BoardCreatedEvent;
+import com.vrudenko.kanban_board.event.BoardDeletedEvent;
+import com.vrudenko.kanban_board.event.BoardUpdatedEvent;
 import com.vrudenko.kanban_board.event.ColumnCreatedEvent;
 import com.vrudenko.kanban_board.event.ColumnDeletedEvent;
+import com.vrudenko.kanban_board.event.ColumnReorderedEvent;
+import com.vrudenko.kanban_board.event.ColumnUpdatedEvent;
 import com.vrudenko.kanban_board.event.SubtaskCreatedEvent;
+import com.vrudenko.kanban_board.event.SubtaskDeletedEvent;
+import com.vrudenko.kanban_board.event.SubtaskUpdatedEvent;
 import com.vrudenko.kanban_board.event.TaskCreatedEvent;
 import com.vrudenko.kanban_board.event.TaskDeletedEvent;
 import com.vrudenko.kanban_board.event.TaskMovedEvent;
+import com.vrudenko.kanban_board.event.TaskUpdatedEvent;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -101,8 +108,61 @@ public class HistoricalActivityEventReconstructor {
                             row.getBoardId(),
                             requireKey(row, detail, "columnId"),
                             row.getCreatedAt());
+            case TASK_UPDATED ->
+                    new TaskUpdatedEvent(
+                            row.getEventId(),
+                            row.getUserId(),
+                            row.getBoardId(),
+                            requireKey(row, detail, "columnId"),
+                            requireKey(row, detail, "taskId"),
+                            row.getCreatedAt());
+            case BOARD_UPDATED ->
+                    new BoardUpdatedEvent(
+                            row.getEventId(),
+                            row.getUserId(),
+                            row.getBoardId(),
+                            row.getCreatedAt());
+            case BOARD_DELETED ->
+                    new BoardDeletedEvent(
+                            row.getEventId(),
+                            row.getUserId(),
+                            row.getBoardId(),
+                            row.getCreatedAt());
+            case COLUMN_UPDATED ->
+                    new ColumnUpdatedEvent(
+                            row.getEventId(),
+                            row.getUserId(),
+                            row.getBoardId(),
+                            requireKey(row, detail, "columnId"),
+                            row.getCreatedAt());
+            case COLUMN_REORDERED ->
+                    new ColumnReorderedEvent(
+                            row.getEventId(),
+                            row.getUserId(),
+                            row.getBoardId(),
+                            requireKey(row, detail, "columnId"),
+                            Integer.parseInt(requireKey(row, detail, "sourcePosition")),
+                            Integer.parseInt(requireKey(row, detail, "targetPosition")),
+                            row.getCreatedAt());
             case SUBTASK_CREATED ->
                     new SubtaskCreatedEvent(
+                            row.getEventId(),
+                            row.getUserId(),
+                            row.getBoardId(),
+                            requireKey(row, detail, "taskId"),
+                            requireKey(row, detail, "subtaskId"),
+                            row.getCreatedAt());
+            case SUBTASK_UPDATED ->
+                    new SubtaskUpdatedEvent(
+                            row.getEventId(),
+                            row.getUserId(),
+                            row.getBoardId(),
+                            requireKey(row, detail, "taskId"),
+                            requireKey(row, detail, "subtaskId"),
+                            Boolean.parseBoolean(requireKey(row, detail, "isCompleted")),
+                            row.getCreatedAt());
+            case SUBTASK_DELETED ->
+                    new SubtaskDeletedEvent(
                             row.getEventId(),
                             row.getUserId(),
                             row.getBoardId(),
