@@ -78,13 +78,15 @@ sequenceDiagram
             AM-->>AC: Authentication
             AC->>SAS: onAuthentication(authentication, request, response)
             Note over SAS: ConcurrentSessionControlAuthenticationStrategy checks the live<br/>SPRING_SESSION count for this principal (max 2) BEFORE<br/>ChangeSessionIdAuthenticationStrategy rotates the session id
+            Note right of SAS: F6 (2026-08-10 scan, accepted D-01): this count-then-register window lets<br/>two genuinely simultaneous signins both pass -- a bounded, self-healing overshoot<br/>of at most one extra session per signin genuinely in flight, never a flat "max 3".<br/>See SecurityConfiguration.sessionAuthenticationStrategy's Javadoc for why a<br/>transaction-scoped lock cannot close it and ConcurrentSigninCeilingE2ETest for proof
             alt already at the 2-session ceiling
                 SAS--xAC: throws SessionAuthenticationException
                 AC-->>C: 401 ProblemDetail {code: BAD_CREDENTIALS}<br/>(collapsed -- indistinguishable from a wrong password, D-08)
             else ceiling not reached
                 AC->>SCR: saveContext(context, request, response)
-                SCR->>DB: write SPRING_SESSION_ATTRIBUTES.SPRING_SECURITY_CONTEXT<br/>(serialized principal has no password field)
+                Note over SCR: writes into Spring Session's request-scoped in-memory session --<br/>not yet committed to Postgres, not yet visible to another DB connection
                 AC-->>C: 200 OK + Set-Cookie: JSESSIONID (rotated id)
+                Note over DB: Spring Session's request-scoped filter commits SPRING_SESSION +<br/>SPRING_SESSION_ATTRIBUTES.SPRING_SECURITY_CONTEXT as the response is flushed --<br/>AFTER AC has already returned. Measured 2026-08-11 (260811-h2v Task 2): a<br/>cross-connection probe taken right after saveContext returned read 0 committed<br/>rows for this principal; a client-side probe taken after the response was<br/>received read 1. This ordering is why a transaction-scoped advisory lock around<br/>AC's method would release before the row it needs to serialize against exists
             end
         end
     end

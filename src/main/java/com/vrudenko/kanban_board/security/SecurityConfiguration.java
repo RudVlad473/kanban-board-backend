@@ -129,6 +129,41 @@ public class SecurityConfiguration {
      * onAuthentication(...)} on this strategy directly, since neither the default filter chain
      * (Spring Security 6 no longer installs {@code SessionManagementFilter}) nor this application's
      * custom signin path would ever call it otherwise.
+     *
+     * <p><b>Known, accepted TOCTOU window (finding F6, 2026-08-10 {@code /claude-security}
+     * scan).</b> {@code ConcurrentSessionControlAuthenticationStrategy} enforces the ceiling by
+     * reading the caller's live {@code SPRING_SESSION} count and then allowing the signin to
+     * register a new session -- a check-then-act sequence. Two genuinely simultaneous signins for
+     * one principal can both read the same under-threshold count before either has committed its
+     * new session row, so both can proceed. This is a <b>knowingly accepted, bounded</b> trade-off,
+     * not an unnoticed gap -- the same disposition style {@link
+     * com.vrudenko.kanban_board.entity.UserEntity}'s deliberately-unversioned last-write-wins theme
+     * preference carries (D-14). The bound is a function of concurrency, not a constant: live
+     * sessions for one principal never exceed {@code MAX_CONCURRENT_SESSIONS} plus at most one
+     * extra per signin genuinely in flight at the same instant -- never "at most 3" as a flat
+     * ceiling. The excess is transient and self-correcting, because the next non-concurrent signin
+     * for that principal is still refused.
+     *
+     * <p>A transaction-scoped advisory lock (e.g. {@code pg_advisory_xact_lock}) around the
+     * count-then-register sequence does not close this window. Measured, not assumed (quick task
+     * 260811-h2v, Task 2, 2026-08-11): a probe reading the live {@code SPRING_SESSION} count from a
+     * <i>second</i> database connection, taken the instant {@link
+     * AuthenticationController#authenticate}'s {@code mapTry} lambda finishes (right after {@code
+     * securityContextRepository.saveContext(...)} returns -- the latest point any controller-scoped
+     * transaction could still be open), read <b>0</b> committed rows for the just-authenticated
+     * principal; a client-side probe taken after the HTTP response was fully received read
+     * <b>1</b>. The new session row is not committed, and therefore not visible to another
+     * connection, until Spring Session's request-scoped filter commits it as the response is
+     * flushed -- strictly after this method (and any transaction scoped around it) has already
+     * returned. A {@code pg_advisory_xact_lock} held across this call would therefore release
+     * before the row it was meant to serialize against exists, closing nothing while adding a
+     * blocking database round trip to every signin. {@code ConcurrentSigninCeilingE2ETest} is the
+     * empirical proof of the accepted bound.
+     *
+     * <p>The rejection this strategy throws stays a {@code 401}, byte-identical to a wrong-password
+     * response (D-08). Do not give a ceiling rejection its own status code or otherwise make it
+     * distinguishable -- that would hand an attacker a validity oracle for "these credentials are
+     * valid, this account just has sessions open."
      */
     @Bean
     public <S extends Session> SessionAuthenticationStrategy sessionAuthenticationStrategy(
