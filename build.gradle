@@ -258,7 +258,7 @@ tasks.register('fastTest', Test) {
 // the same AvroSchemaRegistrar.registerAll() this task invokes, so test-time and
 // build-time registration cannot drift apart (docs/CODE_STYLE.md rule 8).
 tasks.register('registerSchemas', JavaExec) {
-    description = 'Registers all 5 Avro schemas against the Schema Registry with BACKWARD ' +
+    description = 'Registers all 7 Avro schemas against the Schema Registry with BACKWARD ' +
             'compatibility (SCHEMA-01, SCHEMA-04, D-02).'
     group = 'kafka'
     dependsOn classes

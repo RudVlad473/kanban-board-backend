@@ -1,0 +1,13 @@
+{
+  "type": "record",
+  "name": "AvroSubtaskCreatedEvent",
+  "namespace": "com.vrudenko.kanban_board.event.avro",
+  "fields": [
+    { "name": "eventId", "type": "string" },
+    { "name": "userId", "type": "string" },
+    { "name": "boardId", "type": "string" },
+    { "name": "taskId", "type": "string" },
+    { "name": "subtaskId", "type": "string" },
+    { "name": "timestamp", "type": { "type": "long", "logicalType": "timestamp-millis" } }
+  ]
+}

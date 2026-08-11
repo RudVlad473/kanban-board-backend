@@ -22,7 +22,8 @@ public sealed interface ActivityEvent
                 TaskDeletedEvent,
                 BoardCreatedEvent,
                 ColumnCreatedEvent,
-                ColumnDeletedEvent {
+                ColumnDeletedEvent,
+                SubtaskCreatedEvent {
     String eventId();
 
     String userId();

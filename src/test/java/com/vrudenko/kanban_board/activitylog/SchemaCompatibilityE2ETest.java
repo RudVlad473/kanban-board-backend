@@ -5,6 +5,8 @@ import java.util.UUID;
 
 import com.vrudenko.kanban_board.event.avro.AvroBoardCreatedEvent;
 import com.vrudenko.kanban_board.event.avro.AvroColumnCreatedEvent;
+import com.vrudenko.kanban_board.event.avro.AvroColumnDeletedEvent;
+import com.vrudenko.kanban_board.event.avro.AvroSubtaskCreatedEvent;
 import com.vrudenko.kanban_board.event.avro.AvroTaskCreatedEvent;
 import com.vrudenko.kanban_board.event.avro.AvroTaskDeletedEvent;
 import com.vrudenko.kanban_board.event.avro.AvroTaskMovedEvent;
@@ -22,7 +24,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 
 /**
  * Turns D-02's BACKWARD compatibility choice from a configured setting into a demonstrated
- * behaviour. The first nested group asserts configuration (SCHEMA-04: every one of the 5 production
+ * behaviour. The first nested group asserts configuration (SCHEMA-04: every one of the 7 production
  * subjects reports BACKWARD, and it is genuinely subject-level, not just an inherited read of the
  * registry's global default). The second asserts enforcement: a backward-incompatible schema
  * evolution is rejected, and a backward-compatible one is accepted -- the control case that
@@ -48,14 +50,16 @@ class SchemaCompatibilityE2ETest extends AbstractKafkaContainerTest {
                 AvroTaskMovedEvent.getClassSchema().getFullName(),
                 AvroTaskDeletedEvent.getClassSchema().getFullName(),
                 AvroBoardCreatedEvent.getClassSchema().getFullName(),
-                AvroColumnCreatedEvent.getClassSchema().getFullName());
+                AvroColumnCreatedEvent.getClassSchema().getFullName(),
+                AvroColumnDeletedEvent.getClassSchema().getFullName(),
+                AvroSubtaskCreatedEvent.getClassSchema().getFullName());
     }
 
     @Nested
     class ConfiguredCompatibilityTest {
 
         @Test
-        void shouldReportBackwardExplicitly_forAllFiveProductionSubjects() throws Exception {
+        void shouldReportBackwardExplicitly_forAllProductionSubjects() throws Exception {
             // arrange
             var client = buildSchemaRegistryClient();
 

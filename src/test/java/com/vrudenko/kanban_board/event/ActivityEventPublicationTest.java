@@ -7,6 +7,7 @@ import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.board_dto.UpdateBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
 import com.vrudenko.kanban_board.dto.column_dto.UpdateColumnRequestDTO;
+import com.vrudenko.kanban_board.dto.subtask_dto.SaveSubtaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.UpdateTaskRequestDTO;
 import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
@@ -122,6 +123,34 @@ public class ActivityEventPublicationTest extends AbstractAppTest {
 
             // assert
             Assertions.assertThat(recorder.getRecorded()).isEmpty();
+        }
+    }
+
+    @Nested
+    class AddSubtaskByTaskIdTest {
+        @Test
+        void shouldPublishSubtaskCreatedEvent_whenSubtaskCreated() {
+            // arrange
+            recorder.clear();
+            var userId = getOwningUser().getId();
+            var taskId = mockPopulatedTask.getId();
+            var title = dataFactory.getRandomText(ValidationConstants.MIN_SUBTASK_TITLE_LENGTH + 1);
+
+            // act
+            var subtask =
+                    taskService.addSubtaskByTaskId(
+                            userId, taskId, SaveSubtaskRequestDTO.builder().title(title).build());
+
+            // assert
+            Assertions.assertThat(recorder.getRecorded()).hasSize(1);
+            var event = recorder.getRecorded().getFirst();
+            Assertions.assertThat(event).isInstanceOf(SubtaskCreatedEvent.class);
+            var subtaskCreatedEvent = (SubtaskCreatedEvent) event;
+            Assertions.assertThat(subtaskCreatedEvent.subtaskId()).isEqualTo(subtask.getId());
+            Assertions.assertThat(subtaskCreatedEvent.taskId()).isEqualTo(taskId);
+            Assertions.assertThat(subtaskCreatedEvent.boardId())
+                    .isEqualTo(mockPopulatedBoard.getId());
+            Assertions.assertThat(subtaskCreatedEvent.userId()).isEqualTo(userId);
         }
     }
 

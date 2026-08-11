@@ -7,6 +7,7 @@ import com.vrudenko.kanban_board.event.ActivityEvent;
 import com.vrudenko.kanban_board.event.BoardCreatedEvent;
 import com.vrudenko.kanban_board.event.ColumnCreatedEvent;
 import com.vrudenko.kanban_board.event.ColumnDeletedEvent;
+import com.vrudenko.kanban_board.event.SubtaskCreatedEvent;
 import com.vrudenko.kanban_board.event.TaskCreatedEvent;
 import com.vrudenko.kanban_board.event.TaskDeletedEvent;
 import com.vrudenko.kanban_board.event.TaskMovedEvent;
@@ -36,7 +37,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <p>Dispatch is an exhaustive {@code switch} over {@link
  * com.vrudenko.kanban_board.entity.ActivityAction} with no {@code default} arm, mirroring {@code
  * ActivityLogConsumer.deriveActionAndDetailIds} and {@code ActivityEventAvroMapper.toAvro} --
- * adding a sixth action is then a compile error here until this switch is updated, rather than a
+ * adding another action is then a compile error here until this switch is updated, rather than a
  * silently unmappable row at runtime.
  */
 public class HistoricalActivityEventReconstructor {
@@ -99,6 +100,14 @@ public class HistoricalActivityEventReconstructor {
                             row.getUserId(),
                             row.getBoardId(),
                             requireKey(row, detail, "columnId"),
+                            row.getCreatedAt());
+            case SUBTASK_CREATED ->
+                    new SubtaskCreatedEvent(
+                            row.getEventId(),
+                            row.getUserId(),
+                            row.getBoardId(),
+                            requireKey(row, detail, "taskId"),
+                            requireKey(row, detail, "subtaskId"),
                             row.getCreatedAt());
         };
     }

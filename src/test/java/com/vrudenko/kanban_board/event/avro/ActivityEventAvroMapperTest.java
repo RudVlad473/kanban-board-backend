@@ -8,6 +8,7 @@ import com.vrudenko.kanban_board.event.ActivityEvent;
 import com.vrudenko.kanban_board.event.BoardCreatedEvent;
 import com.vrudenko.kanban_board.event.ColumnCreatedEvent;
 import com.vrudenko.kanban_board.event.ColumnDeletedEvent;
+import com.vrudenko.kanban_board.event.SubtaskCreatedEvent;
 import com.vrudenko.kanban_board.event.TaskCreatedEvent;
 import com.vrudenko.kanban_board.event.TaskDeletedEvent;
 import com.vrudenko.kanban_board.event.TaskMovedEvent;
@@ -137,6 +138,27 @@ public class ActivityEventAvroMapperTest
         }
 
         @Test
+        void shouldRoundTrip_whenSubtaskCreatedEvent() {
+            // arrange
+            var event =
+                    new SubtaskCreatedEvent(
+                            UUID.randomUUID().toString(),
+                            "user-1",
+                            "board-1",
+                            "task-1",
+                            "subtask-1",
+                            Instant.now());
+
+            // act
+            var avroRecord = mapper.toAvro(event);
+            var roundTripped = mapper.toDomain(avroRecord);
+
+            // assert
+            Assertions.assertThat(avroRecord).isInstanceOf(AvroSubtaskCreatedEvent.class);
+            assertRoundTripEqual(event, roundTripped);
+        }
+
+        @Test
         void shouldRoundTrip_whenColumnDeletedEvent() {
             // arrange
             var event =
@@ -203,6 +225,11 @@ public class ActivityEventAvroMapperTest
                 case ColumnDeletedEvent o -> {
                     var r = (ColumnDeletedEvent) roundTripped;
                     Assertions.assertThat(r.columnId()).isEqualTo(o.columnId());
+                }
+                case SubtaskCreatedEvent o -> {
+                    var r = (SubtaskCreatedEvent) roundTripped;
+                    Assertions.assertThat(r.taskId()).isEqualTo(o.taskId());
+                    Assertions.assertThat(r.subtaskId()).isEqualTo(o.subtaskId());
                 }
             }
         }

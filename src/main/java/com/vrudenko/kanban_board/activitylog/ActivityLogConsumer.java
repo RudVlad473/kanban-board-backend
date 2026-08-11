@@ -9,6 +9,7 @@ import com.vrudenko.kanban_board.event.ActivityEvent;
 import com.vrudenko.kanban_board.event.BoardCreatedEvent;
 import com.vrudenko.kanban_board.event.ColumnCreatedEvent;
 import com.vrudenko.kanban_board.event.ColumnDeletedEvent;
+import com.vrudenko.kanban_board.event.SubtaskCreatedEvent;
 import com.vrudenko.kanban_board.event.TaskCreatedEvent;
 import com.vrudenko.kanban_board.event.TaskDeletedEvent;
 import com.vrudenko.kanban_board.event.TaskMovedEvent;
@@ -74,7 +75,7 @@ public class ActivityLogConsumer {
 
     /**
      * Exhaustive switch over the sealed {@link ActivityEvent} — deliberately no {@code default}
-     * arm. Adding a sixth event record is then a compile error until this switch is updated,
+     * arm. Adding another event record is then a compile error until this switch is updated,
      * turning a future missed event type into a build failure instead of a silently absorbed
      * message.
      */
@@ -110,6 +111,12 @@ public class ActivityLogConsumer {
                 var ids = new LinkedHashMap<String, String>();
                 ids.put("columnId", e.columnId());
                 yield new ActionAndDetailIds(ActivityAction.COLUMN_DELETED, ids);
+            }
+            case SubtaskCreatedEvent e -> {
+                var ids = new LinkedHashMap<String, String>();
+                ids.put("taskId", e.taskId());
+                ids.put("subtaskId", e.subtaskId());
+                yield new ActionAndDetailIds(ActivityAction.SUBTASK_CREATED, ids);
             }
         };
     }

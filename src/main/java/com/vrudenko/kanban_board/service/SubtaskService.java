@@ -1,19 +1,23 @@
 package com.vrudenko.kanban_board.service;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
+import com.vrudenko.kanban_board.config.EventIdGenerator;
 import com.vrudenko.kanban_board.dto.subtask_dto.SaveSubtaskRequestDTO;
 import com.vrudenko.kanban_board.dto.subtask_dto.SubtaskResponseDTO;
 import com.vrudenko.kanban_board.dto.subtask_dto.UpdateSubtaskRequestDTO;
 import com.vrudenko.kanban_board.entity.SubtaskEntity;
 import com.vrudenko.kanban_board.entity.TaskEntity;
+import com.vrudenko.kanban_board.event.SubtaskCreatedEvent;
 import com.vrudenko.kanban_board.mapper.SubtaskMapper;
 import com.vrudenko.kanban_board.repository.SubtaskRepository;
 
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
@@ -27,6 +31,21 @@ public class SubtaskService {
 
     @Autowired private EntityManager entityManager;
 
+    @Autowired private ApplicationEventPublisher eventPublisher;
+
+    @Autowired private EventIdGenerator eventIdGenerator;
+
+    /**
+     * {@code @Transactional} here (rather than relying on the caller, {@link
+     * TaskService#addSubtaskByTaskId}, already being {@code @Transactional}) makes the after-commit
+     * {@code SubtaskCreatedEvent} publish guarantee self-contained — see {@link
+     * TaskService#save(com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO,
+     * com.vrudenko.kanban_board.entity.ColumnEntity)}'s Javadoc for the full reasoning. {@code
+     * userId}/{@code boardId} are derived from the ownership-verified {@code task} parameter
+     * (walked via its column/board chain), never from a raw path variable — {@link
+     * TaskService#addSubtaskByTaskId} already verified ownership of {@code task} before handing it
+     * to this method (docs/CODE_STYLE.md rule 2).
+     */
     @Transactional
     SubtaskResponseDTO save(TaskEntity task, SaveSubtaskRequestDTO dto) {
         var subtask = subtaskMapper.fromSaveSubtaskRequestDTO(dto);
@@ -34,7 +53,18 @@ public class SubtaskService {
         subtask.setIsCompleted(false);
         subtask.setTask(task);
 
-        return subtaskMapper.toSubtaskResponseDTO(subtaskRepository.save(subtask));
+        subtaskRepository.save(subtask);
+
+        eventPublisher.publishEvent(
+                new SubtaskCreatedEvent(
+                        eventIdGenerator.generate(),
+                        task.getColumn().getBoard().getUser().getId(),
+                        task.getColumn().getBoard().getId(),
+                        task.getId(),
+                        subtask.getId(),
+                        Instant.now()));
+
+        return subtaskMapper.toSubtaskResponseDTO(subtask);
     }
 
     @Transactional

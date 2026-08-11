@@ -10,6 +10,7 @@ import com.vrudenko.kanban_board.entity.ActivityLogEntity;
 import com.vrudenko.kanban_board.event.BoardCreatedEvent;
 import com.vrudenko.kanban_board.event.ColumnCreatedEvent;
 import com.vrudenko.kanban_board.event.ColumnDeletedEvent;
+import com.vrudenko.kanban_board.event.SubtaskCreatedEvent;
 import com.vrudenko.kanban_board.event.TaskCreatedEvent;
 import com.vrudenko.kanban_board.event.TaskDeletedEvent;
 import com.vrudenko.kanban_board.event.TaskMovedEvent;
@@ -378,6 +379,37 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
                                 Assertions.assertThat(row.getCreatedAt())
                                         .isCloseTo(
                                                 timestamp, Assertions.within(1, ChronoUnit.MILLIS));
+                            });
+        }
+
+        @Test
+        void shouldPersistSubtaskCreated_withTaskIdThenSubtaskIdDetail() throws Exception {
+            // arrange
+            var eventId = UUID.randomUUID().toString();
+            var taskId = randomId();
+            var subtaskId = randomId();
+            var event =
+                    new SubtaskCreatedEvent(
+                            eventId, randomId(), randomId(), taskId, subtaskId, Instant.now());
+
+            // act
+            sendAndAwaitAck(event);
+
+            // assert
+            Awaitility.await()
+                    .atMost(Duration.ofSeconds(30))
+                    .untilAsserted(
+                            () -> {
+                                var row = findByEventId(eventId);
+                                Assertions.assertThat(row.getAction())
+                                        .isEqualTo(ActivityAction.SUBTASK_CREATED);
+                                Assertions.assertThat(row.getDetail())
+                                        .isEqualTo(
+                                                "{\"taskId\":\""
+                                                        + taskId
+                                                        + "\",\"subtaskId\":\""
+                                                        + subtaskId
+                                                        + "\"}");
                             });
         }
 

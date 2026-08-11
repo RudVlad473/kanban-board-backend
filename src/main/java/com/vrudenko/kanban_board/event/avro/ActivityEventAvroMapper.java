@@ -4,6 +4,7 @@ import com.vrudenko.kanban_board.event.ActivityEvent;
 import com.vrudenko.kanban_board.event.BoardCreatedEvent;
 import com.vrudenko.kanban_board.event.ColumnCreatedEvent;
 import com.vrudenko.kanban_board.event.ColumnDeletedEvent;
+import com.vrudenko.kanban_board.event.SubtaskCreatedEvent;
 import com.vrudenko.kanban_board.event.TaskCreatedEvent;
 import com.vrudenko.kanban_board.event.TaskDeletedEvent;
 import com.vrudenko.kanban_board.event.TaskMovedEvent;
@@ -20,7 +21,7 @@ import org.springframework.stereotype.Component;
  * codebase's Entity&harr;DTO convention ({@link com.vrudenko.kanban_board.mapper.ActivityLogMapper}
  * and siblings) does not extend here. MapStruct's annotation processor generates a mapper for a
  * single concrete source type mapped to a single concrete target type; it cannot generate a mapper
- * whose source is a sealed interface dispatched by pattern matching over 5 unrelated record shapes.
+ * whose source is a sealed interface dispatched by pattern matching over 7 unrelated record shapes.
  * Do not "fix" this class into a {@code @Mapper} interface — it is not possible, and rediscovering
  * that costs more than this paragraph.
  *
@@ -37,7 +38,7 @@ public class ActivityEventAvroMapper {
 
     /**
      * Exhaustive switch over the sealed {@link ActivityEvent} — deliberately no {@code default}
-     * arm, mirroring {@code ActivityLogConsumer.deriveActionAndDetailIds}. Adding a sixth {@link
+     * arm, mirroring {@code ActivityLogConsumer.deriveActionAndDetailIds}. Adding another {@link
      * ActivityEvent} record is then a compile error here until this switch is updated, rather than
      * silently producing an unmappable event at runtime.
      */
@@ -94,11 +95,20 @@ public class ActivityEventAvroMapper {
                             .setColumnId(e.columnId())
                             .setTimestamp(e.timestamp())
                             .build();
+            case SubtaskCreatedEvent e ->
+                    AvroSubtaskCreatedEvent.newBuilder()
+                            .setEventId(e.eventId())
+                            .setUserId(e.userId())
+                            .setBoardId(e.boardId())
+                            .setTaskId(e.taskId())
+                            .setSubtaskId(e.subtaskId())
+                            .setTimestamp(e.timestamp())
+                            .build();
         };
     }
 
     /**
-     * Dispatches on the 6 generated Avro types. Unlike {@link #toAvro(ActivityEvent)}, this side
+     * Dispatches on the 7 generated Avro types. Unlike {@link #toAvro(ActivityEvent)}, this side
      * requires a {@code default} arm: {@link SpecificRecord} is an ordinary interface, not sealed,
      * so the compiler cannot prove exhaustiveness here the way it can for {@link ActivityEvent}.
      * The {@code default} arm throws rather than silently dropping an unrecognised record.
@@ -146,6 +156,14 @@ public class ActivityEventAvroMapper {
                             r.getUserId(),
                             r.getBoardId(),
                             r.getColumnId(),
+                            r.getTimestamp());
+            case AvroSubtaskCreatedEvent r ->
+                    new SubtaskCreatedEvent(
+                            r.getEventId(),
+                            r.getUserId(),
+                            r.getBoardId(),
+                            r.getTaskId(),
+                            r.getSubtaskId(),
                             r.getTimestamp());
             default ->
                     throw new IllegalArgumentException(
