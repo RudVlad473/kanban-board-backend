@@ -181,6 +181,30 @@ public class BoardControllerTest extends AbstractAppTest {
                     .andReturn();
         }
 
+        @Test
+        void testWithAuthenticatedUser_shouldReturnBadRequest_whenNameIsWhitespaceOnly()
+                throws Exception {
+            // Arrange
+            var userId = getOwningUser().getId();
+            var boardId = mockPopulatedBoard.getId();
+            var url = getBoardPrefix() + "/" + boardId;
+            var updateDto =
+                    UpdateBoardRequestDTO.builder()
+                            .name("   ")
+                            .version(mockPopulatedBoard.getVersion())
+                            .build();
+
+            // Act
+            // Assert
+            mockMvc.perform(
+                            put(url).with(user(userId))
+                                    .contentType(APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(updateDto)))
+                    .andDo(print())
+                    .andExpect(status().isBadRequest())
+                    .andReturn();
+        }
+
         // Single-endpoint HTTP contract coverage (docs/CODE_STYLE.md rule 4): a version-less PUT
         // body is a request-shape concern belonging here, distinct from BoardLockingTest's e2e
         // proof of the 409 stale-write conflict itself.

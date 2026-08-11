@@ -2,6 +2,7 @@ package com.vrudenko.kanban_board.dto.board_dto;
 
 import com.vrudenko.kanban_board.base.entity.BaseBoard;
 import com.vrudenko.kanban_board.dto.annotation.BoardName;
+import com.vrudenko.kanban_board.dto.annotation.OptionalNotBlank;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.constraints.NotNull;
@@ -18,7 +19,7 @@ public class UpdateBoardRequestDTO implements BaseBoard {
      * If more fields are added, don't forget to add validation so at least one of them are present
      * You can see example with UpdateTaskRequestDTO
      */
-    @BoardName private String name;
+    @BoardName @OptionalNotBlank private String name;
 
     // D-13: required so BoardService.updateById can reject a stale write, matching
     // UpdateColumnRequestDTO/UpdateTaskRequestDTO/UpdateSubtaskRequestDTO's shape. No
