@@ -430,6 +430,28 @@ public class AuthenticationTest extends AbstractAppMockMvcTest {
                         .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
                         .andExpect(jsonPath("$.errors.password").exists());
             }
+
+            @Test
+            void shouldReturnBadRequestWithValidationFailedCode_whenDisplayNameIsWhitespaceOnly()
+                    throws Exception {
+                // arrange: email/password are valid -- a 3-space displayName is the only
+                // violated constraint
+                var body =
+                        SignupRequestDTO.builder()
+                                .email(collisionProofEmail())
+                                .password(generateValidPassword())
+                                .displayName("   ")
+                                .build();
+
+                // act & assert
+                mockMvc.perform(
+                                post(ApiPaths.SIGNUP)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(objectMapper.writeValueAsString(body)))
+                        .andExpect(status().isBadRequest())
+                        .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                        .andExpect(jsonPath("$.errors.displayName").exists());
+            }
         }
 
         /**

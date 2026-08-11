@@ -301,6 +301,32 @@ class TaskControllerTest extends AbstractAppTest {
                     .andExpect(status().isBadRequest())
                     .andReturn();
         }
+
+        @Test
+        void testWithAuthenticatedUser_shouldReturnBadRequest_whenTitleIsWhitespaceOnly()
+                throws Exception {
+            // Arrange
+            var userId = getOwningUser().getId();
+            var taskId = mockPopulatedTask.getId();
+            var boardId = mockPopulatedBoard.getId();
+            var columnId = mockPopulatedColumn.getId();
+            var url = getTaskPrefix(boardId, columnId) + "/" + taskId;
+            var updateDto =
+                    UpdateTaskRequestDTO.builder()
+                            .title("   ")
+                            .version(mockPopulatedTask.getVersion())
+                            .build();
+
+            // Act
+            // Assert
+            mockMvc.perform(
+                            put(url).with(user(userId))
+                                    .contentType(APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(updateDto)))
+                    .andDo(print())
+                    .andExpect(status().isBadRequest())
+                    .andReturn();
+        }
     }
 
     @Nested

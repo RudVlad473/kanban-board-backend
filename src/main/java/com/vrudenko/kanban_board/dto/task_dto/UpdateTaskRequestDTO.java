@@ -4,6 +4,7 @@ import java.util.Optional;
 
 import com.vrudenko.kanban_board.base.entity.BaseTask;
 import com.vrudenko.kanban_board.dto.annotation.Description;
+import com.vrudenko.kanban_board.dto.annotation.OptionalNotBlank;
 import com.vrudenko.kanban_board.dto.annotation.TaskTitle;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -20,7 +21,7 @@ import lombok.Setter;
 @EqualsAndHashCode
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class UpdateTaskRequestDTO implements BaseTask {
-    @TaskTitle String title;
+    @TaskTitle @OptionalNotBlank String title;
 
     @Description String description;
 

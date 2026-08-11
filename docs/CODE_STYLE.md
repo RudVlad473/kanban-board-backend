@@ -488,6 +488,50 @@ public class ColumnController {
 
 `BoardController` is the original reference for this pattern; `LayeringArchTest` is the enforcing mechanism.
 
+### 12. An optional String field that rejects blank carries `@OptionalNotBlank`, not `@NotBlank`
+
+When a `String` field is genuinely optional (it may be `null`/omitted, matching the
+`@JsonInclude(JsonInclude.Include.NON_NULL)` partial-update convention from rule 6) but must not
+accept a whitespace-only value when it *is* provided, stack `com.vrudenko.kanban_board.dto.annotation.OptionalNotBlank`
+alongside the field's existing composed annotation. `@NotBlank` is reserved for fields that are
+genuinely mandatory — it rejects `null` as well as blank, so adding it to an optional field
+silently makes that field required, breaking the partial-update contract.
+
+Current application sites: `UpdateBoardRequestDTO.name`, `UpdateTaskRequestDTO.title`,
+`UpdateSubtaskRequestDTO.title`, `SignupRequestDTO.displayName`. `UpdateColumnRequestDTO.name` is
+the one documented exception in this codebase — see that class's Javadoc for why it keeps
+`@NotBlank` and stays mandatory instead of adopting this pattern.
+
+**Why:** Bean Validation's built-in constraints (including the `@Pattern` `@OptionalNotBlank`
+composes) treat `null` as valid — only `@NotNull`/`@NotBlank`/`@NotEmpty` reject it — so
+`@OptionalNotBlank` gets "reject blank, ignore absent" without a hand-written
+`ConstraintValidator`. Reaching for `@NotBlank` on a field that is supposed to stay optional is an
+easy mistake with no compiler signal to catch it; `@OptionalNotBlank`'s name makes the intended
+contract explicit at the field itself.
+
+Discouraged:
+
+```java
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class UpdateWidgetRequestDTO {
+    @NotBlank private String label; // also rejects null -- silently makes this field mandatory
+    @NotNull private Long version;
+}
+```
+
+Preferred:
+
+```java
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class UpdateWidgetRequestDTO {
+    @WidgetLabel @OptionalNotBlank private String label; // null passes, "   " does not
+    @NotNull private Long version;
+}
+```
+
+`OptionalNotBlank.java` is the reference implementation; `UpdateBoardRequestDTO.name` is the
+reference application site.
+
 ## Adding a rule
 
 New rules are appended as a new `###` section under `## Rules`, numbered with the next integer. Each rule must carry the same three parts: a rule statement, a bolded **Why** line, and a bad-vs-good code example.
