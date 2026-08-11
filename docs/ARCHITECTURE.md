@@ -55,28 +55,37 @@ sequenceDiagram
     participant UAP as UserAuthenticationProvider
     participant SAS as sessionAuthenticationStrategy
     participant SCR as SecurityContextRepository
-    participant DB as Postgres (spring_session*)
+    participant DB as Postgres (users, spring_session*)
 
     C->>AC: POST /api/signin {email, password}
-    AC->>AM: authenticate(unauthenticated token)
-    AM->>UAP: authenticate(token)
-    UAP->>UAP: passwordEncoder.matches(password, storedHash)
-    alt password does not match
-        UAP--xAC: throws BadCredentialsException
+    AC->>DB: userService.findByEmail(email)
+    alt email not registered
+        DB--xAC: throws AppEntityNotFoundException
+        AC->>AC: passwordEncoder.matches(password, equalizerHash)<br/>(result discarded -- exists for its cost, not its answer)
+        Note over AC: F1 (2026-08-10 /claude-security scan): this comparison makes the<br/>unknown-email arm pay the same one BCrypt cost as the wrong-password arm<br/>below, closing the response-*latency* gap D-08 left open after already<br/>making the response *body* byte-identical
         AC-->>C: 401 ProblemDetail {code: BAD_CREDENTIALS}
-    else password matches
-        Note over UAP: builds a MINIMAL principal (username only) --<br/>the stored bcrypt hash never leaves this method
-        UAP-->>AM: Authentication(principal=User, no password)
-        AM-->>AC: Authentication
-        AC->>SAS: onAuthentication(authentication, request, response)
-        Note over SAS: ConcurrentSessionControlAuthenticationStrategy checks the live<br/>SPRING_SESSION count for this principal (max 2) BEFORE<br/>ChangeSessionIdAuthenticationStrategy rotates the session id
-        alt already at the 2-session ceiling
-            SAS--xAC: throws SessionAuthenticationException
-            AC-->>C: 401 ProblemDetail {code: BAD_CREDENTIALS}<br/>(collapsed -- indistinguishable from a wrong password, D-08)
-        else ceiling not reached
-            AC->>SCR: saveContext(context, request, response)
-            SCR->>DB: write SPRING_SESSION_ATTRIBUTES.SPRING_SECURITY_CONTEXT<br/>(serialized principal has no password field)
-            AC-->>C: 200 OK + Set-Cookie: JSESSIONID (rotated id)
+    else email registered
+        DB-->>AC: UserEntity
+        AC->>AM: authenticate(unauthenticated token)
+        AM->>UAP: authenticate(token)
+        UAP->>UAP: passwordEncoder.matches(password, storedHash)
+        alt password does not match
+            UAP--xAC: throws BadCredentialsException
+            AC-->>C: 401 ProblemDetail {code: BAD_CREDENTIALS}
+        else password matches
+            Note over UAP: builds a MINIMAL principal (username only) --<br/>the stored bcrypt hash never leaves this method
+            UAP-->>AM: Authentication(principal=User, no password)
+            AM-->>AC: Authentication
+            AC->>SAS: onAuthentication(authentication, request, response)
+            Note over SAS: ConcurrentSessionControlAuthenticationStrategy checks the live<br/>SPRING_SESSION count for this principal (max 2) BEFORE<br/>ChangeSessionIdAuthenticationStrategy rotates the session id
+            alt already at the 2-session ceiling
+                SAS--xAC: throws SessionAuthenticationException
+                AC-->>C: 401 ProblemDetail {code: BAD_CREDENTIALS}<br/>(collapsed -- indistinguishable from a wrong password, D-08)
+            else ceiling not reached
+                AC->>SCR: saveContext(context, request, response)
+                SCR->>DB: write SPRING_SESSION_ATTRIBUTES.SPRING_SECURITY_CONTEXT<br/>(serialized principal has no password field)
+                AC-->>C: 200 OK + Set-Cookie: JSESSIONID (rotated id)
+            end
         end
     end
 ```
