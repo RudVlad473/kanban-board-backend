@@ -58,7 +58,7 @@ class TaskController {
     public ResponseEntity<SubtaskResponseDTO> addSubtaskByTaskId(
             @CurrentUserId String userId,
             @PathVariable @NotBlank String taskId,
-            @Valid SaveSubtaskRequestDTO dto,
+            @Valid @RequestBody SaveSubtaskRequestDTO dto,
             HttpServletRequest request) {
         return ResponseEntity.created(URI.create(request.getRequestURI()))
                 .body(taskService.addSubtaskByTaskId(userId, taskId, dto));
