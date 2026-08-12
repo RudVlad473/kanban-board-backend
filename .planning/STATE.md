@@ -165,6 +165,7 @@ Recent decisions affecting current work:
 - [minor] Investigate test coverage gap tracking (JaCoCo) and fix 11 test files that drifted into the `com.vrudenko.kanban_board` package root instead of Phase 7's subpackage structure — includes folding `TaskOrderingTest` into `TaskControllerTest` as a `@Nested` group. See `.planning/todos/pending/2026-08-11-investigate-test-coverage-gap-tracking-and-fix-test-file-p.md`.
 - [minor] `ActivityAction` enum lives in `entity/` but is used across 3 layers (entity, Kafka consumer, DTO), not just as a JPA column type — misplaced relative to CLAUDE.md's documented package convention. `ThemePreference` flagged as a weaker, related case. See `.planning/todos/pending/2026-08-11-activityaction-enum-misplaced-in-entity-package.md`.
 - [minor] Add OpenAPI breaking-change detection to CI (schema diffing against a checked-in baseline via `oasdiff`) — no guard exists today against a REST response/request shape changing silently, unlike the Kafka pipeline's Schema Registry compatibility mode. See `.planning/todos/pending/2026-08-11-add-openapi-breaking-change-detection-to-ci.md`.
+- [major] Return caller identity (id/email/displayName) from `POST /signin`/`/signup` instead of empty bodies — surfaced by a frontend team building a BFF with no way to learn which user just authenticated (only the opaque `JSESSIONID` cookie comes back today, and there's no `GET /users/me`). See `.planning/todos/pending/2026-08-12-return-caller-identity-from-signin-and-signup-responses-for-.md`.
 
 ### Blockers/Concerns
 
@@ -247,8 +248,8 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-10T20:57:04.932Z
-Stopped at: Completed 07.1-09-PLAN.md -- Phase 07.1 fully complete (9/9 plans)
+Last session: 2026-08-12 (resumed)
+Stopped at: Session resumed via /gsd-resume-work; awaiting choice between Phase 5 (Infra Migration) and todo backlog
 Resume file: None
 
 ## Operator Next Steps
