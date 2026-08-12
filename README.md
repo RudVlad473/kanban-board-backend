@@ -66,7 +66,7 @@ signin. Child resources are created by `POST`ing to their parent.
 
 | Method | Path | Notes |
 |---|---|---|
-| `POST` | `/signup` · `/signin` · `/logout` | Session cookie; max 2 concurrent sessions per user |
+| `POST` | `/signup` · `/signin` · `/logout` | Session cookie; max 2 concurrent sessions per user. `/signup`/`/signin` also return the caller's identity (`id`, `email`, `displayName`, `theme`) in the response body |
 | `GET` | `/boards` | Boards owned by the caller |
 | `PUT` `DELETE` | `/boards/{boardId}` | `PUT` requires the current `version`; delete cascades to columns, tasks, subtasks |
 | `GET` | `/boards/{boardId}/columns` | |

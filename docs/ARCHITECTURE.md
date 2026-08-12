@@ -85,7 +85,7 @@ sequenceDiagram
             else ceiling not reached
                 AC->>SCR: saveContext(context, request, response)
                 Note over SCR: writes into Spring Session's request-scoped in-memory session --<br/>not yet committed to Postgres, not yet visible to another DB connection
-                AC-->>C: 200 OK + Set-Cookie: JSESSIONID (rotated id)
+                AC-->>C: 200 OK + Set-Cookie: JSESSIONID (rotated id)<br/>+ body {id, email, displayName, theme}
                 Note over DB: Spring Session's request-scoped filter commits SPRING_SESSION +<br/>SPRING_SESSION_ATTRIBUTES.SPRING_SECURITY_CONTEXT as the response is flushed --<br/>AFTER AC has already returned. Measured 2026-08-11 (260811-h2v Task 2): a<br/>cross-connection probe taken right after saveContext returned read 0 committed<br/>rows for this principal; a client-side probe taken after the response was<br/>received read 1. This ordering is why a transaction-scoped advisory lock around<br/>AC's method would release before the row it needs to serialize against exists
             end
         end
@@ -95,7 +95,11 @@ sequenceDiagram
 Simplified: the diagram omits `signup`'s extra persistence step
 (`UserService#save`, before this same `authenticate` helper runs) and the auto-rollback
 `userService.deleteById(...)` signup performs if authentication of its own new account somehow
-fails — see `AuthenticationController.java`'s `signup` method for that detail.
+fails — see `AuthenticationController.java`'s `signup` method for that detail. On success, signup
+returns **201** with the same `{id, email, displayName, theme}` body shape as signin's 200 above
+(D-01, quick task 260812-hs4), and a `Location` header naming the caller-identity resource URI
+(`${server.servlet.context-path}` + `/users/me`) rather than the `/signup` route that created it
+(D-02/D-04) — that target has no `GET` handler yet, tracked by a follow-up todo.
 
 ### Scenario — how a rejected request differs across 401 / 403 / 400 / 409
 

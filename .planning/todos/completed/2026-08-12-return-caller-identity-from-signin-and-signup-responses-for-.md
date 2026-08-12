@@ -1,5 +1,6 @@
 ---
 created: 2026-08-12T10:13:53.337Z
+resolved: 2026-08-12
 title: Return caller identity from signin and signup responses for BFF consumption
 area: backend
 severity: major
@@ -47,3 +48,17 @@ response shape, whether `signup`'s `Location` header should also be fixed to poi
 resource URI while this is touched, and whether existing tests
 (`AuthenticationE2ETest`/`AuthenticationTest`) asserting an empty body need updating as part of
 this change.
+
+## Resolution
+
+Resolved by quick task 260812-hs4. `POST /signin` now returns `ResponseEntity<UserResponseDTO>`
+(200, `{id, email, displayName, theme}`, D-01 — reuses the existing DTO exactly as this todo's
+solution anticipated). `POST /signup` returns the same shape (201), reusing the `UserResponseDTO`
+`UserService.save` already produced (no new mapper call, no second read), and its `Location`
+header now points at `${server.servlet.context-path}/users/me` instead of back at `/signup`
+(D-02/D-04, fixed in the same task rather than deferred). Neither body leaks the bcrypt hash,
+proven by an exact-set assertion on the serialized JSON's top-level field names (T-hs4-01).
+`AuthenticationTest` was extended, not replaced (D-03) — 6 new tests, zero existing assertions
+dropped. Option 2 (a separate `GET /users/me` endpoint) was deliberately not added; the `Location`
+header's current non-resolution and the four now-divergent `ResponseEntity.created` sites are each
+carried forward as their own minor follow-up todo.
