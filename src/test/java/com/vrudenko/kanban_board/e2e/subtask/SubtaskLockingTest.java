@@ -1,4 +1,4 @@
-package com.vrudenko.kanban_board;
+package com.vrudenko.kanban_board.e2e.subtask;
 
 import java.util.Arrays;
 
