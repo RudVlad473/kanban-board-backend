@@ -1,0 +1,146 @@
+# Production Compose manifest for the Oracle Cloud A1 Flex VM (v1.2 Infra Migration, Phase 5).
+#
+# This is a STANDALONE file, not an overlay on docker-compose.yml (local dev). The two files'
+# service sets genuinely differ: this file defines no `postgres` service (Neon is the production
+# database) and adds `caddy` (automatic public HTTPS). Compose overlays can add/modify services
+# but cannot remove one, and removing `postgres` here is mandatory -- see 05-02-PLAN.md's
+# trade-off matrix for the full reasoning.
+#
+# Deploy usage (manual, plan 05-04): `docker compose -f docker-compose.prod.yml --env-file
+# .env.prod up -d` from the VM, after copying this file, Caddyfile, and a real .env.prod (never
+# committed -- see .env.prod.example) onto the VM.
+#
+# Cross-plan integration note: DB_URL_PARAMS below is the production value for the JDBC URL
+# query-string placeholder plan 05-01 introduces in application.properties (local-safe empty
+# default there, non-empty override here). Plan 05-01 runs in a parallel wave-1 worktree and picks
+# its own exact placeholder variable name; DB_URL_PARAMS is this plan's chosen name, documented
+# here and in .env.prod.example so the two plans reconcile at merge time -- if 05-01 lands under a
+# different variable name, this file's `app.environment` block and .env.prod.example must be
+# updated to match before plan 05-04's deploy, and that reconciliation is flagged in this plan's
+# SUMMARY.md as a required follow-up check.
+
+x-logging: &default-logging
+  # Docker rotates rather than grows at these limits: total on-disk log bytes per container is
+  # bounded by max-size * max-file, and the oldest rotated file is deleted at rotation rather than
+  # accumulating. Worst case per container here: 10m * "3" = 30MB. Applied to all three services
+  # below via this one anchor (not copy-pasted per service) so a future added service cannot
+  # silently be missed -- the acceptance check is that no service lacks a logging block, not that
+  # at least one has one, since a single uncapped service fills the free-tier disk regardless of
+  # the others' caps (T-05-10). max-size carries Docker's documented unit suffix and max-file is a
+  # quoted string -- an unsuffixed size or unquoted count is accepted by Compose's parser but
+  # misinterpreted or rejected by the daemon.
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # Consumed by Caddyfile's {$APP_DOMAIN} placeholder (D-01: free subdomain, chosen at
+      # execution time in plan 05-03). Swapping to a paid domain later only requires changing this
+      # value and the DNS record -- no application change.
+      APP_DOMAIN: ${APP_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Named volumes (not bind mounts, not ephemeral) so container recreation reuses the existing
+      # Let's Encrypt certificate instead of requesting a new one. Repeated re-requests trigger a
+      # week-long Let's Encrypt rate-limit ban (T-05-12).
+      - caddy-data:/data
+      - caddy-config:/config
+    logging: *default-logging
+
+  app:
+    # Pulled by tag from Docker Hub -- the VM has no source checkout to build from. IMAGE_TAG is
+    # set by the human during plan 05-04's manual deploy and, later, by the CI/CD pipeline
+    # (plan 05-05) after a successful build-and-push.
+    image: rudenkovladimir/kanban-board-backend:${IMAGE_TAG}
+    restart: unless-stopped
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+      # Production value for plan 05-01's JDBC URL query-string placeholder -- see the
+      # cross-plan integration note at the top of this file. Expected shape:
+      # "?sslmode=require&channel_binding=require&prepareThreshold=0".
+      DB_URL_PARAMS: ${DB_URL_PARAMS}
+      # Internal Docker network only -- no host port is published for either, matching the local
+      # dev naming exactly (docker-compose.yml) so no application config diverges between
+      # environments.
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:19092
+      SCHEMA_REGISTRY_URL: http://redpanda:8081
+    # No `ports:` entry -- Caddy reaches this container over the internal Compose network by
+    # service name (app:8080) only. Publishing 8080 here would offer the whole API over plain
+    # HTTP, bypassing Caddy's TLS termination entirely (T-05-08, INFRA-04).
+    healthcheck:
+      # Asserts the aggregate status is UP, not merely that some response arrived -- a check that
+      # returns success while the database is unreachable is the failure mode T-05-06 names and
+      # this plan's own prohibition forbids. The runtime image (eclipse-temurin:21-jre-jammy)
+      # already ships wget, curl and bash, so no Dockerfile change is needed.
+      test: [ "CMD-SHELL", "wget -q -O - http://localhost:8080/api/actuator/health | grep -q '\"status\":\"UP\"' || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging: *default-logging
+
+  redpanda:
+    # Same pinned version as the local dev stack (docker-compose.yml) -- production and the
+    # Phase 4-verified local environment must not become two undertested broker versions.
+    image: docker.redpanda.com/redpandadata/redpanda:v26.2.1
+    hostname: redpanda
+    restart: unless-stopped
+    command:
+      - redpanda
+      - start
+      # Explicit resource caps -- deliberately NOT `--mode dev-container` (the local dev preset
+      # that relaxes resource discipline for developer convenience; carrying it into production
+      # would let Redpanda assume it owns the whole VM, a real OOM path alongside the co-resident
+      # app JVM, T-05-11). Values below are conservative for a 2-OCPU/12GB shape --
+      # UNCONFIRMED until plan 05-03 verifies the real Oracle console tenancy shape (Oracle's
+      # publicly reported post-halving figure is MEDIUM confidence, not vendor-confirmed for this
+      # tenancy). Revisit --smp and --memory then; do not assume these values are final.
+      - --overprovisioned
+      - --smp
+      - "1"
+      - --memory
+      - 2G
+      - --schema-registry-addr
+      - 0.0.0.0:8081
+      # Single internal-only Kafka listener -- no external listener, no host port publication.
+      # 9092/19092 must never be internet-facing (INFRA-08, T-05-07).
+      - --kafka-addr
+      - internal://0.0.0.0:19092
+      - --advertise-kafka-addr
+      - internal://redpanda:19092
+      - --rpc-addr
+      - redpanda:33145
+      - --advertise-rpc-addr
+      - redpanda:33145
+      - --default-log-level=info
+    # No `ports:` entry at all -- neither the Kafka listener nor the Schema Registry is published
+    # to the host. The app and Caddy reach this service only over the internal Compose network.
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    healthcheck:
+      test: [ "CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1" ]
+      interval: 5s
+      timeout: 5s
+      retries: 8
+      start_period: 15s
+    logging: *default-logging
+
+volumes:
+  redpanda-data:
+  caddy-data:
+  caddy-config:
