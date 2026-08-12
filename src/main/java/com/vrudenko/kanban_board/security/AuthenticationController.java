@@ -17,6 +17,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -46,6 +47,12 @@ public class AuthenticationController {
     private final PasswordEncoder passwordEncoder;
 
     @Autowired private UserService userService;
+
+    // Mirrors SecurityConfiguration:45 -- read from configuration rather than
+    // request.getRequestURI() so signup's Location header is identical under MockMvc and a real
+    // servlet container (D-04, quick task 260812-hs4).
+    @Value("${server.servlet.context-path}")
+    private String contextPath;
 
     private static final String INVALID_CREDENTIALS_MESSAGE = "Invalid username or password";
 
@@ -112,7 +119,7 @@ public class AuthenticationController {
 
     // only these authentication routes yield session cookie
     @PostMapping(ApiPaths.SIGNUP)
-    public ResponseEntity<String> signup(
+    public ResponseEntity<UserResponseDTO> signup(
             @Valid @RequestBody SignupRequestDTO signupDTO,
             HttpServletRequest request,
             HttpServletResponse response) {
@@ -136,7 +143,16 @@ public class AuthenticationController {
             throw new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE);
         }
 
-        return ResponseEntity.created(URI.create(request.getRequestURI())).build();
+        // D-01/D-02/D-04 (quick task 260812-hs4): this call site deliberately diverges from the
+        // request-URI-derived Location the other four ResponseEntity.created sites still use
+        // (BoardController, ColumnController, TaskController) -- that idiom names the parent
+        // collection a resource was POSTed to, but named the signup route itself here, a URI
+        // describing no resource. GET /users/me has no handler yet -- see the follow-up todo
+        // filed alongside this task -- so this Location does not currently resolve, matching
+        // today's /signup Location, which also does not resolve; it is still a strict
+        // improvement because the URI shape now names the real resource that was created.
+        return ResponseEntity.created(URI.create(contextPath + ApiPaths.USERS + ApiPaths.ME))
+                .body(createdUser);
     }
 
     private Boolean authenticate(
