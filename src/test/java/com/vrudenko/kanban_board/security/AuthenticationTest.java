@@ -9,6 +9,7 @@ import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.user_dto.SigninRequestDTO;
 import com.vrudenko.kanban_board.dto.user_dto.SignupRequestDTO;
+import com.vrudenko.kanban_board.entity.ThemePreference;
 import com.vrudenko.kanban_board.support.fixtures.AbstractAppMockMvcTest;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -158,10 +159,13 @@ public class AuthenticationTest extends AbstractAppMockMvcTest {
     }
 
     /**
-     * Performs a real HTTP signup and returns the email/password pair used, for later lookup. The
-     * signup response carries no body -- {@code ResponseEntity.created(...)} sets only a Location
-     * header -- so the created user must always be located by the email that was submitted, never
-     * read off the response.
+     * Performs a real HTTP signup and returns the email/password pair used, for later lookup. Since
+     * quick task 260812-hs4, the signup response body carries the created user's identity ({@code
+     * id}, {@code email}, {@code displayName}, {@code theme}, per D-01) -- this helper still
+     * returns the submitted email/password pair rather than reading the response, purely because
+     * its callers ({@code SignupPasswordHashPersistence}, {@code SignupThenSignin}) look the row up
+     * by the submitted email and need the plaintext password to re-authenticate, both of which the
+     * response body does not carry.
      */
     private String[] signupOverHttp() throws Exception {
         var email = collisionProofEmail();
@@ -475,6 +479,84 @@ public class AuthenticationTest extends AbstractAppMockMvcTest {
                 Assertions.assertThat(result.getResponse().getStatus())
                         .isEqualTo(HttpStatus.CREATED.value());
                 Assertions.assertThat(result.getResponse().getCookie(COOKIE_NAME)).isNotNull();
+            }
+
+            /**
+             * D-01: mirrors {@code Signin.Authenticated}'s identity-payload test. The hash-leak
+             * risk (T-hs4-01) is identical on this endpoint and gets an identical exact-set guard.
+             */
+            @Test
+            void testWithValidCredential_shouldReturnCreatedIdentity_whenUserExists()
+                    throws Exception {
+                // Arrange
+                var email = collisionProofEmail();
+                var displayName =
+                        dataFactory.getRandomWord(ValidationConstants.MIN_USER_DISPLAY_NAME_LENGTH);
+                var body =
+                        SignupRequestDTO.builder()
+                                .email(email)
+                                .password(generateValidPassword())
+                                .displayName(displayName)
+                                .build();
+
+                // Act
+                var result =
+                        mockMvc.perform(
+                                        post(ApiPaths.SIGNUP)
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(objectMapper.writeValueAsString(body)))
+                                .andReturn();
+
+                // Assert
+                Assertions.assertThat(result.getResponse().getStatus())
+                        .isEqualTo(HttpStatus.CREATED.value());
+                var rawBody = result.getResponse().getContentAsString();
+                JsonNode responseBody = objectMapper.readTree(rawBody);
+                Assertions.assertThat(responseBody.get("email").asText()).isEqualTo(email);
+                Assertions.assertThat(responseBody.get("displayName").asText())
+                        .isEqualTo(displayName);
+                Assertions.assertThat(responseBody.get("id").asText()).isNotBlank();
+                Assertions.assertThat(responseBody.get("theme").asText())
+                        .isEqualTo(ThemePreference.LIGHT.name());
+                var fieldNames = new HashSet<String>();
+                responseBody.fieldNames().forEachRemaining(fieldNames::add);
+                Assertions.assertThat(fieldNames)
+                        .containsExactlyInAnyOrder("id", "email", "displayName", "theme");
+            }
+
+            /**
+             * D-02 regression guard -- meaningful precisely because it is red today: the header
+             * currently names the signup route itself (see {@code AuthenticationController}) rather
+             * than the caller-identity resource. Composed from {@code CONTEXT_PATH} plus the same
+             * {@link ApiPaths} constants the handler builds from, so this assertion cannot drift
+             * from what the handler actually produces (D-04).
+             */
+            @Test
+            void testWithValidCredential_shouldPointLocationAtCallerIdentityUri_whenUserExists()
+                    throws Exception {
+                // Arrange
+                var body =
+                        SignupRequestDTO.builder()
+                                .email(collisionProofEmail())
+                                .password(generateValidPassword())
+                                .displayName(
+                                        dataFactory.getRandomWord(
+                                                ValidationConstants.MIN_USER_DISPLAY_NAME_LENGTH))
+                                .build();
+
+                // Act
+                var result =
+                        mockMvc.perform(
+                                        post(ApiPaths.SIGNUP)
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(objectMapper.writeValueAsString(body)))
+                                .andReturn();
+
+                // Assert
+                Assertions.assertThat(result.getResponse().getStatus())
+                        .isEqualTo(HttpStatus.CREATED.value());
+                Assertions.assertThat(result.getResponse().getHeader("Location"))
+                        .isEqualTo(CONTEXT_PATH + ApiPaths.USERS + ApiPaths.ME);
             }
         }
 
