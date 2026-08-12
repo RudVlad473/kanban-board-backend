@@ -5,6 +5,13 @@ plugins {
     id 'com.diffplug.spotless' version '7.0.2'
     id 'net.ltgt.errorprone' version '5.1.0'
 
+    // Coverage-gap tracking (quick task 260812-eg8, D-01: measure first, no threshold yet).
+    // Ships inside Gradle core -- no third-party plugin coordinate is resolved, only the
+    // org.jacoco agent/ant artifacts the toolVersion below pins. Report-only in this task;
+    // see the toolVersion comment for the pinning rationale and jacocoTestReport below for
+    // the generated-code exclusions that keep the denominator honest.
+    id 'jacoco'
+
     // Compiles src/main/avro/*.avsc into generated SpecificRecord classes at build time
     // (Phase 4, Schema Registry). Pinned exactly: the project was archived by its owner on
     // 2026-12-28 and donated to the Apache Avro project, so 1.9.1 is its final, permanent
@@ -249,6 +256,76 @@ tasks.register('fastTest', Test) {
     // to it) -- any non-zero value restarts the JVM per class, and therefore restarts
     // AbstractPostgresContainerTest's static Testcontainers initializer per class too, which on
     // this codebase is catastrophic rather than merely slower (260811-ixj-RESEARCH.md).
+
+    // No JaCoCo agent here (trade-off 3, quick task 260812-eg8): the pre-commit hook runs this
+    // task on every commit, and coverage instrumentation typically adds 5-20% wall clock for a
+    // signal nobody reads at commit time. jacoco { enabled = false } overrides the JacocoPlugin's
+    // default of attaching its agent to every Test-typed task -- without this, fastTest would
+    // silently get instrumented too, the moment the jacoco plugin (declared above) is applied.
+    jacoco {
+        enabled = false
+    }
+}
+
+// --- JaCoCo coverage reporting (quick task 260812-eg8) -------------------------------------
+// Report-only per D-01 (measure first, pick an enforcement rung from real numbers as a
+// follow-up decision) -- this task deliberately adds no jacocoTestCoverageVerification task
+// and no threshold. Attached to `test` only (maxParallelForks = 2 above); `fastTest` opts out
+// via jacoco { enabled = false } in its own block.
+jacoco {
+    // Pinned to an exact release rather than left floating, mirroring this file's existing
+    // rationale for errorprone (net.ltgt.errorprone/error_prone_core) and the avro plugin: an
+    // unreviewed upstream release should not be able to change coverage-report behaviour (or,
+    // worse, silently change which classes participate in the denominator) underneath a
+    // future build. 0.8.12 is Gradle 8.11.1's own bundled default for this project's Gradle
+    // wrapper version (verified live via a throwaway `println jacoco.toolVersion` task against
+    // this exact wrapper before pinning it here) and is a known-good combination for the Java 21
+    // toolchain this project already targets.
+    toolVersion = '0.8.12'
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        // XML is not enabled by default -- required for any machine-checkable consumer (Task
+        // 3's regression gate against this task's baseline); HTML is this task's own
+        // human-readable verification artifact.
+        xml.required = true
+        html.required = true
+    }
+
+    // Makes the coverage denominator honest (trade-off 1): three generated-code sources would
+    // otherwise dilute or inflate the numbers this task's whole job is to measure accurately.
+    // Applied via afterEvaluate against classDirectories (not sourceDirectories) because
+    // exclusion here is by compiled .class file pattern, matching how JaCoCo actually attributes
+    // probes to classes at report time.
+    afterEvaluate {
+        classDirectories.setFrom(
+                files(classDirectories.files.collect {
+                    fileTree(dir: it, exclude: [
+                            // MapStruct's generated *Impl.class mappers (build/generated/sources/
+                            // annotationProcessor output, compiled into the same classes dir as
+                            // hand-written code) -- every @Mapper interface in this codebase
+                            // generates a sibling <InterfaceName>Impl class; there is no
+                            // hand-written logic in any of them to lose coverage visibility on.
+                            '**/mapper/*MapperImpl.class',
+                            // gradle-avro-plugin's codegen output (build/generated-main-avro-java,
+                            // already named in this file's ErrorProne excludedPaths regex above,
+                            // re-expressed here as a class-file pattern instead of a path regex).
+                            // Every generated Avro record's top-level class name starts with
+                            // "Avro" (the .avsc "name" field, e.g. AvroBoardCreatedEvent) --
+                            // narrow enough to exclude the generated records and their inner
+                            // Builder/SchemaStore classes while keeping the hand-written
+                            // ActivityEventAvroMapper.class, which lives in the same
+                            // event/avro package but carries no "Avro" prefix.
+                            '**/event/avro/Avro*.class'
+                    ])
+                })
+        )
+    }
+    // Lombok's generated accessors/equals/hashCode/builders are NOT a separate file JaCoCo can
+    // exclude by path or class-name pattern -- they are inline members of hand-written classes.
+    // JaCoCo has a built-in filter for members carrying lombok.config's addLombokGeneratedAnnotation.
 }
 
 // --- Schema Registry registration (SCHEMA-01) ---------------------------------
