@@ -87,6 +87,14 @@ dependencies {
     // https://mvnrepository.com/artifact/org.springframework.boot/spring-boot-starter-security
     implementation 'org.springframework.boot:spring-boot-starter-security'
 
+    // Backs management.endpoints.web.exposure.include=health in application.properties (Phase 5,
+    // INFRA-01). Exists solely to give the production Docker healthcheck a real "is the app
+    // actually working" signal (Actuator's health aggregation includes the DataSource
+    // HealthIndicator for free) -- not for general monitoring/metrics, which stays out of this
+    // phase's scope. No version pin needed, matching every other spring-boot-starter-* line in
+    // this block -- resolved by the same io.spring.dependency-management-managed 3.5.0 train.
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
     // Backs the spring.session.* properties in application.properties (store-type=jdbc,
     // initialize-schema=always). Those properties predate this dependency and were silently
     // inert without it -- sessions were plain in-memory Tomcat HttpSession despite the config

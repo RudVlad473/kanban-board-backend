@@ -34,4 +34,11 @@ public final class ApiPaths {
 
     /** Utilities */
     public static final String SWAGGER_UI = "/swagger-ui";
+
+    // Spring Boot Actuator's default base path (management.server.port is not set, so it shares
+    // this app's port/context-path). Declared as a constant here, matching SWAGGER_UI's precedent
+    // of a framework-adjacent utility path living in this class rather than inline in
+    // SecurityConfiguration -- unlike SWAGGER_DOCS_PATH, which is sourced from a genuinely
+    // configurable property (springdoc.api-docs.path) and has no fixed default to name here.
+    public static final String ACTUATOR_HEALTH = "/actuator/health";
 }

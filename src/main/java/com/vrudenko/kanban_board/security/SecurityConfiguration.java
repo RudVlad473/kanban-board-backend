@@ -76,7 +76,15 @@ public class SecurityConfiguration {
                                     ApiPaths.SIGNUP,
                                     SWAGGER_DOCS_PATH,
                                     String.format("%s/*", SWAGGER_DOCS_PATH),
-                                    String.format("%s/*", ApiPaths.SWAGGER_UI))
+                                    String.format("%s/*", ApiPaths.SWAGGER_UI),
+                                    // Phase 5, INFRA-01: the production Docker healthcheck curls
+                                    // this path unauthenticated. This matcher (like ApiPaths.SIGNIN
+                                    // above) is context-path-relative -- the servlet container
+                                    // strips server.servlet.context-path (=/api) before Spring
+                                    // Security evaluates request matchers, so the externally
+                                    // resolvable URL is /api/actuator/health even though this entry
+                                    // reads /actuator/health.
+                                    ApiPaths.ACTUATOR_HEALTH)
                             .permitAll();
 
                     auth.anyRequest().authenticated();
