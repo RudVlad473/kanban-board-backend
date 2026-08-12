@@ -38,3 +38,6 @@ with RFC 7807 boilerplate, e.g. assert `otherBoard.getName()` does not appear in
 specifically (`objectMapper.readTree(...).get("detail").asText()`) rather than the raw response
 body string, or exclude data-factory words that are substrings of `"about"`/`"blank"`/other
 RFC 7807 constants.
+
+**Filed as its own todo:**
+`.planning/todos/pending/2026-08-12-globalexceptionhandlertest-accessdeniedtest-flaky-against-.md`.

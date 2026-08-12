@@ -5,11 +5,12 @@ plugins {
     id 'com.diffplug.spotless' version '7.0.2'
     id 'net.ltgt.errorprone' version '5.1.0'
 
-    // Coverage-gap tracking (quick task 260812-eg8, D-01: measure first, no threshold yet).
-    // Ships inside Gradle core -- no third-party plugin coordinate is resolved, only the
-    // org.jacoco agent/ant artifacts the toolVersion below pins. Report-only in this task;
-    // see the toolVersion comment for the pinning rationale and jacocoTestReport below for
-    // the generated-code exclusions that keep the denominator honest.
+    // Coverage-gap tracking (quick task 260812-eg8, D-01: measure first, then pick a rung from
+    // real numbers -- report-only through Task 1, a ratchet gate as of Task 4). Ships inside
+    // Gradle core -- no third-party plugin coordinate is resolved, only the org.jacoco
+    // agent/ant artifacts the toolVersion below pins. See the toolVersion comment for the
+    // pinning rationale, jacocoTestReport below for the generated-code exclusions that keep
+    // the denominator honest, and jacocoTestCoverageVerification for the ratchet itself.
     id 'jacoco'
 
     // Compiles src/main/avro/*.avsc into generated SpecificRecord classes at build time
@@ -214,6 +215,17 @@ tasks.named('test') {
     // databases, so the D-02 `@AfterEach`-deletion isolation model (which only ever wipes its own
     // fork's database) is untouched. See 260811-ixj-MEASUREMENTS.md for every run.
     maxParallelForks = 2
+
+    // Makes `./gradlew test` alone (CI's own invocation, .github/workflows/deploy.yml) enforce
+    // the coverage ratchet below -- Gradle's jacoco plugin does NOT wire
+    // jacocoTestCoverageVerification into `check` automatically, and this CI never runs `check`
+    // at all (it runs `test` and `spotlessCheck` as two separate steps), so without this line the
+    // gate would silently never fire outside a developer's own memory to run it by hand -- exactly
+    // the silent-drift shape quick task 260812-eg8 was filed to close. finalizedBy (not
+    // dependsOn) is deliberate: it runs verification strictly after test's own JaCoCo `.exec` file
+    // is written, and still reports the overall build as failed if the ratchet trips even though
+    // `test` itself may have gone green.
+    finalizedBy jacocoTestCoverageVerification
 }
 
 // Pre-commit-hook-only fast test gate. `test` itself is untouched above -- CI and
@@ -267,11 +279,32 @@ tasks.register('fastTest', Test) {
     }
 }
 
-// --- JaCoCo coverage reporting (quick task 260812-eg8) -------------------------------------
-// Report-only per D-01 (measure first, pick an enforcement rung from real numbers as a
-// follow-up decision) -- this task deliberately adds no jacocoTestCoverageVerification task
-// and no threshold. Attached to `test` only (maxParallelForks = 2 above); `fastTest` opts out
-// via jacoco { enabled = false } in its own block.
+// --- JaCoCo coverage reporting and gating (quick task 260812-eg8) --------------------------
+// Attached to `test` only (maxParallelForks = 2 above); `fastTest` opts out via
+// jacoco { enabled = false } in its own block.
+
+// Shared generated-code exclusions (trade-off 1): both jacocoTestReport (the human-readable
+// number) and jacocoTestCoverageVerification (the enforced ratchet, Task 4) MUST compute over
+// the identical denominator -- a verification checked against a different set of excluded
+// classes than the report a human actually read when Task 1's baseline was measured would be a
+// bug waiting to be misread (the ratchet could silently pass or fail for a reason that has
+// nothing to do with the real coverage number). Defined once, reused by both tasks below.
+def jacocoGeneratedCodeExcludes = [
+        // MapStruct's generated *Impl.class mappers (build/generated/sources/
+        // annotationProcessor output, compiled into the same classes dir as hand-written code)
+        // -- every @Mapper interface in this codebase generates a sibling <InterfaceName>Impl
+        // class; there is no hand-written logic in any of them to lose coverage visibility on.
+        '**/mapper/*MapperImpl.class',
+        // gradle-avro-plugin's codegen output (build/generated-main-avro-java, already named in
+        // this file's ErrorProne excludedPaths regex above, re-expressed here as a class-file
+        // pattern instead of a path regex). Every generated Avro record's top-level class name
+        // starts with "Avro" (the .avsc "name" field, e.g. AvroBoardCreatedEvent) -- narrow
+        // enough to exclude the generated records and their inner Builder/SchemaStore classes
+        // while keeping the hand-written ActivityEventAvroMapper.class, which lives in the same
+        // event/avro package but carries no "Avro" prefix.
+        '**/event/avro/Avro*.class'
+]
+
 jacoco {
     // Pinned to an exact release rather than left floating, mirroring this file's existing
     // rationale for errorprone (net.ltgt.errorprone/error_prone_core) and the avro plugin: an
@@ -302,30 +335,56 @@ jacocoTestReport {
     afterEvaluate {
         classDirectories.setFrom(
                 files(classDirectories.files.collect {
-                    fileTree(dir: it, exclude: [
-                            // MapStruct's generated *Impl.class mappers (build/generated/sources/
-                            // annotationProcessor output, compiled into the same classes dir as
-                            // hand-written code) -- every @Mapper interface in this codebase
-                            // generates a sibling <InterfaceName>Impl class; there is no
-                            // hand-written logic in any of them to lose coverage visibility on.
-                            '**/mapper/*MapperImpl.class',
-                            // gradle-avro-plugin's codegen output (build/generated-main-avro-java,
-                            // already named in this file's ErrorProne excludedPaths regex above,
-                            // re-expressed here as a class-file pattern instead of a path regex).
-                            // Every generated Avro record's top-level class name starts with
-                            // "Avro" (the .avsc "name" field, e.g. AvroBoardCreatedEvent) --
-                            // narrow enough to exclude the generated records and their inner
-                            // Builder/SchemaStore classes while keeping the hand-written
-                            // ActivityEventAvroMapper.class, which lives in the same
-                            // event/avro package but carries no "Avro" prefix.
-                            '**/event/avro/Avro*.class'
-                    ])
+                    fileTree(dir: it, exclude: jacocoGeneratedCodeExcludes)
                 })
         )
     }
     // Lombok's generated accessors/equals/hashCode/builders are NOT a separate file JaCoCo can
     // exclude by path or class-name pattern -- they are inline members of hand-written classes.
     // JaCoCo has a built-in filter for members carrying lombok.config's addLombokGeneratedAnnotation.
+}
+
+// --- JaCoCo coverage ratchet (quick task 260812-eg8, D-01 Task 2 decision: option-a) --------
+// Operator-selected rung, chosen from Task 1's measured baseline at the Task 2 blocking
+// checkpoint (2026-08-12): 91.23% instruction / 90.93% line / 78.62% branch coverage on
+// hand-written src/main code (Lombok/MapStruct/Avro excluded -- see jacocoGeneratedCodeExcludes
+// above). The three minimums below are set a few points BELOW those measured numbers -- not
+// equal to them -- deliberately: an exact-equality gate would spuriously fail the very next PR
+// on ordinary code-shape noise (a single new branch, a slightly different line count) that
+// doesn't represent an actual coverage regression. This is a DRIFT ALARM, not a proof of
+// adequacy (measurements-doc trade-off 4): a green jacocoTestCoverageVerification means "no
+// class went dark since 2026-08-12," not "this codebase is well tested" -- the pre-existing
+// suite already established that, independent of this number. Two pre-existing gaps this
+// ratchet deliberately does NOT force closed, per the Task 2 decision, are the zero-coverage
+// atLeastOneFieldPopulated() validators on UpdateTaskRequestDTO/UpdateSubtaskRequestDTO
+// (260812-eg8-MEASUREMENTS.md Section 1) -- accepted as pre-existing baseline, not blocked on.
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                counter = 'INSTRUCTION'
+                minimum = 0.90
+            }
+            limit {
+                counter = 'LINE'
+                minimum = 0.90
+            }
+            limit {
+                counter = 'BRANCH'
+                minimum = 0.75
+            }
+        }
+    }
+
+    // Same generated-code exclusions as jacocoTestReport above -- see jacocoGeneratedCodeExcludes'
+    // own comment for why the ratchet and the report MUST share one denominator.
+    afterEvaluate {
+        classDirectories.setFrom(
+                files(classDirectories.files.collect {
+                    fileTree(dir: it, exclude: jacocoGeneratedCodeExcludes)
+                })
+        )
+    }
 }
 
 // --- Schema Registry registration (SCHEMA-01) ---------------------------------

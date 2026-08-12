@@ -17,6 +17,8 @@ files:
   - src/test/java/com/vrudenko/kanban_board/SubtaskLockingTest.java
   - src/test/java/com/vrudenko/kanban_board/TaskOrderingTest.java
   - src/test/java/com/vrudenko/kanban_board/ThemePersistenceTest.java
+resolved: 2026-08-12T00:00:00.000Z
+resolved_by: Quick task 260812-eg8
 ---
 
 ## Problem
@@ -84,3 +86,67 @@ established design-fork pattern. At minimum the investigation should answer:
    rather than just relocated as-is (check the other root-level files for the same
    duplicate-vs-relocate question, e.g. `ColumnOrderingTest`, `ColumnDeletionTest`,
    `SubtaskLockingTest` against their sibling `*ControllerTest`/`*E2ETest` classes).
+
+## Resolution (260812-eg8)
+
+**Coverage tracking (question 1): JaCoCo, report-only measured first, then a ratchet gate.**
+Gradle-core `jacoco` plugin, pinned `toolVersion = '0.8.12'`, attached to `test` only (never
+`fastTest`, +26.4% instrumentation overhead measured -- steeper than the "typically 5-20%" this
+todo's own investigation expected, recorded as a real finding rather than rounded down).
+Denominator made honest per Lombok/MapStruct/Avro generated code (new `lombok.config` at the repo
+root -- this repo had none before, the single highest-value finding of the whole task).
+`jacocoTestCoverageVerification` now enforces `INSTRUCTION >= 0.90`, `LINE >= 0.90`,
+`BRANCH >= 0.75` -- a ratchet set a few points below the measured baseline (91.23% / 90.93% /
+78.62%), chosen by the operator from real numbers at a blocking checkpoint (`260812-eg8-MEASUREMENTS.md`),
+mirroring this repo's ErrorProne rollout precedent. Wired into `./gradlew test` itself via
+`finalizedBy`, since this repo's CI never runs `check`. The ArchUnit zero-coverage complement this
+todo asked about (question 1's second half) was investigated and explicitly declined -- see
+`260812-eg8-MEASUREMENTS.md` Section 3 for why it would have added strictly less signal than
+JaCoCo's own per-method report on this codebase's own motivating example.
+
+**Test placement guidance (question 2): `docs/CODE_STYLE.md` rule 13** (which subpackage; composes
+with rule 4's purpose test) plus `architecture/TestPlacementArchTest.java`, an ArchUnit guard that
+fails `./gradlew test` if a new test class lands directly in the root package outside the single
+named exemption (`KanbanBoardApplicationTests`). Falsified with a throwaway root-package class
+before landing (confirmed red, then green again after deletion) -- a written rule alone is what
+already failed here once, so this one was made mechanically unreopenable.
+
+**The 11 stray files: fixed, per an audited disposition table, not per this todo's own guesses.**
+7 relocate 1:1 (`ActivityLogCleanupIsolationTest`, `BoardCreationE2ETest`, `BoardFullReadTest`,
+`EventIdGeneratorTest`, `FlywaySchemaProvenanceTest`, `SubtaskLockingTest`, `ThemePersistenceTest`
+-- the last two keep their own filenames rather than being renamed to match a `*ControllerTest`
+convention, since each is the de facto single-purpose test for a route with no existing sibling
+class). `ColumnDeletionTest` + `ColumnOrderingTest` fold into `controller/ColumnControllerTest`
+(0 drops -- their same-named `DeleteById` nested classes test different properties of the same
+route, not the same thing twice). `TaskOrderingTest` splits across
+`controller/ColumnControllerTest.AddTaskByColumnId` (1 test) and
+`e2e/task/TaskMoveTest.MoveToColumn` (9 tests examined, 1 dropped as a genuine duplicate, 8 kept).
+`KanbanBoardApplicationTests` stays exempted at root, per the operator's confirmation at the Task 2
+checkpoint. Full audit trail (per-file `@Test`/`@Nested` counts, verified-not-assumed disposition
+reasons) in `260812-eg8-MEASUREMENTS.md` Section 4.
+
+**What this todo's own investigation got right and wrong, found only by reading every file:**
+- **Right:** `ColumnOrderingTest`/`ColumnDeletionTest` and `SubtaskLockingTest` needed the same
+  duplicate-vs-relocate scrutiny this todo asked for.
+- **Wrong (corrected):** `TaskOrderingTest` does **not** fold into `controller/TaskControllerTest`
+  as this todo predicted -- `TaskControllerTest` has no move or creation group at all. The real
+  overlap was elsewhere: `TaskOrderingTest.TaskCreation` posts to `ColumnController`'s own
+  add-task-by-column-id route (not any `TaskController` route), and
+  `TaskOrderingTest.MoveToColumn` overlaps `e2e/task/TaskMoveTest.MoveToColumn`, an existing class
+  this todo did not name at all.
+- **Not anticipated by this todo:** a second duplicate pair, `ColumnDeletionTest.DeleteById` /
+  `ColumnOrderingTest.DeleteById` (same nested-class name, different tested property -- neither a
+  duplicate of the other, discovered only by reading both bodies); and that `ThemePersistenceTest`
+  is the de facto `UserController` test, standing in for a `controller/UserControllerTest` that
+  does not exist anywhere in the tree.
+
+**Out-of-scope finding filed separately:** a pre-existing, unrelated flaky assertion in
+`GlobalExceptionHandlerTest.AccessDeniedTest` (a random-word DTO fixture occasionally collides with
+RFC 7807's literal `"about:blank"` boilerplate) was discovered while retrying this task's own
+pre-commit gate -- recorded in
+`.planning/quick/260812-eg8-investigate-test-coverage-gap-tracking-j/deferred-items.md`, not fixed
+here (out of this task's own file scope).
+
+Full suite: 430 -> 429 (the fold/split's one genuine dropped duplicate) -> 430 again
+(`TestPlacementArchTest`, one new `@ArchTest`). Final measured count: 430 tests, 0 failures, 0
+errors. `spotlessCheck` and `./gradlew test` (now enforcing the coverage ratchet) both green.

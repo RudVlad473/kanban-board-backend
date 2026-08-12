@@ -210,3 +210,46 @@ gate exists to catch.**
 - `./gradlew clean test jacocoTestReport` -- BUILD SUCCESSFUL, 430/430 tests green, twice
   (once for the baseline run, once more with `--profile` for accurate task-level timing).
 - Zero test files moved or modified in this task.
+
+---
+
+## Section 5 -- Closing State (Task 4)
+
+**D-01 -- rung in force:** option-a, ratchet at the measured baseline. `build.gradle`'s
+`jacocoTestCoverageVerification` enforces `INSTRUCTION >= 0.90`, `LINE >= 0.90`,
+`BRANCH >= 0.75` -- a few points below Task 1's measured 91.23% / 90.93% / 78.62% (Section 1), so
+today's suite passes with headroom against ordinary code-shape noise rather than an exact-equality
+gate that would spuriously fail the next PR. Wired into `./gradlew test` itself via
+`tasks.named('test') { finalizedBy jacocoTestCoverageVerification }`, since this repo's CI
+(`.github/workflows/deploy.yml`) invokes `./gradlew test` and `./gradlew spotlessCheck` directly
+and never runs `check` (which is where Gradle's jacoco plugin would otherwise leave the
+verification task unwired). `fastTest` (the pre-commit gate) remains untouched -- no coverage
+instrumentation, per trade-off 3. The two zero-coverage `atLeastOneFieldPopulated()` gaps
+(`UpdateTaskRequestDTO`, `UpdateSubtaskRequestDTO`) and the confirmed-dead
+`DeleteBoardByIdRequestDTO` are accepted as pre-existing baseline, not force-fixed by this
+ratchet, per the Task 2 decision.
+
+**D-02 -- ArchUnit zero-coverage rule:** **no**, per operator decision at the Task 2 checkpoint,
+agreeing with this document's own Section 3 recommendation. JaCoCo's per-method report already
+subsumes the coarser class-existence check -- Section 3 showed a concrete case
+(`UpdateTaskRequestDTO`/`UpdateSubtaskRequestDTO`) where a class-existence rule would have reported
+"covered" while the class's own most safety-relevant method sat at 0%, which is precisely the
+failure mode a class-existence check cannot see by construction. Not implemented; this reasoning is
+recorded here so the option is not silently re-litigated in a future session without first reading
+why it was declined.
+
+**D-03 -- file dispositions:** confirmed and executed exactly as Section 4's table states, all 11
+rows, zero changes at the Task 2 checkpoint. See the quick task's Task 3 commit for the full
+disposition-to-execution mapping.
+
+**Final test count reconciliation:** pre-work baseline 430 (STATE.md, quick task 260811-ufu) -> 429
+after the fold/split's one genuine dropped duplicate (Section 4's arithmetic, confirmed exactly by
+Task 3's actual run) -> 430 again after Task 3 added `TestPlacementArchTest` (1 new `@ArchTest`).
+Final count as measured by `./gradlew clean test --rerun-tasks` at Task 4 close: **430 tests, 0
+failures, 0 errors** -- non-decreasing against the 430 pre-work baseline, with the arithmetic
+explicitly reconciled rather than silently assumed to match.
+
+**Coverage regression check (Task 3's gate, T-eg8-03):** post-relocation `jacocoTestReport` total:
+91% instruction (406 of 4,629 missed -- identical to Task 1's 91.23% baseline), 78% branch (34 of
+159 missed -- identical to Task 1's 78.62% baseline). No `src/main` code changed in this quick
+task, so an identical total was the expected outcome; confirmed, not assumed.
