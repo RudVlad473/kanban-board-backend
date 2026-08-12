@@ -1,4 +1,4 @@
-package com.vrudenko.kanban_board;
+package com.vrudenko.kanban_board.config;
 
 import java.util.List;
 
@@ -20,9 +20,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * succeeding silently, so a future regression in any one of the four mechanisms fails a specific,
  * named assertion instead of merely "some test somewhere broke."
  *
- * <p>Deliberately does not extend {@link AbstractAppTest}: this class needs no user/board/column/
- * task fixtures, and {@code AbstractAppTest} is still wired to H2 in this plan -- extending it here
- * would pull in fixture creation against the wrong datasource entirely.
+ * <p>Deliberately does not extend {@link
+ * com.vrudenko.kanban_board.support.fixtures.AbstractAppTest}: this class needs no
+ * user/board/column/task fixtures, and {@code AbstractAppTest} is still wired to H2 in this plan --
+ * extending it here would pull in fixture creation against the wrong datasource entirely.
  */
 @SpringBootTest
 // 04.2-02 Task 1: this class now asserts against the profile's own configuration, with no

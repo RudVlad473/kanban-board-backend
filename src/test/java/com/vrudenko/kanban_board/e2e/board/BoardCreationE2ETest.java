@@ -1,4 +1,4 @@
-package com.vrudenko.kanban_board;
+package com.vrudenko.kanban_board.e2e.board;
 
 import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
@@ -33,7 +33,8 @@ import static io.restassured.RestAssured.given;
  * Tracer proving GAP-01 end to end: a POST to the boards collection route runs through the
  * controller, DTO validation, {@link
  * com.vrudenko.kanban_board.service.UserService#addBoardByUserId}, and back out through {@link
- * com.vrudenko.kanban_board.handler.GlobalExceptionHandler}. Modeled on {@link SubtaskLockingTest}.
+ * com.vrudenko.kanban_board.handler.GlobalExceptionHandler}. Modeled on {@link
+ * com.vrudenko.kanban_board.e2e.subtask.SubtaskLockingTest}.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Tag("realSocket")

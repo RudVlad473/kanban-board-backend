@@ -1,4 +1,4 @@
-package com.vrudenko.kanban_board;
+package com.vrudenko.kanban_board.controller;
 
 import java.util.Arrays;
 import java.util.UUID;
@@ -34,7 +34,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * ownership-verified fetch-join query, and the composed {@link
  * com.vrudenko.kanban_board.mapper.BoardFullMapper} chain, returning board, columns, tasks and
  * subtasks four levels deep in a single nested document. Modeled on {@link
- * BoardCreationE2ETest}/{@link SubtaskLockingTest}.
+ * com.vrudenko.kanban_board.e2e.board.BoardCreationE2ETest}/{@link
+ * com.vrudenko.kanban_board.e2e.subtask.SubtaskLockingTest}.
  */
 @SpringBootTest
 @AutoConfigureMockMvc

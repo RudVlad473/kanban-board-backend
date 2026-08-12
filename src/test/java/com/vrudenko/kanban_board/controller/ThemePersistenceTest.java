@@ -1,4 +1,4 @@
-package com.vrudenko.kanban_board;
+package com.vrudenko.kanban_board.controller;
 
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.dto.user_dto.UpdateThemeRequestDTO;
@@ -26,7 +26,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * Tracer proving GAP-05 end to end: a request travels controller ({@link
  * com.vrudenko.kanban_board.controller.UserController}) to session-resolved identity
  * ({@code @CurrentUserId}) to service ({@link com.vrudenko.kanban_board.service.UserService}) to
- * database and back, over real HTTP. Modeled on {@link SubtaskLockingTest}.
+ * database and back, over real HTTP. Modeled on {@link
+ * com.vrudenko.kanban_board.e2e.subtask.SubtaskLockingTest}.
  *
  * <p>Downgraded to the in-process MockMvc tier (D-03, verdict-table row 15). This class keeps using
  * the real-signin cookie relay ({@link AbstractAppMockMvcTest#signinCookie()}) throughout, never

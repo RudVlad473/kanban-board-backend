@@ -532,6 +532,63 @@ public class UpdateWidgetRequestDTO {
 `OptionalNotBlank.java` is the reference implementation; `UpdateBoardRequestDTO.name` is the
 reference application site.
 
+### 13. A new test class belongs in a named subpackage of `com.vrudenko.kanban_board`, never directly in the root package
+
+Every test class lives inside one of this tree's existing subpackages -- `service/`,
+`controller/`, `e2e/{activity,board,column,subtask,task}/`, `activitylog/`, `config/`,
+`security/`, `handler/`, `architecture/`, or `support/{containers,fixtures,listeners}/` -- chosen
+by rule 4's purpose test (which subpackage) together with rule 4's base-class test (which tier).
+The `e2e/` subtree is itself entity-subfoldered: a new flow test that spans board, column, task or
+subtask concerns lives under `e2e/<entity>/`, not loosely under `e2e/` itself. The single named
+exception is `KanbanBoardApplicationTests`, Spring Initializr's conventional root-package
+context-load smoke test, which stays beside `KanbanBoardApplication` by idiomatic Spring Boot
+convention rather than by any technical requirement -- `@SpringBootTest` with no `classes`
+attribute walks *up* the package hierarchy for `@SpringBootConfiguration`, so every subpackage
+below the root can still reach it. This rule governs *where the file lives*; rule 4 above governs
+*which purpose/tier it serves* -- read both together when starting a new test file.
+
+**Why:** the convention already existed in practice (every subpackage above was deliberately
+created for a purpose), but existed nowhere in writing until quick task 260812-eg8, and an
+unwritten convention is one that silently reopens every few sessions -- 11 test files (2,000+
+lines across `ActivityLogCleanupIsolationTest`, `BoardCreationE2ETest`, `BoardFullReadTest`,
+`ColumnDeletionTest`, `ColumnOrderingTest`, `EventIdGeneratorTest`,
+`FlywaySchemaProvenanceTest`, `SubtaskLockingTest`, `TaskOrderingTest`, `ThemePersistenceTest`, and
+the exempted `KanbanBoardApplicationTests`) had drifted into the root package before this rule was
+written down and mechanically enforced. `architecture/TestPlacementArchTest.java` is the enforcing
+mechanism: it fails `./gradlew test` the moment a new test class lands in the root package outside
+the named exemption, so the drift cannot silently reopen the way it did before this rule existed.
+It does not catch a test class that lands in the *wrong* subpackage for what it tests (e.g. a
+column concern filed under `e2e/task/`) -- that judgement call is what this rule's prose, and rule
+4's purpose test, are for.
+
+Discouraged:
+
+```java
+package com.vrudenko.kanban_board;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+public class BoardFullReadTest extends AbstractAppMockMvcTest {
+    // a new controller-purpose test filed directly in the root package --
+    // TestPlacementArchTest fails the build the moment this lands
+}
+```
+
+Preferred:
+
+```java
+package com.vrudenko.kanban_board.controller;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+public class BoardFullReadTest extends AbstractAppMockMvcTest {
+    // filed under controller/, matching rule 4's purpose test for a single-endpoint HTTP contract
+}
+```
+
+`TestPlacementArchTest` is the enforcing mechanism, matching how rules 7 and 11 already cite
+`LayeringArchTest`.
+
 ## Adding a rule
 
 New rules are appended as a new `###` section under `## Rules`, numbered with the next integer. Each rule must carry the same three parts: a rule statement, a bolded **Why** line, and a bad-vs-good code example.

@@ -1,4 +1,4 @@
-package com.vrudenko.kanban_board;
+package com.vrudenko.kanban_board.activitylog;
 
 import java.time.Instant;
 import java.util.UUID;
