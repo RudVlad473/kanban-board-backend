@@ -5,6 +5,7 @@ import java.net.URI;
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.dto.user_dto.SigninRequestDTO;
 import com.vrudenko.kanban_board.dto.user_dto.SignupRequestDTO;
+import com.vrudenko.kanban_board.dto.user_dto.UserResponseDTO;
 import com.vrudenko.kanban_board.entity.UserEntity;
 import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
 import com.vrudenko.kanban_board.service.UserService;
@@ -68,7 +69,7 @@ public class AuthenticationController {
 
     // only these authentication routes yield session cookie
     @PostMapping(ApiPaths.SIGNIN)
-    public ResponseEntity<Void> signin(
+    public ResponseEntity<UserResponseDTO> signin(
             @Valid @RequestBody SigninRequestDTO dto,
             HttpServletRequest request,
             HttpServletResponse response) {
@@ -102,7 +103,11 @@ public class AuthenticationController {
             throw new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE);
         }
 
-        return ResponseEntity.ok().build();
+        // D-01 (quick task 260812-hs4): the caller's identity, so a frontend BFF learns who just
+        // authenticated instead of receiving only an opaque session cookie. Maps the `user`
+        // already loaded above -- no second database read, no reordering relative to the
+        // authenticate(...) call above, so both failure arms above are untouched.
+        return ResponseEntity.ok(userService.toResponseDTO(user));
     }
 
     // only these authentication routes yield session cookie

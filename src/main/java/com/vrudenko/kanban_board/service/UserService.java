@@ -53,6 +53,17 @@ public class UserService implements UserDetailsService {
         return user.get();
     }
 
+    // Exists so an entity a caller already holds can be mapped without the redundant second row
+    // read a find-by-id variant would cost on this repo's most timing-sensitive endpoint
+    // (AuthenticationController.signin, F1). The alternative of injecting UserMapper directly
+    // into a controller was rejected because LayeringArchTest's rule 1 polices only the
+    // repository package and could not see that precedent land (D-01, quick task 260812-hs4).
+    // Deliberately not @Transactional -- it performs no database access, and its input entity is
+    // already detached when signin calls it (findByEmail above carries no @Transactional).
+    public UserResponseDTO toResponseDTO(UserEntity entity) {
+        return userMapper.toResponseDTO(entity);
+    }
+
     // D-07: checked, expected duplicate-email path -- signup reveals this explicitly as a 409
     // rather than swallowing it into a generic auth failure. users.email carries a unique
     // constraint at the database level too (uk_users_email, V1__init.sql), so a race between two
