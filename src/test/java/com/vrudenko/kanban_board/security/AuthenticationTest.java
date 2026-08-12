@@ -11,6 +11,7 @@ import com.vrudenko.kanban_board.dto.user_dto.SigninRequestDTO;
 import com.vrudenko.kanban_board.dto.user_dto.SignupRequestDTO;
 import com.vrudenko.kanban_board.support.fixtures.AbstractAppMockMvcTest;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Nested;
@@ -208,6 +209,108 @@ public class AuthenticationTest extends AbstractAppMockMvcTest {
                 Assertions.assertThat(result.getResponse().getStatus())
                         .isEqualTo(HttpStatus.OK.value());
                 Assertions.assertThat(result.getResponse().getCookie(COOKIE_NAME)).isNotNull();
+            }
+
+            /**
+             * Proves D-01/D-05 empirically rather than merely asserting the key exists: the {@code
+             * theme} value in the response body must equal {@link #getOwningUser()}'s own {@code
+             * theme}, which is itself a {@code UserResponseDTO} field, so all four are directly
+             * comparable. Because {@code UserService.findByEmail} is deliberately not
+             * {@code @Transactional}, this simultaneously proves mapping a detached {@code
+             * UserEntity} does not blow up.
+             */
+            @Test
+            void testWithValidCredential_shouldReturnCallerIdentity_whenUserExists()
+                    throws Exception {
+                // Arrange
+                var body =
+                        SigninRequestDTO.builder()
+                                .email(getOwningUser().getEmail())
+                                .password(getOwningUserPassword())
+                                .build();
+
+                // Act
+                var result =
+                        mockMvc.perform(
+                                        post(ApiPaths.SIGNIN)
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(objectMapper.writeValueAsString(body)))
+                                .andReturn();
+
+                // Assert
+                Assertions.assertThat(result.getResponse().getStatus())
+                        .isEqualTo(HttpStatus.OK.value());
+                JsonNode responseBody =
+                        objectMapper.readTree(result.getResponse().getContentAsString());
+                Assertions.assertThat(responseBody.get("id").asText())
+                        .isEqualTo(getOwningUser().getId());
+                Assertions.assertThat(responseBody.get("email").asText())
+                        .isEqualTo(getOwningUser().getEmail());
+                Assertions.assertThat(responseBody.get("displayName").asText())
+                        .isEqualTo(getOwningUser().getDisplayName());
+                Assertions.assertThat(responseBody.get("theme").asText())
+                        .isEqualTo(getOwningUser().getTheme().name());
+            }
+
+            /**
+             * T-hs4-01: an exact-set assertion on the top-level field names, not a per-key absence
+             * check -- so this also fails on any *future* field silently appearing in this
+             * response, not only the bcrypt hash this test was written against.
+             */
+            @Test
+            void testWithValidCredential_shouldExposeOnlyIdentityFields_whenUserExists()
+                    throws Exception {
+                // Arrange
+                var body =
+                        SigninRequestDTO.builder()
+                                .email(getOwningUser().getEmail())
+                                .password(getOwningUserPassword())
+                                .build();
+
+                // Act
+                var result =
+                        mockMvc.perform(
+                                        post(ApiPaths.SIGNIN)
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(objectMapper.writeValueAsString(body)))
+                                .andReturn();
+
+                // Assert
+                var rawBody = result.getResponse().getContentAsString();
+                JsonNode responseBody = objectMapper.readTree(rawBody);
+                var fieldNames = new HashSet<String>();
+                responseBody.fieldNames().forEachRemaining(fieldNames::add);
+                Assertions.assertThat(fieldNames)
+                        .containsExactlyInAnyOrder("id", "email", "displayName", "theme");
+                Assertions.assertThat(rawBody).doesNotContain(BCRYPT_HASH_MARKER);
+            }
+
+            /**
+             * T-hs4-04. ESCAPE HATCH: if this assertion goes red, delete it, file a todo naming the
+             * missing header, and record the finding in the summary -- do not expand this task into
+             * security-header configuration.
+             */
+            @Test
+            void testWithValidCredential_shouldReturnNonCacheableResponse_whenUserExists()
+                    throws Exception {
+                // Arrange
+                var body =
+                        SigninRequestDTO.builder()
+                                .email(getOwningUser().getEmail())
+                                .password(getOwningUserPassword())
+                                .build();
+
+                // Act
+                var result =
+                        mockMvc.perform(
+                                        post(ApiPaths.SIGNIN)
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content(objectMapper.writeValueAsString(body)))
+                                .andReturn();
+
+                // Assert
+                Assertions.assertThat(result.getResponse().getHeader("Cache-Control"))
+                        .contains("no-store");
             }
         }
 
