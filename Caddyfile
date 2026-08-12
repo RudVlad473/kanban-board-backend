@@ -1,0 +1,24 @@
+# Production Caddy reverse-proxy config (v1.2 Infra Migration, Phase 5, INFRA-04).
+#
+# {$APP_DOMAIN} is Caddy's own environment-variable placeholder syntax (not a hardcoded literal)
+# -- injected by docker-compose.prod.yml's `caddy.environment.APP_DOMAIN` -- so the free-subdomain
+# hostname chosen in plan 05-03 per D-01 is supplied at deploy time. A paid domain can later be
+# swapped in by changing only this environment variable and the DNS A-record; no application
+# change is needed (D-01's stated reversibility).
+{$APP_DOMAIN} {
+	# Reverse-proxies to the app container by its Compose service name on port 8080. This address
+	# resolves only on the internal Compose network -- the app service publishes no host port
+	# (docker-compose.prod.yml), so this is the only path a request can reach it by.
+	reverse_proxy app:8080
+}
+
+# No `tls internal` directive and no `auto_https off` here, deliberately: this site block relies
+# entirely on Caddy's automatic HTTPS, which obtains a real, publicly trusted Let's Encrypt
+# certificate via the HTTP-01 challenge -- which is why port 80 must stay open in addition to 443
+# (see docker-compose.prod.yml's caddy service). INFRA-04 requires real, publicly trusted HTTPS; a
+# self-signed certificate would satisfy the letter of "HTTPS" while failing its actual purpose.
+#
+# Caddy's certificate/state data directory (`/data`) is mounted as a named Docker volume in
+# docker-compose.prod.yml precisely so that recreating this container reuses the existing
+# certificate instead of requesting a new one. Repeated certificate re-requests trigger a
+# week-long Let's Encrypt rate limit -- see docker-compose.prod.yml's caddy service comment.
