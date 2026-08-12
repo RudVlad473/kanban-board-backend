@@ -1,0 +1,46 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-08-12T12:28:29.702Z",
+  "phase": "05",
+  "phase_name": "infra-migration",
+  "phase_dir": ".planning/phases/05-infra-migration",
+  "plan": 3,
+  "task": 2,
+  "total_tasks": 3,
+  "status": "paused",
+  "completed_tasks": [
+    {"id": "wave1-dispatch", "name": "Dispatch 05-01 and 05-02 as background worktree executors", "status": "done"},
+    {"id": "05-02", "name": "Plan 05-02 (production compose/Caddyfile/diagram)", "status": "done", "commit": "30dfdb9 (in worktree-agent-affa22fb82d9a43b6, not yet merged to master)"},
+    {"id": "05-03-task1", "name": "05-03 Task 1: decide VM shape/region/IP strategy", "status": "done"}
+  ],
+  "remaining_tasks": [
+    {"id": "05-01", "name": "Plan 05-01 (actuator health, Neon datasource, baseline schema DDL)", "status": "in_progress_background", "note": "Executor agent still running in worktree .claude/worktrees/agent-a93e6dd993efe56cf (branch worktree-agent-a93e6dd993efe56cf, locked). No SUMMARY.md yet as of pause. Was launched via Agent(subagent_type=gsd-executor, isolation=worktree, run_in_background=true) from the main session — it may keep running or may have been terminated when the session ended; check worktree state on resume before deciding whether to re-dispatch."},
+    {"id": "wave1-merge", "name": "Merge 05-01 and 05-02 worktree branches back into master (--ff-only preferred), update STATE.md/ROADMAP.md for wave 1, remove worktrees", "status": "not_started"},
+    {"id": "wave1-reconcile", "name": "Reconcile DB_URL_PARAMS: 05-02's docker-compose.prod.yml injects this env var name for the JDBC URL query-string placeholder; verify 05-01's actual application.properties placeholder name matches before plan 05-04's deploy. See .planning/WINDOWS.md and 05-02-SUMMARY.md.", "status": "not_started"},
+    {"id": "05-03-task2", "name": "05-03 Task 2: create the Oracle VM and lock down all 3 network layers", "status": "in_progress", "progress": "Decisions locked (see decisions below); was mid-way through the Create Compute Instance console flow (image not yet switched to Ubuntu, shape not yet reset to 2 OCPU/12GB after earlier 80/512 test, SSH key not yet uploaded, Reserved IP not yet attached) — instance has NOT been created yet. Last question pending to user: what the Networking section's 'Advanced options' shows for Reserved vs Ephemeral public IP selection."},
+    {"id": "05-03-task3", "name": "05-03 Task 3: create Neon project, register DuckDNS subdomain, point A record at VM IP", "status": "not_started"},
+    {"id": "05-03-summary", "name": "Write 05-03-SUMMARY.md", "status": "not_started"}
+  ],
+  "blockers": [],
+  "async_jobs": [],
+  "human_actions_pending": [
+    {"action": "Report what Networking > Advanced options shows for Reserved vs Ephemeral public IP in the OCI Create Instance flow", "context": "Need to know whether the Reserved IP (144.24.239.175, already created) can be attached during instance creation or only after, via a separate VNIC edit step", "blocking": true},
+    {"action": "Create the Oracle VM instance with: Ubuntu 22.04+ LTS image, VM.Standard.A1.Flex shape at 2 OCPU/12GB, own existing SSH public key (NOT a newly generated one), Reserved IP 144.24.239.175 attached", "context": "Task 2 of plan 05-03", "blocking": true},
+    {"action": "Install Docker Engine + Compose plugin from Docker's official apt repo (not docker.io), add login user to docker group", "context": "Task 2 of plan 05-03", "blocking": true},
+    {"action": "Configure OS-level firewall (default-drop input, accept established/related + loopback + TCP 22/80/443 only), persist rules, reboot, re-verify persistence and SSH reachability", "context": "Task 2 of plan 05-03; see .planning/phases/05-infra-migration/05-RESEARCH.md Code Examples for the exact iptables sequence", "blocking": true},
+    {"action": "Configure OCI Security List and Network Security Group, both allowing exactly TCP 22/80/443 from the internet", "context": "Task 2 of plan 05-03; both layers must be set even though either alone looks sufficient (Pitfall 7, additive layers)", "blocking": true},
+    {"action": "External port probe from off-VM: confirm 22 reachable, 8080/8081/9092 NOT reachable", "context": "Task 2 acceptance criteria", "blocking": true},
+    {"action": "Create docs/INFRA_RUNBOOK.md recording region/AD/OS image+version/shape+verified OCPU-RAM/public IP+reserved flag/Docker+Compose versions/all 3 layers' rules/date -- no secrets, no private keys, no connection strings", "context": "Task 2 artifact", "blocking": true},
+    {"action": "Create Neon project in region closest to Zurich, leave DB empty, locate (but do not share) both pooled and direct connection strings", "context": "Task 3 of plan 05-03", "blocking": true},
+    {"action": "Register a DuckDNS (or equivalent free dynamic-DNS) subdomain, point its A record at 144.24.239.175, confirm DNS propagation from off-VM. Do NOT attempt cert issuance yet -- that happens during the tracer deploy in plan 05-04.", "context": "Task 3 of plan 05-03", "blocking": true}
+  ],
+  "decisions": [
+    {"decision": "VM shape: VM.Standard.A1.Flex at 2 OCPU / 12 GB", "rationale": "Console's Service Limits page showed 41 cores available, but that is the temporary Free Trial credit ceiling, not the permanent Always Free allocation (Pitfall 8: Oracle silently halved Always Free A1 from 4/24 to 2/12 in June 2026, undocumented). Sizing to the trial number risks reclamation/billing once the trial ends. 2/12 also matches plan 05-02's already-written conservative Redpanda memory/SMP caps, so no cross-plan changes needed.", "phase": "05"},
+    {"decision": "Public IP strategy: Reserved (static), address 144.24.239.175, already created via Networking > IP Management > Reserved Public IPs (no cost warning shown)", "rationale": "DNS A record, the SSH host fingerprint pinned in plan 05-05, and the OCI ingress rules all depend on this IP staying constant; an ephemeral IP would silently break all three simultaneously if the VM is ever recreated (a real possibility on free tier).", "phase": "05"},
+    {"decision": "OS image: Ubuntu 22.04+ LTS instead of the console's Oracle Linux 9 default", "rationale": "STACK.md recommends Ubuntu for the default 'ubuntu' user and broader community documentation for Docker-on-OCI; also matches the plan's requirement to install Docker from Docker's official apt repo rather than a distro package.", "phase": "05"},
+    {"decision": "Region: Switzerland North (Zurich), fixed (tenancy default, not changeable)", "rationale": "Read directly from the console top-right region selector.", "phase": "05"}
+  ],
+  "uncommitted_files": [],
+  "next_action": "Ask the user what the Networking > Advanced options panel in OCI's Create Compute Instance flow shows for Reserved vs Ephemeral public IP selection, then guide them through finishing instance creation with the locked-in decisions (Ubuntu LTS image, 2 OCPU/12GB, own SSH public key, Reserved IP 144.24.239.175 attached).",
+  "context_notes": "Running plan 05-03 interactively (not via a spawned gsd-executor subagent) because all 3 tasks are blocking human checkpoints requiring real cloud-console actions and credential handling the executor agent is not permitted to do (D-02). Protocol being followed: present ONE console step at a time, wait for the user's screenshot/report, confirm against acceptance criteria, then present the next step -- per the plan's explicit instructions. Meanwhile 05-01 and 05-02 (the two autonomous wave-1 plans) were dispatched as background gsd-executor subagents in isolated git worktrees; 05-02 finished clean, 05-01 was still running when this pause was triggered. Neither worktree branch has been merged to master yet -- do that only after both are confirmed complete, then update STATE.md/ROADMAP.md for wave 1 before moving to wave 2 (plan 05-04, which depends on all three wave-1 plans)."
+}
