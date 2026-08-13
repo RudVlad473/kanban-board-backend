@@ -51,11 +51,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * HTTP session on every call (via {@code HttpSessionSecurityContextRepository}) -- which trips
  * {@code SecurityConfiguration}'s own {@code MAX_CONCURRENT_SESSIONS = 2} ceiling on the third call
  * for the same principal, since {@code SessionManagementFilter} treats each of those as a fresh
- * login. A real signin only establishes one session, so replaying its cookie never hits that
- * ceiling -- this is a genuine, non-obvious interaction discovered while writing this class
- * (invisible in production, where the one real signin path always pre-establishes its session
- * before the security context is ever saved), recorded in this plan's SUMMARY rather than fixed,
- * since nothing in {@code src/main} is wrong.
+ * login -- verified empirically by quick task 260813-m9x, which found the filter holds its own
+ * DSL-composed, in-memory-registry-backed {@code SessionAuthenticationStrategy}, a different
+ * instance from the {@code sessionAuthenticationStrategy} bean the real signin path invokes
+ * explicitly (see {@code SecurityConfiguration}'s corrected {@code sessionManagement} comment). A
+ * real signin only establishes one session, so replaying its cookie never hits that ceiling -- this
+ * is a genuine, non-obvious interaction discovered while writing this class (invisible in
+ * production, where the one real signin path always pre-establishes its session before the security
+ * context is ever saved), recorded in this plan's SUMMARY rather than fixed, since nothing in
+ * {@code src/main} is wrong.
  *
  * <p><b>Prohibition, restated from the plan:</b> if any case in this class fails, the correct
  * response is to investigate the binding assumption, never to add input sanitization/escaping to

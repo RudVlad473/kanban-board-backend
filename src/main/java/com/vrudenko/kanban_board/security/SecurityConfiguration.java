@@ -100,11 +100,22 @@ public class SecurityConfiguration {
                         handling.authenticationEntryPoint(problemDetailAuthenticationEntryPoint));
 
         // session management
-        // These lines are declarations only -- no filter reads them on this application's
-        // authentication path (AuthenticationController calls authenticationManager.authenticate
-        // directly, and Spring Security 6 no longer installs SessionManagementFilter on the
-        // default chain either). The sessionAuthenticationStrategy bean below is what actually
-        // enforces both, invoked explicitly from AuthenticationController.authenticate.
+        // Measured, not assumed (quick task 260813-m9x): SessionManagementConfigurer DOES install
+        // a filter from these declarations -- both SessionManagementFilter and the
+        // ConcurrentSessionFilter this file's sessionAuthenticationStrategy Javadoc already names.
+        // That filter holds its OWN CompositeSessionAuthenticationStrategy, composed by the
+        // configurer from the two DSL calls above -- a different instance (reference-compared)
+        // from the sessionAuthenticationStrategy bean below, backed by an in-memory
+        // SessionRegistryImpl rather than that bean's JDBC-backed
+        // SpringSessionBackedSessionRegistry.
+        // This filter-held strategy only fires on a request that reaches the chain already
+        // carrying an authenticated context the session repository never stored -- concretely,
+        // MockMvc's .with(user(...)) test shortcut (see InjectionAttemptTest), never the real
+        // signin/signup path: AuthenticationController.authenticate authenticates and invokes the
+        // bean below explicitly before this filter ever observes an authenticated context on that
+        // request, so on that path the filter finds nothing to do. Two independent ceiling
+        // enforcers therefore coexist on different paths, backed by different registries -- see the
+        // bean's own Javadoc below for the real-path enforcer.
         http.sessionManagement(
                 (session) -> {
                     session.maximumSessions(MAX_CONCURRENT_SESSIONS).maxSessionsPreventsLogin(true);
@@ -133,10 +144,19 @@ public class SecurityConfiguration {
 
     /**
      * Enforces the two session controls declared above in {@code securityFilterChain}'s {@code
-     * sessionManagement} block. {@link AuthenticationController#authenticate} invokes {@code
-     * onAuthentication(...)} on this strategy directly, since neither the default filter chain
-     * (Spring Security 6 no longer installs {@code SessionManagementFilter}) nor this application's
-     * custom signin path would ever call it otherwise.
+     * sessionManagement} block, on the real signin/signup path: {@link
+     * AuthenticationController#authenticate} invokes {@code onAuthentication(...)} on this strategy
+     * directly, before the {@code SecurityContext} is ever saved. This is necessary despite {@code
+     * SessionManagementConfigurer} installing a {@code SessionManagementFilter} from the same DSL
+     * block (measured, quick task 260813-m9x -- see the {@code sessionManagement} block's own
+     * comment above): that filter holds a separate, DSL-composed {@code
+     * CompositeSessionAuthenticationStrategy} backed by an in-memory {@code SessionRegistryImpl},
+     * not this bean, and only fires when a request reaches the chain already authenticated without
+     * a stored context -- a shape this application's own signin/signup requests never produce, but
+     * MockMvc's {@code .with(user(...))} test shortcut does (see {@code InjectionAttemptTest}). The
+     * two enforcers are independent: this bean's {@code SpringSessionBackedSessionRegistry} reads
+     * the live, JDBC-persisted session count, so its ceiling is consistent across instances; the
+     * filter-held strategy's in-memory registry is not.
      *
      * <p><b>Known, accepted TOCTOU window (finding F6, 2026-08-10 {@code /claude-security}
      * scan).</b> {@code ConcurrentSessionControlAuthenticationStrategy} enforces the ceiling by
