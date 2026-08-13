@@ -1,6 +1,6 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '3.5.0'
+    id 'org.springframework.boot' version '3.5.16'
     id 'io.spring.dependency-management' version '1.1.6'
     id 'com.diffplug.spotless' version '7.0.2'
     id 'net.ltgt.errorprone' version '5.1.0'
@@ -77,7 +77,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.postgresql:postgresql'
 
-    // Flyway version is BOM-managed by Spring Boot 3.5.0 (pinned to 11.7.2 in
+    // Flyway version is BOM-managed by Spring Boot 3.5.16 (pinned to 11.7.2 in
     // spring-boot-dependencies) -- deliberately left unversioned so a future Spring Boot
     // bump moves both artifacts together, matching this project's existing precedent of
     // leaving Spring-managed deps unversioned (spring-kafka, postgresql driver above).
@@ -92,7 +92,7 @@ dependencies {
     // actually working" signal (Actuator's health aggregation includes the DataSource
     // HealthIndicator for free) -- not for general monitoring/metrics, which stays out of this
     // phase's scope. No version pin needed, matching every other spring-boot-starter-* line in
-    // this block -- resolved by the same io.spring.dependency-management-managed 3.5.0 train.
+    // this block -- resolved by the same io.spring.dependency-management-managed 3.5.16 train.
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
 
     // Backs the spring.session.* properties in application.properties (store-type=jdbc,
@@ -192,9 +192,10 @@ dependencies {
     // in 04-01-SUMMARY.md for Plan 02.
     testImplementation 'org.testcontainers:redpanda'
 
-    // No explicit version -- BOM-managed by Spring Boot 3.5.0 exactly like the
+    // No explicit version -- BOM-managed by Spring Boot 3.5.16 exactly like the
     // org.testcontainers:kafka/redpanda/junit-jupiter lines above, resolving to the same
-    // 1.21.0 release train those already use (04.2-RESEARCH.md, verified live via
+    // 1.21.4 release train those already use as of the 3.5.0 -> 3.5.16 bump (quick task
+    // 260813-q1i, Task 2; originally 1.21.0 per 04.2-RESEARCH.md, verified live via
     // `./gradlew dependencies --configuration testRuntimeClasspath`). 04.2-02 completes the
     // cutover this tracer started: com.h2database:h2 is now removed entirely (D-05), so
     // AbstractPostgresContainerTest's container is the only datasource left for the whole suite.

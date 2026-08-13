@@ -19,7 +19,7 @@
 ## Frameworks
 
 **Core:**
-- Spring Boot 3.5.0 - Application framework and HTTP server
+- Spring Boot 3.5.16 - Application framework and HTTP server
 
 **Web:**
 - Spring Web - REST API and HTTP request handling (`org.springframework.boot:spring-boot-starter-web`)
@@ -57,13 +57,13 @@
 
 **Infrastructure:**
 - PostgreSQL Driver - PostgreSQL database client (`org.postgresql:postgresql`)
-- Testcontainers PostgreSQL 1.21.0 (BOM-managed via Spring Boot 3.5.0) - Real PostgreSQL 16
+- Testcontainers PostgreSQL 1.21.4 (BOM-managed via Spring Boot 3.5.16) - Real PostgreSQL 16
   container backing every test (`org.testcontainers:postgresql`)
 
 **Utilities:**
 - Vavr 0.10.4 - Functional programming utilities
 - Guava 32.0.1-android - Google collections and utilities
-- Apache Commons Lang 3 - String and utility functions (test dependency)
+- Apache Commons Lang 3 - String and utility functions (runtime dependency; moved from test-only scope, quick task 260813-q1i)
 - Apache Commons Collections 4.5.0 - Collection utilities
 - DataFactory 0.8 - Test data generation
 

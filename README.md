@@ -49,7 +49,7 @@ Detail and reasoning for each of these is in [docs/ARCHITECTURE.md](docs/ARCHITE
 | Concern | Choice |
 |---|---|
 | Language / runtime | Java 21, Gradle 8.11.1 (wrapper) |
-| Framework | Spring Boot 3.5.0 — Web, Data JPA, Security, Validation |
+| Framework | Spring Boot 3.5.16 — Web, Data JPA, Security, Validation |
 | Persistence | PostgreSQL + Hibernate; Flyway for schema history; Testcontainers PostgreSQL for the test profile |
 | Sessions | Spring Session JDBC (server-side session state in Postgres) |
 | Messaging | Spring Kafka against Redpanda; Apache Avro 1.12 + Confluent Schema Registry |

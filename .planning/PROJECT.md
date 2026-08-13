@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A Spring Boot 3.5.0 / Java 21 REST API backend for a Kanban board application (users → boards → columns → tasks → subtasks), with session-based authentication, ownership-based access control, optimistic locking on concurrent edits, and a Kafka-backed, event-driven per-board activity log. Originally scoped to finish **Epic 2** of the [backend modernization plan](../docs/plans/backend-modernization/README.md) (v1.0); v1.1 additionally delivered Epic 1 (the activity feed). The project is a personal/portfolio showcase, and its next milestone shifts focus from feature epics to deployment infrastructure.
+A Spring Boot 3.5.16 / Java 21 REST API backend for a Kanban board application (users → boards → columns → tasks → subtasks), with session-based authentication, ownership-based access control, optimistic locking on concurrent edits, and a Kafka-backed, event-driven per-board activity log. Originally scoped to finish **Epic 2** of the [backend modernization plan](../docs/plans/backend-modernization/README.md) (v1.0); v1.1 additionally delivered Epic 1 (the activity feed). The project is a personal/portfolio showcase, and its next milestone shifts focus from feature epics to deployment infrastructure.
 
 ## Core Value
 
@@ -69,7 +69,7 @@ v1.0 and v1.1 shipped the backend-depth showcase (JPA/Hibernate optimistic locki
 
 ## Constraints
 
-- **Tech stack**: Spring Boot 3.5.0, Java 21, Spring Data JPA/Hibernate, PostgreSQL for both production and tests (tests run against a Testcontainers-managed PostgreSQL instance executing the same Flyway migrations) — no new frameworks introduced for this scope
+- **Tech stack**: Spring Boot 3.5.16, Java 21, Spring Data JPA/Hibernate, PostgreSQL for both production and tests (tests run against a Testcontainers-managed PostgreSQL instance executing the same Flyway migrations) — no new frameworks introduced for this scope
 - **Testing**: Match existing convention — unit tests for services/DTOs, integration tests (REST Assured) for controllers; query-count assertions via Hibernate `Statistics.getPrepareStatementCount()` (not `getQueryExecutionCount()`, which misses `findById()` calls)
 - **PR discipline**: This work should remain reviewable as its own unit, consistent with the modernization plan's one-epic-per-PR intent
 - **Format check**: `./gradlew spotlessCheck` and `./gradlew test` must pass (matches existing CI)

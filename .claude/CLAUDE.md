@@ -4,13 +4,13 @@
 
 **Kanban Board Backend — Epic 2 Completion**
 
-A Spring Boot 3.5.0 / Java 21 REST API backend for a Kanban board application (users → boards → columns → tasks → subtasks), with session-based authentication and ownership-based access control. This GSD project scopes specifically to finishing **Epic 2** of the existing [backend modernization plan](../docs/plans/backend-modernization/README.md): closing out the JPA/Hibernate depth work (N+1 fixes, optimistic locking) that was partially completed in a prior session.
+A Spring Boot 3.5.16 / Java 21 REST API backend for a Kanban board application (users → boards → columns → tasks → subtasks), with session-based authentication and ownership-based access control. This GSD project scopes specifically to finishing **Epic 2** of the existing [backend modernization plan](../docs/plans/backend-modernization/README.md): closing out the JPA/Hibernate depth work (N+1 fixes, optimistic locking) that was partially completed in a prior session.
 
 **Core Value:** Ship the two remaining Epic 2 deliverables — a real "get full board" endpoint and optimistic locking on concurrent edits — as clean, independently reviewable, technically defensible work that matches the standard already set by the completed part of Epic 2.
 
 ### Constraints
 
-- **Tech stack**: Spring Boot 3.5.0, Java 21, Spring Data JPA/Hibernate, PostgreSQL for both production and tests (tests run against a Testcontainers-managed PostgreSQL instance executing the same Flyway migrations) — no new frameworks introduced for this scope
+- **Tech stack**: Spring Boot 3.5.16, Java 21, Spring Data JPA/Hibernate, PostgreSQL for both production and tests (tests run against a Testcontainers-managed PostgreSQL instance executing the same Flyway migrations) — no new frameworks introduced for this scope
 - **Testing**: Match existing convention — unit tests for services/DTOs, integration tests (REST Assured) for controllers; query-count assertions via Hibernate `Statistics.getPrepareStatementCount()` (not `getQueryExecutionCount()`, which misses `findById()` calls)
 - **PR discipline**: This work should remain reviewable as its own unit, consistent with the modernization plan's one-epic-per-PR intent
 - **Format check**: `./gradlew spotlessCheck` and `./gradlew test` must pass (matches existing CI)
@@ -33,7 +33,7 @@ A Spring Boot 3.5.0 / Java 21 REST API backend for a Kanban board application (u
 
 ## Frameworks
 
-- Spring Boot 3.5.0 - Application framework and HTTP server
+- Spring Boot 3.5.16 - Application framework and HTTP server
 - Spring Web - REST API and HTTP request handling (`org.springframework.boot:spring-boot-starter-web`)
 - Spring Data JPA - ORM and database abstraction (`org.springframework.boot:spring-boot-starter-data-jpa`)
 - Spring Security - Authentication and authorization (`org.springframework.boot:spring-boot-starter-security`)
@@ -52,11 +52,11 @@ A Spring Boot 3.5.0 / Java 21 REST API backend for a Kanban board application (u
 - Lombok 1.18.36 - Boilerplate reduction (annotations for getters, setters, constructors)
 - ULID Creator 5.2.0 - Unique ID generation (`com.github.f4b6a3:ulid-creator`)
 - PostgreSQL Driver - PostgreSQL database client (`org.postgresql:postgresql`)
-- Testcontainers PostgreSQL 1.21.0 (BOM-managed via Spring Boot 3.5.0) - Real PostgreSQL 16
+- Testcontainers PostgreSQL 1.21.4 (BOM-managed via Spring Boot 3.5.16) - Real PostgreSQL 16
   container backing every test (`org.testcontainers:postgresql`)
 - Vavr 0.10.4 - Functional programming utilities
 - Guava 32.0.1-android - Google collections and utilities
-- Apache Commons Lang 3 - String and utility functions (test dependency)
+- Apache Commons Lang 3 - String and utility functions (runtime dependency; moved from test-only scope, quick task 260813-q1i)
 - Apache Commons Collections 4.5.0 - Collection utilities
 - DataFactory 0.8 - Test data generation
 

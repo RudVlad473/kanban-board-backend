@@ -78,7 +78,7 @@ import org.testcontainers.utility.DockerImageName;
  * be shared across multiple test classes in one JVM.
  *
  * <p>{@code @ServiceConnection} on {@code kafka} still wires {@code spring.kafka.bootstrap-servers}
- * automatically -- Spring Boot 3.5.0 ships a dedicated {@code
+ * automatically -- Spring Boot 3.5.16 ships a dedicated {@code
  * RedpandaContainerConnectionDetailsFactory} for exactly this container type. No equivalent
  * connection-details mechanism exists for the Schema Registry (it is a Confluent/Avro concern, not
  * something Spring Boot's Kafka autoconfiguration knows about), so {@code schema.registry.url} is
