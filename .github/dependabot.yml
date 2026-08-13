@@ -1,0 +1,26 @@
+# Dependabot version updates (quick task 260813-q1i, Task 5). This is the half of the todo's
+# scan-and-remediate pair that actually remediates: dependency-check-gradle (security-scan.yml)
+# reports advisories, Dependabot opens the PR that closes them -- directly addressing the
+# "BOM is N patches stale" root cause that produced the bulk of RESEARCH.md's measured baseline,
+# rather than only reporting it on a schedule.
+#
+# This file configures *version updates* only. Dependabot *security alerts* (the part that
+# actually surfaces the CVE set against installed versions) are a separate repository setting,
+# not something this file controls -- confirmed enabled via a read-only `gh api
+# repos/:owner/:repo/vulnerability-alerts` check (204 response) during Task 3/5 of quick task
+# 260813-q1i.
+#
+# `package-ecosystem: "github-actions"` is deliberately NOT added yet: Phase 5 (Infra Migration)
+# is actively rewriting .github/workflows/deploy.yml, and unprompted Dependabot PRs against a
+# file mid-rewrite would fight that work rather than help it. Revisit once Phase 5's deploy.yml
+# rewrite settles.
+version: 2
+updates:
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # Bounds PR noise from an automated actor. Every Dependabot PR still runs deploy.yml's
+    # run-tests job (spotlessCheck + the full test suite) like any other PR, so nothing merges
+    # untested or unreviewed -- this limit only caps how many can be open at once.
+    open-pull-requests-limit: 5
