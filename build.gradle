@@ -145,8 +145,8 @@ dependencies {
     // https://mvnrepository.com/artifact/com.google.guava/guava
     implementation 'com.google.guava:guava:32.0.1-android'
 
-    implementation 'org.mapstruct:mapstruct:1.5.3.Final'
-    annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.3.Final'
+    implementation 'org.mapstruct:mapstruct:1.6.3'
+    annotationProcessor 'org.mapstruct:mapstruct-processor:1.6.3'
 
     // https://mvnrepository.com/artifact/org.apache.commons/commons-lang3
     // Bumped from the previously-pinned 3.0 (Phase 4, Task 3 regression fix): Spring Boot's
