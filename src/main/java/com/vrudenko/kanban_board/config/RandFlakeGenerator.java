@@ -30,6 +30,10 @@ public class RandFlakeGenerator implements IdentifierGenerator {
     // either: the low bits are random, not a sequence counter, so same-millisecond collisions
     // were always possible at the same probability. If mutable state (a sequence counter, a
     // last-timestamp field) is ever added here, revisit this.
+    // Measured (quick task 260813-ncx, PROBE-FINDINGS.md): 1000 rapid calls collided in 13 of 200
+    // trials (6.5%), matching the birthday prediction computed from the observed per-trial
+    // millisecond clustering. See EventIdGeneratorTest.GenerateTest's third test for the derived,
+    // production-facing tolerance this measurement justifies.
     public String generateRandflake() {
         long timestamp = Instant.now().toEpochMilli() - CUSTOM_EPOCH;
         long randomBits = ThreadLocalRandom.current().nextLong(1L << RANDOM_BITS);
