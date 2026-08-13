@@ -1,5 +1,6 @@
 ---
 created: 2026-08-10T13:40:00.000Z
+resolved: 2026-08-13
 title: Decide whether to close the .with(user()) vs MAX_CONCURRENT_SESSIONS test-infra interaction
 area: testing
 severity: minor
@@ -57,3 +58,30 @@ author doesn't independently rediscover it:
 
 Recommendation: option 1, the smallest change that prevents the next person from re-deriving this by
 trial and error.
+
+## Resolution
+
+Resolved by quick task 260813-k47: option 1 (document only) was chosen, per this todo's own
+recommendation. The account landed in two places, deliberately, rather than one: `docs/CODE_STYLE.md`
+rule 4 carries the full worked account (the mechanism, the measured `200, 200, 401, 401` sequence, why
+the boundary is the test method, and the `signinCookie()` alternative), because rule 4 is where the
+test-tier decision is made *before* writing a test; `AbstractAppMockMvcTest`'s class Javadoc carries a
+short pointer to the same ceiling, deferring to rule 4 for the reasoning, because that Javadoc is
+literally where `signinCookie()` is defined and is where an author following an existing test (rather
+than reading the style guide first) will actually land.
+
+This todo's own premise about the reference classes was corrected, not transcribed: it does not claim
+`AuthorizationGatingTest` adopted the `signinCookie()` workaround, but a planning-time grep confirmed it
+independently, and the correction is worth recording here since it shapes what the new documentation
+says. `InjectionAttemptTest` calls `signinCookie()` 25 times and `.with(user(` twice; `AuthorizationGatingTest`
+calls `signinCookie()` zero times and `.with(user(` six times, spread across methods that never exceed
+two authenticated calls per principal. So the new documentation cites `InjectionAttemptTest` — and only
+`InjectionAttemptTest` — as the cookie-replay reference, and cites `AuthorizationGatingTest` as the
+counterpart that correctly keeps the shortcut because it never needs more than two calls.
+
+This Problem section's own claim that `SessionManagementFilter` invokes the enforcing strategy was
+deliberately **not** repeated in either new paragraph. `SecurityConfiguration`'s own inline comment
+states the opposite — that no filter reads those declarations on this application's authentication
+path — and that contradiction was not adjudicated here (a doc edit cannot resolve it; a filter-chain
+probe can). It is now tracked by its own pending todo:
+`.planning/todos/pending/2026-08-13-reconcile-contradictory-session-filter-attribution-in-two-.md`.

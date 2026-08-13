@@ -182,6 +182,33 @@ individual test classes. `AbstractAppTest.countQueries(Runnable)` is the only sa
 assert on query counts; its Javadoc records why it reads `getPrepareStatementCount()` instead of
 `getQueryExecutionCount()` — the latter misses `repository.findById()` calls entirely.
 
+**`.with(user(userId))` may authenticate at most two requests for the same principal per test
+method — call `signinCookie()` for a third.** `SecurityMockMvcRequestPostProcessors.user(userId)`
+injects an already-authenticated principal directly into a MockMvc request's security context; because
+MockMvc gives every `perform(...)` call its own request whose security context is persisted at the
+end of that chain, each such call establishes a **brand-new** session for that principal instead of
+reusing one. `SecurityConfiguration`'s `MAX_CONCURRENT_SESSIONS = 2`, together with
+`maxSessionsPreventsLogin(true)`, therefore refuses the third such call for one principal within one
+test method — the ceiling and the `sessionAuthenticationStrategy` bean's live-session count reject
+the login outright. The refusal arrives as HTTP 401 carrying the exact same generic
+invalid-credentials envelope a wrong password would produce — deliberate, so a ceiling hit is not a
+credential-validity oracle — which means nothing in the failure itself points at sessions. Measured:
+four identical `.with(user(userId))` calls in one test method returned `200, 200, 401, 401`. The
+limit is per principal **per test method**, not per class or per JVM run, specifically because
+`AbstractAppTest`'s `@BeforeEach` mints a fresh owning user every test method, so the per-principal
+live-session count restarts at zero each time — a `@ParameterizedTest` making one authenticated call
+per invocation never trips it, however many invocations it has. For three or more authenticated
+requests as one principal within a single test method, call
+`AbstractAppMockMvcTest.signinCookie()` once and replay the returned cookie on every subsequent
+request instead — a real signin establishes exactly one session and each replay reuses it, so the
+count never climbs. Worked examples: `InjectionAttemptTest` is the reference for the cookie-replay
+pattern, adopted because several of its cases make three or more authenticated calls per method;
+`AuthorizationGatingTest` is the counterpart that correctly keeps the `.with(user())` shortcut, since
+no method there makes more than two authenticated calls for one principal — it is not a
+cookie-replay example, and calls `signinCookie()` zero times. This is unreachable in production:
+`AuthenticationController.authenticate` pre-establishes the session on the one real signin path
+before the security context is saved, so a real client never accumulates one session per request.
+
 **Pre-commit gate membership is by `@Tag`, not by class name.** `build.gradle`'s `fastTest` task
 (the pre-commit hook's gate) excludes tests by JUnit 5 `@Tag`, not by a name pattern: classes
 extending `AbstractKafkaContainerTest` carry `@Tag("kafka")`, and `AbstractAppE2ETest` subclasses

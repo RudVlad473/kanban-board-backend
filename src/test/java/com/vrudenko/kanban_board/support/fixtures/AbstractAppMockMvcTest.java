@@ -25,6 +25,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * of classes that must keep exercising the real signin/session path under the cheaper in-process
  * tier (RESEARCH.md Common Pitfalls, Pitfall 2 -- this is the phase-wide proof of Assumption A2).
  *
+ * <p>Because that shortcut establishes a brand-new session on every call, it must not be used for
+ * more than two requests authenticated as the same principal within one test method -- {@code
+ * SecurityConfiguration}'s {@code MAX_CONCURRENT_SESSIONS = 2} refuses the third, surfacing as a
+ * 401 indistinguishable from a wrong password. For three or more authenticated calls as one
+ * principal, call {@link #signinCookie()} once and replay the returned cookie on every subsequent
+ * request instead; see {@code docs/CODE_STYLE.md} rule 4 for the full account and {@code
+ * InjectionAttemptTest} for the reference call site.
+ *
  * <p>Carries no class-level {@code @SpringBootTest}/{@code @AutoConfigureMockMvc} -- matching
  * {@link AbstractAppE2ETest}'s own precedent of leaving Spring Boot test annotations to each
  * concrete subclass rather than assuming a base class can supply them by inheritance.
