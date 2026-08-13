@@ -1,0 +1,266 @@
+RandFlake collision probe (quick task 260813-ncx)
+RANDOM_BITS=23 RANDOM_SPACE=8388608 (8,388,608)
+CUSTOM_EPOCH=1672531200000
+T=200 CALL_COUNT=1000
+
+=== Q1/Q2/Q3: main measurement, T=200 trials of 1000 calls ===
+trial=0 distinct=1000 shortfall=0 buckets=4 p=0.019654184331001523 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441384 windowEndMs=1786633441387 minWall=1786633441384 maxWall=1786633441387
+trial=1 distinct=1000 shortfall=0 buckets=2 p=0.03229959805810134 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441437 windowEndMs=1786633441438 minWall=1786633441437 maxWall=1786633441438
+trial=2 distinct=1000 shortfall=0 buckets=2 p=0.03170127738670803 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441440 windowEndMs=1786633441441 minWall=1786633441440 maxWall=1786633441441
+trial=3 distinct=1000 shortfall=0 buckets=2 p=0.05115326648355811 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441443 windowEndMs=1786633441444 minWall=1786633441443 maxWall=1786633441444
+trial=4 distinct=1000 shortfall=0 buckets=2 p=0.054958260879239273 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441445 windowEndMs=1786633441446 minWall=1786633441445 maxWall=1786633441446
+trial=5 distinct=1000 shortfall=0 buckets=2 p=0.05560289390598083 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441448 windowEndMs=1786633441449 minWall=1786633441448 maxWall=1786633441449
+trial=6 distinct=1000 shortfall=0 buckets=2 p=0.05390094011479418 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441451 windowEndMs=1786633441452 minWall=1786633441451 maxWall=1786633441452
+trial=7 distinct=1000 shortfall=0 buckets=2 p=0.03839892998279848 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441454 windowEndMs=1786633441455 minWall=1786633441454 maxWall=1786633441455
+trial=8 distinct=1000 shortfall=0 buckets=2 p=0.033386014454998225 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441457 windowEndMs=1786633441458 minWall=1786633441457 maxWall=1786633441458
+trial=9 distinct=1000 shortfall=0 buckets=2 p=0.029377075649936746 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441459 windowEndMs=1786633441460 minWall=1786633441459 maxWall=1786633441460
+trial=10 distinct=1000 shortfall=0 buckets=3 p=0.025710462346335228 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441461 windowEndMs=1786633441463 minWall=1786633441461 maxWall=1786633441463
+  DUP trial=11 id=79skjf2olksz count=2 decodedTimestamp=114102241465 decodedRandom=3173523 bothDrawsDecodeToIdenticalHalves=true
+trial=11 distinct=999 shortfall=1 buckets=4 p=0.030778666235939056 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441464 windowEndMs=1786633441467 minWall=1786633441464 maxWall=1786633441467
+trial=12 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441479 windowEndMs=1786633441479 minWall=1786633441479 maxWall=1786633441479
+trial=13 distinct=1000 shortfall=0 buckets=2 p=0.04174949761978275 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441481 windowEndMs=1786633441482 minWall=1786633441481 maxWall=1786633441482
+trial=14 distinct=1000 shortfall=0 buckets=2 p=0.0527626056907593 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441483 windowEndMs=1786633441484 minWall=1786633441483 maxWall=1786633441484
+trial=15 distinct=1000 shortfall=0 buckets=2 p=0.05115326648355811 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441485 windowEndMs=1786633441486 minWall=1786633441485 maxWall=1786633441486
+trial=16 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441487 windowEndMs=1786633441487 minWall=1786633441487 maxWall=1786633441487
+trial=17 distinct=1000 shortfall=0 buckets=2 p=0.04093616092854602 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441489 windowEndMs=1786633441490 minWall=1786633441489 maxWall=1786633441490
+trial=18 distinct=1000 shortfall=0 buckets=2 p=0.03037060796144775 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441496 windowEndMs=1786633441497 minWall=1786633441496 maxWall=1786633441497
+trial=19 distinct=1000 shortfall=0 buckets=2 p=0.04630609630683413 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441498 windowEndMs=1786633441499 minWall=1786633441498 maxWall=1786633441499
+trial=20 distinct=1000 shortfall=0 buckets=2 p=0.0297935324508507 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441499 windowEndMs=1786633441500 minWall=1786633441499 maxWall=1786633441500
+trial=21 distinct=1000 shortfall=0 buckets=2 p=0.029707479362766076 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441500 windowEndMs=1786633441501 minWall=1786633441500 maxWall=1786633441501
+trial=22 distinct=1000 shortfall=0 buckets=2 p=0.031140124062722818 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441501 windowEndMs=1786633441502 minWall=1786633441501 maxWall=1786633441502
+trial=23 distinct=1000 shortfall=0 buckets=2 p=0.034250424113978495 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441502 windowEndMs=1786633441503 minWall=1786633441502 maxWall=1786633441503
+trial=24 distinct=1000 shortfall=0 buckets=2 p=0.029571328714222966 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441507 windowEndMs=1786633441508 minWall=1786633441507 maxWall=1786633441508
+trial=25 distinct=1000 shortfall=0 buckets=2 p=0.03449158364084659 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441516 windowEndMs=1786633441517 minWall=1786633441516 maxWall=1786633441517
+trial=26 distinct=1000 shortfall=0 buckets=2 p=0.04145061916141024 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441519 windowEndMs=1786633441520 minWall=1786633441519 maxWall=1786633441520
+trial=27 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441521 windowEndMs=1786633441521 minWall=1786633441521 maxWall=1786633441521
+trial=28 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441543 windowEndMs=1786633441543 minWall=1786633441543 maxWall=1786633441543
+trial=29 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441544 windowEndMs=1786633441544 minWall=1786633441544 maxWall=1786633441544
+trial=30 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441545 windowEndMs=1786633441545 minWall=1786633441545 maxWall=1786633441545
+trial=31 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441545 windowEndMs=1786633441545 minWall=1786633441545 maxWall=1786633441545
+trial=32 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441547 windowEndMs=1786633441547 minWall=1786633441547 maxWall=1786633441547
+trial=33 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441547 windowEndMs=1786633441547 minWall=1786633441547 maxWall=1786633441547
+  DUP trial=34 id=79skjfe5f0id count=2 decodedTimestamp=114102241548 decodedRandom=294229 bothDrawsDecodeToIdenticalHalves=true
+trial=34 distinct=999 shortfall=1 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441548 windowEndMs=1786633441548 minWall=1786633441548 maxWall=1786633441548
+trial=35 distinct=1000 shortfall=0 buckets=2 p=0.03872385617134877 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441549 windowEndMs=1786633441550 minWall=1786633441549 maxWall=1786633441550
+trial=36 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441551 windowEndMs=1786633441551 minWall=1786633441551 maxWall=1786633441551
+trial=37 distinct=1000 shortfall=0 buckets=2 p=0.04197599362085791 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441551 windowEndMs=1786633441552 minWall=1786633441551 maxWall=1786633441552
+trial=38 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441552 windowEndMs=1786633441552 minWall=1786633441552 maxWall=1786633441552
+trial=39 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441553 windowEndMs=1786633441553 minWall=1786633441553 maxWall=1786633441553
+trial=40 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441554 windowEndMs=1786633441554 minWall=1786633441554 maxWall=1786633441554
+trial=41 distinct=1000 shortfall=0 buckets=2 p=0.043297237162629676 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441556 windowEndMs=1786633441557 minWall=1786633441556 maxWall=1786633441557
+trial=42 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441557 windowEndMs=1786633441557 minWall=1786633441557 maxWall=1786633441557
+trial=43 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441561 windowEndMs=1786633441561 minWall=1786633441561 maxWall=1786633441561
+trial=44 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441563 windowEndMs=1786633441563 minWall=1786633441563 maxWall=1786633441563
+trial=45 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441564 windowEndMs=1786633441564 minWall=1786633441564 maxWall=1786633441564
+trial=46 distinct=1000 shortfall=0 buckets=2 p=0.030200446273069836 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441564 windowEndMs=1786633441565 minWall=1786633441564 maxWall=1786633441565
+trial=47 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441565 windowEndMs=1786633441565 minWall=1786633441565 maxWall=1786633441565
+trial=48 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441566 windowEndMs=1786633441566 minWall=1786633441566 maxWall=1786633441566
+trial=49 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441567 windowEndMs=1786633441567 minWall=1786633441567 maxWall=1786633441567
+trial=50 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441573 windowEndMs=1786633441573 minWall=1786633441573 maxWall=1786633441573
+trial=51 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441574 windowEndMs=1786633441574 minWall=1786633441574 maxWall=1786633441574
+trial=52 distinct=1000 shortfall=0 buckets=3 p=0.036481523842267105 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441575 windowEndMs=1786633441581 minWall=1786633441575 maxWall=1786633441581
+trial=53 distinct=1000 shortfall=0 buckets=2 p=0.0318020427103487 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441581 windowEndMs=1786633441582 minWall=1786633441581 maxWall=1786633441582
+trial=54 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441582 windowEndMs=1786633441582 minWall=1786633441582 maxWall=1786633441582
+trial=55 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441583 windowEndMs=1786633441583 minWall=1786633441583 maxWall=1786633441583
+trial=56 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441584 windowEndMs=1786633441584 minWall=1786633441584 maxWall=1786633441584
+trial=57 distinct=1000 shortfall=0 buckets=2 p=0.038921508853036135 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441584 windowEndMs=1786633441585 minWall=1786633441584 maxWall=1786633441585
+trial=58 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441585 windowEndMs=1786633441585 minWall=1786633441585 maxWall=1786633441585
+trial=59 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441586 windowEndMs=1786633441586 minWall=1786633441586 maxWall=1786633441586
+trial=60 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441586 windowEndMs=1786633441586 minWall=1786633441586 maxWall=1786633441586
+trial=61 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441587 windowEndMs=1786633441587 minWall=1786633441587 maxWall=1786633441587
+trial=62 distinct=1000 shortfall=0 buckets=2 p=0.031635249059574155 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441587 windowEndMs=1786633441588 minWall=1786633441587 maxWall=1786633441588
+trial=63 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441588 windowEndMs=1786633441588 minWall=1786633441588 maxWall=1786633441588
+trial=64 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441589 windowEndMs=1786633441589 minWall=1786633441589 maxWall=1786633441589
+trial=65 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441589 windowEndMs=1786633441589 minWall=1786633441589 maxWall=1786633441589
+trial=66 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441590 windowEndMs=1786633441590 minWall=1786633441590 maxWall=1786633441590
+trial=67 distinct=1000 shortfall=0 buckets=2 p=0.0372155463424404 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441590 windowEndMs=1786633441591 minWall=1786633441590 maxWall=1786633441591
+trial=68 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441591 windowEndMs=1786633441591 minWall=1786633441591 maxWall=1786633441591
+trial=69 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441592 windowEndMs=1786633441592 minWall=1786633441592 maxWall=1786633441592
+trial=70 distinct=1000 shortfall=0 buckets=2 p=0.03226256714994036 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441592 windowEndMs=1786633441593 minWall=1786633441592 maxWall=1786633441593
+trial=71 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441593 windowEndMs=1786633441593 minWall=1786633441593 maxWall=1786633441593
+trial=72 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441594 windowEndMs=1786633441594 minWall=1786633441594 maxWall=1786633441594
+trial=73 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441595 windowEndMs=1786633441595 minWall=1786633441595 maxWall=1786633441595
+trial=74 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441596 windowEndMs=1786633441596 minWall=1786633441596 maxWall=1786633441596
+trial=75 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441597 windowEndMs=1786633441597 minWall=1786633441597 maxWall=1786633441597
+trial=76 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441598 windowEndMs=1786633441598 minWall=1786633441598 maxWall=1786633441598
+trial=77 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441599 windowEndMs=1786633441599 minWall=1786633441599 maxWall=1786633441599
+trial=78 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441600 windowEndMs=1786633441600 minWall=1786633441600 maxWall=1786633441600
+trial=79 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441601 windowEndMs=1786633441601 minWall=1786633441601 maxWall=1786633441601
+trial=80 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441601 windowEndMs=1786633441601 minWall=1786633441601 maxWall=1786633441601
+trial=81 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441602 windowEndMs=1786633441602 minWall=1786633441602 maxWall=1786633441602
+trial=82 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441603 windowEndMs=1786633441603 minWall=1786633441603 maxWall=1786633441603
+trial=83 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441604 windowEndMs=1786633441604 minWall=1786633441604 maxWall=1786633441604
+trial=84 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441604 windowEndMs=1786633441604 minWall=1786633441604 maxWall=1786633441604
+trial=85 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441605 windowEndMs=1786633441605 minWall=1786633441605 maxWall=1786633441605
+trial=86 distinct=1000 shortfall=0 buckets=2 p=0.029642124808516357 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441605 windowEndMs=1786633441606 minWall=1786633441605 maxWall=1786633441606
+trial=87 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441606 windowEndMs=1786633441606 minWall=1786633441606 maxWall=1786633441606
+trial=88 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441607 windowEndMs=1786633441607 minWall=1786633441607 maxWall=1786633441607
+trial=89 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441608 windowEndMs=1786633441608 minWall=1786633441608 maxWall=1786633441608
+trial=90 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441609 windowEndMs=1786633441609 minWall=1786633441609 maxWall=1786633441609
+trial=91 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441609 windowEndMs=1786633441609 minWall=1786633441609 maxWall=1786633441609
+trial=92 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441610 windowEndMs=1786633441610 minWall=1786633441610 maxWall=1786633441610
+trial=93 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441612 windowEndMs=1786633441612 minWall=1786633441612 maxWall=1786633441612
+trial=94 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441613 windowEndMs=1786633441613 minWall=1786633441613 maxWall=1786633441613
+trial=95 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441614 windowEndMs=1786633441614 minWall=1786633441614 maxWall=1786633441614
+trial=96 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441615 windowEndMs=1786633441615 minWall=1786633441615 maxWall=1786633441615
+trial=97 distinct=1000 shortfall=0 buckets=2 p=0.03685876623255546 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441615 windowEndMs=1786633441616 minWall=1786633441615 maxWall=1786633441616
+trial=98 distinct=1000 shortfall=0 buckets=2 p=0.037336279810748385 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441616 windowEndMs=1786633441617 minWall=1786633441616 maxWall=1786633441617
+trial=99 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441641 windowEndMs=1786633441641 minWall=1786633441641 maxWall=1786633441641
+trial=100 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441642 windowEndMs=1786633441642 minWall=1786633441642 maxWall=1786633441642
+trial=101 distinct=1000 shortfall=0 buckets=2 p=0.029594002535377695 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441642 windowEndMs=1786633441643 minWall=1786633441642 maxWall=1786633441643
+trial=102 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441643 windowEndMs=1786633441643 minWall=1786633441643 maxWall=1786633441643
+trial=103 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441644 windowEndMs=1786633441644 minWall=1786633441644 maxWall=1786633441644
+trial=104 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441645 windowEndMs=1786633441645 minWall=1786633441645 maxWall=1786633441645
+trial=105 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441646 windowEndMs=1786633441646 minWall=1786633441646 maxWall=1786633441646
+trial=106 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441646 windowEndMs=1786633441646 minWall=1786633441646 maxWall=1786633441646
+trial=107 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441647 windowEndMs=1786633441647 minWall=1786633441647 maxWall=1786633441647
+  DUP trial=108 id=79skjfs50clg count=2 decodedTimestamp=114102241648 decodedRandom=7275716 bothDrawsDecodeToIdenticalHalves=true
+  DUP trial=108 id=79skjfs4e733 count=2 decodedTimestamp=114102241648 decodedRandom=6242143 bothDrawsDecodeToIdenticalHalves=true
+trial=108 distinct=998 shortfall=2 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441648 windowEndMs=1786633441648 minWall=1786633441648 maxWall=1786633441648
+trial=109 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441654 windowEndMs=1786633441654 minWall=1786633441654 maxWall=1786633441654
+trial=110 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441655 windowEndMs=1786633441655 minWall=1786633441655 maxWall=1786633441655
+trial=111 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441656 windowEndMs=1786633441656 minWall=1786633441656 maxWall=1786633441656
+trial=112 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441656 windowEndMs=1786633441656 minWall=1786633441656 maxWall=1786633441656
+trial=113 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441657 windowEndMs=1786633441657 minWall=1786633441657 maxWall=1786633441657
+trial=114 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441658 windowEndMs=1786633441658 minWall=1786633441658 maxWall=1786633441658
+trial=115 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441659 windowEndMs=1786633441659 minWall=1786633441659 maxWall=1786633441659
+trial=116 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441660 windowEndMs=1786633441660 minWall=1786633441660 maxWall=1786633441660
+trial=117 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441661 windowEndMs=1786633441661 minWall=1786633441661 maxWall=1786633441661
+trial=118 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441662 windowEndMs=1786633441662 minWall=1786633441662 maxWall=1786633441662
+trial=119 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441663 windowEndMs=1786633441663 minWall=1786633441663 maxWall=1786633441663
+  DUP trial=120 id=79skjfubcx43 count=2 decodedTimestamp=114102241664 decodedRandom=4654499 bothDrawsDecodeToIdenticalHalves=true
+trial=120 distinct=999 shortfall=1 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441664 windowEndMs=1786633441664 minWall=1786633441664 maxWall=1786633441664
+trial=121 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441665 windowEndMs=1786633441665 minWall=1786633441665 maxWall=1786633441665
+trial=122 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441666 windowEndMs=1786633441666 minWall=1786633441666 maxWall=1786633441666
+trial=123 distinct=1000 shortfall=0 buckets=2 p=0.03204519829955643 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441666 windowEndMs=1786633441667 minWall=1786633441666 maxWall=1786633441667
+  DUP trial=124 id=79skjfunx1eq count=2 decodedTimestamp=114102241667 decodedRandom=582754 bothDrawsDecodeToIdenticalHalves=true
+trial=124 distinct=999 shortfall=1 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441667 windowEndMs=1786633441667 minWall=1786633441667 maxWall=1786633441667
+trial=125 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441668 windowEndMs=1786633441668 minWall=1786633441668 maxWall=1786633441668
+trial=126 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441669 windowEndMs=1786633441669 minWall=1786633441669 maxWall=1786633441669
+trial=127 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441670 windowEndMs=1786633441670 minWall=1786633441670 maxWall=1786633441670
+trial=128 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441671 windowEndMs=1786633441671 minWall=1786633441671 maxWall=1786633441671
+trial=129 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441672 windowEndMs=1786633441672 minWall=1786633441672 maxWall=1786633441672
+trial=130 distinct=1000 shortfall=0 buckets=2 p=0.029338197228855112 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441672 windowEndMs=1786633441673 minWall=1786633441672 maxWall=1786633441673
+trial=131 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441673 windowEndMs=1786633441673 minWall=1786633441673 maxWall=1786633441673
+trial=132 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441674 windowEndMs=1786633441674 minWall=1786633441674 maxWall=1786633441674
+trial=133 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441676 windowEndMs=1786633441676 minWall=1786633441676 maxWall=1786633441676
+  DUP trial=134 id=79skjfw4x0h8 count=2 decodedTimestamp=114102241677 decodedRandom=5715116 bothDrawsDecodeToIdenticalHalves=true
+trial=134 distinct=999 shortfall=1 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441677 windowEndMs=1786633441677 minWall=1786633441677 maxWall=1786633441677
+trial=135 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441678 windowEndMs=1786633441678 minWall=1786633441678 maxWall=1786633441678
+  DUP trial=136 id=79skjfwe34ts count=2 decodedTimestamp=114102241679 decodedRandom=4340016 bothDrawsDecodeToIdenticalHalves=true
+trial=136 distinct=999 shortfall=1 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441679 windowEndMs=1786633441679 minWall=1786633441679 maxWall=1786633441679
+trial=137 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441680 windowEndMs=1786633441680 minWall=1786633441680 maxWall=1786633441680
+trial=138 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441681 windowEndMs=1786633441681 minWall=1786633441681 maxWall=1786633441681
+trial=139 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441682 windowEndMs=1786633441682 minWall=1786633441682 maxWall=1786633441682
+trial=140 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441682 windowEndMs=1786633441682 minWall=1786633441682 maxWall=1786633441682
+trial=141 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441683 windowEndMs=1786633441683 minWall=1786633441683 maxWall=1786633441683
+trial=142 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441684 windowEndMs=1786633441684 minWall=1786633441684 maxWall=1786633441684
+trial=143 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441685 windowEndMs=1786633441685 minWall=1786633441685 maxWall=1786633441685
+trial=144 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441686 windowEndMs=1786633441686 minWall=1786633441686 maxWall=1786633441686
+trial=145 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441687 windowEndMs=1786633441687 minWall=1786633441687 maxWall=1786633441687
+trial=146 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441687 windowEndMs=1786633441687 minWall=1786633441687 maxWall=1786633441687
+trial=147 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441688 windowEndMs=1786633441688 minWall=1786633441688 maxWall=1786633441688
+trial=148 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441689 windowEndMs=1786633441689 minWall=1786633441689 maxWall=1786633441689
+trial=149 distinct=1000 shortfall=0 buckets=2 p=0.05625518747631686 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441689 windowEndMs=1786633441690 minWall=1786633441689 maxWall=1786633441690
+trial=150 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441690 windowEndMs=1786633441690 minWall=1786633441690 maxWall=1786633441690
+trial=151 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441691 windowEndMs=1786633441691 minWall=1786633441691 maxWall=1786633441691
+  DUP trial=152 id=79skjfy7vg25 count=2 decodedTimestamp=114102241692 decodedRandom=5784077 bothDrawsDecodeToIdenticalHalves=true
+trial=152 distinct=999 shortfall=1 buckets=2 p=0.057582690124184155 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441691 windowEndMs=1786633441692 minWall=1786633441691 maxWall=1786633441692
+trial=153 distinct=1000 shortfall=0 buckets=2 p=0.05125223374879395 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441692 windowEndMs=1786633441693 minWall=1786633441692 maxWall=1786633441693
+trial=154 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441693 windowEndMs=1786633441693 minWall=1786633441693 maxWall=1786633441693
+trial=155 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441694 windowEndMs=1786633441694 minWall=1786633441694 maxWall=1786633441694
+trial=156 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441695 windowEndMs=1786633441695 minWall=1786633441695 maxWall=1786633441695
+  DUP trial=157 id=79skjfyoxhc9 count=2 decodedTimestamp=114102241696 decodedRandom=878089 bothDrawsDecodeToIdenticalHalves=true
+trial=157 distinct=999 shortfall=1 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441696 windowEndMs=1786633441696 minWall=1786633441696 maxWall=1786633441696
+trial=158 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441696 windowEndMs=1786633441696 minWall=1786633441696 maxWall=1786633441696
+trial=159 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441697 windowEndMs=1786633441697 minWall=1786633441697 maxWall=1786633441697
+trial=160 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441698 windowEndMs=1786633441698 minWall=1786633441698 maxWall=1786633441698
+trial=161 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441698 windowEndMs=1786633441698 minWall=1786633441698 maxWall=1786633441698
+trial=162 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441699 windowEndMs=1786633441699 minWall=1786633441699 maxWall=1786633441699
+trial=163 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441699 windowEndMs=1786633441699 minWall=1786633441699 maxWall=1786633441699
+trial=164 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441700 windowEndMs=1786633441700 minWall=1786633441700 maxWall=1786633441700
+trial=165 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441700 windowEndMs=1786633441700 minWall=1786633441700 maxWall=1786633441700
+trial=166 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441701 windowEndMs=1786633441701 minWall=1786633441701 maxWall=1786633441701
+trial=167 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441701 windowEndMs=1786633441701 minWall=1786633441701 maxWall=1786633441701
+trial=168 distinct=1000 shortfall=0 buckets=2 p=0.030914647495642322 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441701 windowEndMs=1786633441702 minWall=1786633441701 maxWall=1786633441702
+trial=169 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441702 windowEndMs=1786633441702 minWall=1786633441702 maxWall=1786633441702
+trial=170 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441702 windowEndMs=1786633441702 minWall=1786633441702 maxWall=1786633441702
+trial=171 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441703 windowEndMs=1786633441703 minWall=1786633441703 maxWall=1786633441703
+trial=172 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441703 windowEndMs=1786633441703 minWall=1786633441703 maxWall=1786633441703
+trial=173 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441704 windowEndMs=1786633441704 minWall=1786633441704 maxWall=1786633441704
+trial=174 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441704 windowEndMs=1786633441704 minWall=1786633441704 maxWall=1786633441704
+trial=175 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441705 windowEndMs=1786633441705 minWall=1786633441705 maxWall=1786633441705
+  DUP trial=176 id=79skjg05w0qc count=2 decodedTimestamp=114102241706 decodedRandom=5943476 bothDrawsDecodeToIdenticalHalves=true
+trial=176 distinct=999 shortfall=1 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441706 windowEndMs=1786633441706 minWall=1786633441706 maxWall=1786633441706
+trial=177 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441707 windowEndMs=1786633441707 minWall=1786633441707 maxWall=1786633441707
+  DUP trial=178 id=79skjg0dhn7o count=2 decodedTimestamp=114102241708 decodedRandom=1932484 bothDrawsDecodeToIdenticalHalves=true
+trial=178 distinct=999 shortfall=1 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441708 windowEndMs=1786633441708 minWall=1786633441708 maxWall=1786633441708
+trial=179 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441709 windowEndMs=1786633441709 minWall=1786633441709 maxWall=1786633441709
+trial=180 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441710 windowEndMs=1786633441710 minWall=1786633441710 maxWall=1786633441710
+trial=181 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441711 windowEndMs=1786633441711 minWall=1786633441711 maxWall=1786633441711
+trial=182 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441711 windowEndMs=1786633441711 minWall=1786633441711 maxWall=1786633441711
+trial=183 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441712 windowEndMs=1786633441712 minWall=1786633441712 maxWall=1786633441712
+trial=184 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441713 windowEndMs=1786633441713 minWall=1786633441713 maxWall=1786633441713
+trial=185 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441714 windowEndMs=1786633441714 minWall=1786633441714 maxWall=1786633441714
+trial=186 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441714 windowEndMs=1786633441714 minWall=1786633441714 maxWall=1786633441714
+trial=187 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441715 windowEndMs=1786633441715 minWall=1786633441715 maxWall=1786633441715
+trial=188 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441716 windowEndMs=1786633441716 minWall=1786633441716 maxWall=1786633441716
+trial=189 distinct=1000 shortfall=0 buckets=2 p=0.03514523159015703 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441716 windowEndMs=1786633441717 minWall=1786633441716 maxWall=1786633441717
+trial=190 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441717 windowEndMs=1786633441717 minWall=1786633441717 maxWall=1786633441717
+trial=191 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441718 windowEndMs=1786633441718 minWall=1786633441718 maxWall=1786633441718
+trial=192 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441719 windowEndMs=1786633441719 minWall=1786633441719 maxWall=1786633441719
+  DUP trial=193 id=79skjg24x9ft count=2 decodedTimestamp=114102241720 decodedRandom=7813641 bothDrawsDecodeToIdenticalHalves=true
+trial=193 distinct=999 shortfall=1 buckets=2 p=0.0482849605885084 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441719 windowEndMs=1786633441720 minWall=1786633441719 maxWall=1786633441720
+trial=194 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441721 windowEndMs=1786633441721 minWall=1786633441721 maxWall=1786633441721
+trial=195 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441722 windowEndMs=1786633441722 minWall=1786633441722 maxWall=1786633441722
+trial=196 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441723 windowEndMs=1786633441723 minWall=1786633441723 maxWall=1786633441723
+trial=197 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441723 windowEndMs=1786633441723 minWall=1786633441723 maxWall=1786633441723
+  DUP trial=198 id=79skjg2kel7g count=2 decodedTimestamp=114102241724 decodedRandom=261852 bothDrawsDecodeToIdenticalHalves=true
+trial=198 distinct=999 shortfall=1 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441724 windowEndMs=1786633441724 minWall=1786633441724 maxWall=1786633441724
+trial=199 distinct=1000 shortfall=0 buckets=1 p=0.05780690386457177 decodeValid=true nonDecreasing=true withinWindow=true windowStartMs=1786633441746 windowEndMs=1786633441746 minWall=1786633441746 maxWall=1786633441746
+
+=== Q1 aggregate ===
+T=200
+collidingTrials(C)=13
+totalDuplicatePairs=14
+minDistinct=998
+maxDistinct=1000
+meanDistinct=999.93
+
+=== Q2 observed vs predicted ===
+C=13
+E=10.63182667873134
+sqrt(E)=3.260648199167052
+E+3*sqrt(E)=20.413771276232495
+C<=E+3*sqrt(E) : true
+C>=2*E : false
+NOTE: E is a property of THIS machine's loop speed via the observed per-trial bucket sizes (avg buckets/trial=1.265), not a universal constant. A different machine will observe a different E for the same verdict.
+
+=== Q3 decode validity and randomness structure ===
+decodeFailures=0
+nonDecreasingFailures(timestamps went backwards within a trial)=0
+windowFailures(decoded timestamp outside captured wall-clock window)=0
+decodeValidityOverall=true
+totalRandomDraws=200000
+distinctRandomValuesSeen=197651
+mostFrequentRandomValue=25772 count=3
+meanOccupancyPerRandomValue(expected)=0.02384185791015625
+consecutiveEqualDraws(observed)=0
+consecutiveEqualDraws(expected, uniform)=0.02384185791015625
+
+=== Q4: production-rate figure, 20000 trials of 20 back-to-back calls ===
+q4Trials=20000
+q4CallsPerTrial=20
+q4CollidingTrials=3
+q4CollidingRate=1.5E-4
+
+=== Q4 lifetime-volume extrapolation (worst-case, tight-loop clustering assumption) ===
+avgBucketSizeObservedInQ1Q2(calls per distinct millisecond)=790.5138339920949
+lifetimeEvents=1000000
+numBucketsAt1MEventsAtSameClustering=1265.0
+expectedPairsPerBucket=k*(k-1)/(2*8388608)=0.037200546735458924
+expectedCollidingPairsAcross1MLifetimeEvents=1265.0 * 0.037200546735458924 = 47.05869162035554
+ARITHMETIC: assuming production traffic clustered into same-millisecond bursts of size avgBucketSize like the tight loop above (a deliberate worst case; ~14 call sites each firing once per user mutation means real traffic is far sparser), 1,000,000 events would fill 1,000,000/avgBucketSize such bursts, each burst independently risking a birthday collision at rate k*(k-1)/(2*8,388,608). Multiplying gives the expected number of colliding pairs across the whole lifetime volume.
+
+=== ActivityLogRecorder production consequence ===
+ActivityLogRecorder.persist short-circuits on existsByEventId(eventId) and uk_activity_log_event_id is a unique constraint -- a genuine eventId collision means the second event is silently treated as a redelivery and dropped, no exception, no dead letter, one activity row lost instead of two.
