@@ -5,7 +5,6 @@ import java.util.UUID;
 
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
-import com.vrudenko.kanban_board.dto.subtask_dto.SaveSubtaskRequestDTO;
 import com.vrudenko.kanban_board.dto.subtask_dto.SubtaskResponseDTO;
 import com.vrudenko.kanban_board.dto.subtask_dto.UpdateSubtaskRequestDTO;
 import com.vrudenko.kanban_board.support.fixtures.AbstractAppTest;
@@ -252,7 +251,13 @@ class SubtaskControllerTest extends AbstractAppTest {
             var taskId = mockPopulatedTask.getId();
             var subtaskId = mockSubtasks.getFirst().getId();
             var url = getSubtaskPrefix(boardId, columnId, taskId) + "/" + subtaskId;
-            var updateDto = SaveSubtaskRequestDTO.builder().title("").build();
+            // Title below the @SubtaskTitle minimum length; version is deliberately valid and
+            // isCompleted deliberately unset so the 400 is attributable to the title alone.
+            var updateDto =
+                    UpdateSubtaskRequestDTO.builder()
+                            .title("ab")
+                            .version(mockSubtasks.getFirst().getVersion())
+                            .build();
 
             // Act
             // Assert
