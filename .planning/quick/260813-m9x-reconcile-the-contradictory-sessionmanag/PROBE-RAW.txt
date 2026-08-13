@@ -1,0 +1,35 @@
+=== Q2: strategy identity (load-bearing) ===
+SessionManagementFilter instance class: org.springframework.security.web.session.SessionManagementFilter
+Filter's strategy == application sessionAuthenticationStrategy bean: false
+filter-held strategy class: org.springframework.security.web.authentication.session.CompositeSessionAuthenticationStrategy
+filter-held delegate class: org.springframework.security.web.authentication.session.ConcurrentSessionControlAuthenticationStrategy
+FIELD LOOKUP MISS on org.springframework.security.web.authentication.session.ConcurrentSessionControlAuthenticationStrategy#maximumSessions -- declared fields: [messages, sessionRegistry, exceptionIfMaximumExceeded, sessionLimit]
+filter-held delegate sessionRegistry class: org.springframework.security.core.session.SessionRegistryImpl
+filter-held delegate class: org.springframework.security.web.authentication.session.ChangeSessionIdAuthenticationStrategy
+filter-held delegate class: org.springframework.security.web.authentication.session.RegisterSessionAuthenticationStrategy
+FIELD LOOKUP MISS on org.springframework.security.web.session.SessionManagementFilter#authenticationFailureHandler -- declared fields: [FILTER_APPLIED, securityContextHolderStrategy, securityContextRepository, sessionAuthenticationStrategy, trustResolver, invalidSessionStrategy, failureHandler]
+application-bean strategy class: org.springframework.security.web.authentication.session.CompositeSessionAuthenticationStrategy
+application-bean delegate class: org.springframework.security.web.authentication.session.ConcurrentSessionControlAuthenticationStrategy
+FIELD LOOKUP MISS on org.springframework.security.web.authentication.session.ConcurrentSessionControlAuthenticationStrategy#maximumSessions -- declared fields: [messages, sessionRegistry, exceptionIfMaximumExceeded, sessionLimit]
+application-bean delegate sessionRegistry class: org.springframework.session.security.SpringSessionBackedSessionRegistry
+application-bean delegate class: org.springframework.security.web.authentication.session.ChangeSessionIdAuthenticationStrategy
+=== Q1: chain composition ===
+chain[0] = DefaultSecurityFilterChain defined as 'securityFilterChain' in [class path resource [com/vrudenko/kanban_board/security/SecurityConfiguration.class]] matching [any request] and having filters [DisableEncodeUrl, WebAsyncManagerIntegration, SecurityContextHolder, HeaderWriter, Cors, Logout, ConcurrentSession, RequestCacheAware, SecurityContextHolderAwareRequest, AnonymousAuthentication, SessionManagement, ExceptionTranslation, Authorization]
+chain[0].filters = [org.springframework.security.web.session.DisableEncodeUrlFilter, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter, org.springframework.security.web.context.SecurityContextHolderFilter, org.springframework.security.web.header.HeaderWriterFilter, org.springframework.web.filter.CorsFilter, org.springframework.security.web.authentication.logout.LogoutFilter, org.springframework.security.web.session.ConcurrentSessionFilter, org.springframework.security.web.savedrequest.RequestCacheAwareFilter, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter, org.springframework.security.web.authentication.AnonymousAuthenticationFilter, org.springframework.security.web.session.SessionManagementFilter, org.springframework.security.web.access.ExceptionTranslationFilter, org.springframework.security.web.access.intercept.AuthorizationFilter]
+SessionManagementFilter present on any chain: true
+ConcurrentSessionFilter present on any chain: true
+=== Q3: behaviour on the injected-principal path ===
+SPRING_SESSION total rows before injected-principal sequence: 0
+call 1: status=200 spring_session_total=1 spring_session_for_principal=1
+call 2: status=200 spring_session_total=2 spring_session_for_principal=2
+call 3: status=401 spring_session_total=2 spring_session_for_principal=2
+call 4: status=401 spring_session_total=2 spring_session_for_principal=2
+=== Q4: shape of the refusal (injected-principal path) ===
+injected-principal refusal errorMessage: Unauthorized
+injected-principal refusal Content-Type: null
+injected-principal refusal body: 
+=== Q4 control: shape of the refusal on the real signin path ===
+real-signin-path third-signin status: 401
+real-signin-path third-signin errorMessage: null
+real-signin-path third-signin Content-Type: application/problem+json
+real-signin-path third-signin body: {"type":"about:blank","title":"Unauthorized","status":401,"detail":"Invalid username or ***","instance":"/signin","code":"BAD_CREDENTIALS"}
