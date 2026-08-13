@@ -1,5 +1,6 @@
 ---
 created: 2026-08-11T00:00:00.000Z
+resolved: 2026-08-13
 title: SaveSubtaskRequestDTO.title missing @NotBlank -- a null/blank title reaches the database constraint instead of Bean Validation
 area: backend
 severity: minor
@@ -54,3 +55,49 @@ shape.
 Whichever approach is taken, add/update a test asserting that a JSON body of `{}` or
 `{"title":null}` (or a blank string) posted to `.../tasks/{taskId}/subtasks` returns 400, not 409
 -- proving the fix actually moves the failure from the database constraint to Bean Validation.
+
+## Resolution
+
+Resolved by quick task `260813-h2f`. Took the todo's primary option (D-01): added
+`@NotBlank(message = "Subtask title cannot be empty")` to `SaveSubtaskRequestDTO.title` alongside
+the existing `@SubtaskTitle`, matching the `SaveBoardRequestDTO` / `SaveTaskRequestDTO` /
+`SaveColumnRequestDTO` precedent exactly. The alternative the todo names -- composing `@NotBlank`
+into the shared `@SubtaskTitle` annotation itself -- was rejected (D-03), not merely deferred as
+out of scope: `@SubtaskTitle` is also used by `UpdateSubtaskRequestDTO.title`, which is
+deliberately optional (partial-update semantics from quick task `260811-ufu`), so composing a
+blank-check into the shared annotation would have silently made partial subtask updates
+mandatory-title. `SubtaskTitle.java` is byte-identical after this task, confirmed by
+`git diff --name-only src/main` listing exactly `SaveSubtaskRequestDTO.java`.
+
+**Pre-fix status, observed against unmodified production code (not assumed):**
+- `{}` -> 409, `code=DATA_INTEGRITY_VIOLATION`, `detail` naming the raw `subtasks.title` NOT NULL
+  constraint -- exactly matching this todo's description.
+- `{"title":null}` -> 409, identical shape -- exactly matching this todo's description.
+- A three-space (whitespace-only) title -> **201 Created**, not 409. This was not what the todo
+  described and is a real, separate gap: `@Size(min=3)` only checks length, so a 3-character
+  whitespace string satisfies it and a subtask with a blank title was silently persisted. `@NotBlank`
+  closes this gap too, as a side effect of the same fix.
+- An empty-string title -> **already 400**, not 409. `@SubtaskTitle`'s own `@Size(min=3, max=32)`
+  already rejects a zero-length string, independent of this fix, with the message
+  `"Subtask title cannot be empty"` -- coincidentally identical to the message `@NotBlank` now uses
+  (that string was chosen deliberately to match `SubtaskTitle`'s own default, D-02).
+
+**Post-fix status:** all four cases return 400 with `code=VALIDATION_FAILED` and an `errors.title`
+entry. The `{}`, `{"title":null}`, and whitespace-only cases each trip exactly one constraint and
+assert the exact message `"Subtask title cannot be empty"`; the empty-string case trips both
+`@NotBlank` and `@Size`, whose messages collapse last-writer-wins in `GlobalExceptionHandler`'s
+`HashMap`-backed errors map (unspecified iteration order), so that one test asserts only that
+`errors.title` is present, not its exact text.
+
+Four new `TaskControllerTest.AddSubtaskByTaskId` tests cover all four cases end-to-end through the
+real HTTP stack. `SubtaskTitleMessageTest`'s two `hasSize(1)` assertions (one per `Save`/`Update`
+DTO) re-ran unmodified and stayed green -- an over-long title is not blank, so `@NotBlank` does not
+additionally fire there. Full suite green with zero shrinkage (see quick task `260813-h2f`'s
+SUMMARY for the exact before/after counts).
+
+**Left open, not resolved by this task:** the todo's own "Alternatively, a project-wide decision...
+should be made once and applied consistently" paragraph, regarding whether to fold `@NotBlank`
+checking into the shared size-shaped annotations (`@SubtaskTitle`, `@BoardName`, `@TaskTitle`,
+etc.) instead of stacking it at each `Save*RequestDTO` field. This task did not settle that
+question -- it applied the existing stacking convention, per precedent, exactly as three sibling
+DTOs already do.
