@@ -8,7 +8,6 @@ import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.subtask_dto.SaveSubtaskRequestDTO;
 import com.vrudenko.kanban_board.dto.subtask_dto.SubtaskResponseDTO;
-import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
 import com.vrudenko.kanban_board.dto.task_dto.UpdateTaskRequestDTO;
 import com.vrudenko.kanban_board.service.SubtaskService;
@@ -240,8 +239,13 @@ class TaskControllerTest extends AbstractAppTest {
             var columnId = mockPopulatedColumn.getId();
             var taskId = mockPopulatedTask.getId();
             var url = getTaskPrefix(boardId, columnId) + "/" + taskId;
-            // Assuming blank name is invalid
-            var updateDto = SaveTaskRequestDTO.builder().title("").build();
+            // Title below the @TaskTitle minimum length; version is deliberately valid so the
+            // 400 is attributable to the title alone.
+            var updateDto =
+                    UpdateTaskRequestDTO.builder()
+                            .title("ab")
+                            .version(mockPopulatedTask.getVersion())
+                            .build();
 
             // Act
             // Assert
