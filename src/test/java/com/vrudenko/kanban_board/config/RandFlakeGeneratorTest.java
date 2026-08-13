@@ -34,6 +34,64 @@ public class RandFlakeGeneratorTest {
     @Nested
     class GenerateRandflakeTest {
 
+        // The largest value the *legacy* layout (23 random low bits, CUSTOM_EPOCH = 2023-01-01)
+        // could ever have produced, generously assuming that code kept running until
+        // 2027-01-01T00:00:00Z: ((2027-01-01 - 2023-01-01) << 23) | (2^23 - 1) =
+        // 1058897343291588607. Deliberately frozen as a constant, not computed live from the
+        // current wall clock - a live-computed ceiling would silently stop being a real assertion
+        // after 2027-01-01, while a frozen one holds forever, since ids only grow. Recomputed with
+        // a throwaway node --eval script during quick task 260813-os9 (see its SUMMARY for the
+        // exact script and output); the recomputation intentionally includes the legacy layout's
+        // maximum possible random low-bit contribution (2^23 - 1), which the plan's own
+        // illustrative figure (1058897343283200000, the shifted timestamp alone with an implicit
+        // random value of 0) omitted - the higher, fully-maximal value is the correct "largest
+        // value the old layout could produce" and is what this assertion needs to be a genuine
+        // ceiling rather than one with an ~8.4-million-wide gap near the boundary.
+        private static final long LEGACY_LAYOUT_CEILING = 1058897343291588607L;
+
+        @Test
+        void shouldProduceStrictlyIncreasingIds_whenCalledRapidlyInSequence() {
+            // arrange
+            var generator = new RandFlakeGenerator();
+            var callCount = 1000;
+
+            // act
+            List<Long> decoded =
+                    IntStream.range(0, callCount)
+                            .mapToObj(i -> Long.parseLong(generator.generateRandflake(), 36))
+                            .collect(Collectors.toList());
+
+            // assert
+            Assertions.assertThat(decoded).isSorted();
+            Assertions.assertThat(decoded).doesNotHaveDuplicates();
+        }
+
+        @Test
+        void shouldDecodeAboveLegacyLayoutCeiling_whenGeneratedFreshly() {
+            // arrange
+            var generator = new RandFlakeGenerator();
+
+            // act
+            var decoded = Long.parseLong(generator.generateRandflake(), 36);
+
+            // assert
+            Assertions.assertThat(decoded).isGreaterThan(LEGACY_LAYOUT_CEILING);
+        }
+
+        @Test
+        void shouldRenderAsTwelveCharPositiveBase36String_whenGeneratedFreshly() {
+            // arrange
+            var generator = new RandFlakeGenerator();
+
+            // act
+            var id = generator.generateRandflake();
+            var decoded = Long.parseLong(id, 36);
+
+            // assert
+            Assertions.assertThat(id).hasSize(12);
+            Assertions.assertThat(decoded).isPositive();
+        }
+
         @Test
         void shouldProduceAllDistinctIds_whenCalledConcurrentlyFromMultipleThreads()
                 throws InterruptedException, ExecutionException {
