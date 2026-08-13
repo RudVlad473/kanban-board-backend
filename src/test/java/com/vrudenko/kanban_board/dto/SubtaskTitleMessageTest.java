@@ -1,19 +1,24 @@
 package com.vrudenko.kanban_board.dto;
 
 import com.vrudenko.kanban_board.constant.ValidationConstants;
+import com.vrudenko.kanban_board.dto.annotation.SubtaskTitle;
 import com.vrudenko.kanban_board.dto.subtask_dto.SaveSubtaskRequestDTO;
 import com.vrudenko.kanban_board.dto.subtask_dto.UpdateSubtaskRequestDTO;
 
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
+import jakarta.validation.constraints.NotBlank;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 /**
- * Pins the client-visible violation message for {@link
- * com.vrudenko.kanban_board.dto.annotation.SubtaskTitle}'s length constraint.
+ * Pins {@link com.vrudenko.kanban_board.dto.annotation.SubtaskTitle}'s constraint behavior on
+ * subtask-title DTOs generally — both its length-constraint message and, for {@link
+ * SaveSubtaskRequestDTO#getTitle()}, the null/whitespace/empty-string boundary matrix that sits
+ * alongside its co-located {@code @NotBlank} (moved down from the controller tier per {@code
+ * docs/CODE_STYLE.md} rule 4).
  *
  * <p>{@code @ReportAsSingleViolation} on {@code SubtaskTitle} collapses any failure of its
  * composing {@code @Size} constraint onto the composed annotation's own {@code message()} default,
@@ -38,6 +43,10 @@ class SubtaskTitleMessageTest {
         return "a".repeat(ValidationConstants.MAX_SUBTASK_TITLE_LENGTH + 1);
     }
 
+    private String whitespaceOnlyTitle() {
+        return " ".repeat(ValidationConstants.MIN_SUBTASK_TITLE_LENGTH);
+    }
+
     @Nested
     class SaveSubtaskRequestDTOTest {
         @Test
@@ -52,6 +61,60 @@ class SubtaskTitleMessageTest {
             Assertions.assertThat(violations).hasSize(1);
             Assertions.assertThat(violations.iterator().next().getMessage())
                     .isEqualTo("Subtask title cannot be empty");
+        }
+
+        @Test
+        void shouldReturnOneViolation_withSubtaskTitleDefaultMessage_whenTitleIsNull() {
+            // arrange
+            var dto = SaveSubtaskRequestDTO.builder().title(null).build();
+
+            // act
+            var violations = validator.validate(dto);
+
+            // assert
+            Assertions.assertThat(violations).hasSize(1);
+            Assertions.assertThat(violations.iterator().next().getMessage())
+                    .isEqualTo("Subtask title cannot be empty");
+        }
+
+        @Test
+        void shouldReturnOneViolation_withSubtaskTitleDefaultMessage_whenTitleIsWhitespaceOnly() {
+            // arrange
+            var dto = SaveSubtaskRequestDTO.builder().title(whitespaceOnlyTitle()).build();
+
+            // act
+            var violations = validator.validate(dto);
+
+            // assert
+            Assertions.assertThat(violations).hasSize(1);
+            Assertions.assertThat(violations.iterator().next().getMessage())
+                    .isEqualTo("Subtask title cannot be empty");
+        }
+
+        @Test
+        void shouldTriggerBothNotBlankAndSubtaskTitle_whenTitleIsEmptyString() {
+            // arrange
+            var dto = SaveSubtaskRequestDTO.builder().title("").build();
+
+            // act
+            var violations = validator.validate(dto);
+
+            // assert
+            Assertions.assertThat(violations)
+                    .extracting(
+                            violation ->
+                                    violation
+                                            .getConstraintDescriptor()
+                                            .getAnnotation()
+                                            .annotationType()
+                                            .getSimpleName())
+                    .containsExactlyInAnyOrder(
+                            NotBlank.class.getSimpleName(), SubtaskTitle.class.getSimpleName());
+            Assertions.assertThat(violations)
+                    .allSatisfy(
+                            violation ->
+                                    Assertions.assertThat(violation.getPropertyPath().toString())
+                                            .isEqualTo("title"));
         }
     }
 
