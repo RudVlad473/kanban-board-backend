@@ -278,13 +278,6 @@ public class TaskService {
                         Instant.now()));
     }
 
-    @Transactional
-    public void deleteAllByColumnId(String userId, String columnId) {
-        var pair = ownershipVerifierService.verifyOwnershipOfColumn(userId, columnId);
-
-        deleteAllByColumn(pair.getSecond());
-    }
-
     /**
      * For callers (e.g. {@link ColumnService#deleteAllByBoardId}) that already verified ownership
      * of {@code column} — skips re-verifying it and batches the subtask/task deletes instead of

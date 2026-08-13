@@ -28,35 +28,6 @@ public class TaskServiceTest extends AbstractAppTest {
 
     @Autowired ColumnService columnService;
 
-    // Guards against the N+1 previously in deleteAllByColumnId: it used to re-verify ownership
-    // (task -> column -> board -> user) and issue a separate delete per task, so query count grew
-    // linearly with the number of tasks in the column (33 queries for 8 tasks, measured before the
-    // fix). The batched version should cost the same regardless of how many tasks are in the
-    // column — this test asserts that by comparing an empty column against a populated one.
-    @Nested
-    class DeleteAllByColumnIdQueryCountTest {
-        @Test
-        void queryCountDoesNotScaleWithTaskCount() {
-            // Arrange
-            final var userId = getOwningUser().getId();
-
-            // Act
-            var emptyColumnQueryCount =
-                    countQueries(
-                            () ->
-                                    taskService.deleteAllByColumnId(
-                                            userId, mockColumns.getFirst().getId()));
-            var populatedColumnQueryCount =
-                    countQueries(
-                            () ->
-                                    taskService.deleteAllByColumnId(
-                                            userId, mockPopulatedColumn.getId()));
-
-            // Assert
-            Assertions.assertThat(populatedColumnQueryCount).isEqualTo(emptyColumnQueryCount + 2);
-        }
-    }
-
     // Proves this plan's central design claim (GAP-03): the bulk-shift renumbering mechanism
     // makes a move's statement count constant, not linear in the number of siblings in the source
     // column. Uses countQueries, the sanctioned prepared-statement counter (docs/CODE_STYLE.md
@@ -303,25 +274,6 @@ public class TaskServiceTest extends AbstractAppTest {
 
             // assert
             Assertions.assertThat(exception).isInstanceOf(AppAccessDeniedException.class);
-        }
-    }
-
-    @Nested
-    class DeleteAllByColumnIdTest {
-        @Test
-        void shouldDeleteAll_whenTasksExist() {
-            // arrange
-            final var userId = getOwningUser().getId();
-            final var columnId = mockPopulatedColumn.getId();
-            var tasksCountBeforeDeletion = taskService.getTaskCountByColumnId(userId, columnId);
-
-            // act
-            taskService.deleteAllByColumnId(userId, columnId);
-
-            // assert
-            var tasksCountAfterDeletion = taskService.getTaskCountByColumnId(userId, columnId);
-            Assertions.assertThat(tasksCountBeforeDeletion).isNotZero();
-            Assertions.assertThat(tasksCountAfterDeletion).isZero();
         }
     }
 

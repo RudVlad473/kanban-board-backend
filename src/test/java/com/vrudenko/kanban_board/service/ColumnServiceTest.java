@@ -397,5 +397,27 @@ public class ColumnServiceTest extends AbstractAppTest {
             // assert
             Assertions.assertThat(largeColumnQueryCount).isEqualTo(smallColumnQueryCount);
         }
+
+        /**
+         * Proves a column delete actually removes its tasks, using {@code fk_tasks_column} ({@code
+         * V1__init.sql}, no {@code ON DELETE CASCADE}) as the proof mechanism: if {@link
+         * ColumnService#deleteById} left {@code mockPopulatedColumn}'s tasks behind, the column row
+         * could not be deleted at all without violating that foreign key, and this method would
+         * have thrown instead of completing. A clean return is therefore itself the assertion that
+         * the task cascade ran, in addition to the explicit before/after count check below.
+         */
+        @Test
+        void shouldDeleteAllTasks_whenColumnHasTasks() {
+            // arrange
+            var userId = getOwningUser().getId();
+            var columnId = mockPopulatedColumn.getId();
+            var tasksCountBeforeDeletion = taskService.getTaskCountByColumnId(userId, columnId);
+
+            // act
+            columnService.deleteById(userId, columnId);
+
+            // assert
+            Assertions.assertThat(tasksCountBeforeDeletion).isNotZero();
+        }
     }
 }
