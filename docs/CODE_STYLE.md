@@ -139,8 +139,32 @@ publish-then-consume-then-dedupe flow). This rule governs package/purpose select
 independent of the base-class rule immediately below — both must be read together when starting a
 new test file.
 
-**Which base class to extend, within `support/fixtures/`:** every test class is a `@SpringBootTest`
-extending one of three bases under `support/fixtures/` — `AbstractAppTest` for tests that call
+**Which tier a Bean Validation boundary case belongs at — `dto/*Test.java` vs. one representative
+controller test:** the `dto/` package holds validator-tier tests that exercise Bean Validation
+constraints directly against a DTO instance — a `jakarta.validation.Validator` obtained from
+`Validation.buildDefaultValidatorFactory()` in `@BeforeEach`, with no `@SpringBootTest`, no
+`support/fixtures/` base class, and no container, making it the cheapest tier in the suite and the
+reason an exhaustive matrix is affordable there. The split rule: one field-plus-annotation's full
+boundary matrix — null, blank, whitespace-only, below the minimum length, above the maximum length,
+and cases where two constraints collide — belongs at this tier; the controller tier keeps at most
+one or two representatives proving that a malformed body produces 400 with the right envelope, and
+does not re-enumerate the matrix behind an HTTP round trip. Worked example: quick task 260813-h2f
+added `@NotBlank` alongside the existing `@SubtaskTitle` on `SaveSubtaskRequestDTO.title` and proved
+it with four `TaskControllerTest.AddSubtaskByTaskId` tests; a suite-wide triage in 260813-i6r found
+this was the only controller-tier over-enumeration in the codebase, relocated three of those cases
+to `SubtaskTitleMessageTest.SaveSubtaskRequestDTOTest`, and kept
+`testWithAuthenticatedUser_shouldReturnBadRequest_whenJsonBodyIsEmpty` — the `{}` case — as the
+single controller-tier representative. This tier invites its own trap: `@SubtaskTitle` carries
+`@ReportAsSingleViolation`, so its rendered message is byte-identical to `@NotBlank`'s on the same
+field, and a DTO-tier test asserting only on message text cannot establish which constraint actually
+fired — an input that trips more than one constraint is asserted on the set of triggered constraint
+annotation types instead, while an input that trips exactly one may still assert message text, and
+only because an exact violation-count assertion pins that fact. Read together with the base-class
+paragraph immediately below, this is the one tier that answers it with "none."
+
+**Which base class to extend, within `support/fixtures/`:** every test class that needs a Spring
+context is a `@SpringBootTest` extending one of three bases under `support/fixtures/` —
+`AbstractAppTest` for tests that call
 services directly, `AbstractAppMockMvcTest` for HTTP tests that go through MockMvc without needing
 a real socket, or `AbstractAppE2ETest` (full real-socket HTTP round-trips) only when a genuinely
 concurrent multi-threaded request is required — exercising the real Spring context against a
@@ -535,7 +559,7 @@ reference application site.
 ### 13. A new test class belongs in a named subpackage of `com.vrudenko.kanban_board`, never directly in the root package
 
 Every test class lives inside one of this tree's existing subpackages -- `service/`,
-`controller/`, `e2e/{activity,board,column,subtask,task}/`, `activitylog/`, `config/`,
+`controller/`, `dto/`, `e2e/{activity,board,column,subtask,task}/`, `activitylog/`, `config/`,
 `security/`, `handler/`, `architecture/`, or `support/{containers,fixtures,listeners}/` -- chosen
 by rule 4's purpose test (which subpackage) together with rule 4's base-class test (which tier).
 The `e2e/` subtree is itself entity-subfoldered: a new flow test that spans board, column, task or
