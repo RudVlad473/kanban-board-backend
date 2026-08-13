@@ -93,6 +93,9 @@
 | ColumnController | HTTP endpoints for column retrieval, task addition | `src/main/java/com/vrudenko/kanban_board/controller/ColumnController.java` |
 | TaskController | HTTP endpoints for task CRUD, subtask addition | `src/main/java/com/vrudenko/kanban_board/controller/TaskController.java` |
 | SubtaskController | HTTP endpoints for subtask CRUD operations | `src/main/java/com/vrudenko/kanban_board/controller/SubtaskController.java` |
+| UserController | HTTP endpoints for the caller's own theme preference | `src/main/java/com/vrudenko/kanban_board/controller/UserController.java` |
+| TaskMoveController | HTTP endpoint for cross-column task moves | `src/main/java/com/vrudenko/kanban_board/controller/TaskMoveController.java` |
+| ActivityController | HTTP endpoint for a board's paginated activity feed | `src/main/java/com/vrudenko/kanban_board/controller/ActivityController.java` |
 | AuthenticationController | User signup, signin, session management | `src/main/java/com/vrudenko/kanban_board/security/AuthenticationController.java` |
 | BoardService | Board business logic, cascading deletes | `src/main/java/com/vrudenko/kanban_board/service/BoardService.java` |
 | ColumnService | Column business logic, task operations | `src/main/java/com/vrudenko/kanban_board/service/ColumnService.java` |
@@ -295,14 +298,20 @@
 - Responsibilities: Initialize Spring context, load configurations, scan components
 
 **HTTP Controller Entry Points:**
-- **Board Operations:** `/api/boards` (GET all, POST create via UserService)
+- **Board Operations:** `/api/boards` (GET list, POST create), `/api/boards/{boardId}` (PUT, DELETE), `/api/boards/{boardId}/full` (GET nested board+columns+tasks+subtasks read), `/api/boards/{boardId}/columns` (POST create column)
   - `src/main/java/com/vrudenko/kanban_board/controller/BoardController.java`
-- **Column Operations:** `/api/boards/{boardId}/columns` (GET all, POST task)
+- **Column Operations:** `/api/boards/{boardId}/columns` (GET all), `/api/boards/{boardId}/columns/{columnId}` (PUT, DELETE), `/api/boards/{boardId}/columns/{columnId}/reorder` (PATCH), `/api/boards/{boardId}/columns/{columnId}` (POST create task)
   - `src/main/java/com/vrudenko/kanban_board/controller/ColumnController.java`
-- **Task Operations:** `/api/boards/{boardId}/columns/{columnId}/tasks` (GET all, DELETE, PUT, POST subtask)
+- **Task Operations:** `/api/boards/{boardId}/columns/{columnId}/tasks` (GET all), `/api/boards/{boardId}/columns/{columnId}/tasks/{taskId}` (PUT, DELETE), `/api/boards/{boardId}/columns/{columnId}/tasks/{taskId}/subtasks` (POST create subtask)
   - `src/main/java/com/vrudenko/kanban_board/controller/TaskController.java`
-- **Subtask Operations:** `/api/boards/{boardId}/columns/{columnId}/tasks/{taskId}/subtasks` (GET all, DELETE, PUT)
+- **Subtask Operations:** `/api/boards/{boardId}/columns/{columnId}/tasks/{taskId}/subtasks` (GET all), `/api/boards/{boardId}/columns/{columnId}/tasks/{taskId}/subtasks/{subtaskId}` (PUT, DELETE)
   - `src/main/java/com/vrudenko/kanban_board/controller/SubtaskController.java`
+- **Task Move:** `/api/tasks/{taskId}/move` (PATCH, cross-column move)
+  - `src/main/java/com/vrudenko/kanban_board/controller/TaskMoveController.java`
+- **Board Activity Feed:** `/api/boards/{boardId}/activity` (GET, paginated)
+  - `src/main/java/com/vrudenko/kanban_board/controller/ActivityController.java`
+- **User Theme Preference:** `/api/users/me/theme` (GET, PUT — identity taken from the session, no user id in the path)
+  - `src/main/java/com/vrudenko/kanban_board/controller/UserController.java`
 - **Authentication:** `/api/signin`, `/api/signup`, `/api/logout`
   - `src/main/java/com/vrudenko/kanban_board/security/AuthenticationController.java`
 

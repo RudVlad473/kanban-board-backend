@@ -183,10 +183,11 @@ last-write-wins. `UserEntity` is the deliberate exception — its one versionabl
 preference) stays last-write-wins by explicit decision, not oversight (see below).
 
 - `@Version` on all four entities, surfaced through the response DTOs; `UpdateBoardRequestDTO`,
-  `UpdateTaskRequestDTO`, `MoveTaskRequestDTO`, `UpdateColumnRequestDTO` and
-  `UpdateSubtaskRequestDTO` all require the client to send back the version it read — a missing one
-  is a 400, not a silent overwrite. `BoardFullResponseDTO` exposes the board's own version alongside
-  its columns/tasks/subtasks, so a client that loads a board via the nested read still has what it
+  `UpdateTaskRequestDTO`, `MoveTaskRequestDTO`, `UpdateColumnRequestDTO`,
+  `UpdateSubtaskRequestDTO` and `ReorderColumnRequestDTO` all require the client to send back the
+  version it read — a missing one is a 400, not a silent overwrite. `BoardFullResponseDTO` exposes
+  the board's own version alongside its columns/tasks/subtasks, so a client that loads a board via
+  the nested read still has what it
   needs for a version-safe rename afterward. Board was the last of the four to gain this (V7
   migration, closing an asymmetry a frontend-integration-readiness audit flagged — the other three
   entities already had it).

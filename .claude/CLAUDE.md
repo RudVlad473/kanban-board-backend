@@ -232,6 +232,9 @@ A Spring Boot 3.5.0 / Java 21 REST API backend for a Kanban board application (u
 | ColumnController | HTTP endpoints for column retrieval, task addition | `src/main/java/com/vrudenko/kanban_board/controller/ColumnController.java` |
 | TaskController | HTTP endpoints for task CRUD, subtask addition | `src/main/java/com/vrudenko/kanban_board/controller/TaskController.java` |
 | SubtaskController | HTTP endpoints for subtask CRUD operations | `src/main/java/com/vrudenko/kanban_board/controller/SubtaskController.java` |
+| UserController | HTTP endpoints for the caller's own theme preference | `src/main/java/com/vrudenko/kanban_board/controller/UserController.java` |
+| TaskMoveController | HTTP endpoint for cross-column task moves | `src/main/java/com/vrudenko/kanban_board/controller/TaskMoveController.java` |
+| ActivityController | HTTP endpoint for a board's paginated activity feed | `src/main/java/com/vrudenko/kanban_board/controller/ActivityController.java` |
 | AuthenticationController | User signup, signin, session management | `src/main/java/com/vrudenko/kanban_board/security/AuthenticationController.java` |
 | BoardService | Board business logic, cascading deletes | `src/main/java/com/vrudenko/kanban_board/service/BoardService.java` |
 | ColumnService | Column business logic, task operations | `src/main/java/com/vrudenko/kanban_board/service/ColumnService.java` |
@@ -343,10 +346,13 @@ A Spring Boot 3.5.0 / Java 21 REST API backend for a Kanban board application (u
 - Location: `src/main/java/com/vrudenko/kanban_board/KanbanBoardApplication.java`
 - Triggers: Spring Boot main method
 - Responsibilities: Initialize Spring context, load configurations, scan components
-- **Board Operations:** `/api/boards` (GET all, POST create via UserService)
-- **Column Operations:** `/api/boards/{boardId}/columns` (GET all, POST task)
-- **Task Operations:** `/api/boards/{boardId}/columns/{columnId}/tasks` (GET all, DELETE, PUT, POST subtask)
-- **Subtask Operations:** `/api/boards/{boardId}/columns/{columnId}/tasks/{taskId}/subtasks` (GET all, DELETE, PUT)
+- **Board Operations:** `/api/boards` (GET list, POST create), `/api/boards/{boardId}` (PUT, DELETE), `/api/boards/{boardId}/full` (GET nested board+columns+tasks+subtasks read), `/api/boards/{boardId}/columns` (POST create column)
+- **Column Operations:** `/api/boards/{boardId}/columns` (GET all), `/api/boards/{boardId}/columns/{columnId}` (PUT, DELETE), `/api/boards/{boardId}/columns/{columnId}/reorder` (PATCH), `/api/boards/{boardId}/columns/{columnId}` (POST create task)
+- **Task Operations:** `/api/boards/{boardId}/columns/{columnId}/tasks` (GET all), `/api/boards/{boardId}/columns/{columnId}/tasks/{taskId}` (PUT, DELETE), `/api/boards/{boardId}/columns/{columnId}/tasks/{taskId}/subtasks` (POST create subtask)
+- **Subtask Operations:** `/api/boards/{boardId}/columns/{columnId}/tasks/{taskId}/subtasks` (GET all), `/api/boards/{boardId}/columns/{columnId}/tasks/{taskId}/subtasks/{subtaskId}` (PUT, DELETE)
+- **Task Move:** `/api/tasks/{taskId}/move` (PATCH, cross-column move)
+- **Board Activity Feed:** `/api/boards/{boardId}/activity` (GET, paginated)
+- **User Theme Preference:** `/api/users/me/theme` (GET, PUT — identity taken from the session, no user id in the path)
 - **Authentication:** `/api/signin`, `/api/signup`, `/api/logout`
 - Location: `src/main/java/com/vrudenko/kanban_board/config/SecurityConfiguration.java`
 - Triggers: Before every HTTP request
