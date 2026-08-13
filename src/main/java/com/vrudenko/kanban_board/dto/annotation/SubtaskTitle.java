@@ -21,7 +21,7 @@ import jakarta.validation.constraints.Size;
 @Size(
         min = ValidationConstants.MIN_SUBTASK_TITLE_LENGTH,
         max = ValidationConstants.MAX_SUBTASK_TITLE_LENGTH,
-        message = ValidationConstants.NAME_LENGTH_VALIDATION_MESSAGE)
+        message = ValidationConstants.SUBTASK_TITLE_LENGTH_VALIDATION_MESSAGE)
 public @interface SubtaskTitle {
     String message() default "Subtask title cannot be empty";
 
