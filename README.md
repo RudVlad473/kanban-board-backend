@@ -67,22 +67,21 @@ signin. Child resources are created by `POST`ing to their parent.
 | Method | Path | Notes |
 |---|---|---|
 | `POST` | `/signup` · `/signin` · `/logout` | Session cookie; max 2 concurrent sessions per user. `/signup`/`/signin` also return the caller's identity (`id`, `email`, `displayName`, `theme`) in the response body |
-| `GET` | `/boards` | Boards owned by the caller |
+| `GET` `POST` | `/boards` | `GET` lists boards owned by the caller; `POST` creates one — `201` with a `Location` header, and the name must be unique for that user |
 | `PUT` `DELETE` | `/boards/{boardId}` | `PUT` requires the current `version`; delete cascades to columns, tasks, subtasks |
+| `GET` | `/boards/{boardId}/full` | The board with its columns, each column with its tasks, and each task with its subtasks, in one nested document; carries the board's own `version` |
 | `GET` | `/boards/{boardId}/columns` | |
 | `POST` | `/boards/{boardId}/columns` | Create a column |
-| `PUT` | `/boards/{boardId}/columns/{columnId}` | Requires the current `version` |
+| `PUT` `DELETE` | `/boards/{boardId}/columns/{columnId}` | `PUT` requires the current `version`; `DELETE` cascades to the column's tasks and subtasks |
 | `POST` | `/boards/{boardId}/columns/{columnId}` | Create a task in the column |
+| `PATCH` | `/boards/{boardId}/columns/{columnId}/reorder` | Reposition a column within its board; body takes `targetPosition` and requires the current `version` |
 | `GET` | `…/columns/{columnId}/tasks` | |
 | `PUT` `DELETE` | `…/columns/{columnId}/tasks/{taskId}` | `PUT` requires the current `version` |
 | `PATCH` | `/tasks/{taskId}/move` | Cross-column move; requires the current `version` |
 | `GET` `POST` | `…/tasks/{taskId}/subtasks` | |
 | `PUT` `DELETE` | `…/tasks/{taskId}/subtasks/{subtaskId}` | |
 | `GET` | `/boards/{boardId}/activity` | Paginated feed — default 20, capped at 100 |
-
-Two gaps worth naming rather than hiding: board creation exists as `UserService.addBoardByUserId`
-but is not exposed over HTTP yet (only tests reach it), and columns have no delete route — the
-cascade is only reachable by deleting the board.
+| `GET` `PUT` | `/users/me/theme` | The caller's own theme preference (`LIGHT`/`DARK`); the user is taken from the session, so no user id appears in the path |
 
 ## Testing
 
