@@ -121,7 +121,20 @@ dependencies {
     // ActivityLogIdempotencyE2ETest) the moment the Avro dependency landed on the classpath.
     // 3.18.0 matches the highest version already requested transitively, so it resolves cleanly
     // against every other caller too.
-    testImplementation 'org.apache.commons:commons-lang3:3.18.0'
+    //
+    // Scope corrected to `implementation` (quick task 260813-q1i, Task 1): the fix above landed
+    // as `testImplementation` only, so it never touched `configurations.runtimeClasspath` --
+    // the exact configuration `bootJar` packages into the production Docker image. Left alone,
+    // that configuration kept resolving whatever the Spring Boot BOM and Avro's transitive tree
+    // agreed on: 3.17.0 (observed live via `./gradlew dependencies --configuration
+    // runtimeClasspath` before this fix landed), which carries CVE-2025-48924
+    // (GHSA-j288-q9x7-2f5v, uncontrolled recursion in `ClassUtils.getClass`), fixed in 3.18.0.
+    // This was found by quick task 260813-q1i's research, not by any gate -- which is why
+    // `verifyRuntimeDependencyFloor` below now exists: it fails the build if this line ever
+    // regresses back to test-only scope. One declaration, not two: `implementation` already
+    // extends into the test compile and runtime configurations, so a separate
+    // `testImplementation` line would be redundant.
+    implementation 'org.apache.commons:commons-lang3:3.18.0'
 
     // https://mvnrepository.com/artifact/org.fluttercode.datafactory/datafactory
     testImplementation 'org.fluttercode.datafactory:datafactory:0.8'
@@ -234,6 +247,14 @@ tasks.named('test') {
     // is written, and still reports the overall build as failed if the ratchet trips even though
     // `test` itself may have gone green.
     finalizedBy jacocoTestCoverageVerification
+
+    // Same "CI never runs `check`" reasoning applies to verifyRuntimeDependencyFloor (defined
+    // near the JaCoCo section below, quick task 260813-q1i, Task 1) -- dependsOn, not
+    // finalizedBy, since this check has no ordering need against test's own artifacts and should
+    // fail in seconds, before the five-minute suite runs, rather than after it. Referenced by
+    // name (not task object) because this block executes before that task is registered further
+    // down the file; Gradle resolves string-named task dependencies lazily at task-graph time.
+    dependsOn 'verifyRuntimeDependencyFloor'
 }
 
 // Pre-commit-hook-only fast test gate. `test` itself is untouched above -- CI and
@@ -392,6 +413,100 @@ jacocoTestCoverageVerification {
                     fileTree(dir: it, exclude: jacocoGeneratedCodeExcludes)
                 })
         )
+    }
+}
+
+// --- Runtime dependency floor check (quick task 260813-q1i, Task 1) -------------------------
+// Guards the commons-lang3 `implementation` scope (see the dependencies-block comment above)
+// against silent regression back to test-only scope. A JUnit test cannot prove this property:
+// the test JVM runs on `testRuntimeClasspath`, the exact configuration that was already correct
+// for the entire period `runtimeClasspath` -- the configuration `bootJar` actually packages into
+// the production Docker image -- resolved a vulnerable version. A test asserting the version via
+// the test classpath would have been green throughout that whole window; only a check that
+// resolves `configurations.runtimeClasspath` itself can observe what this task exists to guard.
+//
+// Wired to `test` via `dependsOn` above, not `check`: this CI runs exactly two commands, `test`
+// and `spotlessCheck` (.github/workflows/deploy.yml), and never invokes `check` -- the same
+// reasoning already recorded above for `finalizedBy jacocoTestCoverageVerification`. Not wired
+// into `fastTest`: that task deliberately stays lean (it already opts out of the JaCoCo agent for
+// the same reason), and a dependency-scope regression is not something introduced accidentally
+// mid-feature.
+//
+// One entry today; the map shape is so the next floor is one line. A module absent from
+// `runtimeClasspath` entirely fails loudly rather than silently matching nothing -- a floor that
+// can no longer find its target has quietly stopped checking.
+def runtimeDependencyFloors = [
+        'org.apache.commons:commons-lang3': '3.18.0'
+]
+
+tasks.register('verifyRuntimeDependencyFloor') {
+    description = 'Fails the build if a pinned runtime-scope dependency resolves below its ' +
+            'floor version on configurations.runtimeClasspath -- the configuration bootJar ' +
+            'actually packages into the production Docker image.'
+    group = 'verification'
+
+    // Captured at configuration time into a Provider and read only inside doLast, so this task
+    // stays configuration-cache compatible -- matching this file's existing providers.exec
+    // rationale in the git-hooks block below. resolvedArtifacts() is a
+    // Provider<Set<ResolvedArtifactResult>>; each element's id.componentIdentifier, when it is a
+    // ModuleComponentIdentifier, carries group/module/version -- verified against Gradle 8.11.1
+    // by running this task during quick task 260813-q1i.
+    def resolvedArtifacts = configurations.runtimeClasspath.incoming.artifacts.resolvedArtifacts
+
+    doLast {
+        def versionPattern = ~/^(\d+)\.(\d+)\.(\d+)/
+
+        def resolvedVersions = [:]
+        resolvedArtifacts.get().each { artifact ->
+            def componentId = artifact.id.componentIdentifier
+            if (componentId instanceof org.gradle.api.artifacts.component.ModuleComponentIdentifier) {
+                resolvedVersions["${componentId.group}:${componentId.module}"] = componentId.version
+            }
+        }
+
+        runtimeDependencyFloors.each { coordinate, floorVersion ->
+            def resolvedVersion = resolvedVersions[coordinate]
+            if (resolvedVersion == null) {
+                throw new GradleException(
+                        "verifyRuntimeDependencyFloor: '${coordinate}' is absent from " +
+                                "configurations.runtimeClasspath entirely -- this floor check has " +
+                                "quietly stopped checking anything. Update or remove the floor entry.")
+            }
+
+            def floorMatcher = versionPattern.matcher(floorVersion)
+            def resolvedMatcher = versionPattern.matcher(resolvedVersion)
+            if (!floorMatcher.find() || !resolvedMatcher.find()) {
+                throw new GradleException(
+                        "verifyRuntimeDependencyFloor: could not parse a major.minor.patch shape " +
+                                "out of floor='${floorVersion}' or resolved='${resolvedVersion}' for " +
+                                "'${coordinate}' -- refusing to fall back to a silently-wrong string " +
+                                "comparison.")
+            }
+
+            def floorParts = (1..3).collect { floorMatcher.group(it) as int }
+            def resolvedParts = (1..3).collect { resolvedMatcher.group(it) as int }
+
+            // Explicit element-wise major/minor/patch comparison, not List#<=> -- Groovy's
+            // spaceship operator on two plain ArrayLists throws ClassCastException at runtime
+            // (verified against Gradle 8.11.1's bundled Groovy while writing this task) rather
+            // than delegating to a component-wise Comparable comparison.
+            def isBelowFloor = false
+            for (int i = 0; i < 3; i++) {
+                if (resolvedParts[i] != floorParts[i]) {
+                    isBelowFloor = resolvedParts[i] < floorParts[i]
+                    break
+                }
+            }
+
+            if (isBelowFloor) {
+                throw new GradleException(
+                        "verifyRuntimeDependencyFloor: '${coordinate}' resolves to " +
+                                "'${resolvedVersion}' on configurations.runtimeClasspath, below the " +
+                                "required floor '${floorVersion}'. This is the production classpath " +
+                                "bootJar packages -- see the dependencies-block comment above this " +
+                                "entry for why the floor exists.")
+            }
+        }
     }
 }
 
