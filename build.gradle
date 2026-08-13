@@ -178,7 +178,7 @@ dependencies {
     // https://mvnrepository.com/artifact/org.fluttercode.datafactory/datafactory
     testImplementation 'org.fluttercode.datafactory:datafactory:0.8'
 
-    implementation 'io.vavr:vavr:0.10.4'
+    implementation 'io.vavr:vavr:1.0.1'
 
     testImplementation 'org.springframework.security:spring-security-test'
 
