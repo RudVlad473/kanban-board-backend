@@ -82,14 +82,14 @@ class GlobalExceptionHandlerTest extends AbstractAppMockMvcTest {
             // arrange
             Cookie cookie = signinCookie();
             var otherUser = createUser();
+            // Fixed literal, not a random word (D-05): "about" is 5 characters, inside the
+            // [MIN_BOARD_NAME_LENGTH, MAX_BOARD_NAME_LENGTH] bound, so it is a valid board name —
+            // and it is precisely the value that used to cause an intermittent failure below, by
+            // colliding with the "about:blank" RFC 7807 type boilerplate. Fixing it makes that
+            // previously-unlucky case run on every build instead of ~1-in-N.
             var otherBoard =
                     userService.addBoardByUserId(
-                            otherUser.getId(),
-                            SaveBoardRequestDTO.builder()
-                                    .name(
-                                            dataFactory.getRandomWord(
-                                                    ValidationConstants.MIN_BOARD_NAME_LENGTH + 4))
-                                    .build());
+                            otherUser.getId(), SaveBoardRequestDTO.builder().name("about").build());
 
             // act
             var response =
@@ -102,11 +102,34 @@ class GlobalExceptionHandlerTest extends AbstractAppMockMvcTest {
             // assert
             Assertions.assertThat(response.getStatus()).isEqualTo(HttpStatus.FORBIDDEN.value());
             Assertions.assertThat(response.getContentType()).isEqualTo("application/problem+json");
-            Assertions.assertThat(response.getContentAsString())
-                    .doesNotContain(otherBoard.getName());
 
             var body = objectMapper.readTree(response.getContentAsString());
             Assertions.assertThat(body.get("code").asText()).isEqualTo("ACCESS_DENIED");
+
+            // `type` is pinned to the RFC 7807 boilerplate default rather than excluded blindly
+            // (D-05): this is the exact field whose "about:blank" value collided with a
+            // randomly-drawn board name of "about" before this fix. Pinning its value means the
+            // exclusion below cannot silently widen if Spring ever starts emitting a real type URI
+            // instead of the boilerplate default.
+            Assertions.assertThat(body.get("type").asText()).isEqualTo("about:blank");
+
+            // Leak-check every other field's textual value — not just `detail` — so this remains
+            // the one assertion proving a 403 on another user's board never echoes that board's
+            // name back to the caller, across `title`, `instance`, `code` and any future extension
+            // property.
+            var fieldNames = body.fieldNames();
+            while (fieldNames.hasNext()) {
+                var fieldName = fieldNames.next();
+                if (fieldName.equals("type")) {
+                    continue;
+                }
+                var fieldValue = body.get(fieldName);
+                if (fieldValue.isTextual()) {
+                    Assertions.assertThat(fieldValue.asText())
+                            .as("field '%s' must not leak the other user's board name", fieldName)
+                            .doesNotContain(otherBoard.getName());
+                }
+            }
         }
     }
 
