@@ -29,6 +29,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -388,6 +389,100 @@ class TaskControllerTest extends AbstractAppTest {
                     .andDo(print())
                     .andExpect(status().isBadRequest())
                     .andReturn();
+        }
+
+        @Test
+        void testWithAuthenticatedUser_shouldReturnBadRequest_whenJsonBodyIsEmpty()
+                throws Exception {
+            // Arrange
+            var userId = getOwningUser().getId();
+            var boardId = mockPopulatedBoard.getId();
+            var columnId = mockPopulatedColumn.getId();
+            var taskId = mockPopulatedTask.getId();
+            var url = getTaskPrefix(boardId, columnId) + "/" + taskId + ApiPaths.SUBTASKS;
+
+            // Act
+            // Assert
+            mockMvc.perform(
+                            post(url)
+                                    .with(user(userId))
+                                    .contentType(APPLICATION_JSON)
+                                    .content("{}"))
+                    .andDo(print())
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.errors.title").value("Subtask title cannot be empty"));
+        }
+
+        @Test
+        void testWithAuthenticatedUser_shouldReturnBadRequest_whenTitleIsNull() throws Exception {
+            // Arrange
+            var userId = getOwningUser().getId();
+            var boardId = mockPopulatedBoard.getId();
+            var columnId = mockPopulatedColumn.getId();
+            var taskId = mockPopulatedTask.getId();
+            var url = getTaskPrefix(boardId, columnId) + "/" + taskId + ApiPaths.SUBTASKS;
+
+            // Act
+            // Assert
+            mockMvc.perform(
+                            post(url)
+                                    .with(user(userId))
+                                    .contentType(APPLICATION_JSON)
+                                    .content("{\"title\":null}"))
+                    .andDo(print())
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.errors.title").value("Subtask title cannot be empty"));
+        }
+
+        @Test
+        void testWithAuthenticatedUser_shouldReturnBadRequest_whenTitleIsWhitespaceOnly()
+                throws Exception {
+            // Arrange
+            var userId = getOwningUser().getId();
+            var boardId = mockPopulatedBoard.getId();
+            var columnId = mockPopulatedColumn.getId();
+            var taskId = mockPopulatedTask.getId();
+            var url = getTaskPrefix(boardId, columnId) + "/" + taskId + ApiPaths.SUBTASKS;
+
+            // Act
+            // Assert
+            mockMvc.perform(
+                            post(url)
+                                    .with(user(userId))
+                                    .contentType(APPLICATION_JSON)
+                                    .content("{\"title\":\"   \"}"))
+                    .andDo(print())
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.errors.title").value("Subtask title cannot be empty"));
+        }
+
+        @Test
+        void testWithAuthenticatedUser_shouldReturnBadRequest_whenTitleIsEmptyString()
+                throws Exception {
+            // Arrange
+            var userId = getOwningUser().getId();
+            var boardId = mockPopulatedBoard.getId();
+            var columnId = mockPopulatedColumn.getId();
+            var taskId = mockPopulatedTask.getId();
+            var url = getTaskPrefix(boardId, columnId) + "/" + taskId + ApiPaths.SUBTASKS;
+
+            // Act
+            // Assert
+            // An empty string trips both @NotBlank and @Size(min=3); GlobalExceptionHandler keys
+            // its errors map by field name (HashMap.put), so the two violations collapse
+            // last-writer-wins in unspecified constraint-iteration order -- assert presence only.
+            mockMvc.perform(
+                            post(url)
+                                    .with(user(userId))
+                                    .contentType(APPLICATION_JSON)
+                                    .content("{\"title\":\"\"}"))
+                    .andDo(print())
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.errors.title").exists());
         }
     }
 }
