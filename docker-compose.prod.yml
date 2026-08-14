@@ -1,4 +1,7 @@
-# Production Compose manifest for the Oracle Cloud A1 Flex VM (v1.2 Infra Migration, Phase 5).
+# Production Compose manifest for the Netcup VPS Lite 2 G12s VM (v1.2 Infra Migration, Phase 5).
+# Originally written against an Oracle Cloud A1 Flex target; the deploy target pivoted after
+# Oracle's eu-zurich-1 capacity shortage proved structural -- see 05-03 HANDOFF/SUMMARY for the
+# full rationale. Netcup is x86_64/4 vCPU/8GB, not Oracle's ARM64/2 OCPU/12GB.
 #
 # This is a STANDALONE file, not an overlay on docker-compose.yml (local dev). The two files'
 # service sets genuinely differ: this file defines no `postgres` service (Neon is the production
@@ -10,14 +13,11 @@
 # .env.prod up -d` from the VM, after copying this file, Caddyfile, and a real .env.prod (never
 # committed -- see .env.prod.example) onto the VM.
 #
-# Cross-plan integration note: DB_URL_PARAMS below is the production value for the JDBC URL
-# query-string placeholder plan 05-01 introduces in application.properties (local-safe empty
-# default there, non-empty override here). Plan 05-01 runs in a parallel wave-1 worktree and picks
-# its own exact placeholder variable name; DB_URL_PARAMS is this plan's chosen name, documented
-# here and in .env.prod.example so the two plans reconcile at merge time -- if 05-01 lands under a
-# different variable name, this file's `app.environment` block and .env.prod.example must be
-# updated to match before plan 05-04's deploy, and that reconciliation is flagged in this plan's
-# SUMMARY.md as a required follow-up check.
+# Cross-plan integration note: DB_JDBC_PARAMS below is the production value for the JDBC URL
+# query-string placeholder plan 05-01 introduces in application.properties (local-safe default
+# there, non-empty override here). Reconciled at wave-1 merge time: this plan originally drafted
+# the name DB_URL_PARAMS, but 05-01 actually landed as DB_JDBC_PARAMS -- renamed here and in
+# .env.prod.example to match the variable application.properties actually reads.
 
 x-logging: &default-logging
   # Docker rotates rather than grows at these limits: total on-disk log bytes per container is
@@ -71,9 +71,10 @@ services:
       DB_USER: ${DB_USER}
       DB_PASS: ${DB_PASS}
       # Production value for plan 05-01's JDBC URL query-string placeholder -- see the
-      # cross-plan integration note at the top of this file. Expected shape:
-      # "?sslmode=require&channel_binding=require&prepareThreshold=0".
-      DB_URL_PARAMS: ${DB_URL_PARAMS}
+      # cross-plan integration note at the top of this file. Expected shape (no leading "?" --
+      # application.properties' URL template already supplies it):
+      # "sslmode=require&channel_binding=require&prepareThreshold=0".
+      DB_JDBC_PARAMS: ${DB_JDBC_PARAMS}
       # Internal Docker network only -- no host port is published for either, matching the local
       # dev naming exactly (docker-compose.yml) so no application config diverges between
       # environments.
@@ -106,10 +107,11 @@ services:
       # Explicit resource caps -- deliberately NOT `--mode dev-container` (the local dev preset
       # that relaxes resource discipline for developer convenience; carrying it into production
       # would let Redpanda assume it owns the whole VM, a real OOM path alongside the co-resident
-      # app JVM, T-05-11). Values below are conservative for a 2-OCPU/12GB shape --
-      # UNCONFIRMED until plan 05-03 verifies the real Oracle console tenancy shape (Oracle's
-      # publicly reported post-halving figure is MEDIUM confidence, not vendor-confirmed for this
-      # tenancy). Revisit --smp and --memory then; do not assume these values are final.
+      # app JVM, T-05-11). Values below are a floor, not tied to a specific host shape -- confirmed
+      # against the Netcup VPS Lite 2 G12s target (4 vCPU/8GB): Redpanda's 2G cap plus the app
+      # JVM's default ~25%-of-container heap (no explicit -Xmx set) plus Caddy leaves roughly 2GB
+      # of headroom on 8GB total, tighter than the original 12GB Oracle target but not exceeded.
+      # Revisit under real load if this proves too tight.
       - --overprovisioned
       - --smp
       - "1"
