@@ -97,10 +97,45 @@ before assuming the ruleset itself is wrong.**
   later plan, 05-04) — this probe confirms the firewall layers, not the eventual app.
 - Both firewall layers independently verified to allow 22 and nothing else currently listening.
 
+## Database — Neon
+
+| Field | Value |
+|-------|-------|
+| Project name | `kanban-board-db` |
+| Project ID | `floral-union-23715140` |
+| Organization | Rudenko Vladimir (`org-red-moon-37279582`) |
+| Region | `aws-eu-central-1` (Frankfurt) — closest Neon-offered region to the Netcup VM's Vienna datacenter; Neon has no Austria region |
+| Postgres version | 18 |
+| Compute | `ep-delicate-bird-b2lni8pr`, autoscaling 0.25–2 CU, `suspend_timeout_seconds: 0` (scale-to-zero) |
+| Direct host | `ep-delicate-bird-b2lni8pr.c-6.eu-central-1.aws.neon.tech` |
+| Pooled host | `ep-delicate-bird-b2lni8pr-pooler.c-6.eu-central-1.aws.neon.tech` (pooler mode: transaction) |
+| Database state | Empty — no schema, no data, confirmed via `get_database_tables` — Flyway owns schema creation on first deploy |
+
+No connection string, user, or password is recorded here — see `.env.prod.example` for the shape
+of what production needs; the real values live only in `.env.prod` on the VM (never committed),
+populated during plan 05-04.
+
+**Open question for 05-04:** `docker-compose.prod.yml` wires a single `DB_HOST` for the app
+service, and Spring Boot's own Flyway integration runs migrations against that same datasource at
+startup. Neon's pooler runs in **transaction mode**, which is known to break Flyway's
+session-level advisory locks — so `DB_HOST` will likely need to be the **direct** (non-`-pooler`)
+host, not the pooled one. Not yet decided; flag this when wiring `.env.prod`.
+
+## DNS — DuckDNS
+
+| Field | Value |
+|-------|-------|
+| Subdomain | `kanban-board-rud-vlad-473.duckdns.org` |
+| A record | `159.195.114.230` (the Netcup VM's public IPv4) |
+| Verified (2026-08-14) | Resolves correctly via both the local resolver and Google's public DNS (`8.8.8.8`) — not a stale/cached answer. Port 22 reachable through the domain (confirms it correctly routes to the VM, not just resolves); 80/443 closed, matching the "nothing deployed yet" expectation exactly. |
+| Dynamic-update note | The Netcup VM's IP is static for this deployment's lifetime — no DuckDNS auto-updater client/cron/token is running. If the VM is ever re-provisioned with a new IP, the A record must be updated manually. |
+
+Not yet attempted: certificate issuance — that's plan 05-04's job once Caddy is actually deployed
+and can run its own HTTP-01 challenge against this hostname.
+
 ## Not yet done (tracked in `.planning/phases/05-infra-migration/`)
 
 - Deploy the actual stack (`docker-compose.prod.yml`, `Caddyfile`) — plan 05-04.
-- Neon project creation and DuckDNS subdomain/A-record — plan 05-03 Task 3.
 - Re-point CI/CD (`.github/workflows/deploy.yml`'s disabled `deploy-to-ec2` job) at this host —
   plans 05-04/05-05.
 

@@ -126,9 +126,9 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 05-01-PLAN.md — Production app configuration: Actuator health endpoint, Neon datasource + HikariCP sizing, baseline schema DDL (wave 1, autonomous)
-- [ ] 05-02-PLAN.md — Production deploy manifests: docker-compose.prod.yml, Caddyfile, infra architecture diagram (wave 1, autonomous)
-- [ ] 05-03-PLAN.md — Guided cloud provisioning: Oracle VM + Reserved IP, three-layer firewall, Neon project, free subdomain (wave 1, human checkpoints)
+- [x] 05-01-PLAN.md — Production app configuration: Actuator health endpoint, Neon datasource + HikariCP sizing, baseline schema DDL (wave 1, autonomous) — merged to master 2026-08-13
+- [x] 05-02-PLAN.md — Production deploy manifests: docker-compose.prod.yml, Caddyfile, infra architecture diagram (wave 1, autonomous) — merged to master 2026-08-13
+- [x] 05-03-PLAN.md — Guided cloud provisioning: Netcup VM (pivoted from Oracle, capacity-constrained), two-layer firewall, Neon project, free subdomain (wave 1, human checkpoints) — complete 2026-08-14
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

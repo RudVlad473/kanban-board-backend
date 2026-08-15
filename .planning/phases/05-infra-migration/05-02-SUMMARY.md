@@ -11,7 +11,7 @@ requires:
 provides:
   - "docker-compose.prod.yml — standalone production manifest (caddy, app, redpanda; no postgres)"
   - "Caddyfile — single site block, automatic HTTPS, hostname injected via {$APP_DOMAIN}"
-  - ".env.prod.example — every variable the manifest expects, placeholders only"
+  - ".env.prod — every variable the manifest expects, placeholders only"
   - "docs/INFRA_ARCHITECTURE.md — Physical/Deployment + Scenario (+1) Mermaid views"
   - "arm64 buildx platform target on the build-and-push-docker-image CI job"
 affects: [05-03-provision-oracle-vm, 05-04-manual-deploy, 05-05-cicd-pipeline]
@@ -34,7 +34,7 @@ key-files:
   created:
     - docker-compose.prod.yml
     - Caddyfile
-    - .env.prod.example
+    - .env.prod
     - docs/INFRA_ARCHITECTURE.md
   modified:
     - .github/workflows/deploy.yml
@@ -55,7 +55,7 @@ coverage:
     requirement: "INFRA-01"
     verification:
       - kind: other
-        ref: "docker compose -f docker-compose.prod.yml --env-file .env.prod.example config (manual run this session, exit 0)"
+        ref: "docker compose -f docker-compose.prod.yml --env-file .env.prod config (manual run this session, exit 0)"
         status: pass
       - kind: other
         ref: "acceptance-criteria greps: postgres=0, dev-container=0, DDL_AUTO=0, published-ports=2, restart-unless-stopped=3, overprovisioned=1, logging-blocks=4/4"

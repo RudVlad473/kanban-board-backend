@@ -11,13 +11,13 @@
 #
 # Deploy usage (manual, plan 05-04): `docker compose -f docker-compose.prod.yml --env-file
 # .env.prod up -d` from the VM, after copying this file, Caddyfile, and a real .env.prod (never
-# committed -- see .env.prod.example) onto the VM.
+# committed -- see .env.prod) onto the VM.
 #
 # Cross-plan integration note: DB_JDBC_PARAMS below is the production value for the JDBC URL
 # query-string placeholder plan 05-01 introduces in application.properties (local-safe default
 # there, non-empty override here). Reconciled at wave-1 merge time: this plan originally drafted
 # the name DB_URL_PARAMS, but 05-01 actually landed as DB_JDBC_PARAMS -- renamed here and in
-# .env.prod.example to match the variable application.properties actually reads.
+# .env.prod to match the variable application.properties actually reads.
 
 x-logging: &default-logging
   # Docker rotates rather than grows at these limits: total on-disk log bytes per container is
