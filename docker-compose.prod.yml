@@ -61,6 +61,21 @@ services:
     # (plan 05-05) after a successful build-and-push.
     image: rudenkovladimir/kanban-board-backend:${IMAGE_TAG}
     restart: unless-stopped
+    # Explicit memory ceiling. The JVM has been container-aware since JDK 10
+    # (UseContainerSupport on by default, MaxRAMPercentage=25% with no explicit -Xmx set --
+    # confirmed by the absence of -Xmx anywhere in Dockerfile/this file), but that only sizes the
+    # heap against a real bounded number if the container actually HAS a memory limit. Without
+    # this line the cgroup limit the JVM reads back defaults to the host's full measured 7.8GiB,
+    # not a bounded slice -- 25% of that is already ~2GB of heap alone, before any non-heap JVM
+    # overhead (metaspace, thread stacks, JIT code cache, direct buffers), which would already
+    # exceed the headroom the redpanda service's command comment below claims. 3g here caps the
+    # JVM's own 25%-of-container default heap at ~768MB, leaving real headroom inside the
+    # container for non-heap overhead, and leaving Caddy + the OS their own real share of the
+    # 7.8GiB host total alongside redpanda's 2G cap -- see that comment for the full budget math.
+    # This does not replace Task 3's own measure-under-load pass (05-04-PLAN.md Task 3) -- that
+    # still tunes these numbers against real observed usage; this only makes the container
+    # boundary the JVM sizes against match what the comment already claimed.
+    mem_limit: 3g
     depends_on:
       redpanda:
         condition: service_healthy
@@ -108,10 +123,15 @@ services:
       # that relaxes resource discipline for developer convenience; carrying it into production
       # would let Redpanda assume it owns the whole VM, a real OOM path alongside the co-resident
       # app JVM, T-05-11). Values below are a floor, not tied to a specific host shape -- confirmed
-      # against the Netcup VPS Lite 2 G12s target (4 vCPU/8GB): Redpanda's 2G cap plus the app
-      # JVM's default ~25%-of-container heap (no explicit -Xmx set) plus Caddy leaves roughly 2GB
-      # of headroom on 8GB total, tighter than the original 12GB Oracle target but not exceeded.
-      # Revisit under real load if this proves too tight.
+      # against the Netcup VPS Lite 2 G12s target (4 vCPU/8GB, 7.8GiB measured). Real budget basis
+      # (corrected 05-04 Task 1 -- the app service now carries an explicit `mem_limit: 3g`, see its
+      # comment above, so the JVM's container-aware default heap sizing computes against that
+      # bounded number instead of silently reading the host's unbounded 7.8GiB): redpanda 2G + app
+      # 3G = 5G, leaving ~2.8G of the measured 7.8GiB host total for Caddy (lightweight, well under
+      # 100MB typically) and the OS -- genuine headroom, not merely asserted. Tighter than the
+      # original 12GB Oracle target but not exceeded. This is still a floor pending Task 3's
+      # measure-under-real-load pass (05-04-PLAN.md), which retunes these numbers against actual
+      # observed usage rather than this budget math alone -- revisit there if it proves too tight.
       - --overprovisioned
       - --smp
       - "1"
