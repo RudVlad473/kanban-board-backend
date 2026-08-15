@@ -1,0 +1,40 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-08-15T22:53:40.724Z",
+  "phase": "05",
+  "phase_name": "infra-migration",
+  "phase_dir": ".planning/phases/05-infra-migration",
+  "plan": 4,
+  "task": 1,
+  "total_tasks": 3,
+  "status": "paused",
+  "completed_tasks": [
+    {"id": "pre-task-1-fix", "name": "Bound app JVM heap sizing (mem_limit: 3g) + graceful shutdown (server.shutdown=graceful)", "status": "done", "commit": "08feddb"}
+  ],
+  "remaining_tasks": [
+    {"id": 1, "name": "Bring up the full production stack by hand and prove one HTTPS request end-to-end", "status": "in_progress", "progress": "Phases A-D done (image tag confirmed, artifacts copied to VM, .env.prod created, DNS confirmed resolving via whatsmydns.net multi-location check). Phase E (bring up Redpanda) blocked: docker compose warns every variable in .env.prod as unset despite the file existing, being populated (280 bytes, 7 keys), and sitting in the same directory (/root on the VM) as docker-compose.prod.yml. Root cause not yet identified -- awaiting `cut -d= -f1 .env.prod` (key names only) and `docker compose version` output from the human to distinguish between an `export KEY=VALUE` formatting mistake vs. a Compose v1/v2 mismatch."},
+    {"id": 2, "name": "Repoint the Schema Registry to the production target and re-run Phase 4's verification suite against it", "status": "not_started"},
+    {"id": 3, "name": "Measure actual resource usage and correct Redpanda's caps against the verified shape", "status": "not_started"}
+  ],
+  "blockers": [
+    {"description": "docker compose --env-file .env.prod up -d redpanda on the Netcup VM prints 'variable is not set. Defaulting to a blank string.' for every one of the 7 vars in .env.prod (APP_DOMAIN, DB_NAME, DB_PASS, DB_JDBC_PARAMS, DB_HOST, DB_USER, IMAGE_TAG), even though the file exists, is 280 bytes / populated, and is in the same /root directory as docker-compose.prod.yml. Ruled out: wrong directory (confirmed via ls -la showing all 3 files together), missing file. Not yet ruled out: an `export KEY=VALUE` prefix on the .env.prod lines (Compose's .env parser does not understand `export`), or Compose v1 (`docker-compose`, hyphenated) vs v2 (`docker compose`, plugin) CLI mismatch. Diagnostic commands were sent to the human right before this pause; their output was not yet received when the session paused.", "type": "technical", "workaround": "none yet -- next session should ask for `cut -d= -f1 .env.prod` and `docker compose version` output first if not already provided, then correct .env.prod's formatting (strip any `export ` prefix) or re-run with the correct Compose v2 command."}
+  ],
+  "async_jobs": [],
+  "human_actions_pending": [
+    {"action": "Diagnose why docker compose isn't reading /root/.env.prod on the Netcup VM (see blockers above), fix it, then resume the guided Phase E-I sequence: bring up Redpanda, register schemas via SSH tunnel (expect 14 subjects, not the plan's stale 5), start app then Caddy, verify HTTPS end-to-end, prove the DB write survives an app restart.", "context": "Task 1 of plan 05-04 is a tracer deploy against real production infrastructure -- SSH sessions and real credentials on the VM are human-only actions per the plan's own execution constraint.", "blocking": true}
+  ],
+  "decisions": [
+    {"decision": "DB_HOST in .env.prod must be Neon's DIRECT endpoint (ep-delicate-bird-b2lni8pr.c-6.eu-central-1.aws.neon.tech), not the pooled -pooler one, despite INFRA-02's literal 'pooled' wording", "rationale": "Flyway takes a session-scoped advisory lock at boot; Neon's pooled endpoint runs PgBouncer in transaction mode, which does not preserve session-scoped state (Neon's own docs list this as unsupported). This is a single-instance app with a small HikariCP pool (max 5) -- no real need for the pooler's connection multiplexing.", "phase": "05"},
+    {"decision": "Expect 14 registry subjects when querying the production Schema Registry in Phase F, not the plan's stated 5", "rationale": "05-04-PLAN.md and 04-VERIFICATION.md were written 2026-08-04; quick task 260811-s5e later expanded ActivityEvent from 6 to 14 types. build.gradle:606's registerSchemas task description already says 'Registers all 14 Avro schemas'. Treat the plan's '5' as stale text, verify against 14, and flag explicitly rather than silently forcing a match to either number.", "phase": "05"},
+    {"decision": "Added mem_limit: 3g to the app service in docker-compose.prod.yml and server.shutdown=graceful + spring.lifecycle.timeout-per-shutdown-phase to application.properties, ahead of Task 1's own scope, before the tracer deploy started", "rationale": "The JVM has been container-aware since JDK 10 (reads cgroup memory limit for heap sizing) but only correctly if the container has an explicit limit -- app had none, so its 25%-of-container heap calculation was silently sizing off the host's full 8GB instead of a bounded slice, contradicting docker-compose.prod.yml's own comment about leaving headroom for Redpanda's 2G cap. Graceful shutdown closes a real gap where restart: unless-stopped could drop in-flight requests on every redeploy.", "phase": "05"}
+  ],
+  "uncommitted_files": [
+    ".planning/STATE.md",
+    "docs/ARCHITECTURE.md",
+    "docs/INFRA_ARCHITECTURE.md",
+    ".gsd/ (untracked)",
+    "docs/diagrams/ (untracked -- includes infra-physical-deployment.mmd/.png updated this session to nest caddy/app/redpanda each inside their own 'Docker container: X' subgraph box within the Netcup VM boundary; also several pre-existing diagram files from before this session)"
+  ],
+  "next_action": "Ask the human for `cut -d= -f1 .env.prod` and `docker compose version` output from the Netcup VM if not already provided; diagnose and fix the .env.prod-not-being-read issue; then resume the guided Phase E-I hand-off sequence for plan 05-04 Task 1. Do NOT re-dispatch the gsd-executor with isolation=\"worktree\" for this plan -- see the blocking anti-pattern below.",
+  "context_notes": "This session ran plan 05-04 (a heavily human-interactive TRACER plan against real production infrastructure -- live Netcup VM, live Neon Postgres, real DNS/TLS) almost entirely as a live guided hand-off between a gsd-executor subagent and the human running commands over SSH. The first executor dispatch used isolation=\"worktree\" and hit a real tooling failure (see Critical Anti-Patterns in the .continue-here.md) -- it was re-dispatched sequentially and that attempt is what produced commit 08feddb and the current Phase A-D progress. That second executor's background task is tied to this session and is NOT resumable in a fresh session -- resuming means dispatching a brand new gsd-executor (sequential mode) for plan 05-04, briefing it on Phases A-D already being done, the image tag (08feddb), the two documented decisions above, and the current .env.prod blocker. The diagram edits and other uncommitted doc files are unrelated side work from this same session, not part of plan 05-04's scope -- they can be committed independently whenever convenient."
+}
