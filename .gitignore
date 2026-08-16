@@ -44,4 +44,13 @@ out/
 !.env.example
 !.env.prod.example
 
+### Secret scanning (quick task 260816-hn1) ###
+# gitleaks report output. A gitleaks report contains matched secret *values* in plaintext
+# even with --redact applied to the console/log stream in some report formats -- the JSON
+# report's `Secret`/`Match` fields are only redacted when --redact is passed, and this path
+# must never be committed regardless, since it is scratch measurement output, not a
+# reviewable artifact. See 260816-hn1-MEASUREMENTS.md for why this exists and what
+# redaction guarantee was actually verified empirically before any report was trusted.
+.gitleaks-reports/
+
 

@@ -1,0 +1,47 @@
+title = "kanban-board-backend gitleaks configuration"
+
+# Quick task 260816-hn1 ("wire up secret scanning"). Extends the built-in default rule set
+# rather than replacing it, so upstream rule maintenance (new patterns, fixed false positives)
+# keeps flowing in on every gitleaks version bump. See 260816-hn1-MEASUREMENTS.md for the full
+# baseline triage this file's allowlist entries are evidence for -- every entry below cites the
+# specific finding it exempts and the file:line/commit evidence that made it a false positive.
+# A blanket path exemption (e.g. for .planning/, the directory that motivated this task in the
+# first place) is deliberately out of bounds -- see that plan's approach_analysis for why.
+[extend]
+useDefault = true
+
+# --- curl-auth-user: GitHub Actions `${{ secrets.* }}` template interpolation ------------------
+# 12 of the 13 baseline findings (deploy.yml lines across 5 historical commits, plus a copy of
+# the same shell idiom quoted in .planning/phases/05-infra-migration/05-PATTERNS.md) are the
+# identical false positive: `curl -u "$DOCKERHUB_USER:${{ secrets.DOCKERHUB_TOKEN }}"`. The
+# rule's regex matches the `-u user:pass` shape, but the "password" half is a GitHub Actions
+# secret *reference*, not a literal value -- the real token is injected by the Actions runner at
+# execution time from an encrypted repository secret and never appears in the tree at all.
+# Verified empirically (260816-hn1-MEASUREMENTS.md, Task 1): `git show <commit>:.github/workflows/deploy.yml`
+# at every flagged commit shows the literal `${{ secrets.DOCKERHUB_TOKEN }}` template string, not
+# a resolved value, at every one of the 12 sites.
+#
+# Scoped to the rule itself (not a global allowlist) and matched against the finding's `match`
+# text (the whole matched substring, not just the extracted secret group) so it only ever
+# exempts a curl-auth-user finding whose captured password half is literally a GitHub Actions
+# secrets-block reference -- a real credential accidentally pasted into a curl -u call on any
+# other line, in any file, would still be caught.
+[[rules]]
+id = "curl-auth-user"
+
+    [[rules.allowlists]]
+    description = "GitHub Actions `${{ secrets.* }}` interpolation is not a literal credential (260816-hn1)"
+    regexTarget = "match"
+    regexes = [
+      '''\$\{\{\s*secrets\.''',
+    ]
+
+# --- generic-api-key: src/main/resources/application.properties:10 (commit 5121740f61) --------
+# Deliberately NOT allowlisted. This finding is a real, hardcoded local-dev Postgres password
+# (`spring.datasource.password=...` against `jdbc:postgresql://localhost:5432/test-kanban`)
+# committed on 2025-06-05, long before the environment-variable-based datasource config
+# (`${DB_HOST}`/`${DB_USER}`/`${DB_PASS}`) that HEAD uses today. It is a genuine credential
+# value, not a false positive, so it is not this file's place to silently exempt it -- see
+# 260816-hn1-MEASUREMENTS.md's triage table and the plan's blocking checkpoint (Fork A) for the
+# human verdict on whether this constitutes a "genuine credential found in history" in the sense
+# that gates this quick task's own scope.
