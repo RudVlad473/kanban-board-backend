@@ -5,16 +5,16 @@ milestone_name: Infra Migration & Schema Registry
 current_phase: 05
 current_phase_name: infra-migration
 status: executing
-stopped_at: Phase 05 Plan 05-04 Task 1 (tracer deploy) complete -- full stack live on real Netcup infrastructure, HTTPS verified end-to-end, DB persistence proven. Task 2 (repoint Schema Registry verification) next.
-last_updated: "2026-08-16T12:17:52.671Z"
+stopped_at: Phase 05 Plan 05-04 (TRACER) fully complete -- all 3 tasks done, SUMMARY.md written. Plan 05-05 (CI/CD cutover) next.
+last_updated: "2026-08-16T13:35:00.000Z"
 last_activity: 2026-08-16
-last_activity_desc: "Closed out Phase 05 Plan 05-04 Task 1 (TRACER: prove the entire production stack end-to-end on the real Netcup VM). Root cause of the prior session's .env.prod blocker: Docker Compose only auto-loads a file literally named .env, not .env.prod -- needs --env-file passed explicitly, not an export-prefix or CLI-version issue as first suspected. Redpanda brought up healthy; 14 Avro schemas registered (not the plan's stale 5, per the already-logged 260811-s5e decision) via a one-off container reusing the deployed app image on the VM's own Compose network -- Spring Boot's PropertiesLauncher (org.springframework.boot.loader.launch.PropertiesLauncher) launched AvroSchemaRegistrar against http://redpanda:8081 by Compose service name, no tunnel or port needed, worked first attempt, verified independently via rpk registry subject list. iptables 80/443 re-confirmed before starting Caddy. App started healthy in 11.2s; Flyway applied V1-V7 against the genuinely empty Neon database -- another stale-plan-number finding (plan text said V1-V4; V5-V7 were added by later quick tasks after the plan was written). Caddy obtained its Let's Encrypt certificate on the first attempt, no rate-limit risk incurred. HTTPS verified from off-VM: 200, Let's Encrypt issuer accepted without a trust warning, plain HTTP 308-redirects to HTTPS. Signed up a user and created a board through the public HTTPS API, restarted the app container, confirmed the board (and, as a bonus finding, the session cookie) survived -- real confirmation Spring Session JDBC persistence and Neon persistence both work, not just container-memory state. Full command sequence, observed output, and every deviation from the plan text recorded in docs/INFRA_RUNBOOK.md's new manual-deploy section. Execution note: Task 1 was driven directly by the agent over the human's own SSH session rather than hand-typed by the human, per the human's explicit mid-session authorization -- a deliberate, scoped exception to the plan's default human-hands-on-keyboard execution constraint; no .env.prod contents or credentials were read or requested at any point regardless. Task 2 (repoint Schema Registry verification suite to production, re-run Phase 4's suite) and Task 3 (measure real resource usage, correct Redpanda's caps) remain."
+last_activity_desc: "Completed Phase 05 Plan 05-04 Tasks 2 and 3 (Task 1 -- the tracer deploy -- was already closed out in a prior session). Task 2: confirmed the Schema Registry was already effectively repointed to production as a side effect of Task 1's deploy (zero src/main changes needed); independently re-verified the production registry directly from inside the VM (14 subjects, BACKWARD compatibility, live reject/accept compatibility-enforcement pair via the registry's own REST API) and exercised the live pipeline through a real public-API mutation producing a real activity_log row. Documented, as a deviation, why neither of the plan's two offered suite-reach options (VM-local JUnit run / SSH tunnel) could literally point the existing test classes at production without modifying shared test infrastructure -- substituted direct-API verification plus a local regression run of the five named classes (28/28 green) instead. Task 3: measured real per-container CPU/memory under a 54-request burst workload (not idle) against the live stack; left --smp 1 / --memory 2G unchanged (large measured headroom) but found and closed a real gap -- redpanda had no Docker-level mem_limit cgroup backstop at all, unlike the app's existing mem_limit: 3g. Discovered live that setting it numerically equal to --memory 2G broke every restart (cgroup accounting overhead left less usable memory than Seastar's internal request); fixed with mem_limit: 2200m, confirmed healthy by a live restart with the off-VM HTTPS path and registry data (14 subjects, survived via the named volume) both still intact. Plan 05-04 SUMMARY.md written; .continue-here.md deleted (one-shot checkpoint artifact, no longer needed)."
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 39
-  completed_plans: 36
-  percent: 86
+  completed_plans: 37
+  percent: 95
 ---
 
 # Project State
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-08-03)
 ## Current Position
 
 Phase: 05 (infra-migration) — EXECUTING
-Plan: 1 of 6
+Plan: 5 of 6 (05-04 complete, 05-05 next)
 Status: Executing Phase 05
-Last activity: 2026-08-15 — Phase 05 execution started
+Last activity: 2026-08-16 — Plan 05-04 (TRACER) fully complete, all 3 tasks
 
-Progress: [█████████▓] 92%
+Progress: [█████████▓] 95%
 
 ## Performance Metrics
 
@@ -84,6 +84,7 @@ Progress: [█████████▓] 92%
 | Phase 04.2 P03 | 50min | 3 tasks | 12 files |
 | Phase 07.1 P09 | 68min | 4 tasks | 14 files |
 | Phase quick-260813-i6r P01 | 35min | 3 tasks | 2 files |
+| Phase 05 P04 | ~30min (Tasks 2-3 this session; Task 1 in a prior session) | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -147,6 +148,8 @@ Recent decisions affecting current work:
 - [Phase ?]: [Quick/260813-i6r]: Moved SaveSubtaskRequestDTO.title's blank-title boundary matrix (null, whitespace-only, empty-string) from TaskControllerTest.AddSubtaskByTaskId to SubtaskTitleMessageTest.SaveSubtaskRequestDTOTest per docs/CODE_STYLE.md rule 4, keeping the {} empty-JSON-body test as the single controller-tier HTTP-contract representative (D-01). Falsified before deleting anything (D-04): removing @NotBlank from SaveSubtaskRequestDTO.title reds all three new DTO tests exactly as predicted, restoring greens them, zero net src/main diff. Empty-string case asserts on the set of triggered constraint annotation types (NotBlank + SubtaskTitle), not message text, since @ReportAsSingleViolation makes both constraints render the byte-identical message on that field (D-03) — a genuine message-collision finding, not a stylistic choice. Full suite 444->444 tests (net-zero, 3 left controller tier, 3 arrived at DTO tier), 0 failures. No matching pending todo existed to close.
 - [Phase 5 Plan 03]: Pivoted production hosting from Oracle Cloud (eu-zurich-1 A1.Flex, structurally capacity-constrained per 200+ automated attempts over 10+ hours) to Netcup VPS Lite 2 G12s (4 vCPU/8GB/160GB, Vienna) after screening out AWS (this project's own prior billing-risk history), GCP/Azure free tiers (region/time-restricted), and Hetzner CX33 (unavailable everywhere checked). Netcup's two-layer network model (OS iptables + Netcup Cloud Firewall) meets INFRA-08's intent at equivalent rigor to OCI's three-layer model but not its literal wording — flagged as WINDOWS.md ledger entry #2 for 05-06 rather than silently reworded. Neon project region corrected to aws-eu-central-1 (Frankfurt, closest to Netcup's Vienna) from the stale Oracle-era Zurich assumption. Caught and fixed a real latent bug: deploy.yml's Docker build was still hardcoded to linux/arm64 (Oracle-era), which would have silently broken deploy to Netcup's x86_64 target.
 - [Phase 5 Plan 04 Task 1]: Full production stack proven live end-to-end on the real Netcup VM — HTTPS request from the public internet through Caddy (Let's Encrypt cert, first-attempt issuance) into the app into Neon, plus the Redpanda schema registry populated. Two plan-text staleness findings confirmed against live evidence rather than assumed: the registry holds 14 subjects (not 5 — predates quick task 260811-s5e's ActivityEvent expansion) and Flyway applied V1-V7 (not V1-V4 — predates migrations V5/V6/V7 added by later quick tasks). Schema registration executed via a one-off container on the VM's own Compose network using Spring Boot's `PropertiesLauncher` to launch `AvroSchemaRegistrar` directly against `redpanda:8081` by Compose service name — no SSH tunnel, no container-IP lookup, no port ever opened, simpler than the plan's anticipated approach once the agent had direct SSH access. A user signed up and a board created through the public API survived an app container restart, and the session cookie survived too, confirming both Neon persistence and Spring Session JDBC persistence are real. Task 1 executed directly by the agent over the human's SSH session at the human's explicit mid-session request, a deliberate departure from the plan's default human-hands-on-keyboard execution constraint — no `.env.prod` contents or credentials were read or requested regardless of who typed the commands. Full sequence recorded in `docs/INFRA_RUNBOOK.md`.
+- [Phase 5 Plan 04 Task 2]: Confirmed the Schema Registry was already effectively repointed to production as a side effect of Task 1's deploy (`SCHEMA_REGISTRY_URL: http://redpanda:8081` in `docker-compose.prod.yml`, resolved identically by both producer and consumer in `application.properties`) — zero `src/main` changes needed this task. Independently re-verified the production registry live from inside the VM: 14 subjects (same staleness finding as Task 1, plan text predates 260811-s5e), BACKWARD compatibility confirmed at the subject level, and BACKWARD enforcement re-proven directly via the registry's own `/compatibility` dry-run REST endpoint (a modified schema with one new required field, no default → rejected; the unchanged schema → accepted) rather than through JUnit. Documented as a deviation why neither of the plan's two offered suite-reach options (VM-local run / SSH tunnel) could literally point the existing named JUnit classes at production: `AbstractKafkaContainerTest`'s shared harness always provisions its own ephemeral Testcontainers-managed registry with a hardcoded `@DynamicPropertySource`, with no existing hook to redirect at an external registry — building one would mean modifying shared test infrastructure and running a JDK/Gradle build environment on the live production VM. Substituted direct-API verification (above) plus a local regression run of the five named classes (28/28 tests green across all nested groups) plus a real public-API mutation through the production pipeline (signup + board create → `GET .../activity` returned the `BOARD_CREATED` row).
+- [Phase 5 Plan 04 Task 3]: Measured real per-container CPU/memory under a 54-request burst workload (6 columns + 24 tasks + 24 subtasks via the public HTTPS API, not idle) against the live production stack. `redpanda` used under 18% of its 2G internal memory cap and a small fraction of its `--smp 1`-pinned single-core CPU ceiling even under the burst, so `--smp 1`/`--memory 2G` were left unchanged; `docker-compose.prod.yml`'s comment above the broker command block was rewritten from a provisional budget-math floor to the measured basis. Found and closed a real gap: `redpanda` had no Docker-level cgroup `mem_limit` at all (unlike the app's existing `mem_limit: 3g`) — 05-RESEARCH.md's Pitfall 1 recommends both. Setting it numerically equal to `--memory 2G` broke every restart live (`Could not initialize seastar: insufficient physical memory, needed 2147483648 available 2078277632` — cgroup accounting overhead ate into an exactly-equal limit); fixed with `mem_limit: 2200m` (~150MiB headroom above the internal request), confirmed by a live restart reaching `(healthy)` within the existing 15s `start_period`, with the off-VM HTTPS health check still returning 200 and the registry's 14 subjects surviving the container recreation via the named volume. Plan 05-04 is now fully complete (all 3 tasks); `.continue-here.md` deleted.
 
 ### Pending Todos
 
@@ -274,13 +277,14 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-15 (resume)
-Stopped at: Session resumed, no incomplete work found, routing to /gsd-execute-phase 05 for Plan 05-04 (tracer deploy)
+Last session: 2026-08-16 (Plan 05-04 Tasks 2-3, sequential executor)
+Stopped at: Completed Plan 05-04 Task 2 (repoint Schema Registry verification) and Task 3 (measure/correct Redpanda caps). Plan 05-04 fully complete (all 3 tasks); SUMMARY.md written; .continue-here.md deleted.
 Resume file: None
 
 ## Operator Next Steps
 
-- Plan 05-04 (tracer deploy) is next in Phase 5 — 05-01/05-02/05-03 (wave 1) are all complete, and 05-04/05-05 plan text has already been corrected for the Netcup pivot.
+- Plan 05-05 (CI/CD pipeline rewrite + guided deploy secrets + DDL verification job) is next in Phase 5, now that 05-04's manual deploy sequence is fully recorded in `docs/INFRA_RUNBOOK.md` for its automation to reproduce.
 - Open: decide the E2ETest-suffix vs. `fastTest`-filter coupling Phase 7 surfaced, and WINDOWS.md ledger entry #2 (INFRA-08 wording stale after the Netcup pivot — owned by 05-06) — see Pending Todos below.
+- Two harmless tracer data artifacts remain live in production (boards/columns/tasks from Plan 05-04 Tasks 1 and 3, plus their creating users) — consistent with Task 1's own precedent of leaving tracer data in place; fine to delete before real users onboard, not blocking.
 
 </content>

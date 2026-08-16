@@ -121,7 +121,7 @@ Plans:
   4. A push to `master` triggers an automated GitHub Actions build-and-deploy to the Oracle VM using freshly generated SSH credentials (not reused AWS-era secrets), gated by a pre-merge DDL verification step against Neon's direct connection string
   5. Only ports 80/443 are externally reachable — verified by an outside port scan/curl across all three OCI network layers (Security List, NSG, OS firewall); Redpanda's 9092 is never internet-facing; Docker log drivers are capped (`max-size`/`max-file`) so unbounded app/Redpanda logs cannot fill the free-tier disk
 
-**Plans**: 6 plans (4 waves; D-03 sequencing — manual tracer deploy proven before CI/CD automation)
+**Plans**: 4/6 plans executed (4 waves; D-03 sequencing — manual tracer deploy proven before CI/CD automation)
 
 Plans:
 **Wave 1**
@@ -132,7 +132,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 05-04-PLAN.md — TRACER: manual end-to-end deploy on real Oracle infra + Schema Registry cutover + measured resource caps (wave 2, human checkpoints)
+- [x] 05-04-PLAN.md — TRACER: manual end-to-end deploy on real Oracle infra + Schema Registry cutover + measured resource caps (wave 2, human checkpoints)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -155,7 +155,7 @@ Plans:
 | 6. Mock-up Feature Gap Closure | v1.2 | 7/7 | Complete | 2026-08-09 |
 | 7. Restructure test folder | v1.2 | 7/7 | Complete | 2026-08-09 |
 | 07.1. Address hard blockers and inconsistencies from the frontend-integration-readiness audit (INSERTED) | v1.2 | 9/9 | Complete | 2026-08-10 |
-| 5. Infra Migration | v1.2 | 0/TBD | Not started | - |
+| 5. Infra Migration | v1.2 | 4/6 | In Progress|  |
 </content>
 
 ### Phase 6: Mock-up Feature Gap Closure
