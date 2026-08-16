@@ -1,0 +1,30 @@
+%%{init: {"flowchart": {"subGraphTitleMargin": {"top": 15, "bottom": 15}, "curve": "linear"}}}%%
+flowchart TB
+    client["Browser / API client<br/>(external actor)"]
+
+    subgraph netcup["Netcup VPS Lite 2 G12s — x86_64<br/>Vienna, Austria — trust boundary"]
+        direction TB
+
+        netcup_spacer[" "]
+        style netcup_spacer height:1px,fill:none,stroke:none
+
+        subgraph caddy_box["Docker container: caddy"]
+            caddy["caddy<br/>ports 80, 443"]
+        end
+        netcup_spacer ~~~ caddy_box
+        subgraph app_box["Docker container: app"]
+            app["app<br/>(Spring Boot, port 8080,<br/>no host port published)"]
+        end
+        subgraph redpanda_box["Docker container: redpanda"]
+            redpanda["redpanda<br/>(Kafka broker + Schema Registry,<br/>no host port published)"]
+        end
+
+        caddy -- "HTTP :8080<br/>(internal Docker network)" --> app
+        app -- "Kafka wire protocol :19092<br/>(internal Docker network)" --> redpanda
+        app -- "Schema Registry HTTP :8081<br/>(internal Docker network)" --> redpanda
+    end
+
+    neon[("Neon serverless Postgres<br/>aws-eu-central-1, Frankfurt<br/>(external, managed)")]
+
+    client -- "HTTPS :443 via kanban-board-rud-vlad-473.duckdns.org<br/>(crosses VM boundary)" --> caddy
+    app -- "JDBC over TLS :5432<br/>sslmode=require, channel_binding=require<br/>(crosses VM boundary, public internet)" --> neon

@@ -1,0 +1,33 @@
+sequenceDiagram
+    actor C as Client
+    participant Ctrl as TaskMoveController
+    participant Svc as TaskService
+    participant Repo as TaskRepository
+    participant DB as Postgres
+    participant Pub as ApplicationEventPublisher
+    participant KEP as KafkaEventPublisher
+    participant K as kanban.activity (topic)
+    participant Cons as ActivityLogConsumer
+    participant Rec as ActivityLogRecorder
+
+    C->>Ctrl: PATCH /tasks/{taskId}/move {targetColumnId, targetPosition, version}
+    Ctrl->>Svc: moveToColumn(userId, taskId, dto)  [@Transactional]
+    Svc->>Svc: findById(userId, taskId) -- ownership-verified load
+    Svc->>Svc: task.getVersion().equals(dto.getVersion())?
+    alt version mismatch
+        Svc--xCtrl: throws OptimisticLockingFailureException
+        Ctrl-->>C: 409 (see the error-handling diagram above)
+    else version matches
+        Svc->>Repo: shiftPositions(...), save(task)
+        Svc->>DB: entityManager.flush() -- forces the UPDATE (and @Version<br/>increment) now, inside this transaction
+        Svc->>Pub: publishEvent(TaskMovedEvent)  -- queued, NOT delivered yet
+        Svc-->>Ctrl: TaskResponseDTO (new version)
+        Ctrl-->>C: 200 OK  -- the response returns here
+        Note over DB,Pub: transaction commits
+        Pub->>KEP: onActivityEvent(event)  [@Async kafkaPublishExecutor,<br/>@TransactionalEventListener(AFTER_COMMIT)]
+        Note over KEP,K: this all happens AFTER the client already has its 200 --<br/>a broker outage cannot change the HTTP outcome above (D-01)
+        KEP->>K: send(eventId, Avro SpecificRecord)
+        K->>Cons: @KafkaListener onActivityEvent(avroRecord)
+        Cons->>Rec: record(entity)  -- existsByEventId fast path, idempotent
+        Rec->>DB: INSERT activity_log
+    end

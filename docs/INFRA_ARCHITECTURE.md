@@ -1,9 +1,12 @@
 # Infrastructure Architecture
 
 This document describes the production deployment topology introduced by v1.2's Infra Migration
-milestone (Phase 5): an Oracle Cloud Always Free A1 Flex VM running the application, a self-hosted
-Redpanda broker, and Caddy for automatic public HTTPS, backed externally by Neon serverless
-Postgres and delivered via GitHub Actions.
+milestone (Phase 5): a Netcup VPS Lite 2 G12s VM (Vienna, x86_64) running the application, a
+self-hosted Redpanda broker, and Caddy for automatic public HTTPS, backed externally by Neon
+serverless Postgres (Frankfurt) and delivered via GitHub Actions. The original target was Oracle
+Cloud's Always Free A1 Flex (ARM64); it was replaced after Oracle's free-tier capacity in the
+planned region proved structurally unavailable — see `docs/INFRA_RUNBOOK.md` and Phase 5 Plan
+05-03's SUMMARY for the pivot rationale.
 
 Per [`docs/DIAGRAM_CONVENTIONS.md`](DIAGRAM_CONVENTIONS.md), each diagram below is one deliberate
 Kruchten 4+1 view, not an ad hoc mix of concerns. The two views chosen are the ones that matter
@@ -18,26 +21,8 @@ architecture — the discipline this project adopted specifically because a plai
 what" diagram would not have surfaced the CI pipeline building an x86_64-only image for an ARM64
 deploy target (see `DIAGRAM_CONVENTIONS.md`'s own note on this).
 
-```mermaid
-flowchart TB
-    client["Browser / API client<br/>(external actor)"]
-
-    subgraph oracle["Oracle Cloud A1 Flex VM — ARM64 (Ampere)<br/>trust boundary"]
-        direction TB
-        caddy["caddy<br/>ports 80, 443"]
-        app["app<br/>(Spring Boot, port 8080,<br/>no host port published)"]
-        redpanda["redpanda<br/>(Kafka broker + Schema Registry,<br/>no host port published)"]
-
-        caddy -- "HTTP :8080<br/>(internal Docker network)" --> app
-        app -- "Kafka wire protocol :19092<br/>(internal Docker network)" --> redpanda
-        app -- "Schema Registry HTTP :8081<br/>(internal Docker network)" --> redpanda
-    end
-
-    neon[("Neon serverless Postgres<br/>(external, managed)")]
-
-    client -- "HTTPS :443<br/>(crosses VM boundary)" --> caddy
-    app -- "JDBC over TLS :5432<br/>sslmode=require, channel_binding=require<br/>(crosses VM boundary, public internet)" --> neon
-```
+![Flowchart: physical/deployment view of the production topology](diagrams/infra-physical-deployment.png)
+<sub>[diagram source](diagrams/infra-physical-deployment.mmd)</sub>
 
 **Externally reachable vs. internal-only:** only Caddy's ports 80 and 443 are published on the
 VM's host network and reachable from the internet (443 serves traffic, 80 exists solely for the
@@ -66,26 +51,15 @@ volume loses operational continuity, not user data.
 
 Traces one key end-to-end scenario — push to `master` through to a running deploy — across the
 other views, confirming they stay consistent with each other. **This diagram describes the target
-state after plan 05-05 lands, not what is live today** — as of this plan (05-02), the build job
-gains its `linux/arm64` platform target, but the deploy and DDL-verification jobs themselves are
-built by later plans in this phase (05-04, 05-05).
+state after plan 05-05 lands, not what is live today** — the build job already builds and pushes a
+`linux/amd64` image on every push to master (confirmed working, no QEMU cross-compilation needed
+since Netcup's x86_64 matches `ubuntu-latest` runners natively), but the deploy and
+DDL-verification jobs themselves are still built by later plans in this phase (05-04, 05-05); the
+existing `deploy-to-ec2` job remains disabled (`if: false`), targeting a host that no longer
+exists.
 
-```mermaid
-sequenceDiagram
-    participant Dev as Developer
-    participant GH as GitHub Actions runner<br/>(x86_64, ubuntu-latest)
-    participant DH as Docker Hub
-    participant Neon as Neon Postgres<br/>(direct endpoint)
-    participant VM as Oracle VM<br/>(ARM64 / Ampere)
-
-    Dev->>GH: push to master
-    GH->>GH: run-tests (./gradlew test, spotlessCheck)
-    GH->>GH: setup QEMU + buildx<br/>(linux/arm64 cross-compilation)
-    GH->>DH: build-and-push-docker-image<br/>(docker/build-push-action, platforms: linux/arm64)
-    GH->>Neon: ddl-verify (INFRA-06)<br/>psql against Neon DIRECT connection string
-    GH->>VM: deploy-to-oracle (INFRA-05)<br/>SSH — scp compose+Caddyfile, then<br/>docker compose pull && up -d
-    VM->>DH: docker compose pull<br/>(pulls the linux/arm64 image)
-```
+![Sequence diagram: delivery path from push to master to a running deploy](diagrams/infra-delivery-scenario.png)
+<sub>[diagram source](diagrams/infra-delivery-scenario.mmd)</sub>
 
 **Externally reachable vs. internal-only (delivery path):** the GitHub Actions runner reaches
 Docker Hub and Neon's direct endpoint over the public internet (both require real network

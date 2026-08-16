@@ -1,0 +1,53 @@
+sequenceDiagram
+    actor C as Client
+    participant AF as AuthorizationFilter
+    participant ETF as ExceptionTranslationFilter
+    participant EP as ProblemDetailAuthenticationEntryPoint
+    participant DS as DispatcherServlet
+    participant Ctrl as Controller
+    participant Svc as Service
+    participant OVS as OwnershipVerifierService
+    participant GEH as GlobalExceptionHandler
+
+    rect rgb(248, 235, 235)
+    Note over C,EP: 401 -- no session at all (never reaches DispatcherServlet)
+    C->>AF: any protected route, no session cookie
+    AF--xETF: AuthenticationException (unauthenticated)
+    ETF->>EP: commence(request, response, ex)
+    EP-->>C: 401 ProblemDetail {code: UNAUTHENTICATED}
+    end
+
+    rect rgb(248, 244, 235)
+    Note over C,GEH: 403 -- authenticated, but not this resource's owner
+    C->>AF: e.g. GET /boards/{foreignBoardId}/columns, valid session
+    AF->>DS: authenticated -- forward
+    DS->>Ctrl: handle(...)
+    Ctrl->>Svc: findById(userId, boardId)
+    Svc->>OVS: verifyOwnershipOfBoard(userId, boardId)
+    OVS--xSvc: throws AppAccessDeniedException (board.user.id != userId)
+    Svc--xDS: propagates
+    DS->>GEH: handleAppAccessDeniedException(ex)
+    GEH-->>C: 403 ProblemDetail {code: ACCESS_DENIED}<br/>(message never names the foreign resource -- T-07.1-08-03)
+    end
+
+    rect rgb(235, 240, 248)
+    Note over C,GEH: 400 -- request body fails Jakarta validation
+    C->>AF: POST /api/signup {email: "not-an-email", ...}
+    AF->>DS: authenticated route or permitAll -- forward
+    DS->>Ctrl: bind @Valid @RequestBody
+    Ctrl--xDS: MethodArgumentNotValidException (before the method body runs)
+    DS->>GEH: handleMethodArgumentNotValidException(ex)
+    GEH-->>C: 400 ProblemDetail {code: VALIDATION_FAILED, errors: {email: "..."}}
+    end
+
+    rect rgb(238, 248, 238)
+    Note over C,GEH: 409 -- stale version on a concurrent edit
+    C->>AF: PUT /tasks/{id} {..., version: 1}, valid session, owner
+    AF->>DS: authenticated + owned -- forward
+    DS->>Ctrl: handle(...)
+    Ctrl->>Svc: updateById(userId, taskId, dto)
+    Svc->>Svc: dto.getVersion() != task.getVersion()
+    Svc--xDS: throws OptimisticLockingFailureException
+    DS->>GEH: handleOptimisticLockingFailure(ex)
+    GEH-->>C: 409 ProblemDetail {code: OPTIMISTIC_LOCK_CONFLICT}
+    end

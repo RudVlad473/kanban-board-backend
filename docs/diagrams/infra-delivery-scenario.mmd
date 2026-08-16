@@ -1,0 +1,14 @@
+sequenceDiagram
+    actor Dev as Developer
+    participant GH as GitHub Actions runner<br/>(x86_64, ubuntu-latest)
+    participant DH as Docker Hub
+    participant Neon as Neon Postgres<br/>(direct endpoint)
+    participant VM as Netcup VM<br/>(x86_64, Vienna)
+
+    Dev->>GH: push to master
+    GH->>GH: run-tests (./gradlew test, spotlessCheck)
+    GH->>GH: setup Docker Buildx<br/>(native linux/amd64, no cross-compilation)
+    GH->>DH: build-and-push-docker-image<br/>(docker/build-push-action, platforms: linux/amd64)
+    GH->>Neon: ddl-verify (INFRA-06)<br/>psql against Neon DIRECT connection string
+    GH->>VM: deploy-to-netcup (INFRA-05)<br/>SSH — scp compose+Caddyfile, then<br/>docker compose pull && up -d
+    VM->>DH: docker compose pull<br/>(pulls the linux/amd64 image)

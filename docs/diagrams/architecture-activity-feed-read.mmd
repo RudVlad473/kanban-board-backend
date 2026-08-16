@@ -1,0 +1,20 @@
+sequenceDiagram
+    actor C as Client
+    participant Ctrl as ActivityController
+    participant Svc as ActivityLogService
+    participant OVS as OwnershipVerifierService
+    participant Repo as ActivityLogRepository
+    participant DB as Postgres
+    participant Mapper as ActivityLogMapper
+
+    C->>Ctrl: GET /boards/{boardId}/activity?page=0&size=20
+    Ctrl->>Svc: findAllByBoardId(userId, boardId, pageable)
+    Svc->>OVS: verifyOwnershipOfBoard(userId, boardId)
+    OVS-->>Svc: (user, board)
+    Note over Svc: the caller's own Pageable.sort is DISCARDED here and replaced with<br/>Sort.by(createdAt desc, id desc) -- the id tiebreak is what makes<br/>offset pagination a genuine total order, not merely newest-first
+    Svc->>Repo: findAllByBoardId(board.id, effectivePageable)
+    Repo->>DB: SELECT ... ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?
+    DB-->>Repo: page of activity_log rows
+    Svc->>Mapper: toActivityLogResponseDTO (per row)
+    Svc-->>Ctrl: Page<ActivityLogResponseDTO>
+    Ctrl-->>C: 200 OK  -- raw Spring Data PageImpl shape (content/totalElements/...)

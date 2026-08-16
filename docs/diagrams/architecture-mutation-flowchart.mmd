@@ -1,0 +1,11 @@
+flowchart TD
+    C(["Client"]) -->|"PATCH /tasks/{id}/move"| S["TaskService — @Transactional"]
+    S -->|ApplicationEventPublisher| TX{{"transaction commit"}}
+    TX ==>|"HTTP 200 — never waits on Kafka"| C
+    TX -->|AFTER_COMMIT| P["KafkaEventPublisher<br/>@Async kafkaPublishExecutor"]
+    P -->|"Avro SpecificRecord"| K[["kanban.activity"]]
+    K --> L["ActivityLogConsumer<br/>Kafka listener thread"]
+    L -->|"exhaustive switch, no default arm"| D{"processed OK?"}
+    D -->|yes| R["ActivityLogRecorder<br/>idempotent insert"]
+    R --> DB[("activity_log")]
+    D -.->|"no -- 3 retries exhausted"| DLT[["kanban.activity.dlt"]]

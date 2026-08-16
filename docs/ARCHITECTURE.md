@@ -47,50 +47,8 @@ follows the identical path through `AuthenticationController#authenticate` (`sec
 AuthenticationController.java`) after its own persistence step; only signin is drawn here to keep
 the diagram legible.
 
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant AC as AuthenticationController
-    participant AM as AuthenticationManager
-    participant UAP as UserAuthenticationProvider
-    participant SAS as sessionAuthenticationStrategy
-    participant SCR as SecurityContextRepository
-    participant DB as Postgres (users, spring_session*)
-
-    C->>AC: POST /api/signin {email, password}
-    AC->>DB: userService.findByEmail(email)
-    alt email not registered
-        DB--xAC: throws AppEntityNotFoundException
-        AC->>AC: passwordEncoder.matches(password, equalizerHash)<br/>(result discarded -- exists for its cost, not its answer)
-        Note over AC: F1 (2026-08-10 /claude-security scan): this comparison makes the<br/>unknown-email arm pay the same one BCrypt cost as the wrong-password arm<br/>below, closing the response-*latency* gap D-08 left open after already<br/>making the response *body* byte-identical
-        AC-->>C: 401 ProblemDetail {code: BAD_CREDENTIALS}
-    else email registered
-        DB-->>AC: UserEntity
-        AC->>AM: authenticate(unauthenticated token)
-        AM->>UAP: authenticate(token)
-        UAP->>UAP: passwordEncoder.matches(password, storedHash)
-        alt password does not match
-            UAP--xAC: throws BadCredentialsException
-            AC-->>C: 401 ProblemDetail {code: BAD_CREDENTIALS}
-        else password matches
-            Note over UAP: builds a MINIMAL principal (username only) --<br/>the stored bcrypt hash never leaves this method
-            UAP-->>AM: Authentication(principal=User, no password)
-            AM-->>AC: Authentication
-            AC->>SAS: onAuthentication(authentication, request, response)
-            Note over SAS: ConcurrentSessionControlAuthenticationStrategy checks the live<br/>SPRING_SESSION count for this principal (max 2) BEFORE<br/>ChangeSessionIdAuthenticationStrategy rotates the session id
-            Note right of SAS: F6 (2026-08-10 scan, accepted D-01): this count-then-register window lets<br/>two genuinely simultaneous signins both pass -- a bounded, self-healing overshoot<br/>of at most one extra session per signin genuinely in flight, never a flat "max 3".<br/>See SecurityConfiguration.sessionAuthenticationStrategy's Javadoc for why a<br/>transaction-scoped lock cannot close it and ConcurrentSigninCeilingE2ETest for proof
-            alt already at the 2-session ceiling
-                SAS--xAC: throws SessionAuthenticationException
-                AC-->>C: 401 ProblemDetail {code: BAD_CREDENTIALS}<br/>(collapsed -- indistinguishable from a wrong password, D-08)
-            else ceiling not reached
-                AC->>SCR: saveContext(context, request, response)
-                Note over SCR: writes into Spring Session's request-scoped in-memory session --<br/>not yet committed to Postgres, not yet visible to another DB connection
-                AC-->>C: 200 OK + Set-Cookie: JSESSIONID (rotated id)<br/>+ body {id, email, displayName, theme}
-                Note over DB: Spring Session's request-scoped filter commits SPRING_SESSION +<br/>SPRING_SESSION_ATTRIBUTES.SPRING_SECURITY_CONTEXT as the response is flushed --<br/>AFTER AC has already returned. Measured 2026-08-11 (260811-h2v Task 2): a<br/>cross-connection probe taken right after saveContext returned read 0 committed<br/>rows for this principal; a client-side probe taken after the response was<br/>received read 1. This ordering is why a transaction-scoped advisory lock around<br/>AC's method would release before the row it needs to serialize against exists
-            end
-        end
-    end
-```
+![Sequence diagram: signin and session establishment](diagrams/architecture-signin-scenario.png)
+<sub>[diagram source](diagrams/architecture-signin-scenario.mmd)</sub>
 
 Simplified: the diagram omits `signup`'s extra persistence step
 (`UserService#save`, before this same `authenticate` helper runs) and the auto-rollback
@@ -112,61 +70,8 @@ filter-chain rejection with no controller/service ever invoked; the other three 
 `@ExceptionHandler` dispatch from `GlobalExceptionHandler` (`handler/GlobalExceptionHandler.java`)
 after a controller or service method actually ran and threw.
 
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant AF as AuthorizationFilter
-    participant ETF as ExceptionTranslationFilter
-    participant EP as ProblemDetailAuthenticationEntryPoint
-    participant DS as DispatcherServlet
-    participant Ctrl as Controller
-    participant Svc as Service
-    participant OVS as OwnershipVerifierService
-    participant GEH as GlobalExceptionHandler
-
-    rect rgb(248, 235, 235)
-    Note over C,EP: 401 -- no session at all (never reaches DispatcherServlet)
-    C->>AF: any protected route, no session cookie
-    AF--xETF: AuthenticationException (unauthenticated)
-    ETF->>EP: commence(request, response, ex)
-    EP-->>C: 401 ProblemDetail {code: UNAUTHENTICATED}
-    end
-
-    rect rgb(248, 244, 235)
-    Note over C,GEH: 403 -- authenticated, but not this resource's owner
-    C->>AF: e.g. GET /boards/{foreignBoardId}/columns, valid session
-    AF->>DS: authenticated -- forward
-    DS->>Ctrl: handle(...)
-    Ctrl->>Svc: findById(userId, boardId)
-    Svc->>OVS: verifyOwnershipOfBoard(userId, boardId)
-    OVS--xSvc: throws AppAccessDeniedException (board.user.id != userId)
-    Svc--xDS: propagates
-    DS->>GEH: handleAppAccessDeniedException(ex)
-    GEH-->>C: 403 ProblemDetail {code: ACCESS_DENIED}<br/>(message never names the foreign resource -- T-07.1-08-03)
-    end
-
-    rect rgb(235, 240, 248)
-    Note over C,GEH: 400 -- request body fails Jakarta validation
-    C->>AF: POST /api/signup {email: "not-an-email", ...}
-    AF->>DS: authenticated route or permitAll -- forward
-    DS->>Ctrl: bind @Valid @RequestBody
-    Ctrl--xDS: MethodArgumentNotValidException (before the method body runs)
-    DS->>GEH: handleMethodArgumentNotValidException(ex)
-    GEH-->>C: 400 ProblemDetail {code: VALIDATION_FAILED, errors: {email: "..."}}
-    end
-
-    rect rgb(238, 248, 238)
-    Note over C,GEH: 409 -- stale version on a concurrent edit
-    C->>AF: PUT /tasks/{id} {..., version: 1}, valid session, owner
-    AF->>DS: authenticated + owned -- forward
-    DS->>Ctrl: handle(...)
-    Ctrl->>Svc: updateById(userId, taskId, dto)
-    Svc->>Svc: dto.getVersion() != task.getVersion()
-    Svc--xDS: throws OptimisticLockingFailureException
-    DS->>GEH: handleOptimisticLockingFailure(ex)
-    GEH-->>C: 409 ProblemDetail {code: OPTIMISTIC_LOCK_CONFLICT}
-    end
-```
+![Sequence diagram: how a rejected request differs across 401/403/400/409](diagrams/architecture-error-response-split.png)
+<sub>[diagram source](diagrams/architecture-error-response-split.mmd)</sub>
 
 Simplified: the four `rect` blocks are drawn as one diagram for side-by-side comparison, not as one
 literal request — each block starts its own independent request. `AuthorizationFilter` and
@@ -224,18 +129,8 @@ reasoning.
 
 ### Process View — path of a mutation
 
-```mermaid
-flowchart TD
-    C(["Client"]) -->|"PATCH /tasks/{id}/move"| S["TaskService — @Transactional"]
-    S -->|ApplicationEventPublisher| TX{{"transaction commit"}}
-    TX ==>|"HTTP 200 — never waits on Kafka"| C
-    TX -->|AFTER_COMMIT| P["KafkaEventPublisher<br/>@Async kafkaPublishExecutor"]
-    P -->|"Avro SpecificRecord"| K[["kanban.activity"]]
-    K --> L["ActivityLogConsumer<br/>Kafka listener thread"]
-    L -->|"exhaustive switch, no default arm"| R["ActivityLogRecorder<br/>idempotent insert"]
-    R --> DB[("activity_log")]
-    L -.->|"3 retries, then dead-letter"| DLT[["kanban.activity.dlt"]]
-```
+![Flowchart: path of a mutation through the activity-log pipeline](diagrams/architecture-mutation-flowchart.png)
+<sub>[diagram source](diagrams/architecture-mutation-flowchart.mmd)</sub>
 
 *Process view only, per [DIAGRAM_CONVENTIONS.md](DIAGRAM_CONVENTIONS.md) — it shows runtime
 communication, not deployment topology.*
@@ -248,41 +143,8 @@ Process View — the flowchart above shows the shape of the pipeline; this seque
 it in one real endpoint, `PATCH /tasks/{taskId}/move`
 (`controller/TaskMoveController.java` → `service/TaskService.java#moveToColumn`).
 
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant Ctrl as TaskMoveController
-    participant Svc as TaskService
-    participant Repo as TaskRepository
-    participant DB as Postgres
-    participant Pub as ApplicationEventPublisher
-    participant KEP as KafkaEventPublisher
-    participant K as kanban.activity (topic)
-    participant Cons as ActivityLogConsumer
-    participant Rec as ActivityLogRecorder
-
-    C->>Ctrl: PATCH /tasks/{taskId}/move {targetColumnId, targetPosition, version}
-    Ctrl->>Svc: moveToColumn(userId, taskId, dto)  [@Transactional]
-    Svc->>Svc: findById(userId, taskId) -- ownership-verified load
-    Svc->>Svc: task.getVersion().equals(dto.getVersion())?
-    alt version mismatch
-        Svc--xCtrl: throws OptimisticLockingFailureException
-        Ctrl-->>C: 409 (see the error-handling diagram above)
-    else version matches
-        Svc->>Repo: shiftPositions(...), save(task)
-        Svc->>DB: entityManager.flush() -- forces the UPDATE (and @Version<br/>increment) now, inside this transaction
-        Svc->>Pub: publishEvent(TaskMovedEvent)  -- queued, NOT delivered yet
-        Svc-->>Ctrl: TaskResponseDTO (new version)
-        Ctrl-->>C: 200 OK  -- the response returns here
-        Note over DB,Pub: transaction commits
-        Pub->>KEP: onActivityEvent(event)  [@Async kafkaPublishExecutor,<br/>@TransactionalEventListener(AFTER_COMMIT)]
-        Note over KEP,K: this all happens AFTER the client already has its 200 --<br/>a broker outage cannot change the HTTP outcome above (D-01)
-        KEP->>K: send(eventId, Avro SpecificRecord)
-        K->>Cons: @KafkaListener onActivityEvent(avroRecord)
-        Cons->>Rec: record(entity)  -- existsByEventId fast path, idempotent
-        Rec->>DB: INSERT activity_log
-    end
-```
+![Sequence diagram: TaskMovedEvent mutation, response timing vs. Kafka publish](diagrams/architecture-mutation-sequence.png)
+<sub>[diagram source](diagrams/architecture-mutation-sequence.mmd)</sub>
 
 Simplified: the same-column vs. cross-column position-shifting branch inside `moveToColumn` is
 collapsed into `shiftPositions(...)`; see the method itself for the two-case split. The dead-letter
@@ -295,28 +157,8 @@ covers it.
 instead of merely "roughly newest first"?* Process View —
 `controller/ActivityController.java` → `service/ActivityLogService.java#findAllByBoardId`.
 
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant Ctrl as ActivityController
-    participant Svc as ActivityLogService
-    participant OVS as OwnershipVerifierService
-    participant Repo as ActivityLogRepository
-    participant DB as Postgres
-    participant Mapper as ActivityLogMapper
-
-    C->>Ctrl: GET /boards/{boardId}/activity?page=0&size=20
-    Ctrl->>Svc: findAllByBoardId(userId, boardId, pageable)
-    Svc->>OVS: verifyOwnershipOfBoard(userId, boardId)
-    OVS-->>Svc: (user, board)
-    Note over Svc: the caller's own Pageable.sort is DISCARDED here and replaced with<br/>Sort.by(createdAt desc, id desc) -- the id tiebreak is what makes<br/>offset pagination a genuine total order, not merely newest-first
-    Svc->>Repo: findAllByBoardId(board.id, effectivePageable)
-    Repo->>DB: SELECT ... ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?
-    DB-->>Repo: page of activity_log rows
-    Svc->>Mapper: toActivityLogResponseDTO (per row)
-    Svc-->>Ctrl: Page<ActivityLogResponseDTO>
-    Ctrl-->>C: 200 OK  -- raw Spring Data PageImpl shape (content/totalElements/...)
-```
+![Sequence diagram: reading the paginated activity feed](diagrams/architecture-activity-feed-read.png)
+<sub>[diagram source](diagrams/architecture-activity-feed-read.mmd)</sub>
 
 Simplified: `Pageable`'s own max-page-size clamp (`spring.data.web.pageable.max-page-size`) is
 enforced by Spring Data before this method runs and is not drawn. The offset-pagination

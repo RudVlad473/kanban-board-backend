@@ -14,7 +14,7 @@ progress:
   completed_phases: 6
   total_plans: 39
   completed_plans: 36
-  percent: 92
+  percent: 86
 ---
 
 # Project State
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-03)
 
 **Core value:** Redeploy the app on a cost-guarded, always-free/near-free stack (Oracle Cloud + Neon + self-hosted Redpanda) after the AWS EC2/RDS deletion, and add a Schema Registry (Avro) in front of the Kafka activity-log pipeline to close the schema-evolution risk flagged during v1.1.
-**Current focus:** Phase 07.1 — address-hard-blockers-and-inconsistencies-from-the-frontend
+**Current focus:** Phase 05 — infra-migration
 
 ## Current Position
 
-Phase: 05 (infra-migration) — in progress
-Plan: 05-03 of 6 — complete (3/3 tasks). Next: 05-04 (tracer deploy).
-Status: 05-01, 05-02, 05-03 (wave 1) all merged to master. Oracle A1.Flex capacity confirmed structurally unavailable; production host pivoted to Netcup VPS Lite 2 G12s (Vienna), provisioned and hardened. Neon Postgres project + DuckDNS hostname provisioned. 05-04/05-05 plan text corrected for the Netcup pivot ahead of their own execution.
-Last activity: 2026-08-14 — Closed out Phase 05 Plan 05-03 (Guided cloud provisioning): Oracle→Netcup pivot, VM hardening, Neon project, DuckDNS hostname. See last_activity_desc in frontmatter for full detail.
+Phase: 05 (infra-migration) — EXECUTING
+Plan: 1 of 6
+Status: Executing Phase 05
+Last activity: 2026-08-15 — Phase 05 execution started
 
 Progress: [█████████▓] 92%
 
@@ -272,7 +272,7 @@ Items acknowledged and carried forward:
 ## Session Continuity
 
 Last session: 2026-08-15 (resume)
-Stopped at: Session resumed, closed out Phase 05 Plan 05-03, proceeding to Plan 05-04 (tracer deploy)
+Stopped at: Session resumed, no incomplete work found, routing to /gsd-execute-phase 05 for Plan 05-04 (tracer deploy)
 Resume file: None
 
 ## Operator Next Steps
