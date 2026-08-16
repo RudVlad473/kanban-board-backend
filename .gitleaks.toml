@@ -36,6 +36,22 @@ id = "curl-auth-user"
       '''\$\{\{\s*secrets\.''',
     ]
 
+# --- aws-access-token: synthetic falsification canary (260816-hn1-MEASUREMENTS.md) -------------
+# `AKIATESTFAKEKEY23456` is a deliberately-fake, correctly-shaped AWS access key used to prove
+# (Task 1: gitleaks dir vs .gitignore; Task 2: the pre-commit hook's refusal path) that scanning
+# actually works. It appears only in documentation describing those tests, never as a real
+# credential or in application/infra config. Scoped to this exact literal string via regexTarget
+# = "match" so it exempts nothing else -- a real AWS key elsewhere would still be caught.
+[[rules]]
+id = "aws-access-token"
+
+    [[rules.allowlists]]
+    description = "Synthetic falsification-test canary value, not a real credential (260816-hn1)"
+    regexTarget = "match"
+    regexes = [
+      '''AKIATESTFAKEKEY23456''',
+    ]
+
 # --- generic-api-key: src/main/resources/application.properties:10 (commit 5121740f61) --------
 # Deliberately NOT allowlisted. This finding is a real, hardcoded local-dev Postgres password
 # (`spring.datasource.password=...` against `jdbc:postgresql://localhost:5432/test-kanban`)

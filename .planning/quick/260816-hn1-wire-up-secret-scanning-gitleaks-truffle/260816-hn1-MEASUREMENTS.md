@@ -253,3 +253,60 @@ with `--baseline-path` pointed at that same **redacted** report.
   created entirely outside the main repo's directory tree (a different drive, a sibling
   directory reached only by `..`, etc.) cannot be captured by this task's single-mount
   strategy and would need its own fix if this repo's worktree convention ever changes.
+
+# Task 2 — Pre-commit hook gate, falsified
+
+Executed after resuming from a crashed terminal (Task 1 was already committed as `f1ac8ae`;
+this task's hook wiring existed as an uncommitted draft in the worktree, verified correct
+in substance and then falsified per the plan's five-step sequence below).
+
+## Real bug found and fixed during falsification
+
+The draft's `docker run` invocation omitted `--verbose`. Without it, gitleaks prints only a
+one-line `leaks found: N` summary — the hook's own refusal message ("see the Finding/RuleID/File
+lines above") was pointing at output that never actually printed. Added `--verbose`; confirmed
+`--redact` still masks the `Secret`/`Match` fields in verbose stdout, so file:line detail is now
+shown with zero additional exposure. Re-ran Test A after the fix to confirm the referenced lines
+now genuinely appear (see below).
+
+## Timing
+
+- **Isolated gitleaks-step cost:** 0.822s wall-clock (includes container startup), scanning an
+  empty staged diff. Measured directly (`time docker run ... git --staged ...`), not inferred.
+- **Before/after full-hook timing** (both `git commit --allow-empty`, both discarded via
+  `git reset --soft HEAD~1` immediately after): before (original hook, no gitleaks step) =
+  4m48.253s; after (with gitleaks step) = 7.892s. **Not an apples-to-apples gitleaks-overhead
+  number** — the "after" run hit Gradle's `UP-TO-DATE` incremental cache (nothing had changed
+  since the prior full run), while "before" happened to run cold. Recorded honestly rather than
+  presented as "gitleaks made the hook 40x faster," which would be a confound, not a finding.
+  The isolated 0.822s figure above is the real, uncounfounded added-cost number: ~0.3% of a
+  genuine 4m48s cold run, comfortably under the plan's "under 1%" bar.
+
+## Falsification (all 5 steps, all observed directly)
+
+1. **Timing** — see above.
+2. **Planted fake credential at repo root** (`secret-canary.txt`,
+   `AWS_ACCESS_KEY_ID=AKIATESTFAKEKEY23456` — same synthetic, non-real value shape used in Task
+   1's canary). `git commit` refused, exit 1, before `spotlessCheck` ran. Output showed
+   `File: secret-canary.txt`, `Line: 1`, `RuleID: aws-access-token`, `Secret: REDACTED`.
+3. **Same canary under `.planning/`**
+   (`.planning/quick/260816-hn1-wire-up-secret-scanning-gitleaks-truffle/canary.md`). Refused
+   identically, exit 1, `File:` correctly showed the `.planning/` path — confirms the directory
+   this task exists to inspect is inside the scanned surface, not exempted.
+4. **Values removed, identical tree** — both canary files deleted, unstaged. `git commit
+   --allow-empty` (a stand-in for "the identical tree") reached `spotlessCheck`/`fastTest` and
+   succeeded, exit 0, in 8.179s (warm Gradle cache). Commit immediately discarded via
+   `git reset --soft HEAD~1` (this was a falsification probe, not a real deliverable commit).
+5. **Scanner unreachable** — simulated via `DOCKER_HOST=tcp://127.0.0.1:1` for a single
+   invocation (an invalid loopback port) rather than actually stopping Docker Desktop, so the
+   real daemon backing this repo's Testcontainers-based test suite was never disturbed. `docker
+   run` itself failed to connect (`error during connect: ... connection refused`), exit code 1 —
+   distinct from the remapped exit code 2 gitleaks itself would use for "leaks found." The hook's
+   `else` branch fired with its own distinctly-worded message ("did not run to completion...
+   Commit refused rather than silently skipping the scan"), not the leaks-found message. No
+   commit was created. `docker info` confirmed the real daemon was healthy throughout and
+   required no restart.
+
+All 5 steps matched the plan's automated verify criteria exactly. `git status --short` after
+every step showed only the intended `.githooks/pre-commit` modification — no canary file,
+scanner report, or stray commit survived any step.

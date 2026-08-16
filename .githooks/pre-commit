@@ -3,9 +3,114 @@
 # invocation, so this file needs no per-clone setup. Keep it mode 100755 in the
 # index - git silently skips a non-executable hook on Linux and macOS.
 #
-# Gate: formatting is correct, the project compiles, and the non-E2E test suite
-# passes. Does not auto-fix anything - a formatting violation fails the commit
-# with instructions instead of silently rewriting staged files.
+# Gate: secret scanning, then formatting is correct, the project compiles, and the
+# non-E2E test suite passes. Does not auto-fix anything - neither a leaked credential
+# nor a formatting violation silently rewrites staged files; both fail the commit with
+# instructions instead.
+
+# --- Secret scanning (quick task 260816-hn1) --------------------------------------
+# Runs FIRST, ahead of spotlessCheck/fastTest below. Those two steps take roughly
+# four minutes combined (docs/CODE_STYLE.md rule 8's measured fastTest figures); a
+# staged credential should be refused in seconds, not after four minutes of tests.
+# Placement is a usability decision with no cost, so it takes priority.
+#
+# Scans the STAGED DIFF ONLY (`gitleaks git --staged`), not history and not the
+# working tree - full-history scanning is CI's job (.github/workflows/secret-scan.yml),
+# and a working-tree/`dir`-mode scan would read gitignored .env*/*.pem files this repo
+# deliberately never wants a scan report to touch (260816-hn1-MEASUREMENTS.md proved
+# `gitleaks dir` does NOT respect .gitignore; staged-diff mode is immune to this by
+# construction, since git never stages a gitignored path).
+#
+# The image reference below is PINNED to an exact tag+digest
+# (ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:...) - this pin is load-bearing, not
+# cosmetic. Every gate in this file except the (deliberately unpinned,
+# report-only) NVD/OWASP scan is a pure function of the commit; an unpinned
+# `:latest` scanner tag would break that property here too, since a new gitleaks
+# rule could red an unchanged commit with zero code change - the exact failure mode
+# security-scan.yml documents for a different tool. .github/workflows/secret-scan.yml
+# pins the byte-identical reference; if either drifts, the two gates could disagree.
+#
+# Mount strategy: this repo's own convention nests git worktrees under
+# .claude/worktrees/<name> (see docs/SESSION_LESSONS.md / CLAUDE.md's worktree
+# preference). A worktree's private git-dir (.git/worktrees/<name>/) cannot be
+# bind-mounted standalone - its `commondir` file holds a RELATIVE path back to the
+# shared object database, and a standalone mount severs that chain, silently
+# producing "0 commits scanned" / a false-clean result rather than an error
+# (260816-hn1-MEASUREMENTS.md). The fix: mount the single directory that is the
+# common ancestor of both the worktree-private git-dir and the work-tree itself -
+# which `dirname "$(git rev-parse --path-format=absolute --git-common-dir)"` always
+# gives, for both a worktree and a plain (non-worktree) checkout alike - then pass
+# GIT_DIR/GIT_WORK_TREE as absolute paths inside that one mount, bypassing the
+# `.git`-file indirection entirely rather than relying on the container's own git to
+# resolve it (which cannot, in a worktree, since the indirection file holds a literal
+# host-OS absolute path meaningless inside the container).
+GITLEAKS_IMAGE='ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f'
+
+echo "Scanning staged diff for secrets..."
+
+GIT_TOPLEVEL=$(git rev-parse --show-toplevel)
+GIT_COMMON_DIR=$(git rev-parse --path-format=absolute --git-common-dir)
+GIT_PRIVATE_DIR=$(git rev-parse --path-format=absolute --git-dir)
+MOUNT_ROOT=$(dirname "$GIT_COMMON_DIR")
+
+if [ "$GIT_TOPLEVEL" = "$MOUNT_ROOT" ]; then
+  # Plain checkout: the work tree IS the mount root, nothing to strip.
+  REL_WORKTREE=""
+else
+  REL_WORKTREE=${GIT_TOPLEVEL#"$MOUNT_ROOT"/}
+fi
+REL_GITDIR=${GIT_PRIVATE_DIR#"$MOUNT_ROOT"/}
+
+CONTAINER_WORKTREE="/repo${REL_WORKTREE:+/$REL_WORKTREE}"
+CONTAINER_GITDIR="/repo/$REL_GITDIR"
+
+# MSYS_NO_PATHCONV=1: Git Bash on Windows rewrites Docker's Windows-style path
+# arguments before they reach docker.exe, mangling both the -v mount source and any
+# -w/path argument (260816-hn1-MEASUREMENTS.md reproduced this directly - a bind
+# mount silently turned into a nonsense concatenated path without this). No effect
+# on Linux/macOS runners, where this variable does nothing.
+#
+# --exit-code 2 remaps ONLY the "leaks found" outcome away from gitleaks' own
+# generic-error exit code (1). This is what makes the three-way branch below
+# possible: 0 = clean, 2 = findings, anything else (including docker itself failing
+# to reach a stopped daemon, or a real gitleaks tool error) = "could not run" -
+# verified empirically that gitleaks' own tool-level failures (e.g. an unreadable
+# config) still exit 1, distinct from a remapped 2.
+#
+# --verbose is required, not cosmetic: without it gitleaks prints only a one-line
+# "leaks found: N" summary, and the refusal message below (which points the
+# developer at "the Finding/RuleID/File lines above") would be referencing output
+# that was never printed. --redact already covers the secret VALUE regardless of
+# verbosity, so turning this on adds file:line detail without adding exposure.
+MSYS_NO_PATHCONV=1 docker run --rm \
+  -v "${MOUNT_ROOT}:/repo" \
+  -e GIT_DIR="${CONTAINER_GITDIR}" \
+  -e GIT_WORK_TREE="${CONTAINER_WORKTREE}" \
+  "${GITLEAKS_IMAGE}" \
+  git --staged --redact --no-banner --verbose --exit-code 2 "${CONTAINER_WORKTREE}"
+GITLEAKS_STATUS=$?
+
+if [ "$GITLEAKS_STATUS" -eq 0 ]; then
+  echo "No secrets found in staged diff."
+elif [ "$GITLEAKS_STATUS" -eq 2 ]; then
+  echo "Secret scan found a likely credential in the staged diff (see the Finding/RuleID/File"
+  echo "lines above - the secret VALUE itself is redacted, never printed). Commit refused."
+  echo "Remove it, or if this is a genuine false positive, add a narrow, evidence-cited"
+  echo "allowlist entry to .gitleaks.toml (never a blanket path/directory exemption) and"
+  echo "re-commit."
+  exit 1
+else
+  echo "Secret scan did not run to completion (exit code ${GITLEAKS_STATUS}, expected 0 or 2)."
+  echo "Most likely cause: the Docker daemon is not running, or the pinned gitleaks image"
+  echo "could not be pulled. Commit refused rather than silently skipping the scan - start"
+  echo "Docker Desktop (or otherwise restore the scanner) and re-commit. This is a distinct"
+  echo "failure from 'a secret was found' (see above); conflating the two - passing a commit"
+  echo "because the scanner could not run - is exactly the silent-drift failure mode"
+  echo ".github/workflows/security-scan.yml's preflight step already rejects for a different"
+  echo "tool, and this hook does not reintroduce it here."
+  exit 1
+fi
+
 echo "Checking formatting..."
 ./gradlew spotlessCheck < /dev/null
 if [ $? -ne 0 ]; then
