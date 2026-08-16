@@ -116,22 +116,61 @@ services:
     image: docker.redpanda.com/redpandadata/redpanda:v26.2.1
     hostname: redpanda
     restart: unless-stopped
+    # Docker-level cgroup backstop added 05-04 Task 3, matching the app service's own
+    # `mem_limit: 3g` above -- previously the ONLY memory ceiling on this container was
+    # Redpanda's own internal `--memory 2G` accounting below (Seastar's own allocator), with no
+    # cgroup limit behind it. A leak or accounting gap inside Redpanda's own self-cap had no
+    # second backstop, unlike the app -- 05-RESEARCH.md's Pitfall 1 explicitly recommends cgroup
+    # limits on BOTH co-resident containers, not just one.
+    #
+    # Deliberately NOT set equal to `--memory 2G` below -- tried that first and it broke startup:
+    # `Could not initialize seastar: std::runtime_error (insufficient physical memory: needed
+    # 2147483648 available 2078277632)`. A cgroup limit numerically equal to Seastar's own
+    # requested usable memory leaves no room for the cgroup accounting overhead (other
+    # in-container processes, kernel-side slab/page accounting) that a byte-for-byte-equal cap
+    # doesn't budget for -- Seastar's own probe saw ~66MiB less than the 2048MiB it asked for
+    # and refused to start rather than silently run smaller. 2200m gives that headroom back
+    # (~150MiB above the internal request) while still being a real backstop, not a no-op --
+    # confirmed by a live restart after this fix: `(healthy)` within the existing 15s
+    # start_period, per Task 3's own re-verification below.
+    mem_limit: 2200m
     command:
       - redpanda
       - start
       # Explicit resource caps -- deliberately NOT `--mode dev-container` (the local dev preset
       # that relaxes resource discipline for developer convenience; carrying it into production
       # would let Redpanda assume it owns the whole VM, a real OOM path alongside the co-resident
-      # app JVM, T-05-11). Values below are a floor, not tied to a specific host shape -- confirmed
-      # against the Netcup VPS Lite 2 G12s target (4 vCPU/8GB, 7.8GiB measured). Real budget basis
-      # (corrected 05-04 Task 1 -- the app service now carries an explicit `mem_limit: 3g`, see its
-      # comment above, so the JVM's container-aware default heap sizing computes against that
-      # bounded number instead of silently reading the host's unbounded 7.8GiB): redpanda 2G + app
-      # 3G = 5G, leaving ~2.8G of the measured 7.8GiB host total for Caddy (lightweight, well under
-      # 100MB typically) and the OS -- genuine headroom, not merely asserted. Tighter than the
-      # original 12GB Oracle target but not exceeded. This is still a floor pending Task 3's
-      # measure-under-real-load pass (05-04-PLAN.md), which retunes these numbers against actual
-      # observed usage rather than this budget math alone -- revisit there if it proves too tight.
+      # app JVM, T-05-11).
+      #
+      # MEASURED BASIS (05-04 Task 3, 2026-08-16) -- these values are no longer a budget-math
+      # floor pending verification; they are now measured against the real deploy target and a
+      # real workload. Shape: Netcup VPS Lite 2 G12s, 4 vCPU / 7.8GiB RAM measured (05-03).
+      # Workload: a 54-request burst fired in rapid sequential succession through the public
+      # HTTPS API against this live production stack (6 columns + 24 tasks + 24 subtasks), each
+      # mutation producing a real Avro-serialized Kafka publish against this production registry
+      # and a real consumer-side persist -- not an idle-stack measurement.
+      #   - Idle baseline: redpanda 347.8MiB RSS / 0.43% CPU (of its 2G internal cap, ~17%); app
+      #     458.6MiB / 0.26% CPU (of its 3g mem_limit, ~14.9%); caddy 19.9MiB / 0.00% CPU; host
+      #     1.3GiB used / 6.4GiB available of 7.8GiB total.
+      #   - Under burst (6 samples across the run): redpanda CPU peaked 7.3-8.6% -- `--smp 1`
+      #     pins it to one logical core, so this is a small fraction even of that single core's
+      #     ceiling, not the host's 4; RSS never moved off 347.8MiB. App CPU peaked 3.5-6.2%; RSS
+      #     grew ~12MiB (458.6MiB -> 471.1MiB, ~15.3% of its 3g limit). Caddy stayed flat
+      #     (~20MiB, <0.2% CPU). Host `available` memory was unchanged at 6.4GiB after the burst
+      #     -- this app's real traffic shape (a personal/portfolio kanban board) does not move
+      #     the needle at the host level at all.
+      #   - Conclusion: redpanda used under 18% of its memory cap and a small fraction of its
+      #     single-core CPU ceiling even under this burst, so the `--smp`/`--memory` values below
+      #     were left UNCHANGED -- tightening further would trade away real broker headroom for a
+      #     benefit no measurement supports, and loosening them is exactly what this plan's own
+      #     prohibition forbids doing without a measured reason. The prior budget math (redpanda
+      #     2G + app 3G = 5G, leaving 2.8G of the 7.8GiB host for Caddy + the OS) is now
+      #     measurement-verified rather than merely asserted -- and with the new `mem_limit:
+      #     2200m` cgroup backstop above (also this task, see its own comment for why it isn't
+      #     numerically 2G), the real worst-case host budget is 3G (app) + 2200m (redpanda) =
+      #     ~5.15G, leaving ~2.65GiB of the measured 7.8GiB for Caddy + the OS -- still genuine
+      #     headroom, now against the tighter of the two figures rather than the looser one. No
+      #     memory- or CPU-constrained finding surfaced -- there is nothing here to work around.
       - --overprovisioned
       - --smp
       - "1"
