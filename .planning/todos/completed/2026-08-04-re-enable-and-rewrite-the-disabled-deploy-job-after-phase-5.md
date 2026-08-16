@@ -1,5 +1,6 @@
 ---
 created: 2026-08-04T16:17:47.000Z
+resolved: 2026-08-16
 title: Re-enable and rewrite the disabled deploy-to-ec2 CI job once Phase 5 lands
 area: tooling
 severity: major
@@ -71,3 +72,40 @@ INFRA-01..INFRA-08):
 
 **Trigger:** This closes as part of Phase 5's deploy work (INFRA-05). Phase 5 must
 not be marked complete while `deploy-to-ec2` is still skipped.
+
+## Resolution
+
+Closed by 05-05-PLAN.md Task 3, a genuine rewrite rather than a revival — `deploy-to-ec2` was
+deleted outright and replaced with `deploy-to-netcup`, targeting the Netcup VPS the milestone
+pivoted to in plan 05-03 (Oracle's A1 Flex capacity proved structurally unavailable), not the
+original EC2 host this todo was filed against.
+
+**What changed, against this todo's own bullet list:**
+- New host, new non-root `deploy` SSH user, freshly-generated ed25519 keypair (plan 05-05 Task 1)
+  — none of the AWS-era `EC2_SSH_KEY`/`EC2_HOST`/`EC2_USER` values are referenced anywhere in the
+  rewritten job.
+- Deploy now runs `docker compose ... pull app && ... up -d` against `docker-compose.prod.yml`
+  (plan 05-02/05-04), which already carries `restart: unless-stopped`, healthchecks, and capped
+  `json-file` log drivers for all three services — not a bare `docker run` with none of those.
+- `DB_*` env vars are not part of this job at all: the app's runtime datasource config lives in
+  `.env.prod` on the VM (plan 05-04), untouched by this job by design; `DB_*` secrets are consumed
+  by the sibling `flyway-verify` job (Task 2) against Neon's **direct** endpoint, not this job.
+- `deploy-to-netcup` carries a real `if: success()` condition (not `if: false`), gated on
+  `build-and-push-docker-image` and the new `flyway-verify` job.
+- Both `cleanup-old-images` and `cleanup-unused-image` have their `needs:` updated to
+  `deploy-to-netcup` and resume firing on real success/failure. The previously-truncated
+  `curl -X DELETE` in `cleanup-unused-image` is completed using that job's own `TOKEN`/`DIGEST`
+  variables (digest-based deletion), not `cleanup-old-images`' tag+basic-auth style.
+- **AWS-era secret revocation is explicitly NOT done here** — deferred to plan 05-06 per
+  `05-CONTEXT.md`'s own decision ("revoked in plan 05-06, not here, so nothing is destroyed at
+  this point"). Still present and unused after this task.
+- **Docker Hub tag pruning**: not a separate manual step. `cleanup-old-images`' existing logic
+  (unchanged by this task) deletes every tag except the current run's on each successful deploy —
+  so the first real `deploy-to-netcup` success prunes all tags accumulated since quick task
+  `260804-p7a` disabled it, as a side effect of resuming the existing (already-correct) job rather
+  than a bespoke pruning script. Verified live: 27 stale tags existed immediately before this
+  task's first successful production run; confirmed down to the single current tag afterward (see
+  `docs/INFRA_RUNBOOK.md`'s "Automated deploy — Plan 05-05 Task 2 and Task 3" section for the
+  measured before/after count and the full verification sequence, including the deliberate
+  fingerprint-mismatch test that proved `cleanup-unused-image` fires on a real failure, not just
+  by inspection).

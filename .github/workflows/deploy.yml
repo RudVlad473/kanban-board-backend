@@ -136,59 +136,76 @@ jobs:
           # against hand-authored DDL scripts; Phase 04.1/04.2 superseded that
           # project-wide with Flyway, see 05-05-PLAN.md Task 2's own note).
 
-  # DISABLED for the v1.2 "Infra Migration & Schema Registry" milestone.
-  # The AWS EC2 host this job SSHes into has been deleted (moving off AWS
-  # on cost grounds), so every push to master would otherwise fail here
-  # trying to reach an unreachable host.
-  # Tests and the Docker build/push above are deliberately unaffected and
-  # still run on every push.
-  # Phase 5 (Infra Migration, INFRA-01..INFRA-08) replaces the deploy
-  # target with an Oracle Cloud VM and requires newly-generated SSH
-  # credentials per INFRA-05 -- REWRITE this job, do not just flip
-  # `if: false` back to re-enable it.
-  # Tracking: .planning/todos/pending/2026-08-04-re-enable-and-rewrite-the-disabled-deploy-job-after-phase-5.md
-  deploy-to-ec2:
+  # Rewritten for the v1.2 "Infra Migration" milestone (Phase 5, plan 05-05 Task 3).
+  # Targets the Netcup VPS provisioned in plan 05-03 -- the originally-planned Oracle
+  # Cloud A1 Flex target proved structurally capacity-constrained (200+ automated
+  # provisioning attempts, zero successes; see docs/INFRA_RUNBOOK.md's "Provider
+  # history" note) -- not the deleted AWS EC2 host the old job SSHed into. Freshly
+  # generated, dedicated SSH credentials (plan 05-05 Task 1) authenticate as a
+  # minimally-privileged, non-root `deploy` user (never root), and the connection's
+  # host key is pinned by fingerprint on both steps below -- the old job never verified
+  # the host key at all.
+  deploy-to-netcup:
     needs: [ build-and-push-docker-image, flyway-verify ]
     runs-on: ubuntu-latest
-    if: false
+    if: success()
+    # Serializes deploys against this one VM: a second push while a deploy is still
+    # in-flight QUEUES behind it rather than cancelling it (cancel-in-progress: false).
+    # Cancelling mid-deploy could interrupt the SCP step partway through, leaving a
+    # half-copied docker-compose.prod.yml/Caddyfile on the VM -- exactly the
+    # interleaving this control exists to prevent. Queuing costs a little wall-clock on
+    # a rapid double push, but every deploy that runs still leaves the VM in a complete,
+    # self-consistent state, and the last queued deploy always reflects the latest push
+    # (each deploy fully re-copies and re-applies whatever commit was current when it
+    # started).
+    concurrency:
+      group: deploy-to-netcup-vm
+      cancel-in-progress: false
     steps:
-      - name: Set up SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
-      #          1. install docker if not installed; 2. stop old container, start a new one using new image
-      - name: Deploy on EC2
-        run: |
-          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
-             if ! command -v docker &> /dev/null; then
-               echo "Docker not found. Installing..."
-               sudo apt update
-               sudo apt install -y docker.io
-               sudo systemctl enable docker
-               sudo systemctl start docker
-               sudo usermod -aG docker $(whoami)
-               newgrp docker
-             else
-               echo "Docker is already installed."
-             fi
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-            sudo docker pull ${{ needs.build-and-push-docker-image.outputs.actual_image_name }}
-            sudo docker stop myapp || true
-            sudo docker rm myapp || true
-            sudo docker run -d --name myapp -p 80:8080 \
-              -e DB_HOST=${{ secrets.DB_HOST }} \
-              -e DB_NAME=${{ secrets.DB_NAME }} \
-              -e DB_USER=${{ secrets.DB_USER }} \
-              -e DB_PASS=${{ secrets.DB_PASS }} \
-            ${{ needs.build-and-push-docker-image.outputs.actual_image_name }}
-            sudo docker image prune -af
-          EOF
+      - name: Copy Compose manifest and Caddyfile to the VM
+        # `rm` is deliberately NOT set: the target directory also holds .env.prod
+        # (plan 05-04's manual deploy, populated once, off-limits to this job's own
+        # explicit prohibition), which must never be recreated or deleted here -- only
+        # the two named files below are transferred.
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ secrets.NETCUP_HOST }}
+          username: ${{ secrets.NETCUP_DEPLOY_USER }}
+          key: ${{ secrets.NETCUP_SSH_KEY }}
+          fingerprint: ${{ secrets.NETCUP_HOST_FINGERPRINT }}
+          source: "docker-compose.prod.yml,Caddyfile"
+          target: "/opt/deploy/kanban-board-backend/"
+
+      - name: Deploy via Docker Compose
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.NETCUP_HOST }}
+          username: ${{ secrets.NETCUP_DEPLOY_USER }}
+          key: ${{ secrets.NETCUP_SSH_KEY }}
+          fingerprint: ${{ secrets.NETCUP_HOST_FINGERPRINT }}
+          script: |
+            cd /opt/deploy/kanban-board-backend
+            # Exported (not written into .env.prod) so this commit's freshly-built tag
+            # always wins over Compose's --env-file precedence -- shell environment
+            # variables take priority over --env-file values, and .env.prod itself is
+            # never touched by this job.
+            export IMAGE_TAG=${{ needs.build-and-push-docker-image.outputs.image_tag }}
+            # rudenkovladimir/kanban-board-backend is a public Docker Hub repository
+            # (confirmed live via the Docker Hub API during this plan's execution,
+            # is_private: false) -- no docker login/registry credential is needed here
+            # to pull it. Pull-and-up is idempotent: a push that changes nothing this
+            # deploy consumes still converges the VM to the pushed state (the app image
+            # tag always changes per commit) rather than erroring on there being
+            # nothing to do.
+            docker compose --env-file ./.env.prod -f docker-compose.prod.yml pull app
+            docker compose --env-file ./.env.prod -f docker-compose.prod.yml up -d
 
   cleanup-old-images:
     runs-on: ubuntu-latest
-    needs: [ deploy-to-ec2, build-and-push-docker-image, setup ]
+    needs: [ deploy-to-netcup, build-and-push-docker-image, setup ]
     if: success()
     steps:
       # we need to do that because we only want to have a single active prod deployment for that project
@@ -211,7 +228,7 @@ jobs:
   # if deployment failed, we need to cleanup the image we pushed, because it won't be used
   cleanup-unused-image:
     runs-on: ubuntu-latest
-    needs: [ deploy-to-ec2, build-and-push-docker-image, setup ]
+    needs: [ deploy-to-netcup, build-and-push-docker-image, setup ]
     if: failure()
     steps:
       - name: Remove just-pushed image
@@ -224,5 +241,12 @@ jobs:
             -H "Authorization: Bearer $TOKEN" \
             "https://registry-1.docker.io/v2/${{ needs.setup.outputs.base_image_name }}/manifests/${{ needs.build-and-push-docker-image.outputs.image_tag }}" \
             | awk '/Docker-Content-Digest/ {print $2}' | tr -d $'\r')
+          # Completes the previously-truncated command (todo
+          # 2026-08-04-re-enable-and-rewrite-the-disabled-deploy-job-after-phase-5.md):
+          # deletion is by DIGEST here (this job's own variable, resolved above via the
+          # manifest HEAD request), not by tag+basic-auth like cleanup-old-images --
+          # the Docker Registry v2 API's DELETE-manifest endpoint at this host requires
+          # the digest reference, which is exactly what TOKEN/DIGEST were computed for.
           curl -s -X DELETE \
             -H "Authorization: Bearer $TOKEN" \
+            "https://registry-1.docker.io/v2/${{ needs.setup.outputs.base_image_name }}/manifests/$DIGEST"
