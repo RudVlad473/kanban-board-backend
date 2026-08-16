@@ -106,6 +106,12 @@ Actions pipeline runs the test suite and `spotlessCheck`, then builds and pushes
 image — the deploy job is explicitly disabled rather than left to fail against a host that no longer
 exists, and it needs a rewrite (not a re-enable) for the new target.
 
+**Security gates.** `gitleaks` (pinned version, digest-referenced) scans every staged commit
+locally via a pre-commit hook and every push/PR's full history in CI, hard-gated — a detected
+credential fails the build, not just a warning. OWASP `dependency-check` runs weekly against
+NVD/OSS-Index, report-only for now (its verdict drifts with newly-published advisories
+independent of any code change, so it isn't hard-gated yet).
+
 Not done, deliberately: no rate limiting on the auth endpoints, no refresh-token-style session
 renewal (sessions are fixed-duration), and no caching layer.
 

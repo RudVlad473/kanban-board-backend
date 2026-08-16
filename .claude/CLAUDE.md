@@ -14,6 +14,7 @@ A Spring Boot 3.5.16 / Java 21 REST API backend for a Kanban board application (
 - **Testing**: Match existing convention — unit tests for services/DTOs, integration tests (REST Assured) for controllers; query-count assertions via Hibernate `Statistics.getPrepareStatementCount()` (not `getQueryExecutionCount()`, which misses `findById()` calls)
 - **PR discipline**: This work should remain reviewable as its own unit, consistent with the modernization plan's one-epic-per-PR intent
 - **Format check**: `./gradlew spotlessCheck` and `./gradlew test` must pass (matches existing CI)
+- **Secret scanning**: `.githooks/pre-commit` runs a pinned `gitleaks` scan of the staged diff first, ahead of formatting/tests, and refuses the commit on a detected credential — a real credential-shaped value (API key, AWS access key, password literal, etc.) pasted anywhere in a staged file, including `.planning/` prose, will be refused before it ever reaches formatting/test checks. `.github/workflows/secret-scan.yml` re-scans full history on every push/PR as a hard gate. A genuine false positive needs a narrow, evidence-cited entry in `.gitleaks.toml` (never a blanket path exemption) — see that file's existing entries for the pattern.
 
 <!-- GSD:project-end -->
 

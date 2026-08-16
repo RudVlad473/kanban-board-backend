@@ -310,3 +310,61 @@ now genuinely appear (see below).
 All 5 steps matched the plan's automated verify criteria exactly. `git status --short` after
 every step showed only the intended `.githooks/pre-commit` modification — no canary file,
 scanner report, or stray commit survived any step.
+
+# Task 3 — CI workflow, docs, close-out
+
+## CI workflow (`.github/workflows/secret-scan.yml`)
+
+Diverges from `security-scan.yml` deliberately: push (master) + pull_request + workflow_dispatch
+triggers (not weekly-only), hard gate (no `continue-on-error`), `actions/checkout@v4` with
+`fetch-depth: 0` (full history — a shallow default checkout would scan one commit and read as
+falsely clean). Invokes the pinned scanner directly (same tag+digest reference as
+`.githooks/pre-commit`, confirmed byte-identical via `grep`) rather than the vendor's Marketplace
+Action, avoiding its organization-use license-key dependency and keeping the CI command
+structurally identical to the hook's.
+
+**Smoke-tested locally** (not run in real GitHub Actions, since this task has no CI access):
+ran the workflow's exact `docker run` command against the main checkout
+(`C:\Dev\Repos\kanban-board-backend`, a plain non-worktree checkout — the shape
+`actions/checkout` actually produces, unlike this task's own worktree). Result: 623 commits
+scanned, 17.6s, 16 raw findings (13 from Task 1's original triage + the 2 new
+`260816-hn1-MEASUREMENTS.md` occurrences documenting the synthetic canary + 1 more from this
+task's own Task 3 writeup) — **expected and correct**, since `.gitleaks.toml` had not yet merged
+into `master` at the time of this smoke test (it exists only on this task's worktree branch
+pre-merge). Once `.gitleaks.toml` lands on `master`, gitleaks' `(target path)/.gitleaks.toml`
+auto-discovery (the same mechanism both the hook and this workflow rely on, no `-c` flag passed
+by either) will pick it up identically to Task 1's already-verified re-scan, which confirmed
+exactly 1 consciously-carried finding remains with the config in force. **Not independently
+re-verified against this exact CI command post-merge** — inferred from Task 1's equivalent
+result plus the identical auto-discovery mechanism, stated here rather than silently assumed.
+YAML syntax validated via a local YAML parser (no `actionlint`/GitHub-side validation available
+in this environment).
+
+## Docs reconciled
+
+- `README.md`: added a "Security gates" paragraph under Project status (no pre-existing
+  dependency-scan mention existed to sit alongside, despite the plan text's assumption — stated
+  honestly rather than silently working around it; the new paragraph covers both gitleaks and
+  the existing OWASP dependency-check in one place).
+- `.claude/CLAUDE.md`: added a Constraints bullet documenting the gate, so a future agent (or
+  this one, next session) knows a credential-shaped staged value will be refused before
+  attempting to work around it as a mystery hook failure.
+- `docs/CODE_STYLE.md`: **judged unwarranted, not added.** That file's own stated scope
+  (preamble, line 3) is "judgement-level choices Spotless cannot check" for *Java code* —
+  existing rules that stretch into process/tooling (rules 4, 8, 13) still concern
+  developer-authored code or test-file placement, not general repository security policy. A
+  "don't paste secrets into markdown" rule would be (a) mechanically enforced already by this
+  task's two gates, making a prose rule redundant with tooling rather than a judgement call with
+  multiple valid choices, and (b) already explained in more precise, evidence-cited detail by
+  `.gitleaks.toml`'s own comments and the hook's inline comments than a generic CODE_STYLE.md
+  entry could add. Recorded here per the plan's explicit instruction to state the reasoning
+  rather than skip silently.
+
+## Deferred, filed as todos (not fixed here)
+
+- TruffleHog live-credential verification pass, CI-only (`2026-08-16-add-a-trufflehog-live-...`) —
+  the deferred pick from Task 1's Decision 1, as the approach_analysis anticipated.
+- gitleaks hook cannot scan a worktree created outside the main repo's directory tree
+  (`2026-08-16-gitleaks-hook-cannot-scan-a-worktree-created-outside-...`) — a real limit of Task
+  1/2's mount strategy, newly surfaced by this task's own worktree-mounting work, not previously
+  documented anywhere.
