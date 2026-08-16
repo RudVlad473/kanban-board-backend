@@ -86,6 +86,56 @@ jobs:
           push: true
           tags: ${{ steps.set_full_image_name.outputs.actual_image_name }}
 
+  # INFRA-06 (Phase 5, plan 05-05 Task 2): verifies this project's Flyway migrations
+  # (src/main/resources/db/migration/V1-V7) apply cleanly against Neon's DIRECT
+  # (non-pooled) endpoint before any image is allowed to reach a VM -- gates deploy.
+  # Runs the official Flyway CLI Docker image (same version Spring Boot 3.5.16's BOM
+  # pins flyway-core/flyway-database-postgresql to, see build.gradle) directly against
+  # the checked-out migration scripts, rather than booting the whole Spring context
+  # (which would also need a reachable Kafka broker in CI for no benefit here) or
+  # inventing a second migration mechanism. This keeps the whole verification inside
+  # this workflow file, matching plan 05-05's declared file scope.
+  flyway-verify:
+    needs: [ setup, run-tests ]
+    runs-on: ubuntu-latest
+    if: success()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Guard against Neon's pooled (transaction-mode) endpoint
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+        run: |
+          # Transaction-mode pooling does not support DDL/schema migration the way a
+          # direct connection does -- a run against the pooled endpoint would either
+          # fail confusingly or, worse, appear to succeed without proving what this job
+          # exists to prove. Neon's own naming convention marks pooled hosts with a
+          # "-pooler" suffix (see docs/INFRA_RUNBOOK.md). Inspected without ever being
+          # printed.
+          if [[ "$DB_HOST" == *"-pooler"* ]]; then
+            echo "::error::DB_HOST carries Neon's pooler marker (-pooler). Flyway migration verification must run against the DIRECT (non-pooled) endpoint only -- refusing to proceed."
+            exit 1
+          fi
+          echo "Guard passed: configured endpoint is not the pooled endpoint."
+
+      - name: Verify Flyway migrations apply cleanly (Neon direct endpoint)
+        env:
+          FLYWAY_URL: jdbc:postgresql://${{ secrets.DB_HOST }}:5432/${{ secrets.DB_NAME }}?sslmode=require
+          FLYWAY_USER: ${{ secrets.DB_USER }}
+          FLYWAY_PASSWORD: ${{ secrets.DB_PASS }}
+        run: |
+          docker run --rm \
+            -e FLYWAY_URL -e FLYWAY_USER -e FLYWAY_PASSWORD \
+            -v "${{ github.workspace }}/src/main/resources/db/migration:/flyway/sql:ro" \
+            flyway/flyway:11.7.2 migrate
+          # Flyway aborts on the first failed migration by design (recorded in
+          # flyway_schema_history, blocking all subsequent ones) -- no hand-rolled
+          # abort-on-first-failure logic needed here, unlike the old per-script psql
+          # sequence this job replaces in spirit (INFRA-06 was originally scoped
+          # against hand-authored DDL scripts; Phase 04.1/04.2 superseded that
+          # project-wide with Flyway, see 05-05-PLAN.md Task 2's own note).
+
   # DISABLED for the v1.2 "Infra Migration & Schema Registry" milestone.
   # The AWS EC2 host this job SSHes into has been deleted (moving off AWS
   # on cost grounds), so every push to master would otherwise fail here
@@ -98,7 +148,7 @@ jobs:
   # `if: false` back to re-enable it.
   # Tracking: .planning/todos/pending/2026-08-04-re-enable-and-rewrite-the-disabled-deploy-job-after-phase-5.md
   deploy-to-ec2:
-    needs: build-and-push-docker-image
+    needs: [ build-and-push-docker-image, flyway-verify ]
     runs-on: ubuntu-latest
     if: false
     steps:
