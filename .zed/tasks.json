@@ -1,0 +1,44 @@
+// Zed task definitions for kanban-board-backend (Gradle wrapper, Windows).
+// See docs: https://zed.dev/docs/tasks
+[
+  {
+    "label": "gradle: build",
+    "command": "./gradlew.bat",
+    "args": ["build"]
+  },
+  {
+    "label": "gradle: test (full suite)",
+    "command": "./gradlew.bat",
+    "args": ["test"]
+  },
+  {
+    "label": "gradle: fastTest (pre-commit subset, no Kafka/socket tests)",
+    "command": "./gradlew.bat",
+    "args": ["fastTest"]
+  },
+  {
+    "label": "gradle: spotlessCheck",
+    "command": "./gradlew.bat",
+    "args": ["spotlessCheck"]
+  },
+  {
+    "label": "gradle: spotlessApply",
+    "command": "./gradlew.bat",
+    "args": ["spotlessApply"]
+  },
+  {
+    "label": "gradle: bootRun",
+    "command": "./gradlew.bat",
+    "args": ["bootRun"]
+  },
+  {
+    "label": "gradle: clean",
+    "command": "./gradlew.bat",
+    "args": ["clean"]
+  },
+  {
+    "label": "gradle: jacocoTestReport",
+    "command": "./gradlew.bat",
+    "args": ["jacocoTestReport"]
+  }
+]
