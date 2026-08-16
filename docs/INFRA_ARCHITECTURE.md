@@ -50,13 +50,9 @@ volume loses operational continuity, not user data.
 ## Scenario (+1) View — Delivery Path
 
 Traces one key end-to-end scenario — push to `master` through to a running deploy — across the
-other views, confirming they stay consistent with each other. **This diagram describes the target
-state after plan 05-05 lands, not what is live today** — the build job already builds and pushes a
-`linux/amd64` image on every push to master (confirmed working, no QEMU cross-compilation needed
-since Netcup's x86_64 matches `ubuntu-latest` runners natively), but the deploy and
-DDL-verification jobs themselves are still built by later plans in this phase (05-04, 05-05); the
-existing `deploy-to-ec2` job remains disabled (`if: false`), targeting a host that no longer
-exists.
+other views, confirming they stay consistent with each other. This is the delivery path as it
+runs today: all seven `deploy.yml` jobs, reconciled against the landed Phase 5 Plan 05-05 CI/CD
+cutover by quick task 260816-tqc (2026-08-16).
 
 ![Sequence diagram: delivery path from push to master to a running deploy](diagrams/infra-delivery-scenario.png)
 <sub>[diagram source](diagrams/infra-delivery-scenario.mmd)</sub>
@@ -65,24 +61,42 @@ exists.
 Docker Hub and Neon's direct endpoint over the public internet (both require real network
 egress); the SSH hop to the VM is authenticated via a pinned host-key fingerprint, not left to
 `StrictHostKeyChecking` defaults. None of these delivery-path connections touch Redpanda or the
-app's internal-only listeners — the pipeline only ever talks to the VM's SSH port and to Caddy's
-public HTTPS is not part of the delivery path itself.
+app's internal-only listeners: the pipeline talks to the VM's SSH port only, and Caddy's public
+HTTPS is not part of the delivery path at all.
 
 **Where TLS terminates (delivery path):** the SSH connection from the runner to the VM is
-encrypted end-to-end by SSH itself, independent of Caddy's certificate. The `ddl-verify` job's
-connection to Neon uses the same TLS-required, channel-binding-required posture as the app's own
-runtime connection, over Neon's **direct** (non-pooled) endpoint specifically for this job — the
-pooled endpoint does not support the DDL-verification job's needs (see `05-RESEARCH.md`'s
-Pitfall C).
+encrypted end-to-end by SSH itself, independent of Caddy's certificate. The `flyway-verify` job
+runs the pinned Flyway CLI container's `migrate` against this repo's own
+`src/main/resources/db/migration` scripts, over Neon's **direct** (non-pooled) endpoint
+specifically for this job — a guard step refuses to proceed if the configured `DB_HOST` carries
+Neon's `-pooler` marker, since transaction-mode pooling does not support DDL/schema migration the
+way a direct connection does (see `docs/INFRA_RUNBOOK.md`).
 
 **Stateful components (delivery path):** Docker Hub holds the built image tags (build artifacts,
 not user data); GitHub Actions itself holds no durable state between runs. No step in this
-pipeline writes application data — `ddl-verify` only applies idempotent schema DDL, and the deploy
-step only replaces running containers.
+pipeline writes application data — `flyway-verify` only applies this repo's own Flyway migrations,
+and the deploy step only replaces running containers.
+
+**The VM-side container switch:** `docker compose up -d` recreates exactly one service, `app`,
+because its `image:` reference (`rudenkovladimir/kanban-board-backend:${IMAGE_TAG}`) resolves to a
+new tag on every deploy; `caddy` and `redpanda` are left running because their resolved
+configuration is byte-identical to what is already up — a no-op for them, not a restart. This
+outcome depends on `docker-compose.prod.yml`'s top-level `name: kanban-board-backend` pin: it
+makes project identity, and every named volume's project-prefixed name, independent of the
+directory the command runs from, so Compose converges the already-running stack instead of
+starting a second, unrelated one against fresh, empty volumes — see `docs/INFRA_RUNBOOK.md` for
+the incident that motivated the pin, where a directory-derived project name did exactly that and
+briefly lost the registered Avro schemas. Honest limit: nothing in this pipeline waits for the new
+`app` container's healthcheck — `up -d` returns once the container is started, not once it is
+healthy — so a green `deploy-to-netcup` job is not by itself proof the new container reached `UP`.
 
 ## Maintenance Note
 
-This document describes `docker-compose.prod.yml`, `Caddyfile`, and the `build-and-push-docker-image`
-job in `.github/workflows/deploy.yml` (specifically its `linux/arm64` platform target). If any of
-those three files' topology, ports, or delivery flow changes, update this document in the same
-change — it is the single checked-in description of what actually runs where.
+This document describes `docker-compose.prod.yml`, `Caddyfile`, and `.github/workflows/deploy.yml`
+— specifically the `build-and-push-docker-image` job's `linux/amd64` platform target (the deploy
+target pivoted from Oracle A1 Flex/ARM64 to Netcup/x86_64 in Phase 5), the seven job names and the
+job graph (`needs:` edges) in `deploy.yml`, and `docker-compose.prod.yml`'s top-level
+`name: kanban-board-backend` project pin plus the `app` service's `image:` tag interpolation. If
+any of those facts changes — a job renamed or added, the build platform changed, or either of
+those two `docker-compose.prod.yml` lines changed — update this document, and the diagram it links
+to, in the same change: it is the single checked-in description of what actually runs where.
