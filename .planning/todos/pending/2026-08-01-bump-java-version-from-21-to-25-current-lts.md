@@ -29,6 +29,40 @@ The blocking chain: Java 25 requires Gradle ≥9.1.0 (both to run Gradle itself 
 
 Units A and B were deliberately deferred (not executed) on 2026-08-02 pending an explicit decision on whether/when to take on Unit C — see STATE.md decisions log.
 
+## Update (2026-08-16, quick task 260816-sv1) — Unit B's CI half is done; Dockerfile half still open
+
+Unit B is **half complete**. `deploy.yml`'s `run-tests` job now declares
+`actions/setup-java@v5` with `distribution: 'temurin'` (was `@v4` / `'adopt'`),
+`java-version` unchanged at `'21'`. `actions/checkout` was also bumped from `@v3`
+to `@v5` (not `@v4`, which would still run on the now-also-deprecated Node 20) in
+all three jobs that carried the deprecated tag — `run-tests`,
+`build-and-push-docker-image`, `flyway-verify` — widened beyond `run-tests` alone
+per an operator decision at this task's blocking checkpoint (`all-recommended`:
+A1 `checkout@v5` + B1 fix all three occurrences + C1 leave `security-scan.yml`
+untouched). Commit `d0206ed`.
+
+Verified live: master run `31966148764` (rerun of the `build-and-push-docker-image`
+job after a one-off Gradle-distribution-download network blip, unrelated to this
+change — `java.net.SocketException: Connection reset` fetching
+`gradle-8.11.1-bin.zip` from `services.gradle.org` inside the Dockerfile's own
+`RUN ./gradlew bootJar` step) concluded `success` end to end, including
+`build-and-push-docker-image`, `flyway-verify`, and `deploy-to-netcup`. The
+`run-tests` job's log carries **zero** of the CI-action deprecation lines
+targeted by this task (Node-20 runtime warnings for `checkout`/`setup-java`, the
+`setup-java v4` deprecation, the `'adopt'` alias deprecation), down from 15 in
+the `31964944867` baseline. Five lines matching a naive `grep -i deprecat` remain
+in both the before and after logs, byte-identical: `javac -Xlint:deprecation`
+notes that `AvroSchemaRegistrar.java` uses a deprecated Java API — pre-existing,
+unrelated to any CI Action, out of this task's scope, not touched. `Run tests`
+step result: `BUILD SUCCESSFUL`, `7 actionable tasks: 7 executed`, no `FAILED`
+line — same shape as baseline (Gradle's default console output prints no literal
+per-test count in either run). Full before/after evidence in
+`.planning/quick/260816-sv1-fix-the-github-actions-deprecation-warni/260816-sv1-SUMMARY.md`.
+
+**Still open — Unit B's Dockerfile half:** `gradle:8.7-jdk21` (build stage) →
+`eclipse-temurin:21-jdk-noble`, `21-jre-jammy` (runtime stage) → `21-jre-noble`.
+Units A and C remain entirely untouched. This todo stays in `pending/`.
+
 ## Original Solution (superseded by the split above — kept for history)
 
 1. Verify Spring Boot 3.5.0 and Gradle 8.7 compatibility with JDK 25 first (check release notes / compatibility matrices before touching anything).
