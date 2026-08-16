@@ -11,7 +11,7 @@
 - [x] **INFRA-02**: Production database is Neon serverless Postgres (pooled connection string, `sslmode=require`, HikariCP sized for Neon's cold-start/pooling behavior), replacing the deleted RDS/EC2-hosted Postgres with no JPA/Hibernate code changes
 - [x] **INFRA-03**: Kafka broker in the deploy target is a self-hosted single-node Redpanda instance, with explicit `--overprovisioned`/`--memory`/`--smp` resource caps so it cannot starve the co-resident app JVM on the shared VM
 - [x] **INFRA-04**: App is publicly reachable over real HTTPS via a Caddy reverse proxy with automatic TLS (not bare HTTP/IP)
-- [ ] **INFRA-05**: GitHub Actions builds, pushes, and deploys to the Oracle VM automatically on merge to `master`, using newly-generated SSH credentials (the dead AWS-era secrets are not reused)
+- [x] **INFRA-05**: GitHub Actions builds, pushes, and deploys to the Oracle VM automatically on merge to `master`, using newly-generated SSH credentials (the dead AWS-era secrets are not reused)
 - [x] **INFRA-06**: A pre-merge DDL verification step runs against Neon's direct connection string before merge, replacing the AWS-target check acknowledged as superseded at v1.1 close
 - [ ] **INFRA-07**: Docker log drivers are capped (`max-size`/`max-file`) so unbounded app/Redpanda logs cannot fill the free-tier VM's disk
 - [ ] **INFRA-08**: OCI's three network layers (Security List, NSG, OS firewall) are audited together and externally verified (port scan/curl from outside) so only 80/443 are publicly reachable — Redpanda's 9092 must never be internet-facing
@@ -109,7 +109,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INFRA-02 | Phase 5 | Complete |
 | INFRA-03 | Phase 5 | Complete |
 | INFRA-04 | Phase 5 | Complete |
-| INFRA-05 | Phase 5 | Pending |
+| INFRA-05 | Phase 5 | Complete |
 | INFRA-06 | Phase 5 | Complete |
 | INFRA-07 | Phase 5 | Pending |
 | INFRA-08 | Phase 5 | Pending |

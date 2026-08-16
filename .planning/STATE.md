@@ -5,16 +5,16 @@ milestone_name: Infra Migration & Schema Registry
 current_phase: 05
 current_phase_name: infra-migration
 status: executing
-stopped_at: Phase 05 Plan 05-04 (TRACER) fully complete -- all 3 tasks done, SUMMARY.md written. Plan 05-05 (CI/CD cutover) next.
-last_updated: "2026-08-16T13:35:00.000Z"
+stopped_at: Phase 05 Plan 05-05 (CI/CD cutover) fully complete -- Tasks 2 and 3 verified/repaired, SUMMARY.md written. Plan 05-06 (secret revocation) next.
+last_updated: "2026-08-16T18:20:00.000Z"
 last_activity: 2026-08-16
-last_activity_desc: "Completed Phase 05 Plan 05-04 Tasks 2 and 3 (Task 1 -- the tracer deploy -- was already closed out in a prior session). Task 2: confirmed the Schema Registry was already effectively repointed to production as a side effect of Task 1's deploy (zero src/main changes needed); independently re-verified the production registry directly from inside the VM (14 subjects, BACKWARD compatibility, live reject/accept compatibility-enforcement pair via the registry's own REST API) and exercised the live pipeline through a real public-API mutation producing a real activity_log row. Documented, as a deviation, why neither of the plan's two offered suite-reach options (VM-local JUnit run / SSH tunnel) could literally point the existing test classes at production without modifying shared test infrastructure -- substituted direct-API verification plus a local regression run of the five named classes (28/28 green) instead. Task 3: measured real per-container CPU/memory under a 54-request burst workload (not idle) against the live stack; left --smp 1 / --memory 2G unchanged (large measured headroom) but found and closed a real gap -- redpanda had no Docker-level mem_limit cgroup backstop at all, unlike the app's existing mem_limit: 3g. Discovered live that setting it numerically equal to --memory 2G broke every restart (cgroup accounting overhead left less usable memory than Seastar's internal request); fixed with mem_limit: 2200m, confirmed healthy by a live restart with the off-VM HTTPS path and registry data (14 subjects, survived via the named volume) both still intact. Plan 05-04 SUMMARY.md written; .continue-here.md deleted (one-shot checkpoint artifact, no longer needed)."
+last_activity_desc: "Completed Phase 05 Plan 05-05 Tasks 2 and 3 (Task 1 -- the guided secrets checkpoint -- was already closed out in a prior, uninterrupted session the same day). Confirmed both tasks' code was already implemented and committed (flyway-verify job gating deploy, deploy-to-netcup replacing the disabled deploy-to-ec2) -- verified every acceptance criterion against live evidence rather than trusting the commit messages, since this session began as a continuation of already-committed work. Found and fixed a real bug live: cleanup-old-images' DELETE URL was missing the repository-name path segment, causing every delete to 404 silently since the job was first written (latent the whole time it was permanently skipped). After that fix, found a second, deeper bug (Docker Hub Hub API v2 rejects the job's Basic auth on DELETE) -- diagnosed but deliberately not fixed blind without live credential access to verify a guessed JWT-exchange fix; filed as a new todo instead of claiming an unverified fix as done. Also found and corrected a false verification claim already committed in the deploy-rewrite todo's Resolution text by the prior session (claimed tag pruning and a fingerprint-mismatch failure test were verified live; neither had happened). Pushed two additional real commits specifically to prove the plan's idempotency acceptance criterion with independent production deploys (three total, not one) -- each confirmed via off-VM health check (200) and the deployed image tag on the VM matching the pushed commit's SHA exactly. Plan 05-05 SUMMARY.md written."
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 39
-  completed_plans: 37
-  percent: 95
+  completed_plans: 38
+  percent: 97
 ---
 
 # Project State
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-08-03)
 ## Current Position
 
 Phase: 05 (infra-migration) — EXECUTING
-Plan: 5 of 6 (05-04 complete, 05-05 next)
+Plan: 6 of 6 (05-05 complete, 05-06 next)
 Status: Executing Phase 05
-Last activity: 2026-08-16 — Plan 05-04 (TRACER) fully complete, all 3 tasks
+Last activity: 2026-08-16 — Plan 05-05 (CI/CD cutover) fully complete, Tasks 2-3
 
-Progress: [█████████▓] 95%
+Progress: [█████████▓] 97%
 
 ## Performance Metrics
 
@@ -85,6 +85,7 @@ Progress: [█████████▓] 95%
 | Phase 07.1 P09 | 68min | 4 tasks | 14 files |
 | Phase quick-260813-i6r P01 | 35min | 3 tasks | 2 files |
 | Phase 05 P04 | ~30min (Tasks 2-3 this session; Task 1 in a prior session) | 3 tasks | 3 files |
+| Phase 05 P05 | ~75min (this session; Task 1 + original Task 2/3 authorship in an earlier, uninterrupted session the same day) | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -150,6 +151,7 @@ Recent decisions affecting current work:
 - [Phase 5 Plan 04 Task 1]: Full production stack proven live end-to-end on the real Netcup VM — HTTPS request from the public internet through Caddy (Let's Encrypt cert, first-attempt issuance) into the app into Neon, plus the Redpanda schema registry populated. Two plan-text staleness findings confirmed against live evidence rather than assumed: the registry holds 14 subjects (not 5 — predates quick task 260811-s5e's ActivityEvent expansion) and Flyway applied V1-V7 (not V1-V4 — predates migrations V5/V6/V7 added by later quick tasks). Schema registration executed via a one-off container on the VM's own Compose network using Spring Boot's `PropertiesLauncher` to launch `AvroSchemaRegistrar` directly against `redpanda:8081` by Compose service name — no SSH tunnel, no container-IP lookup, no port ever opened, simpler than the plan's anticipated approach once the agent had direct SSH access. A user signed up and a board created through the public API survived an app container restart, and the session cookie survived too, confirming both Neon persistence and Spring Session JDBC persistence are real. Task 1 executed directly by the agent over the human's SSH session at the human's explicit mid-session request, a deliberate departure from the plan's default human-hands-on-keyboard execution constraint — no `.env.prod` contents or credentials were read or requested regardless of who typed the commands. Full sequence recorded in `docs/INFRA_RUNBOOK.md`.
 - [Phase 5 Plan 04 Task 2]: Confirmed the Schema Registry was already effectively repointed to production as a side effect of Task 1's deploy (`SCHEMA_REGISTRY_URL: http://redpanda:8081` in `docker-compose.prod.yml`, resolved identically by both producer and consumer in `application.properties`) — zero `src/main` changes needed this task. Independently re-verified the production registry live from inside the VM: 14 subjects (same staleness finding as Task 1, plan text predates 260811-s5e), BACKWARD compatibility confirmed at the subject level, and BACKWARD enforcement re-proven directly via the registry's own `/compatibility` dry-run REST endpoint (a modified schema with one new required field, no default → rejected; the unchanged schema → accepted) rather than through JUnit. Documented as a deviation why neither of the plan's two offered suite-reach options (VM-local run / SSH tunnel) could literally point the existing named JUnit classes at production: `AbstractKafkaContainerTest`'s shared harness always provisions its own ephemeral Testcontainers-managed registry with a hardcoded `@DynamicPropertySource`, with no existing hook to redirect at an external registry — building one would mean modifying shared test infrastructure and running a JDK/Gradle build environment on the live production VM. Substituted direct-API verification (above) plus a local regression run of the five named classes (28/28 tests green across all nested groups) plus a real public-API mutation through the production pipeline (signup + board create → `GET .../activity` returned the `BOARD_CREATED` row).
 - [Phase 5 Plan 04 Task 3]: Measured real per-container CPU/memory under a 54-request burst workload (6 columns + 24 tasks + 24 subtasks via the public HTTPS API, not idle) against the live production stack. `redpanda` used under 18% of its 2G internal memory cap and a small fraction of its `--smp 1`-pinned single-core CPU ceiling even under the burst, so `--smp 1`/`--memory 2G` were left unchanged; `docker-compose.prod.yml`'s comment above the broker command block was rewritten from a provisional budget-math floor to the measured basis. Found and closed a real gap: `redpanda` had no Docker-level cgroup `mem_limit` at all (unlike the app's existing `mem_limit: 3g`) — 05-RESEARCH.md's Pitfall 1 recommends both. Setting it numerically equal to `--memory 2G` broke every restart live (`Could not initialize seastar: insufficient physical memory, needed 2147483648 available 2078277632` — cgroup accounting overhead ate into an exactly-equal limit); fixed with `mem_limit: 2200m` (~150MiB headroom above the internal request), confirmed by a live restart reaching `(healthy)` within the existing 15s `start_period`, with the off-VM HTTPS health check still returning 200 and the registry's 14 subjects surviving the container recreation via the named volume. Plan 05-04 is now fully complete (all 3 tasks); `.continue-here.md` deleted.
+- [Phase 5 Plan 05 Tasks 2-3]: `flyway-verify` (INFRA-06) and `deploy-to-netcup` (INFRA-05, replacing the disabled `deploy-to-ec2`) were both already implemented and committed by an uninterrupted prior session the same day; this session verified every acceptance criterion against live evidence (CI run logs, `docker inspect` on the VM, off-VM health checks) rather than trusting the commit messages. `flyway-verify`'s pooler guard was already proven by a real deliberate-failure-then-revert pair; idempotency proven across four real runs (not asserted). `deploy-to-netcup` proven green on three independent real pushes, each with the deployed tag matching the pushed commit's short SHA and a 200 health check. Found live (via `gh run view --job --log`, not by reading the workflow file) that `cleanup-old-images`' DELETE URL was missing the repository-name path segment — every delete had been 404ing silently since the job was first written, latent the whole time it was permanently skipped (2026-08-04–2026-08-16). Fixed the path segment; a second, deeper bug surfaced immediately after (Docker Hub Hub API v2 rejects the job's Basic auth on `DELETE`) — diagnosed but deliberately left unfixed rather than guessing a JWT-exchange fix with no live credential access to verify it, filed as a new todo instead. Also found and corrected a false "verified live" claim already committed in the deploy-rewrite todo's Resolution text (claimed tag-pruning and a fingerprint-mismatch failure test were proven; neither had actually happened — no matching CI run or runbook section existed). Pushed two additional real commits specifically to generate the second and third independent production deploys the plan's own acceptance criteria require as live convergence proof.
 
 ### Pending Todos
 
@@ -180,6 +182,7 @@ Recent decisions affecting current work:
 - [minor] Ratchet `dependencyCheckAnalyze`'s `failBuildOnCVSS` after a real, CPE-matched baseline exists — shipped report-only (`failBuildOnCVSS=11`) by 260813-q1i since no local `NVD_API_KEY` was available to produce a real run; the first `security-scan.yml` run (weekly schedule or manual dispatch) will produce the actual baseline to triage/suppress against before picking a gate rung, same measure-first-then-gate sequence as Error Prone and JaCoCo. See `.planning/todos/pending/2026-08-13-ratchet-failbuildoncvss-after-a-real-dependency-check-baseline.md`.
 - [minor] Add `package-ecosystem: "github-actions"` to `.github/dependabot.yml` once Phase 5's `deploy.yml` rewrite settles — deliberately deferred by 260813-q1i to avoid Dependabot PR noise/conflicts against the in-flight AWS→Oracle deploy-target rewrite. Trigger: after the deploy-job-rewrite todo closes. See `.planning/todos/pending/2026-08-13-add-github-actions-ecosystem-to-dependabot-after-deploy-rewrite.md`.
 - [minor] Expand README into a full project architecture showcase — pre-commit hooks, testing architecture, deployment strategy, verification/quality gates, `docs/diagrams/`, local setup, tech stack and why each technology was chosen. Tension to resolve first: quick task 21 (2026-08-06) deliberately trimmed README to a 116-line front door and pushed depth into `docs/ARCHITECTURE.md`; this ask may mean reversing that or instead surfacing a prominent linked "highlights" section. See `.planning/todos/pending/2026-08-16-expand-readme-into-a-full-project-architecture-showcase.md`.
+- [minor] `cleanup-old-images`' DELETE calls are rejected "unauthorized" — Docker Hub Hub API v2 needs a JWT token exchange, not the Basic auth the job currently uses; a first bug (missing repository-name path segment) was found and fixed live during Plan 05-05, exposing this second one. Not gating Phase 5 — the plan's acceptance criteria required the cleanup jobs to be correctly wired and to fire, not that their deletes succeed. See `.planning/todos/pending/2026-08-16-cleanup-old-images-delete-calls-rejected-unauthorized.md`.
 
 ### Blockers/Concerns
 
@@ -277,14 +280,15 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-16 (Plan 05-04 Tasks 2-3, sequential executor)
-Stopped at: Completed Plan 05-04 Task 2 (repoint Schema Registry verification) and Task 3 (measure/correct Redpanda caps). Plan 05-04 fully complete (all 3 tasks); SUMMARY.md written; .continue-here.md deleted.
+Last session: 2026-08-16 (Plan 05-05 Tasks 2-3, sequential executor)
+Stopped at: Completed Plan 05-05 Task 2 (Flyway migration-verification CI job, INFRA-06) and Task 3 (deploy-to-netcup rewrite + cleanup-job restoration, INFRA-05) — both verified against live evidence and one real bug fixed live (cleanup-old-images' DELETE URL). Plan 05-05 fully complete (all 3 tasks); SUMMARY.md written.
 Resume file: None
 
 ## Operator Next Steps
 
-- Plan 05-05 (CI/CD pipeline rewrite + guided deploy secrets + DDL verification job) is next in Phase 5, now that 05-04's manual deploy sequence is fully recorded in `docs/INFRA_RUNBOOK.md` for its automation to reproduce.
+- Plan 05-06 (revoke the AWS-era secrets now that the new pipeline is proven; close WINDOWS.md ledger entry #2) is next and final in Phase 5, now that 05-05's CI/CD cutover is proven green on three independent real production deploys.
+- New this session: `cleanup-old-images`' DELETE calls are rejected by Docker Hub as unauthorized (a second bug beyond the one fixed live) — see Pending Todos below. Not blocking Plan 05-06.
 - Open: decide the E2ETest-suffix vs. `fastTest`-filter coupling Phase 7 surfaced, and WINDOWS.md ledger entry #2 (INFRA-08 wording stale after the Netcup pivot — owned by 05-06) — see Pending Todos below.
-- Two harmless tracer data artifacts remain live in production (boards/columns/tasks from Plan 05-04 Tasks 1 and 3, plus their creating users) — consistent with Task 1's own precedent of leaving tracer data in place; fine to delete before real users onboard, not blocking.
+- Three harmless tracer data artifacts remain live in production (boards/columns/tasks from Plan 05-04 Tasks 1 and 3, plus their creating users) — consistent with Task 1's own precedent of leaving tracer data in place; fine to delete before real users onboard, not blocking.
 
 </content>
