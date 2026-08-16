@@ -167,7 +167,7 @@ jobs:
       cancel-in-progress: false
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Copy Compose manifest and Caddyfile to the VM
         # `rm` is deliberately NOT set: the target directory also holds .env.prod
