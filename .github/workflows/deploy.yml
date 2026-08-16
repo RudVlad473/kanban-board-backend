@@ -217,11 +217,21 @@ jobs:
             | jq -r '.results[].name')
 
           # Delete all tags except the current one
+          #
+          # BUG FIXED (plan 05-05, discovered live 2026-08-16): this DELETE URL previously omitted
+          # the repository name segment ("$DOCKERHUB_USER/tags/$TAG/" instead of
+          # "$DOCKERHUB_USER/$DOCKERHUB_REPOSITORY/tags/$TAG/"), so every delete 404'd silently --
+          # the job reported success while deleting nothing, since a non-zero curl exit from a
+          # 404 body doesn't fail `-s` by itself and this script has no explicit status check. The
+          # bug predates this plan (present since this job was first written) but was latent the
+          # entire time because deploy-to-ec2 being `if: false` meant this job always skipped too
+          # -- Task 3 is the first time it has ever actually run. Caught by reading this job's own
+          # live log (repeated "404 page not found"), not by inspection.
           for TAG in $TAGS; do
             if [ "$TAG" != "${{ needs.build-and-push-docker-image.outputs.image_tag }}" ]; then
               echo "Deleting tag: $TAG"
               curl -s -X DELETE -u "$DOCKERHUB_USER:${{ secrets.DOCKERHUB_TOKEN }}" \
-                "https://hub.docker.com/v2/repositories/$DOCKERHUB_USER/tags/$TAG/"
+                "https://hub.docker.com/v2/repositories/${{ needs.setup.outputs.base_image_name }}/tags/$TAG/"
             fi
           done
 

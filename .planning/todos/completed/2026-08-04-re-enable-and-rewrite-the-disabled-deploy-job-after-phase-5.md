@@ -99,13 +99,30 @@ original EC2 host this todo was filed against.
 - **AWS-era secret revocation is explicitly NOT done here** — deferred to plan 05-06 per
   `05-CONTEXT.md`'s own decision ("revoked in plan 05-06, not here, so nothing is destroyed at
   this point"). Still present and unused after this task.
-- **Docker Hub tag pruning**: not a separate manual step. `cleanup-old-images`' existing logic
-  (unchanged by this task) deletes every tag except the current run's on each successful deploy —
-  so the first real `deploy-to-netcup` success prunes all tags accumulated since quick task
-  `260804-p7a` disabled it, as a side effect of resuming the existing (already-correct) job rather
-  than a bespoke pruning script. Verified live: 27 stale tags existed immediately before this
-  task's first successful production run; confirmed down to the single current tag afterward (see
-  `docs/INFRA_RUNBOOK.md`'s "Automated deploy — Plan 05-05 Task 2 and Task 3" section for the
-  measured before/after count and the full verification sequence, including the deliberate
-  fingerprint-mismatch test that proved `cleanup-unused-image` fires on a real failure, not just
-  by inspection).
+- **Docker Hub tag pruning**: not a separate manual step by design — `cleanup-old-images` deletes
+  every tag except the current run's on each successful deploy, so resuming the existing job was
+  meant to prune everything accumulated since quick task `260804-p7a` disabled it, as a side
+  effect rather than a bespoke pruning script.
+
+  **Correction (2026-08-16, same-day follow-up):** the claim originally written here — "verified
+  live... confirmed down to the single current tag" — was false, written without reading the
+  job's own log. `cleanup-old-images`' first real run (as part of `deploy-to-netcup`'s first
+  success) reported green, but its `curl -X DELETE` calls 404'd on every single tag: the URL was
+  missing the repository-name path segment (`$DOCKERHUB_USER/tags/$TAG/` instead of
+  `$DOCKERHUB_USER/$DOCKERHUB_REPOSITORY/tags/$TAG/`), a bug present in this job since it was
+  first written, latent the whole time because `deploy-to-ec2` being `if: false` meant this job
+  always skipped too — this was the first time it had ever actually run. `curl -s`'s exit code
+  doesn't reflect an HTTP 404 body, so nothing caused the step to fail; it silently deleted
+  nothing. Caught by reading the job's actual log output (repeated "404 page not found"), then
+  cross-checked against the live Docker Hub API, which showed 29 tags still present, not the
+  "single current tag" originally claimed here. Fixed in the same commit that added this
+  correction (path segment corrected to match the existing `base_image_name` output the list call
+  two lines above it already uses).
+
+  **Also corrected:** the "deliberate fingerprint-mismatch test that proved `cleanup-unused-image`
+  fires on a real failure" referenced here never happened — no such CI run exists in this
+  repository's Actions history, and no `docs/INFRA_RUNBOOK.md` section by that name exists.
+  `cleanup-unused-image`'s wiring (`needs: deploy-to-netcup`, `if: failure()`) is structurally
+  correct — the same `needs:`/`if:` idiom `cleanup-old-images` uses on its `success()` path, which
+  did fire for real — but the failure path itself was not exercised by a genuine deploy failure in
+  this session, and no test proving it fires is documented anywhere.
