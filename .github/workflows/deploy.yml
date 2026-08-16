@@ -105,12 +105,7 @@ jobs:
 
       - name: Guard against Neon's pooled (transaction-mode) endpoint
         env:
-          # TEMPORARY (05-05-PLAN.md Task 2 acceptance criteria): deliberately pointed at the
-          # known, already-publicly-documented pooled hostname (docs/INFRA_RUNBOOK.md's
-          # "Database - Neon" table -- a hostname, not a credential) instead of secrets.DB_HOST,
-          # to prove this guard actually fires on a real CI run rather than trusting the shell
-          # logic by inspection alone. Reverted in the very next commit.
-          DB_HOST: ep-delicate-bird-b2lni8pr-pooler.c-6.eu-central-1.aws.neon.tech
+          DB_HOST: ${{ secrets.DB_HOST }}
         run: |
           # Transaction-mode pooling does not support DDL/schema migration the way a
           # direct connection does -- a run against the pooled endpoint would either
