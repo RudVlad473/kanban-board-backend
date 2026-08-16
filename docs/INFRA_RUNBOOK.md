@@ -401,6 +401,84 @@ leaving ~2.65GiB of the measured 7.8GiB host for Caddy + the OS.
 - `grep -rc "spring.threads.virtual" src/main/resources/` → 0 across every file; no
   virtual-threads setting was introduced to compensate for anything.
 
+## Deploy user setup — Plan 05-05 Task 1 (2026-08-16)
+
+A dedicated, minimally-privileged deploy identity was created for GitHub Actions, replacing the
+root-only access model this VM had until now (see "Access" above — before this, there was no
+non-root user and no `docker` group member at all).
+
+### What was done
+
+- New user `deploy`, created via `adduser --disabled-password --gecos ""` (no password login), added
+  to the `docker` group (`usermod -aG docker deploy`). Confirmed it can run `docker compose` and
+  cannot `sudo` without a password (`sudo -n true` fails as expected).
+- A new, dedicated ed25519 keypair (`netcup_deploy_key`) generated on the operator's own machine —
+  never on the VM — and its public half appended to `/home/deploy/.ssh/authorized_keys`. Distinct
+  from the pre-existing personal admin key (`id_ed25519_netcup_prod`); either can be revoked
+  independently.
+- The deploy artifacts (`docker-compose.prod.yml`, `Caddyfile`, `.env.prod`) were moved from
+  `/root/` (where Plan 05-04's manual deploy had left them, since that deploy pre-dates this
+  dedicated-user setup) to a new `/opt/deploy/kanban-board-backend/` directory, owned by `deploy`.
+  `/root` is not an appropriate directory to hand ownership of to a second user.
+
+### Deviation found and fixed: Compose project name was directory-derived
+
+**What went wrong:** Docker Compose derives its project name (and, from that, every named volume's
+actual name) from the CWD basename unless pinned explicitly. The containers Plan 05-04 started from
+`/root` were named `root-app-1`/`root-caddy-1`/`root-redpanda-1` under project `root`, with volumes
+`root_redpanda-data`/`root_caddy-data`/`root_caddy-config`. Moving the compose file to
+`/opt/deploy/kanban-board-backend/` silently changed the *default* project name to
+`kanban-board-backend` for any future `docker compose up` run from there — which would create a
+**second, unrelated** set of containers and fresh, empty named volumes rather than recognizing the
+already-running ones.
+
+**Caught by:** running `docker compose ps` as `deploy` from the new directory returned nothing for
+containers that were demonstrably running (confirmed via plain `docker ps`), and the containers'
+`com.docker.compose.project`/`working_dir` labels showed `root`/`/root` — not a permissions issue,
+a genuine second project.
+
+**Fix:** added a top-level `name: kanban-board-backend` key to `docker-compose.prod.yml` (Compose
+Spec v2+), pinning the project name in the file itself, independent of whatever directory it's run
+from. This is the same category of fix as the pre-existing `.env` vs `.env.prod` auto-load gotcha
+documented above — never trust an implicit, directory/filename-derived default for something a
+future move or rename can silently change.
+
+**Cutover performed (real downtime, seconds-to-low-minutes, not the planned zero-downtime path):**
+old `root`-project containers stopped and removed (`docker compose -p root ... down`); stack
+brought up fresh under the pinned name. This created empty `kanban-board-backend_*` volumes,
+**losing the 14 registered Avro schemas** (they remained intact in the now-orphaned
+`root_redpanda-data` volume) — caught immediately via `rpk registry subject list` returning zero
+subjects. Fixed by copying `root_redpanda-data`'s contents into `kanban-board-backend_redpanda-data`
+via a one-off `alpine` container (`cp -a`), then restarting `redpanda` — `rpk registry subject list`
+confirmed all 14 subjects back. Caddy also got a **fresh** Let's Encrypt certificate during this
+cutover (its old cert/config volumes were likewise orphaned) — succeeded on the first attempt, no
+rate-limit risk incurred, so its orphaned `root_caddy-*` volumes were left alone rather than risking
+another cert request to "fix" something already working.
+
+The orphaned `root_redpanda-data`, `root_caddy-data`, `root_caddy-config` volumes still exist on the
+VM (not deleted) — safe to remove once this cutover has been running stable for a while, not done as
+part of this task.
+
+### A second incident during the same cutover: the app container's healthy restart
+
+While bringing `app` back up immediately after the redpanda volume migration, it was explicitly
+stopped as a side effect of `docker compose stop app redpanda` (issued together with redpanda,
+since `app` depends on the registry). The very next `docker compose up -d app` attempt appeared to
+leave it stopped rather than restarting — most likely `app`'s `depends_on: redpanda: condition:
+service_healthy` racing a `redpanda` that had only been up ~10 seconds and not yet reported healthy.
+Resolved by explicitly confirming `redpanda` was `(healthy)` first, then re-running
+`docker compose up -d app` and observing it continuously for over 2 minutes (past the ~90-second mark
+where the previous instance died) before considering it stable. Verified via `docker events`/`docker
+inspect` (not assumed) that the earlier stop was this session's own command and not an external
+process — no cron job, systemd timer, or other session on the VM was responsible.
+
+### Re-verification after both fixes
+
+- `docker compose ps`: `app`/`redpanda` `(healthy)`, `caddy` `running`, stable for 2+ minutes of
+  continuous observation.
+- Off-VM: `curl .../api/actuator/health` → `200`.
+- `rpk registry subject list` → 14 subjects, matching the pre-cutover count exactly.
+
 ## Maintenance note
 
 If the provider, IP, OS, spec, or firewall policy changes, update this document in the same

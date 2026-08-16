@@ -34,6 +34,13 @@ x-logging: &default-logging
     max-size: "10m"
     max-file: "3"
 
+# Pinned so `docker compose` commands converge on the same project regardless of which directory
+# the file happens to live in on the host -- without this, Compose derives the project name from
+# the CWD basename, so a file moved between directories (as happened when plan 05-05 relocated
+# this from /root to a dedicated /opt/deploy/kanban-board-backend deploy-user directory) silently
+# starts a second, unrelated project instead of recognizing the already-running containers.
+name: kanban-board-backend
+
 services:
   caddy:
     image: caddy:2
