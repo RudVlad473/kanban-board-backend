@@ -61,3 +61,12 @@ id = "aws-access-token"
 # 260816-hn1-MEASUREMENTS.md's triage table and the plan's blocking checkpoint (Fork A) for the
 # human verdict on whether this constitutes a "genuine credential found in history" in the sense
 # that gates this quick task's own scope.
+#
+# It IS suppressed from CI's hard gate, but by a different, narrower mechanism than an allowlist
+# entry here: .gitleaks-baseline.json (repo root, committed, redacted) fingerprints this exact
+# finding by commit+file+line, and .github/workflows/secret-scan.yml passes it via
+# --baseline-path. A baseline suppresses only fingerprints already recorded in that file -- any
+# new finding anywhere still fails CI. This distinction matters: an allowlist entry here would
+# make gitleaks stop reporting this finding under ANY invocation (hook included, though the hook
+# never revisits old history anyway); the baseline only affects the one workflow that explicitly
+# opts into it, and remains fully auditable by reading the committed JSON.

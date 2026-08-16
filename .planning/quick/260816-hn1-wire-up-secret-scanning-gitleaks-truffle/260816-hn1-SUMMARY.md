@@ -102,6 +102,28 @@ discovered later — the falsification design worked as intended.
 
 ## Self-Check: PASSED
 
+## Post-merge fix (found by watching the real CI run, not assumed)
+
+After merging and pushing, the real `secret-scan.yml` run **failed** on its first execution —
+exit 1 on the consciously-carried `generic-api-key` finding (Fork A's decision), because the
+workflow as built had no way to distinguish "the one known, accepted finding" from "a new leak."
+It would have failed on every future push forever, not just this one. Root cause and fix:
+
+**[Rule 1 - Bug] CI hard gate had no path for a consciously-carried, non-allowlisted finding** —
+Found during: watching the real `gh run watch` output after the first post-merge push. Fix: added
+a committed, redacted `.gitleaks-baseline.json` fingerprinting exactly that one finding, wired via
+`--baseline-path` in `secret-scan.yml`. Verified locally (same pinned command, exit 0 with the
+baseline in force) before re-pushing. `.gitleaks.toml` cross-references the baseline so the
+"deliberately NOT allowlisted" comment there doesn't read as contradicting a passing CI run.
+Files: `.github/workflows/secret-scan.yml`, `.gitleaks.toml`, `.gitleaks-baseline.json` (new).
+Verification: real CI re-run, watched via `gh run watch`, green.
+
+**Total deviations (final):** 3 auto-fixed (Rule 1), 1 judgment call recorded. **Impact:** this
+one was caught only because the real workflow was actually pushed and watched rather than
+declared done from local smoke-testing alone — the plan's own Task 3 human-check ("trigger the
+workflow manually and confirm it completes green") was honored, just one round later than ideal.
+
 ## Next
 
-Ready to merge `worktree-agent-a9aeb46f634574b7e` into `master` and remove the worktree.
+Quick task fully closed. `worktree-agent-a9aeb46f634574b7e` merged into `master` (rebase +
+fast-forward) and removed; branch deleted.

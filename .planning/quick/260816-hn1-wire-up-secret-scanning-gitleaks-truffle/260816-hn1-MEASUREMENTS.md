@@ -368,3 +368,30 @@ in this environment).
   (`2026-08-16-gitleaks-hook-cannot-scan-a-worktree-created-outside-...`) — a real limit of Task
   1/2's mount strategy, newly surfaced by this task's own worktree-mounting work, not previously
   documented anywhere.
+
+# Post-merge fix — real CI run caught a design gap Task 3 missed
+
+After merging to `master` and pushing (triggering the real workflow for the first time — not
+simulated, watched live via `gh run watch`), `.github/workflows/secret-scan.yml` **failed**, exit
+code 1, on the "Scan full history for secrets" step. Confirmed via `gh run view --log` that the
+failure was exactly the expected `generic-api-key` finding at `application.properties:10`
+(commit `5121740f61`) — no unexpected finding, no image/config-loading problem.
+
+**Root cause:** Task 3's CI workflow hard-gates on ANY nonzero exit from gitleaks, but Fork A's
+checkpoint decision (deliberately) left this one finding un-suppressed in `.gitleaks.toml`
+rather than allowlisted. That finding can therefore never reach zero under the workflow as
+originally built — every future push and PR would have failed forever, not flakily.
+
+**Fix:** generated a redacted, committed baseline file (`.gitleaks-baseline.json`, repo root)
+fingerprinting exactly this one finding, and added `--baseline-path` to the CI scan command.
+Verified locally before re-pushing: same command, same pinned image, `--baseline-path
+.gitleaks-baseline.json` in force → `no leaks found`, exit 0. This is a different mechanism from
+`.gitleaks.toml`'s allowlist (fingerprint-scoped suppression for one specific workflow, not a
+rule-wide exemption) — `.gitleaks.toml` itself now cross-references it so a future reader isn't
+left wondering why a "deliberately not allowlisted" finding doesn't actually fail CI.
+
+This is exactly what Fork B's decision text anticipated ("Task 1 already verifies the
+redaction/baseline interaction empirically") but Task 3 failed to wire through — a real,
+found-in-production gap, not a hypothetical one. Documented here rather than silently amended
+into the earlier Task 3 section, since it was discovered after that task's own commit and
+verification had already been reported complete.

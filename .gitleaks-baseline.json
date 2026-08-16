@@ -1,0 +1,23 @@
+[
+ {
+  "RuleID": "generic-api-key",
+  "Description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+  "StartLine": 10,
+  "EndLine": 10,
+  "StartColumn": 2,
+  "EndColumn": 60,
+  "Match": "spring.datasource.password=REDACTED",
+  "Secret": "REDACTED",
+  "File": "src/main/resources/application.properties",
+  "SymlinkFile": "",
+  "Commit": "5121740f61b618dbcf73c6e9a457598e2de5ad2b",
+  "Link": "https://github.com/RudVlad473/kanban-board-backend/blob/5121740f61b618dbcf73c6e9a457598e2de5ad2b/src/main/resources/application.properties#L10",
+  "Entropy": 3.503928,
+  "Author": "Rudenko Volodymyr",
+  "Email": "rudenkovladimir2003@gmail.com",
+  "Date": "2025-06-04T22:02:05Z",
+  "Message": "style: format code for consistency and readability across multiple classes",
+  "Tags": [],
+  "Fingerprint": "5121740f61b618dbcf73c6e9a457598e2de5ad2b:src/main/resources/application.properties:generic-api-key:10"
+ }
+]
