@@ -115,11 +115,12 @@ No connection string, user, or password is recorded here — see `.env.prod.exam
 of what production needs; the real values live only in `.env.prod` on the VM (never committed),
 populated during plan 05-04.
 
-**Open question for 05-04:** `docker-compose.prod.yml` wires a single `DB_HOST` for the app
-service, and Spring Boot's own Flyway integration runs migrations against that same datasource at
-startup. Neon's pooler runs in **transaction mode**, which is known to break Flyway's
-session-level advisory locks — so `DB_HOST` will likely need to be the **direct** (non-`-pooler`)
-host, not the pooled one. Not yet decided; flag this when wiring `.env.prod`.
+**Resolved in 05-04 Task 1:** `DB_HOST` in `.env.prod` is the **direct** (non-`-pooler`) host,
+confirmed by the app's own boot log (`jdbc:postgresql://ep-delicate-bird-b2lni8pr.c-6.eu-central-1.aws.neon.tech:5432/neondb`).
+The transaction-mode pooler concern below was correct — Flyway's session-scoped advisory lock at
+boot is unsupported under it — and this single-instance app's small HikariCP pool (max 5) gets
+nothing from the pooler's multiplexing anyway, so there was no reason to fight it. This is a
+documented divergence from INFRA-02's literal "pooled" wording, not an oversight.
 
 ## DNS — DuckDNS
 
@@ -133,11 +134,98 @@ host, not the pooled one. Not yet decided; flag this when wiring `.env.prod`.
 Not yet attempted: certificate issuance — that's plan 05-04's job once Caddy is actually deployed
 and can run its own HTTP-01 challenge against this hostname.
 
-## Not yet done (tracked in `.planning/phases/05-infra-migration/`)
+## Manual deploy — Plan 05-04 Task 1 (2026-08-16)
 
-- Deploy the actual stack (`docker-compose.prod.yml`, `Caddyfile`) — plan 05-04.
+The full stack is live: `caddy`, `app`, and `redpanda` all running, `app` and `redpanda` reporting
+`(healthy)` (`caddy` has no healthcheck defined, so plain `running` is its correct state). One real
+HTTPS request from the public internet reaches the application over a Let's Encrypt certificate,
+and a write made through the public API survives an app container restart.
+
+**Execution note:** this task was executed by the agent directly over the human's own SSH session
+(`ssh netcup-prod`), not hand-typed by the human as the plan's execution constraint originally
+specified — the human explicitly authorized this mid-session after confirming SSH connectivity,
+trading the plan's default human-in-the-loop safety net for speed. No `.env.prod` contents,
+connection strings, or credentials were read or requested at any point.
+
+### Sequence, in order
+
+1. **Copy artifacts to the VM** (`docker-compose.prod.yml`, `Caddyfile` via `scp`; `.env.prod`
+   created directly on the VM by the human from `.env.prod.example`, populated with the direct
+   Neon endpoint, real domain, and image tag — never committed, never pasted into any session).
+2. **Bring up Redpanda:**
+   `docker compose --env-file ./.env.prod -f docker-compose.prod.yml up -d redpanda`
+   — waited for `(healthy)` via `rpk cluster health`.
+3. **Register the 14 Avro schemas** as a one-off container on the VM's own Compose network,
+   reusing the already-pulled `app` image rather than tunneling a local `./gradlew registerSchemas`
+   through SSH — reaches `redpanda` by its Compose service name directly, no port published, no
+   tunnel needed:
+   ```
+   docker compose -f docker-compose.prod.yml --env-file ./.env.prod run --rm --entrypoint java app \
+     -Dloader.main=com.vrudenko.kanban_board.config.AvroSchemaRegistrar \
+     -cp app.jar org.springframework.boot.loader.launch.PropertiesLauncher http://redpanda:8081
+   ```
+   Spring Boot's `PropertiesLauncher` (shipped unpacked at the jar root of every Boot fat jar)
+   launches a different main class than the manifest's declared one — a documented but
+   previously-untested-in-this-repo technique. Worked on the first attempt: `Registered 14 Avro
+   schemas against http://redpanda:8081`. Verified independently (not just trusting the log line)
+   via `docker compose exec redpanda rpk registry subject list` — returned exactly 14 subjects,
+   one per `ActivityEvent` type. **Deviation from plan text:** `05-04-PLAN.md` and `STATE.md` both
+   say "5 subjects" — stale, predates quick task `260811-s5e`'s expansion from 6 to 14 event types.
+4. **Re-confirmed iptables 80/443** (`sudo iptables -L INPUT -n -v --line-numbers`) before starting
+   Caddy — asked for earlier in the session but never actually pasted back at the time; confirmed
+   present this time (rules 3–5: `tcp dpt:22`, `tcp dpt:80`, `tcp dpt:443`, all `ACCEPT`, ahead of
+   the default-`DROP` policy).
+5. **Started the app:** `docker compose --env-file ./.env.prod -f docker-compose.prod.yml up -d app`.
+   Booted in 11.2s, reported `(healthy)`. Flyway applied migrations **V1 through V7** against the
+   genuinely empty Neon database — **deviation from plan text:** `05-04-PLAN.md`/`STATE.md` say
+   "V1-V4"; stale, predates migrations V5 ("add position subtask version theme board name
+   uniqueness"), V6 ("change activity log event id to varchar"), V7 ("add board optimistic locking
+   version column") added by later quick tasks. `flyway_schema_history` shows 7 successful rows,
+   not 4 — this is the plan text being outdated, not a deploy defect.
+6. **Started Caddy:** `docker compose --env-file ./.env.prod -f docker-compose.prod.yml up -d caddy`.
+   Obtained its Let's Encrypt certificate for `kanban-board-rud-vlad-473.duckdns.org` on the
+   **first** attempt (HTTP-01 challenge, ~6 seconds from request to `certificate obtained
+   successfully` in the container log) — no rate-limit risk incurred.
+7. **Verified end-to-end from off-VM:**
+   - `curl https://kanban-board-rud-vlad-473.duckdns.org/api/actuator/health` → `200`,
+     `{"status":"UP"}`.
+   - Certificate issuer (via `openssl s_client` + `x509 -noout -issuer`): `O=Let's Encrypt, CN=YE1`,
+     subject matches the hostname, accepted by curl's default trust store with no `-k` flag needed
+     (genuinely publicly trusted, not self-signed).
+   - Plain `http://` request → `308` redirect to the `https://` URL, no content served over plain
+     HTTP.
+8. **Proved the database path is real:** signed up a user (`tracer-deploy-260816@example.com`) and
+   created a board (`Tracer Deploy Board`, id `8o5uls3ouvpc`) through the public HTTPS API,
+   restarted the `app` container (`docker compose restart app`), waited for `(healthy)` again
+   (24s), then re-fetched `/api/boards` with the *same* session cookie — board still present,
+   `200`. The session itself also survived the restart unprompted, a live confirmation that
+   `spring.session.store-type=jdbc` is really persisting sessions to Neon and not just
+   configured to.
+
+### Deviations from the prepared instructions, and why
+
+- **`.env.prod` root cause:** Docker Compose only auto-loads a file literally named `.env`; a file
+  named `.env.prod` sitting in the same directory is silently ignored unless `--env-file` is passed
+  explicitly. Every one of the file's 7 variables showed as an unset/blank-string warning until
+  `--env-file ./.env.prod` was added to the command line. Not an `export`-prefix issue and not a
+  Compose v1/v2 mismatch (both hypotheses considered and ruled out) — simpler than either.
+- **Schema registration mechanism:** the plan anticipated an SSH tunnel from the operator's local
+  machine running `./gradlew registerSchemas`. Executed differently (Step 3 above) because the
+  agent had direct root SSH access this session, making a same-VM, same-Compose-network one-off
+  container both simpler and lower-risk (no tunnel, no container-IP lookup, no port ever opened).
+- **Stale plan numbers:** both the expected subject count (5 → 14) and the expected migration count
+  (4 → 7) in `05-04-PLAN.md`/`STATE.md` predate later quick tasks. Verified against the live
+  registry/database rather than the plan text, per this task's own instruction not to assume the
+  plan was right.
+
+### Not yet done (tracked in `.planning/phases/05-infra-migration/`)
+
+- Task 2: repoint the Schema Registry verification suite to the production target and re-run
+  Phase 4's verification suite against it.
+- Task 3: measure actual resource usage under load and correct Redpanda's memory/SMP caps against
+  the verified shape.
 - Re-point CI/CD (`.github/workflows/deploy.yml`'s disabled `deploy-to-ec2` job) at this host —
-  plans 05-04/05-05.
+  plan 05-05.
 
 ## Maintenance note
 
