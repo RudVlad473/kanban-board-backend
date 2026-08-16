@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-08-03)
 Phase: 05 (infra-migration) — EXECUTING
 Plan: 6 of 6 (05-05 complete, 05-06 next)
 Status: Executing Phase 05
-Last activity: 2026-08-16 — Plan 05-05 (CI/CD cutover) fully complete, Tasks 2-3
+Last activity: 2026-08-16 - Completed quick task 260816-sv1: Fix GitHub Actions deprecation warnings (checkout/setup-java version bumps, adopt->temurin) in deploy.yml
 
 Progress: [█████████▓] 97%
 
@@ -201,6 +201,7 @@ Carried from research (address during Phase 4/5 planning):
 |---|-------------|------|--------|--------|-----------|
 | 260801-gby | Create docs/CODE_STYLE.md with agent code-style preferences (enums over magic constants), referenced from CLAUDE.md | 2026-08-01 | 685b471 | | [260801-gby-create-docs-code-style-md-with-agent-cod](./quick/260801-gby-create-docs-code-style-md-with-agent-cod/) |
 | 260801-gib | Append rules 2-7 to docs/CODE_STYLE.md (ownership-verified loading, AssertJ/catchException, no-mocks, @Nested/AAA, Update*RequestDTO shape, Optional isEmpty()-guard) and fix bare-int HTTP status literals in TaskLockingE2ETest/ColumnLockingE2ETest to use HttpStatus enum constants | 2026-08-01 | 85ed93f | | [260801-gib-survey-the-repo-for-existing-code-conven](./quick/260801-gib-survey-the-repo-for-existing-code-conven/) |
+| 260816-sv1 | Fix GitHub Actions deprecation warnings in deploy.yml (checkout@v3->v5 across 3 jobs, setup-java@v4->v5 + adopt->temurin in run-tests) -- closes the CI half of Unit B from the Java-25 bump research; verified live on a real master push (15 deprecation lines -> 0) | 2026-08-16 | d0206ed | | [260816-sv1-fix-the-github-actions-deprecation-warni](./quick/260816-sv1-fix-the-github-actions-deprecation-warni/) |
 | 260801-k93 | Reword hiring-context language ("interview-defensible", "interview prep" headings, etc.) out of 17 git-tracked docs to neutral technical phrasing, preserving meaning | 2026-08-01 | 1bdfb79 | | [260801-k93-remove-interview-related-language-from-d](./quick/260801-k93-remove-interview-related-language-from-d/) |
 | 260802-pw0 | Auto-configure git core.hooksPath so the pre-commit hook needs no manual per-clone step | 2026-08-02 | ea64adc | | [260802-pw0-auto-configure-git-core-hookspath-so-the](./quick/260802-pw0-auto-configure-git-core-hookspath-so-the/) |
 | 260802-q6n | Add ArchUnit to enforce documented layering and ownership-verification rules (also fixed a genuine pre-existing CODE_STYLE rule-2 violation in SubtaskService) | 2026-08-02 | c3780d7 | | [260802-q6n-add-archunit-to-enforce-documented-layer](./quick/260802-q6n-add-archunit-to-enforce-documented-layer/) |
