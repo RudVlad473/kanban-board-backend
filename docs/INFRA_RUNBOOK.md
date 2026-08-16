@@ -479,6 +479,31 @@ process — no cron job, systemd timer, or other session on the VM was responsib
 - Off-VM: `curl .../api/actuator/health` → `200`.
 - `rpk registry subject list` → 14 subjects, matching the pre-cutover count exactly.
 
+### Repository secret inventory (names and purpose only — no values recorded here)
+
+| Secret name | Purpose | Origin |
+|---|---|---|
+| `NETCUP_SSH_KEY` | Private half of the dedicated deploy keypair; authenticates the deploy job as `deploy` | Generated locally (`ssh-keygen -t ed25519`), never present on the VM before being appended to `deploy`'s `authorized_keys` |
+| `NETCUP_DEPLOY_USER` | The non-root deploy identity (`deploy`) the SSH/SCP deploy steps authenticate as | Created on the VM this task |
+| `NETCUP_HOST` | The VM's public IPv4 (`159.195.114.230`) | Already known (plan 05-03) |
+| `NETCUP_HOST_FINGERPRINT` | SSH host key fingerprint, pins the deploy connection against MITM — never disabled | `ssh-keyscan` + `ssh-keygen -lf` against the real host |
+| `DB_HOST` / `DB_NAME` / `DB_USER` / `DB_PASS` | Neon's **direct** (non-pooled) endpoint, split into fields — consumed by plan 05-05 Task 2's Flyway migration-verification job | Neon dashboard, direct connection string |
+
+**Deviation from the plan's acceptance criteria, recorded deliberately:** the plan calls for six
+secrets under names distinct from the AWS-era ones specifically so a future reader can't confuse a
+live secret with a stale one by name alone. `DB_HOST`/`DB_NAME`/`DB_USER`/`DB_PASS` **reuse the
+AWS-era secret names** (operator's explicit choice — "reused variable names from last year") rather
+than new ones. `DB_NAME`/`DB_USER`/`DB_PASS` were updated the same day this task ran; `DB_HOST` was
+updated slightly later in the same session after an initial gap where its timestamp lagged the other
+three — confirmed via `gh secret list` (names/timestamps only, values never seen) before treating it
+as done. If these are ever audited later, do not assume a `DB_*`-named secret is safe by name alone —
+check its last-updated timestamp against this entry's date (2026-08-16).
+
+**Also deliberately not registered:** a secret for Neon's **pooled** connection string. The original
+plan/research assumed one was needed for the app's runtime config, but that config already lives in
+`.env.prod` on the VM (plan 05-04) and nothing in this workflow writes or reads it — the pooled
+secret would have had zero consumers. Dropped as unnecessary rather than registered for its own sake.
+
 ## Maintenance note
 
 If the provider, IP, OS, spec, or firewall policy changes, update this document in the same
