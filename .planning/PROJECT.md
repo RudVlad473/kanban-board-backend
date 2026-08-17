@@ -40,10 +40,11 @@ v1.0 and v1.1 shipped the backend-depth showcase (JPA/Hibernate optimistic locki
 - ✓ Avro schemas for all 5 `ActivityEvent` types with enforced BACKWARD compatibility, build-time registration (not producer auto-registration), DLT byte-fidelity under Avro, and a real-historical-data rehearsal — v1.2 Phase 4, done 2026-08-04
 - ✓ Flyway-managed domain schema: V1–V4 reconstructing the schema's real evolution, `ddl-auto=validate` outside the test profile so Hibernate can no longer create or alter — v1.2 Phase 04.1, done 2026-08-05
 - ✓ Whole test suite runs against a Testcontainers PostgreSQL 16 instance whose schema is built by the same Flyway V1–V4 migrations production runs; `com.h2database:h2` removed outright with no fallback profile — v1.2 Phase 04.2, done 2026-08-06. Verified 17/17 must-haves against the live codebase; schema provenance is enforced by a standing test (`FlywaySchemaProvenanceTest`) asserting Flyway-only artifacts and zero Hibernate-generated constraint names, so a silent regression to Hibernate-built DDL fails the build. Measured ~19s/6.1% **faster** than the like-for-like H2 baseline, inverting the expected cost.
+- ✓ Production redeploy on a cost-guarded stack (Netcup VPS, pivoted from Oracle Cloud A1 Flex after 200+ automated provisioning attempts hit structural capacity constraints) — Neon serverless Postgres, self-hosted resource-capped Redpanda, Caddy automatic HTTPS, GitHub Actions CI/CD with a pre-merge Flyway verification gate — v1.2 Phase 5, done 2026-08-17. All 8 INFRA requirements verified live by an independent `gsd-verifier` pass: real HTTPS health check, an off-VM external port scan (three independent full-range passes confirming only 22/80/443 reachable), Docker log-rotation proven deterministic via a throwaway container, AWS-era secrets confirmed absent, and Docker Hub tag pruning fixed and live-verified (two bugs: Basic-auth rejection, then pagination) after an initial same-day checkpoint halt. This closes out v1.2 (Infra Migration & Schema Registry) — all 7 phases of the milestone are now complete.
 
 ### Active
 
-(None yet — next milestone's scope not yet defined.)
+(None yet — next milestone's scope not yet defined. v1.2 is fully shipped; run `/gsd-complete-milestone` to archive and open the next one.)
 
 ### Out of Scope
 
@@ -107,4 +108,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-06 after Phase 04.2 (Testcontainers Postgres, drop H2) completed and verified*
+*Last updated: 2026-08-17 after Phase 5 (Infra Migration) completed and verified — v1.2 milestone fully shipped*
