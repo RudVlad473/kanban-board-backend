@@ -215,29 +215,53 @@ jobs:
       # we need to do that because we only want to have a single active prod deployment for that project
       - name: Delete old Docker Hub images
         run: |
+          # BUG FIXED (todo 2026-08-16-cleanup-old-images-delete-calls-rejected-unauthorized.md):
+          # Docker Hub's Hub API v2 (hub.docker.com/v2, distinct from the Registry API v2 that
+          # cleanup-unused-image below correctly token-exchanges against) rejects HTTP Basic auth
+          # on mutating requests with {"message":"unauthorized"} -- confirmed live, run
+          # 31963539949, 2026-08-16, 29/29 deletes rejected. The prior GET-with-Basic-auth
+          # "succeeding" was not evidence Basic auth worked: this is a public repository, so an
+          # unauthenticated GET on its tag list succeeds regardless of -u. Fixed by exchanging
+          # credentials for a JWT via the documented /v2/users/login/ endpoint first, then sending
+          # that as `Authorization: JWT <token>` on every authenticated call. Both list and delete
+          # now check their HTTP status explicitly and fail loudly, rather than relying on a body
+          # inspection that a 404 (the original bug) or 401 (this bug) would both silently pass.
+          HUB_TOKEN=$(curl -s -H "Content-Type: application/json" -X POST \
+            -d "{\"username\": \"$DOCKERHUB_USER\", \"password\": \"${{ secrets.DOCKERHUB_TOKEN }}\"}" \
+            "https://hub.docker.com/v2/users/login/" | jq -r .token)
+          if [ -z "$HUB_TOKEN" ] || [ "$HUB_TOKEN" = "null" ]; then
+            echo "::error::Docker Hub login-token exchange failed -- no token in response. Cannot prune tags."
+            exit 1
+          fi
+
           # Get list of all tags
-          TAGS=$(curl -s -u "$DOCKERHUB_USER:${{ secrets.DOCKERHUB_TOKEN }}" \
-            "https://hub.docker.com/v2/repositories/${{ needs.setup.outputs.base_image_name }}/tags/" \
-            | jq -r '.results[].name')
+          TAGS_HTTP_STATUS=$(curl -s -o /tmp/tags.json -w "%{http_code}" \
+            -H "Authorization: JWT ${HUB_TOKEN}" \
+            "https://hub.docker.com/v2/repositories/${{ needs.setup.outputs.base_image_name }}/tags/")
+          if [ "$TAGS_HTTP_STATUS" != "200" ]; then
+            echo "::error::Listing tags failed with HTTP $TAGS_HTTP_STATUS: $(cat /tmp/tags.json)"
+            exit 1
+          fi
+          TAGS=$(jq -r '.results[].name' /tmp/tags.json)
 
           # Delete all tags except the current one
-          #
-          # BUG FIXED (plan 05-05, discovered live 2026-08-16): this DELETE URL previously omitted
-          # the repository name segment ("$DOCKERHUB_USER/tags/$TAG/" instead of
-          # "$DOCKERHUB_USER/$DOCKERHUB_REPOSITORY/tags/$TAG/"), so every delete 404'd silently --
-          # the job reported success while deleting nothing, since a non-zero curl exit from a
-          # 404 body doesn't fail `-s` by itself and this script has no explicit status check. The
-          # bug predates this plan (present since this job was first written) but was latent the
-          # entire time because deploy-to-ec2 being `if: false` meant this job always skipped too
-          # -- Task 3 is the first time it has ever actually run. Caught by reading this job's own
-          # live log (repeated "404 page not found"), not by inspection.
+          FAILED=0
           for TAG in $TAGS; do
             if [ "$TAG" != "${{ needs.build-and-push-docker-image.outputs.image_tag }}" ]; then
               echo "Deleting tag: $TAG"
-              curl -s -X DELETE -u "$DOCKERHUB_USER:${{ secrets.DOCKERHUB_TOKEN }}" \
-                "https://hub.docker.com/v2/repositories/${{ needs.setup.outputs.base_image_name }}/tags/$TAG/"
+              DELETE_HTTP_STATUS=$(curl -s -o /tmp/delete-response.json -w "%{http_code}" -X DELETE \
+                -H "Authorization: JWT ${HUB_TOKEN}" \
+                "https://hub.docker.com/v2/repositories/${{ needs.setup.outputs.base_image_name }}/tags/$TAG/")
+              if [ "$DELETE_HTTP_STATUS" != "204" ]; then
+                echo "::warning::Delete of tag $TAG failed with HTTP $DELETE_HTTP_STATUS: $(cat /tmp/delete-response.json)"
+                FAILED=$((FAILED + 1))
+              fi
             fi
           done
+          if [ "$FAILED" -gt 0 ]; then
+            echo "::error::$FAILED tag deletion(s) failed -- see warnings above."
+            exit 1
+          fi
 
   # if deployment failed, we need to cleanup the image we pushed, because it won't be used
   cleanup-unused-image:
