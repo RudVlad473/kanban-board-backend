@@ -1,0 +1,55 @@
+sequenceDiagram
+    actor C as Client
+    participant AC as AuthenticationController
+    participant US as UserService
+    participant AM as AuthenticationManager
+    participant UAP as UserAuthenticationProvider
+    participant SAS as sessionAuthenticationStrategy
+    participant SCR as SecurityContextRepository
+    participant DB as Postgres (users, spring_session*)
+
+    Note over C,DB: one of only two routes reachable without a session -- the other is /signin
+
+    C->>AC: POST /api/signup {displayName (optional), email, password}
+
+    alt request body fails Jakarta validation
+        AC--xAC: MethodArgumentNotValidException (before this method body runs)
+        AC-->>C: 400 ProblemDetail {code: VALIDATION_FAILED, errors: {field: message}}
+    else request body valid
+        AC->>US: userService.save(signupDTO)
+        US->>DB: existsByEmail(email)
+        alt email already registered
+            DB-->>US: true
+            US--xAC: throws AppDuplicateResourceException
+            AC-->>C: 409 ProblemDetail {code: DUPLICATE_RESOURCE}
+            Note over US,DB: a race between two simultaneous signups for the SAME address<br/>still cannot create two rows -- users.email carries a database-level<br/>unique constraint too (uk_users_email). The LOSER of that race hits<br/>DataIntegrityViolationException instead, backstopped by<br/>GlobalExceptionHandler's broader arm -- also 409, but with a<br/>different code: DATA_INTEGRITY_VIOLATION. A client may see either code.
+        else email available
+            DB-->>US: false
+            US->>DB: INSERT INTO users
+            DB-->>US: new UserEntity
+            US-->>AC: createdUser
+            Note over AC,SCR: everything from here to the response is IDENTICAL code to<br/>the signin flow -- see auth-signin-scenario.mmd for this same helper,<br/>drawn there in full including its own failure arms
+            AC->>AC: build unauthenticated token from createdUser.id<br/>(the id, NOT the email address)
+            AC->>AM: authenticationManager.authenticate(token)
+            AM->>UAP: authenticate(token)
+            UAP->>DB: loadUserByUsername(id)
+            DB-->>UAP: stored credential
+            UAP->>UAP: passwordEncoder.matches(password, storedHash)
+            alt authenticate() reports success
+                Note over UAP: builds a MINIMAL principal (username only, no password hash) --<br/>this is the object Spring Session serializes into the session store
+                UAP-->>AM: Authentication(principal=User, no password)
+                AM-->>AC: Authentication
+                AC->>SAS: sessionAuthenticationStrategy.onAuthentication(authentication, request, response)
+                Note over AC,SAS: the concurrent-session ceiling drawn on the signin diagram<br/>CANNOT reject a signup here -- a principal that did not exist a<br/>moment ago has zero live sessions. The session-id rotation half of<br/>this same strategy still applies.
+                AC->>SCR: securityContextRepository.saveContext(context, request, response)
+                Note over SCR,DB: written into a request-scoped session here -- the session<br/>rows are committed to Postgres only as the response is flushed,<br/>AFTER this handler has already returned. A client that inspects the<br/>database the instant it gets its response sees nothing yet.
+                AC-->>C: 201 Set-Cookie: JSESSIONID (new session)<br/>Location: /api/users/me<br/>body {id, email, displayName, theme}
+                Note right of C: the Location header names a resource with no GET handler<br/>yet (open todo since 2026-08-12) -- following it will not succeed
+            else authenticate() reports failure (any exception collapses to false)
+                AC->>US: userService.deleteById(createdUser.id)
+                US->>DB: DELETE FROM users
+                Note over AC: caught by this method's own blanket catch -- an<br/>AccessDeniedException is raised first, then re-thrown as<br/>BadCredentialsException, so the client sees 401, NOT 403,<br/>despite the intermediate exception type
+                AC-->>C: 401 ProblemDetail {code: BAD_CREDENTIALS}
+            end
+        end
+    end
