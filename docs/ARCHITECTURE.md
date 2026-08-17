@@ -47,13 +47,22 @@ follows the identical path through `AuthenticationController#authenticate` (`sec
 AuthenticationController.java`) after its own persistence step; only signin is drawn here to keep
 the diagram legible.
 
+**Want the client's-eye view instead?** [AUTH_FLOWS.md](AUTH_FLOWS.md) is written for a frontend or
+QA engineer planning E2E tests against this API rather than for a security reviewer — it draws
+`signup` in full via `diagrams/auth-signup-scenario.mmd` (not just in prose, below), draws this same
+signin flow again from that HTTP-first angle via `diagrams/auth-signin-scenario.mmd`, and adds the
+session/cookie/CORS facts (the concurrent-session ceiling, the two session lifetimes, `SameSite`,
+credentialed CORS) that will otherwise silently break a Playwright suite.
+
 ![Sequence diagram: signin and session establishment](diagrams/architecture-signin-scenario.png)
 <sub>[diagram source](diagrams/architecture-signin-scenario.mmd)</sub>
 
 Simplified: the diagram omits `signup`'s extra persistence step
 (`UserService#save`, before this same `authenticate` helper runs) and the auto-rollback
 `userService.deleteById(...)` signup performs if authentication of its own new account somehow
-fails — see `AuthenticationController.java`'s `signup` method for that detail. On success, signup
+fails — see `AuthenticationController.java`'s `signup` method for that detail, or
+[AUTH_FLOWS.md](AUTH_FLOWS.md)'s signup diagram for the fuller, drawn treatment of both. On
+success, signup
 returns **201** with the same `{id, email, displayName, theme}` body shape as signin's 200 above
 (D-01, quick task 260812-hs4), and a `Location` header naming the caller-identity resource URI
 (`${server.servlet.context-path}` + `/users/me`) rather than the `/signup` route that created it

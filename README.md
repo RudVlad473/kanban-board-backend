@@ -124,6 +124,7 @@ renewal (sessions are fixed-duration), and no caching layer.
 | | |
 |---|---|
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How it works and why — the detail behind the highlights above |
+| [docs/AUTH_FLOWS.md](docs/AUTH_FLOWS.md) | For a frontend/QA engineer writing E2E tests — the signup/signin contract in HTTP terms, plus session/cookie/CORS gotchas |
 | [docs/LOCAL_DEV.md](docs/LOCAL_DEV.md) | Local runbook and the compose stack's scope |
 | [docs/CODE_STYLE.md](docs/CODE_STYLE.md) | Judgement-level rules the formatter can't check |
 | [docs/plans/backend-modernization/](docs/plans/backend-modernization/) | The remaining modernization epics |
