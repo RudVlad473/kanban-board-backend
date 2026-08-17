@@ -7,18 +7,24 @@ document covers how to run it, why it's shaped the way it is, and — importantl
 
 ## Local development only
 
-**`docker-compose.yml` is not a deployment artifact.** The production pipeline
-(`.github/workflows/deploy.yml`) deploys the app with a single `docker run` of the built image —
-it never runs `docker compose up`, and it does not stand up a Kafka broker at all. Concretely,
-this means the deployed app on EC2 receives no `KAFKA_BOOTSTRAP_SERVERS` environment variable, so
-it falls back to `localhost:9092`, finds no broker there, and logs a publish failure per mutation
-while every mutation still succeeds at the HTTP level (see "Why the app waits for Kafka" below for
-the mechanism that makes failed publishes non-fatal). This is the deliberate, documented
-consequence of shipping Kafka for local dev and tests only — it is not a bug to hot-fix.
+**`docker-compose.yml` is not a deployment artifact — `docker-compose.prod.yml` is a separate,
+standalone one.** This section originally described a single-`docker run` EC2 deploy with no Kafka
+broker at all; that is stale. As of v1.2's infra migration (Phase 5), production deploys to a
+Netcup VPS via `docker compose -f docker-compose.prod.yml up -d`, which **does** stand up a
+self-hosted, resource-capped Redpanda broker (see `docs/INFRA_RUNBOOK.md` and
+`docs/INFRA_ARCHITECTURE.md` for the current shape). `docker-compose.yml` (this file's subject,
+local dev only) and `docker-compose.prod.yml` (production) remain two genuinely different files
+with different service sets — `docker-compose.prod.yml` defines no `postgres` service (Neon is the
+production database) and adds `caddy` (automatic public HTTPS) — so the caution below about not
+reusing *this* file unmodified as a deploy artifact still holds, just for a different reason than
+originally written.
 
-Standing up a real Kafka broker in production — its own listener/network configuration, TLS/SASL,
-volume durability under EC2's constraints — is a separate, still-deferred decision tracked as
-`KAFKA-V2-01`. Do not reuse this compose file unmodified as a deploy artifact without that review.
+Kafka-in-production is no longer a deferred decision (`KAFKA-V2-01` is resolved by the Redpanda
+service in `docker-compose.prod.yml`) — its listener/network configuration and volume durability
+are documented in `docs/INFRA_RUNBOOK.md`'s "Manual deploy" and "Log Rotation Observation"
+sections. TLS/SASL on the internal Kafka listener remains out of scope, since that listener never
+leaves the VM's internal Docker network (no host port is published) — see
+`docs/INFRA_ARCHITECTURE.md`'s Physical/Deployment view for the trust-boundary reasoning.
 
 ## Prerequisites
 

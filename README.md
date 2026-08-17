@@ -97,14 +97,18 @@ repositories are deliberately untested — they carry no custom logic. Full brea
 ## Project status
 
 Shipped: optimistic locking (v1.0), the Kafka activity feed (v1.1), Avro Schema Registry governance
-and the Flyway migration history (v1.2, phases 4 and 4.1).
+and the Flyway migration history (v1.2, phases 4 and 4.1), and the infra migration itself (v1.2,
+phase 5) — see below.
 
-**In flight — the deployment target.** This ran on AWS EC2 until the host was deliberately torn down
-on cost grounds; the replacement is an Oracle Cloud Always Free A1 instance with Neon serverless
-Postgres, a resource-capped Redpanda, and Caddy terminating TLS. Until that lands, the GitHub
-Actions pipeline runs the test suite and `spotlessCheck`, then builds and pushes a tagged Docker
-image — the deploy job is explicitly disabled rather than left to fail against a host that no longer
-exists, and it needs a rewrite (not a re-enable) for the new target.
+**The deployment target.** This ran on AWS EC2 until the host was deliberately torn down on cost
+grounds. The originally-planned replacement, an Oracle Cloud Always Free A1 instance, proved
+structurally unavailable (Oracle's free-tier ARM capacity never provisioned after 200+ attempts —
+see `docs/INFRA_RUNBOOK.md`'s "Provider history"); the app is now deployed on a Netcup VPS instead,
+with Neon serverless Postgres, a self-hosted resource-capped Redpanda, and Caddy terminating TLS.
+GitHub Actions builds and pushes a tagged Docker image, runs a Flyway migration-verification job
+against Neon, then deploys to the Netcup VM and prunes old image tags — see
+`docs/INFRA_ARCHITECTURE.md` for the full delivery path and `docs/INFRA_RUNBOOK.md` for the
+provisioned host's actual state.
 
 **Security gates.** `gitleaks` (pinned version, digest-referenced) scans every staged commit
 locally via a pre-commit hook and every push/PR's full history in CI, hard-gated — a detected

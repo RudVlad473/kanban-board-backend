@@ -99,16 +99,24 @@
 - Gradle 8.7 (via wrapper)
 
 **Production:**
-- Docker - Container deployment
-- PostgreSQL 12+ - Database server
-- Linux environment (from Docker image: openjdk:21-jdk-slim)
-- Port 8080 exposed from container (mapped to port 80 on host)
+- Docker Compose - Container deployment (`docker-compose.prod.yml`, standalone from local dev's
+  `docker-compose.yml`)
+- Netcup VPS Lite 2 G12s - Deployment target (v1.2 Phase 5, superseded AWS EC2; see
+  `docs/INFRA_RUNBOOK.md`)
+- Neon serverless Postgres - Database server (replaced self-hosted Postgres 12+ on the deleted EC2
+  host)
+- Self-hosted Redpanda - Kafka-protocol broker, resource-capped
+- Caddy - Automatic public HTTPS / reverse proxy
+- Linux environment (from Docker image: `eclipse-temurin:21-jre-jammy`)
+- Ports 80/443 published on the VM; app's port 8080 stays internal-only behind Caddy
 
 **CI/CD:**
-- GitHub Actions - Automated testing and deployment
+- GitHub Actions - Automated testing, build, Flyway migration verification, and deployment
 - Docker Hub - Container registry
-- AWS EC2 - Deployment target
+- Netcup VPS - Deployment target (see `docs/INFRA_RUNBOOK.md`; AWS EC2 was the original target
+  before its 2026-08 teardown)
 
 ---
 
-*Stack analysis: 2026-07-31*
+*Stack analysis: 2026-07-31, Production/CI-CD section updated 2026-08-17 (v1.2 Phase 5 infra
+migration reconciliation)*
