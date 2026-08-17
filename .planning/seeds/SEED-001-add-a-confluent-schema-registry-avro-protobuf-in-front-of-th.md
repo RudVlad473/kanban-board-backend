@@ -1,11 +1,18 @@
 ---
 id: SEED-001
-status: dormant
+status: implemented
 planted: 2026-08-01
 planted_during: v1.1 Kafka Activity Feed, Phase 3 (Activity Log Consumer, Reliability & Read API)
 trigger_when: next Kafka-related milestone after v1.1 (v1.2/v2.0), or the one after that — whichever milestone actually revisits the Kafka event pipeline next, depending on what gets cut from the current backend modernization plan
 scope: medium
+implemented_in: v1.2 Phase 4 (Schema Registry), done 2026-08-04
 ---
+
+**Resolved (2026-08-17):** This frontmatter was never updated when the seed was actually
+promoted and delivered. Promoted into v1.2 scope during roadmap creation and shipped whole
+by Phase 4 — see `.planning/PROJECT.md`'s "Target features" list ("promoted from SEED-001")
+and Validated requirements (SCHEMA-01..06). Caught by the pre-milestone-close artifact audit
+still flagging it `dormant`/unimplemented; corrected here rather than silently deferred.
 
 # SEED-001: Add a Confluent Schema Registry (Avro/Protobuf) in front of the kanban.activity Kafka topic
 

@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Infra Migration & Schema Registry
-current_phase: 05
-current_phase_name: infra-migration
-status: milestone_complete
-stopped_at: "Phase 05 (the last of v1.2's 7 phases) closed out: reconciled 05-06's stale checkpoint bookkeeping against 2 already-live commits (Docker Hub tag-pruning fix), gsd-verifier confirmed 5/5 success criteria + 8/8 INFRA requirements against live evidence. current_phase auto-advanced to '06' by phase.complete's next-integer logic, but Phase 6 (and 7, 07.1) were already complete from a prior session -- corrected here to avoid the same false-positive documented in the 07.1 SUMMARY history. All 7 phases of v1.2 are now genuinely complete; milestone ready for /gsd-complete-milestone."
-last_updated: "2026-08-17T11:04:07.536Z"
+status: Awaiting next milestone
+stopped_at: Found 05-06-SUMMARY.md/STATE.md/the Docker Hub todo stale relative to 2 already-live commits (8a31d85, faacda4) that had closed the plan's last open checkpoint. Reconciled all planning artifacts against live evidence, ran gsd-verifier (5/5 success criteria, 8/8 INFRA requirements passed), marked Phase 05 complete. All 7 phases of v1.2 are now genuinely complete — milestone ready for `/gsd-complete-milestone`.
+last_updated: "2026-08-17T11:28:06.260Z"
 last_activity: 2026-08-17
-last_activity_desc: "Phase 05 fully complete (all 6 plans, all 8 INFRA requirements verified live) -- v1.2 milestone's last phase. All 7 phases of v1.2 now complete."
+last_activity_desc: Phase 05 fully complete (all 6 plans, all 8 INFRA requirements verified live) -- v1.2 milestone's last phase. All 7 phases of v1.2 now complete.
 progress:
   total_phases: 7
   completed_phases: 7
   total_plans: 39
   completed_plans: 39
   percent: 100
+current_phase: 07.1
+current_phase_name: infra-migration
 ---
 
 # Project State
@@ -28,18 +28,16 @@ See: .planning/PROJECT.md (updated 2026-08-03)
 
 ## Current Position
 
-Phase: 05 (infra-migration) — COMPLETE (last phase of v1.2)
-Plan: 6 of 6 — all complete
-Status: Milestone v1.2 fully complete (all 7 phases: 4, 04.1, 04.2, 6, 7, 07.1, 5), pending `/gsd-complete-milestone`
-Last activity: 2026-08-17 — Phase 05 verified complete (gsd-verifier: 5/5 success criteria, 8/8 INFRA requirements, live evidence)
-
-Progress: [██████████] 100%
+Phase: Milestone v1.2 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-08-17 — Milestone v1.2 completed and archived
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 23
+- Total plans completed: 32
 - Average duration: 32 min
 - Total execution time: 1.6 hours
 
@@ -54,6 +52,7 @@ Progress: [██████████] 100%
 | 05 | 6 | - | - |
 | 04.1 | 3 | - | - |
 | 7 | 7 | - | - |
+| 07.1 | 9 | - | - |
 
 **Recent Trend:**
 
@@ -282,8 +281,13 @@ Items acknowledged and carried forward:
 | Seed | SEED-001 Confluent Schema Registry (Avro/Protobuf) | Promoted into v1.2 scope (Phase 4: SCHEMA-01..06) | 2026-08-04 |
 | Infra Polish | INFRA-V2-01..03 (full observability stack, blue-green deploys, multi-broker Redpanda HA) | Deferred to v2 per v1.2 REQUIREMENTS.md | 2026-08-03 |
 | Schema Registry Polish | SCHEMA-V2-01..02 (pre-merge schema-compatibility CI check, documented compatibility-mode rationale) | Deferred to v2 per v1.2 REQUIREMENTS.md | 2026-08-03 |
+| Quick task | 260801-p03-add-explicit-comments-to-taskservice-upd (missing summary) | Re-acknowledged at v1.2 close (already acknowledged at v1.1 close, still open) | 2026-08-17 |
+| Quick task | 260802-rq5-bump-java-version-from-21-to-25-current- (research-only, no summary artifact) | Re-acknowledged at v1.2 close (already acknowledged at v1.1 close, still open) | 2026-08-17 |
+| Quick task | 260802-ryf-enable-virtual-threads-in-spring-boot-co (research-only, no summary artifact) | Re-acknowledged at v1.2 close (already acknowledged at v1.1 close, still open) | 2026-08-17 |
+| Quick task | 260816-hn1-wire-up-secret-scanning-gitleaks-truffle (audit flagged status "unknown") | False positive, not deferred — SUMMARY.md exists and the work is complete (this is quick task #48, gitleaks secret scanning, committed 393d0d9, already in STATE.md's Quick Tasks Completed table); the audit tool's status classifier doesn't recognize this SUMMARY's frontmatter shape | 2026-08-17 |
+| Todo | 31 pending todos (Java 25 bump, virtual threads, NullAway, alert-service exploration, and 27 others spanning tooling/backend/security minor items accumulated since 2026-08-01) | Acknowledged at v1.2 close — none block v1.2's shipped scope (Infra Migration, Schema Registry); remain in `.planning/todos/pending/` for triage in a future milestone | 2026-08-17 |
 
-**Known verification overrides: 9 (see above)**
+**Known verification overrides: 9 (see above) + 5 acknowledged at v1.2 close = 14 total**
 
 ## Session Continuity
 
@@ -293,8 +297,4 @@ Resume file: None (phase 05's `.continue-here.md` deleted — fully resolved, no
 
 ## Operator Next Steps
 
-- **v1.2 milestone (Infra Migration & Schema Registry) is fully shipped** — run `/gsd-complete-milestone` to archive and prepare for the next milestone.
-- Open: decide the E2ETest-suffix vs. `fastTest`-filter coupling Phase 7 surfaced — see Pending Todos below (unrelated to v1.2, carries forward).
-- Three harmless tracer data artifacts remain live in production (boards/columns/tasks from Plan 05-04 Tasks 1 and 3, plus their creating users) — consistent with Task 1's own precedent of leaving tracer data in place; fine to delete before real users onboard, not blocking.
-
-</content>
+- Start the next milestone with /gsd-new-milestone
