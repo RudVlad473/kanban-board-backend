@@ -1,0 +1,40 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-08-17T12:13:00.000Z",
+  "phase": null,
+  "phase_name": "milestone-init (v1.3, pre-phase)",
+  "phase_dir": ".planning",
+  "plan": null,
+  "task": null,
+  "total_tasks": null,
+  "status": "paused",
+  "completed_tasks": [
+    {"id": 1, "name": "Reconcile Plan 05-06's stale checkpoint bookkeeping against already-live commits, verify Phase 5", "status": "done", "commit": "2841481"},
+    {"id": 2, "name": "Independently re-verify Phase 07.1 (was missing VERIFICATION.md), close its gap", "status": "done", "commit": "74a7ffa"},
+    {"id": 3, "name": "Complete and archive v1.2 milestone (ROADMAP/REQUIREMENTS archived, PROJECT.md full review, RETROSPECTIVE.md updated, STATE.md trimmed)", "status": "done", "commit": "74a7ffa,9b3126a,e9e4e57"},
+    {"id": 4, "name": "Tag v1.2 and push (master + tag)", "status": "done", "commit": "tag v1.2"},
+    {"id": 5, "name": "Start v1.3 milestone: PROJECT.md Current Milestone section + STATE.md reset", "status": "done", "commit": "470db70"},
+    {"id": 6, "name": "Dispatch and complete 4 parallel research agents (Stack, Features, Architecture, Pitfalls) for v1.3", "status": "done", "commit": "311e2b4"},
+    {"id": 7, "name": "Dispatch research synthesizer, recover from its #222 false-refusal (returned text instead of writing SUMMARY.md), write SUMMARY.md from its returned content, commit and push all 5 research files", "status": "done", "commit": "311e2b4"}
+  ],
+  "remaining_tasks": [
+    {"id": 8, "name": "new-milestone.md Step 9: Define Requirements -- read .planning/research/SUMMARY.md (and FEATURES.md for the category breakdown), present features by category via AskUserQuestion (table stakes/differentiators/anti-features), incorporate the already-confirmed bundled todos (see decisions below), write .planning/REQUIREMENTS.md, commit", "status": "not_started"},
+    {"id": 9, "name": "new-milestone.md Step 10: spawn gsd-roadmapper (model=opus) to create .planning/ROADMAP.md phases from the requirements -- research already suggests a 4-phase build order (bootstrap -> deploy+measure -> Kafka isolation+reset -> CI automation), present for approval, commit", "status": "not_started"},
+    {"id": 10, "name": "new-milestone.md Step 10.5: scan pending todos against approved roadmap phases, tag matches with resolves_phase in frontmatter, commit", "status": "not_started"}
+  ],
+  "blockers": [],
+  "async_jobs": [],
+  "human_actions_pending": [],
+  "decisions": [
+    {"decision": "Milestone v1.3 named 'Nonprod Environment & CI Hardening'", "rationale": "User confirmed via AskUserQuestion", "phase": null},
+    {"decision": "Bundle scope confirmed: nonprod env + CI gate, PLUS Dependabot github-actions ecosystem entry, TruffleHog CI pass, GitHub Actions digest-pinning, gradle cache in run-tests, gitleaks-in-worktree fix, security-scan.yml stale-comment cleanup, session cookie Secure flag (now that real TLS exists), README architecture-showcase expansion", "rationale": "User chose 'Bundle in other ready todos' when asked scope-narrow vs scope-wide", "phase": null},
+    {"decision": "Colocate nonprod on the existing Netcup VPS (not a second VPS) as the default plan", "rationale": "Research measured ~2.65GB unreserved headroom under current prod caps; a second VPS is the documented fallback (~EUR4/month Netcup VPS Lite 1) if live measurement after first nonprod deploy shows it doesn't fit -- this is NOT yet decided with the user, it's the research recommendation to present at requirements time", "phase": null},
+    {"decision": "Research recommends a SECOND Redpanda broker instance for nonprod, not topic-name-prefixing on the shared prod broker", "rationale": "This codebase's Avro Schema Registry uses RecordNameStrategy keyed by class name, not topic -- prefixing topics would still leave the registry shared, so a nonprod schema-evolution test could mutate prod's registered compatibility history", "phase": null},
+    {"decision": "Research recommends stable long-lived nonprod (not per-PR ephemeral environments)", "rationale": "Per-PR environments solve a parallel-review-contention problem a solo project structurally doesn't have -- flagged as an anti-feature for this scale", "phase": null},
+    {"decision": "Research flags 'backend gates its own prod promotion on the frontend repo's E2E results' (the original todo's framing) as a probable anti-pattern", "rationale": "Inverts ownership/coupling -- recommended alternative is the frontend repo gates itself on nonprod reachability instead (nonprod deploys continuously on every push, so it's already a stable target). This needs to be surfaced as an explicit decision point during requirements definition -- not yet confirmed with the user", "phase": null},
+    {"decision": "Cross-repo repository_dispatch Playwright trigger explicitly deferred out of this milestone", "rationale": "Hard-blocked on the frontend repo existing -- there is no workflow file to dispatch into yet. Research's suggested 5th phase is this, explicitly marked do-not-attempt", "phase": null}
+  ],
+  "uncommitted_files": [],
+  "next_action": "Read .planning/research/SUMMARY.md (just written) and .planning/research/FEATURES.md, then run new-milestone.md Step 9 (Define Requirements): present the feature categories via AskUserQuestion -- including the two open decision points research flagged (colocate-vs-second-VPS as the default with fallback documented; whether backend should gate its own prod promotion on frontend E2E, recommending NOT to) -- incorporate the already-confirmed bundled todos, then write REQUIREMENTS.md and commit.",
+  "context_notes": "This was a very long, multi-part session: (1) resumed and found Phase 5's checkpoint bookkeeping stale relative to already-live commits -- reconciled and verified it properly with a real gsd-verifier dispatch; (2) discovered Phase 07.1 had zero VERIFICATION.md despite being complete -- independently re-verified it too before allowing milestone close; (3) fully completed and archived v1.2, tagged and pushed; (4) started v1.3 per explicit user request to 'complete that milestone and open new one officially and just start working inside it'; (5) ran the full new-milestone research phase (4 parallel researchers + synthesizer, with a synthesizer #222 false-refusal recovered by hand). Everything through research is committed and pushed to origin/master (HEAD is 311e2b4). The user then invoked /gsd-pause-work at a clean boundary -- research just finished and got pushed, nothing is mid-flight or stuck. Session context was also flagged at 65% usage around this point, which is the other reason to pause here rather than push into the Define Requirements step (which involves multiple AskUserQuestion rounds and a roadmapper dispatch -- better started fresh)."
+}
