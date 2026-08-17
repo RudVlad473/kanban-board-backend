@@ -4,7 +4,7 @@
 
 - ✅ **v1.0 Optimistic Locking** — Phase 1 (shipped 2026-08-01)
 - ✅ **v1.1 Kafka Activity Feed** — Phases 2-3 (shipped 2026-08-03)
-- 🚧 **v1.2 Infra Migration & Schema Registry** — Phases 4-5 (in progress)
+- ✅ **v1.2 Infra Migration & Schema Registry** — Phases 4-5 (shipped 2026-08-17)
 
 ## Phases
 
@@ -34,12 +34,12 @@ Full details: [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md)
 
 </details>
 
-### 🚧 v1.2 Infra Migration & Schema Registry (In Progress)
+### ✅ v1.2 Infra Migration & Schema Registry — SHIPPED 2026-08-17
 
 **Milestone Goal:** Redeploy the app on a cost-guarded, always-free/near-free stack (Oracle Cloud + Neon + self-hosted Redpanda) after the AWS EC2/RDS deletion, and close the schema-evolution risk flagged during v1.1 (SEED-001) with a Kafka Schema Registry (Avro) in front of the activity-log pipeline.
 
 - [x] **Phase 4: Schema Registry** - Avro schemas, mapping layer, enforced compatibility mode, and DLT/historical-data re-verification, built and proven entirely against the local docker-compose stack (completed 2026-08-04)
-- [ ] **Phase 5: Infra Migration** - Oracle Cloud VM + Neon + Redpanda + Caddy + GitHub Actions CI/CD, with Phase 4's Schema Registry cutover to the production target
+- [x] **Phase 5: Infra Migration** - Oracle Cloud VM (pivoted to Netcup VPS) + Neon + Redpanda + Caddy + GitHub Actions CI/CD, with Phase 4's Schema Registry cutover to the production target (completed 2026-08-17)
 
 ## Phase Details
 
@@ -121,7 +121,7 @@ Plans:
   4. A push to `master` triggers an automated GitHub Actions build-and-deploy to the Oracle VM using freshly generated SSH credentials (not reused AWS-era secrets), gated by a pre-merge DDL verification step against Neon's direct connection string
   5. Only ports 80/443 are externally reachable — verified by an outside port scan/curl across all three OCI network layers (Security List, NSG, OS firewall); Redpanda's 9092 is never internet-facing; Docker log drivers are capped (`max-size`/`max-file`) so unbounded app/Redpanda logs cannot fill the free-tier disk
 
-**Plans**: 5/6 plans executed (4 waves; D-03 sequencing — manual tracer deploy proven before CI/CD automation)
+**Plans**: 6/6 plans executed (4 waves; D-03 sequencing — manual tracer deploy proven before CI/CD automation)
 
 Plans:
 **Wave 1**
@@ -140,7 +140,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 05-06-PLAN.md — Cutover verification & decommission: external network audit, log-rotation measurement, AWS-era secret revocation (wave 4, human checkpoints)
+- [x] 05-06-PLAN.md — Cutover verification & decommission: external network audit, log-rotation measurement, AWS-era secret revocation (wave 4, human checkpoints) — complete 2026-08-17
 
 ## Progress
 
@@ -155,7 +155,7 @@ Plans:
 | 6. Mock-up Feature Gap Closure | v1.2 | 7/7 | Complete | 2026-08-09 |
 | 7. Restructure test folder | v1.2 | 7/7 | Complete | 2026-08-09 |
 | 07.1. Address hard blockers and inconsistencies from the frontend-integration-readiness audit (INSERTED) | v1.2 | 9/9 | Complete | 2026-08-10 |
-| 5. Infra Migration | v1.2 | 5/6 | In Progress|  |
+| 5. Infra Migration | v1.2 | 6/6 | Complete    | 2026-08-17 |
 </content>
 
 ### Phase 6: Mock-up Feature Gap Closure

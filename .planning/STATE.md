@@ -4,17 +4,17 @@ milestone: v1.2
 milestone_name: Infra Migration & Schema Registry
 current_phase: 05
 current_phase_name: infra-migration
-status: executing
-stopped_at: "Completed quick task 260816-uc8: bumped deploy-to-netcup's actions/checkout to v5, closing last Node-deprecation warning in deploy.yml, verified live on master run 31969094633"
-last_updated: "2026-08-16T20:08:41.206Z"
-last_activity: 2026-08-16
-last_activity_desc: "Completed Phase 05 Plan 05-05 Tasks 2 and 3 (Task 1 -- the guided secrets checkpoint -- was already closed out in a prior, uninterrupted session the same day). Confirmed both tasks' code was already implemented and committed (flyway-verify job gating deploy, deploy-to-netcup replacing the disabled deploy-to-ec2) -- verified every acceptance criterion against live evidence rather than trusting the commit messages, since this session began as a continuation of already-committed work. Found and fixed a real bug live: cleanup-old-images' DELETE URL was missing the repository-name path segment, causing every delete to 404 silently since the job was first written (latent the whole time it was permanently skipped). After that fix, found a second, deeper bug (Docker Hub Hub API v2 rejects the job's Basic auth on DELETE) -- diagnosed but deliberately not fixed blind without live credential access to verify a guessed JWT-exchange fix; filed as a new todo instead of claiming an unverified fix as done. Also found and corrected a false verification claim already committed in the deploy-rewrite todo's Resolution text by the prior session (claimed tag pruning and a fingerprint-mismatch failure test were verified live; neither had happened). Pushed two additional real commits specifically to prove the plan's idempotency acceptance criterion with independent production deploys (three total, not one) -- each confirmed via off-VM health check (200) and the deployed image tag on the VM matching the pushed commit's SHA exactly. Plan 05-05 SUMMARY.md written."
+status: milestone_complete
+stopped_at: "Phase 05 (the last of v1.2's 7 phases) closed out: reconciled 05-06's stale checkpoint bookkeeping against 2 already-live commits (Docker Hub tag-pruning fix), gsd-verifier confirmed 5/5 success criteria + 8/8 INFRA requirements against live evidence. current_phase auto-advanced to '06' by phase.complete's next-integer logic, but Phase 6 (and 7, 07.1) were already complete from a prior session -- corrected here to avoid the same false-positive documented in the 07.1 SUMMARY history. All 7 phases of v1.2 are now genuinely complete; milestone ready for /gsd-complete-milestone."
+last_updated: "2026-08-17T11:04:07.536Z"
+last_activity: 2026-08-17
+last_activity_desc: "Phase 05 fully complete (all 6 plans, all 8 INFRA requirements verified live) -- v1.2 milestone's last phase. All 7 phases of v1.2 now complete."
 progress:
   total_phases: 7
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 39
-  completed_plans: 38
-  percent: 97
+  completed_plans: 39
+  percent: 100
 ---
 
 # Project State
@@ -24,22 +24,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-03)
 
 **Core value:** Redeploy the app on a cost-guarded, always-free/near-free stack (Oracle Cloud + Neon + self-hosted Redpanda) after the AWS EC2/RDS deletion, and add a Schema Registry (Avro) in front of the Kafka activity-log pipeline to close the schema-evolution risk flagged during v1.1.
-**Current focus:** Phase 05 — infra-migration
+**Current focus:** v1.2 milestone complete — awaiting `/gsd-complete-milestone`
 
 ## Current Position
 
-Phase: 05 (infra-migration) — EXECUTING
-Plan: 6 of 6 (05-05 complete, 05-06 next)
-Status: Executing Phase 05
-Last activity: 2026-08-16 - Completed quick task 260816-tqc: rewrote CI/CD delivery-path sequence diagram as current-state, reconciled INFRA_ARCHITECTURE.md prose
+Phase: 05 (infra-migration) — COMPLETE (last phase of v1.2)
+Plan: 6 of 6 — all complete
+Status: Milestone v1.2 fully complete (all 7 phases: 4, 04.1, 04.2, 6, 7, 07.1, 5), pending `/gsd-complete-milestone`
+Last activity: 2026-08-17 — Phase 05 verified complete (gsd-verifier: 5/5 success criteria, 8/8 INFRA requirements, live evidence)
 
-Progress: [██████████] 97%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 17
+- Total plans completed: 23
 - Average duration: 32 min
 - Total execution time: 1.6 hours
 
@@ -51,7 +51,7 @@ Progress: [██████████] 97%
 | 2 | TBD | - | - |
 | 3 | TBD | - | - |
 | 04 | 4 | - | - |
-| 5 | TBD | - | - |
+| 05 | 6 | - | - |
 | 04.1 | 3 | - | - |
 | 7 | 7 | - | - |
 
@@ -156,6 +156,7 @@ Recent decisions affecting current work:
 - [Phase 5 Plan 05 Tasks 2-3]: `flyway-verify` (INFRA-06) and `deploy-to-netcup` (INFRA-05, replacing the disabled `deploy-to-ec2`) were both already implemented and committed by an uninterrupted prior session the same day; this session verified every acceptance criterion against live evidence (CI run logs, `docker inspect` on the VM, off-VM health checks) rather than trusting the commit messages. `flyway-verify`'s pooler guard was already proven by a real deliberate-failure-then-revert pair; idempotency proven across four real runs (not asserted). `deploy-to-netcup` proven green on three independent real pushes, each with the deployed tag matching the pushed commit's short SHA and a 200 health check. Found live (via `gh run view --job --log`, not by reading the workflow file) that `cleanup-old-images`' DELETE URL was missing the repository-name path segment — every delete had been 404ing silently since the job was first written, latent the whole time it was permanently skipped (2026-08-04–2026-08-16). Fixed the path segment; a second, deeper bug surfaced immediately after (Docker Hub Hub API v2 rejects the job's Basic auth on `DELETE`) — diagnosed but deliberately left unfixed rather than guessing a JWT-exchange fix with no live credential access to verify it, filed as a new todo instead. Also found and corrected a false "verified live" claim already committed in the deploy-rewrite todo's Resolution text (claimed tag-pruning and a fingerprint-mismatch failure test were proven; neither had actually happened — no matching CI run or runbook section existed). Pushed two additional real commits specifically to generate the second and third independent production deploys the plan's own acceptance criteria require as live convergence proof.
 - [Phase ?]: [Quick/260816-tqc]: Rewrote the CI/CD delivery-path diagram in place (Approach A) rather than adding a competing diagram or splitting into two views -- the existing infra-delivery-scenario.mmd was factually wrong (named a job that no longer exists, disclaimed itself as unbuilt), not merely incomplete. Rendered PNG came in at 784px wide vs. every existing diagram's 3136px, so the Approach C width-triggered split fallback never fired.
 - [Phase ?]: [Quick/260816-uc8]: Bumped deploy-to-netcup's actions/checkout pin from @v4 to @v5, closing the last Node-runtime deprecation warning in deploy.yml (all four checkout refs now uniformly @v5). Verified live on master run 31969094633 -- deploy-to-netcup's Node-deprecation line count dropped from 3 (baseline run 31967459100) to 0, full pipeline including production deploy concluded success.
+- [Phase 5 close-out, 2026-08-17]: Resumed a new session to find 05-06-SUMMARY.md/STATE.md/the Docker Hub todo all stale relative to two already-live, already-pushed commits (`8a31d85` JWT auth exchange, `faacda4` pagination fix) that had closed Task 3 Part C's open checkpoint (cleanup-old-images' Docker Hub tag pruning) without any of the bookkeeping being updated to match. Verified live via `gh run view` on CI run `32017867204`: all 32 backlog tags deleted, zero failures. Reconciled 05-06-SUMMARY.md (status halted->complete, D4 coverage marked passed), closed the pending todo with a Resolution section, fixed WINDOWS.md ledger entry #2 (`gsd-tools windows fixed 2`), corrected INFRA-08's stale OCI-three-layer wording in REQUIREMENTS.md to Netcup's actual two-layer model (intent unchanged), and corrected docs/INFRA_RUNBOOK.md's Part C section which still read "not performed." Dispatched a real gsd-verifier agent (not self-declared) which independently re-confirmed all 5 phase success criteria and all 8 INFRA requirements against live evidence (a fresh HTTPS health check, fresh TCP port probes, `gh secret list`, direct `deploy.yml` job-graph inspection) before `phase.complete` was run. `phase.complete`'s next-integer auto-advance set `current_phase: 06`, which is a known false-positive this project already hit once before (Phase 6/7/07.1 were completed in an earlier session but numbered lower than Phase 5) -- corrected STATE.md's frontmatter/body back to reflect reality: all 7 phases of v1.2 complete, milestone ready for `/gsd-complete-milestone`, not "Phase 06 ready to plan."
 
 ### Pending Todos
 
@@ -186,7 +187,6 @@ Recent decisions affecting current work:
 - [minor] Ratchet `dependencyCheckAnalyze`'s `failBuildOnCVSS` after a real, CPE-matched baseline exists — shipped report-only (`failBuildOnCVSS=11`) by 260813-q1i since no local `NVD_API_KEY` was available to produce a real run; the first `security-scan.yml` run (weekly schedule or manual dispatch) will produce the actual baseline to triage/suppress against before picking a gate rung, same measure-first-then-gate sequence as Error Prone and JaCoCo. See `.planning/todos/pending/2026-08-13-ratchet-failbuildoncvss-after-a-real-dependency-check-baseline.md`.
 - [minor] Add `package-ecosystem: "github-actions"` to `.github/dependabot.yml` once Phase 5's `deploy.yml` rewrite settles — deliberately deferred by 260813-q1i to avoid Dependabot PR noise/conflicts against the in-flight AWS→Oracle deploy-target rewrite. Trigger: after the deploy-job-rewrite todo closes. See `.planning/todos/pending/2026-08-13-add-github-actions-ecosystem-to-dependabot-after-deploy-rewrite.md`.
 - [minor] Expand README into a full project architecture showcase — pre-commit hooks, testing architecture, deployment strategy, verification/quality gates, `docs/diagrams/`, local setup, tech stack and why each technology was chosen. Tension to resolve first: quick task 21 (2026-08-06) deliberately trimmed README to a 116-line front door and pushed depth into `docs/ARCHITECTURE.md`; this ask may mean reversing that or instead surfacing a prominent linked "highlights" section. See `.planning/todos/pending/2026-08-16-expand-readme-into-a-full-project-architecture-showcase.md`.
-- [minor] `cleanup-old-images`' DELETE calls are rejected "unauthorized" — Docker Hub Hub API v2 needs a JWT token exchange, not the Basic auth the job currently uses; a first bug (missing repository-name path segment) was found and fixed live during Plan 05-05, exposing this second one. Not gating Phase 5 — the plan's acceptance criteria required the cleanup jobs to be correctly wired and to fire, not that their deletes succeed. See `.planning/todos/pending/2026-08-16-cleanup-old-images-delete-calls-rejected-unauthorized.md`.
 
 ### Blockers/Concerns
 
@@ -287,15 +287,14 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-08-16T20:08:09.034Z
-Stopped at: Completed quick task 260816-uc8: bumped deploy-to-netcup's actions/checkout to v5, closing last Node-deprecation warning in deploy.yml, verified live on master run 31969094633
-Resume file: None
+Last session: 2026-08-17 (resumed via /gsd-resume-work)
+Stopped at: Found 05-06-SUMMARY.md/STATE.md/the Docker Hub todo stale relative to 2 already-live commits (8a31d85, faacda4) that had closed the plan's last open checkpoint. Reconciled all planning artifacts against live evidence, ran gsd-verifier (5/5 success criteria, 8/8 INFRA requirements passed), marked Phase 05 complete. All 7 phases of v1.2 are now genuinely complete — milestone ready for `/gsd-complete-milestone`.
+Resume file: None (phase 05's `.continue-here.md` deleted — fully resolved, not a checkpoint anymore)
 
 ## Operator Next Steps
 
-- Plan 05-06 (revoke the AWS-era secrets now that the new pipeline is proven; close WINDOWS.md ledger entry #2) is next and final in Phase 5, now that 05-05's CI/CD cutover is proven green on three independent real production deploys.
-- New this session: `cleanup-old-images`' DELETE calls are rejected by Docker Hub as unauthorized (a second bug beyond the one fixed live) — see Pending Todos below. Not blocking Plan 05-06.
-- Open: decide the E2ETest-suffix vs. `fastTest`-filter coupling Phase 7 surfaced, and WINDOWS.md ledger entry #2 (INFRA-08 wording stale after the Netcup pivot — owned by 05-06) — see Pending Todos below.
+- **v1.2 milestone (Infra Migration & Schema Registry) is fully shipped** — run `/gsd-complete-milestone` to archive and prepare for the next milestone.
+- Open: decide the E2ETest-suffix vs. `fastTest`-filter coupling Phase 7 surfaced — see Pending Todos below (unrelated to v1.2, carries forward).
 - Three harmless tracer data artifacts remain live in production (boards/columns/tasks from Plan 05-04 Tasks 1 and 3, plus their creating users) — consistent with Task 1's own precedent of leaving tracer data in place; fine to delete before real users onboard, not blocking.
 
 </content>

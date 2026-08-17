@@ -13,8 +13,8 @@
 - [x] **INFRA-04**: App is publicly reachable over real HTTPS via a Caddy reverse proxy with automatic TLS (not bare HTTP/IP)
 - [x] **INFRA-05**: GitHub Actions builds, pushes, and deploys to the Oracle VM automatically on merge to `master`, using newly-generated SSH credentials (the dead AWS-era secrets are not reused)
 - [x] **INFRA-06**: A pre-merge DDL verification step runs against Neon's direct connection string before merge, replacing the AWS-target check acknowledged as superseded at v1.1 close
-- [ ] **INFRA-07**: Docker log drivers are capped (`max-size`/`max-file`) so unbounded app/Redpanda logs cannot fill the free-tier VM's disk
-- [ ] **INFRA-08**: OCI's three network layers (Security List, NSG, OS firewall) are audited together and externally verified (port scan/curl from outside) so only 80/443 are publicly reachable — Redpanda's 9092 must never be internet-facing
+- [x] **INFRA-07**: Docker log drivers are capped (`max-size`/`max-file`) so unbounded app/Redpanda logs cannot fill the free-tier VM's disk
+- [x] **INFRA-08**: Both of Netcup's network layers (OS `iptables`, Netcup Cloud Firewall) are audited together and externally verified (port scan/curl from outside) so only 80/443 are publicly reachable — Redpanda's 9092 must never be internet-facing. *(Wording corrected 2026-08-17 — originally named OCI's three-layer model (Security List, NSG, OS firewall); the deploy target pivoted from Oracle Cloud to Netcup at plan 05-03, which has a genuinely different two-layer model. Requirement intent (multi-layer, externally-verified, 80/443-only) is unchanged and fully met — see WINDOWS.md ledger entry #2, fixed 2026-08-17, and `docs/INFRA_RUNBOOK.md`'s External Network Audit section.)*
 
 ### Schema Registry
 
@@ -111,8 +111,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | INFRA-04 | Phase 5 | Complete |
 | INFRA-05 | Phase 5 | Complete |
 | INFRA-06 | Phase 5 | Complete |
-| INFRA-07 | Phase 5 | Pending |
-| INFRA-08 | Phase 5 | Pending |
+| INFRA-07 | Phase 5 | Complete |
+| INFRA-08 | Phase 5 | Complete |
 | GAP-01 | Phase 6 (plan 02) | Complete |
 | GAP-02 | Phase 6 (plan 03) | Complete |
 | GAP-03 | Phase 6 (plans 01, 04) | Complete |

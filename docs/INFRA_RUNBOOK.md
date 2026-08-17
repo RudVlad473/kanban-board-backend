@@ -931,10 +931,30 @@ trail this project's own CLAUDE.md and `docs/SESSION_LESSONS.md` conventions rel
 `.planning/codebase/STACK.md` was the one exception, corrected specifically because it is a live
 generation source for `.claude/CLAUDE.md`, not a historical record.
 
-### Part C — Docker Hub tag pruning: not performed, genuine human-only checkpoint
+### Part C — Docker Hub tag pruning: closed 2026-08-17, same-day follow-on
 
-Not attempted. Recorded here as an open item, carried forward as a checkpoint rather than
-fabricated or silently skipped — see the SUMMARY's checkpoint section for the full detail.
+Originally halted here as a genuine human-only checkpoint (no Docker Hub console access in
+this session). Resolved without needing that access after all: `cleanup-old-images`' DELETE
+calls turned out to have two independent bugs in the job's own code, both found and fixed live
+rather than guessed.
+
+1. **`8a31d85`** — Hub API v2 rejects HTTP Basic auth on mutating requests (`DELETE`); added the
+   documented login-token exchange (`POST /v2/users/login/`), sending the result as
+   `Authorization: JWT <token>`. Its first live run (CI run `32016633112`) succeeded per its own
+   status checks but deleted only 9 of 41 accumulated tags.
+2. **`faacda4`** — root cause of the partial deletion: Hub API v2 paginates tag listings at
+   10/page, and the list call only ever read page 1. Fixed by following the response's `next`
+   cursor until `null`.
+
+**Live proof:** CI run [`32017867204`](https://github.com/RudVlad473/kanban-board-backend/actions/runs/32017867204)
+(2026-08-17T09:58Z, commit `faacda4`) — `cleanup-old-images` deleted all 32 remaining
+non-current tags, the job's own `FAILED` counter (incremented on any non-204 delete response)
+stayed at 0, job concluded success with zero `::warning`/`::error` lines.
+
+INFRA-05's Docker Hub tag-pruning must-have is now fully satisfied. See
+`.planning/phases/05-infra-migration/05-06-SUMMARY.md` (coverage item D4) and
+`.planning/todos/completed/2026-08-16-cleanup-old-images-delete-calls-rejected-unauthorized.md`
+for the full resolution writeup.
 
 ### Decommission date
 

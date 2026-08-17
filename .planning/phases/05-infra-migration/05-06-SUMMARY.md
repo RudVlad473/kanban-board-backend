@@ -44,12 +44,13 @@ key-decisions:
   - "Task 2's literal suggested method (force rotation by hitting /api/actuator/health repeatedly) was tried first, in good faith, and empirically shown to produce near-zero log growth -- a real, documented finding matching this codebase's own 'logging not extensively used' convention. Substituted a same-daemon/same-driver/same-options throwaway container to prove the rotation mechanism deterministically instead of hammering production with an impractical request volume."
   - "Task 3 Part A: verified the prior session's HANDOFF.json/.continue-here.md claim that AWS-era secrets were 'still present and unrevoked' was stale or wrong -- gh secret list shows exactly 10 secrets, none of them EC2_SSH_KEY/EC2_HOST/EC2_USER. Recorded as an already-satisfied finding, not a fabricated deletion."
   - "Task 3 Part B: fixed both .claude/CLAUDE.md's generated Platform Requirements block AND its underlying GSD-managed source (.planning/codebase/STACK.md), so a future stack-doc regeneration doesn't silently reintroduce the stale AWS EC2 line."
-  - "Task 3 Part C (Docker Hub tag pruning) intentionally not performed -- genuine human-only checkpoint, no Docker Hub credentials/console access available to this session, and a known auth bug in cleanup-old-images' DELETE calls complicates it further. Carried forward as a checkpoint, not skipped or fabricated."
+  - "Task 3 Part C (Docker Hub tag pruning): closed in a follow-on continuation of this same plan, after this SUMMARY was first written and committed (74139a3) as 'halted' on this exact checkpoint. Two commits landed live-tested rather than guessed: 8a31d85 fixed the JWT-token-exchange auth bug (Hub API v2 rejects Basic auth on mutating requests) -- its first live run (CI run 32016633112) succeeded but exposed a second, previously-invisible bug (only 9 of 41 accumulated tags deleted, since the tag-list call only ever read page 1 of Hub API v2's 10/page pagination); faacda4 fixed that by following the `next` cursor until null. CI run 32017867204 (2026-08-17T09:58Z, commit faacda4) is the live proof: `cleanup-old-images` job succeeded, all 32 remaining non-current tags issued a `DELETE`, `FAILED=0` (the job's own explicit per-call HTTP-status check, not a body-content guess), zero `::warning`/`::error` lines. This satisfies the todo's 'verify live, don't trust documentation' standard through the job's own status-code checking rather than a separate follow-up GET -- the mechanism that would surface a partial failure (the FAILED counter driving a non-zero exit) is the same one that already ran clean."
 
-requirements-completed: [INFRA-07, INFRA-08]
-# INFRA-05 intentionally NOT marked complete: Part A (secret revocation) and the doc-correction
-# half of Part B are done, but Part C (Docker Hub tag pruning) -- part of INFRA-05's own
-# must_haves truth ("Docker Hub image tags ... are pruned") -- is an open checkpoint.
+requirements-completed: [INFRA-05, INFRA-07, INFRA-08]
+# INFRA-05 completed in two parts: Part A (secret revocation) and the doc-correction half of
+# Part B were done when this SUMMARY was first written; Part C (Docker Hub tag pruning) closed
+# afterward via commits 8a31d85 (JWT auth fix) and faacda4 (pagination fix), live-verified by
+# CI run 32017867204 -- see the key-decisions entry above and coverage item D4.
 
 coverage:
   - id: D1
@@ -79,27 +80,30 @@ coverage:
   - id: D4
     description: "Docker Hub image tags accumulated during the migration window pruned, and both restored cleanup jobs observed to run rather than skip on a live workflow execution"
     requirement: "INFRA-05"
-    verification: []
-    human_judgment: true
-    rationale: "No Docker Hub credentials/console access available to this session (~/.docker/config.json has no cached auth, DOCKERHUB_TOKEN is a write-only GitHub Actions secret). Also complicated by a known auth bug in cleanup-old-images' DELETE calls (Hub API v2 rejects Basic auth on mutating requests) tracked in .planning/todos/pending/2026-08-16-cleanup-old-images-delete-calls-rejected-unauthorized.md. A human must either manually prune via the Hub web console or fix the auth bug first."
+    verification:
+      - kind: ci_run
+        ref: "https://github.com/RudVlad473/kanban-board-backend/actions/runs/32017867204"
+        status: pass
+    human_judgment: false
+    rationale: "Closed in a follow-on continuation after this plan first halted here. Root cause was two independent bugs, each found and fixed live rather than guessed: (1) Hub API v2 rejects Basic auth on mutating requests -- fixed via JWT token exchange (commit 8a31d85); its first live run deleted only 9/41 tags, surfacing (2) the tag-list call only reading page 1 of a 10/page-paginated response -- fixed by following the `next` cursor until null (commit faacda4). CI run 32017867204 confirms both fixes together: 32 tags deleted, the job's own explicit per-call HTTP-status check (FAILED=0) reported zero failures, job concluded success."
 
 # Metrics
-duration: ~90min (this continuation session; Task 1's initial context-read happened in a prior session)
+duration: ~90min (this continuation session; Task 1's initial context-read happened in a prior session) + a later same-day continuation closing Task 3 Part C (2 commits, 8a31d85 + faacda4)
 completed: 2026-08-17
-status: halted
+status: complete
 ---
 
-# Phase 05 Plan 06: External Network Audit, Log Rotation Proof, and Partial AWS Decommission Summary
+# Phase 05 Plan 06: External Network Audit, Log Rotation Proof, and AWS Decommission Summary
 
-**Proved 22/80/443-only external reachability via three independent full-range scans, proved Docker's log-rotation mechanism deterministically after discovering the app itself logs almost nothing per request, confirmed AWS-era secrets are already gone, and corrected eight files' worth of stale AWS-EC2 deploy-target documentation — Docker Hub tag pruning remains an open human-only checkpoint.**
+**Proved 22/80/443-only external reachability via three independent full-range scans, proved Docker's log-rotation mechanism deterministically after discovering the app itself logs almost nothing per request, confirmed AWS-era secrets are already gone, corrected eight files' worth of stale AWS-EC2 deploy-target documentation, and (in a same-day follow-on continuation) fixed and live-verified `cleanup-old-images`' two-bug Docker Hub pruning failure — Phase 5 is now fully complete.**
 
 ## Performance
 
-- **Duration:** ~90 min (continuation session; Task 1's context was read by a prior agent that returned a checkpoint)
+- **Duration:** ~90 min (continuation session; Task 1's context was read by a prior agent that returned a checkpoint) + a later same-day continuation closing Task 3 Part C
 - **Started:** 2026-08-17 (this continuation session)
-- **Completed:** 2026-08-17 (Tasks 1-2 and Task 3 Parts A/B; Task 3 Part C still open)
-- **Tasks:** 2 of 3 fully complete, 1 (Task 3) two-thirds complete (Parts A/B done, Part C is an open checkpoint)
-- **Files modified:** 8
+- **Completed:** 2026-08-17 (all 3 tasks, including Task 3 Part C's two follow-on bug-fix commits)
+- **Tasks:** 3 of 3 fully complete
+- **Files modified:** 8 (docs, this plan) + 1 (`.github/workflows/deploy.yml`, Task 3 Part C's follow-on fixes)
 
 ## Accomplishments
 
@@ -115,8 +119,7 @@ Each task was committed atomically:
 1. **Task 1: External network audit** — `a067b57` (docs)
 2. **Task 2: Log rotation observation** — `1a0e676` (docs)
 3. **Task 3 Parts A/B: Decommission record + documentation correction** — `f1e6d62` (docs)
-
-**Plan metadata:** not yet committed — orchestrator handles the final metadata/state commit after the Part C checkpoint round-trip resolves.
+4. **Task 3 Part C: Docker Hub tag-pruning bug fixes** (same-day continuation, after this SUMMARY's first version was committed at `74139a3`) — `8a31d85` (JWT auth-exchange fix) and `faacda4` (pagination fix), both live-verified: `8a31d85`'s own live run (CI run 32016633112) surfaced the pagination gap, `faacda4`'s live run (CI run 32017867204) confirmed the full 32-tag backlog cleared with zero delete failures.
 
 ## Files Created/Modified
 
@@ -136,7 +139,7 @@ Each task was committed atomically:
 - **Guided-execution deviation, both destructive steps still gated:** Task 1's scan and Task 3 Parts A/B's verification/correction work were executed directly by this session (which has SSH/`gh` CLI access the plan's original human-only assumption didn't anticipate) rather than relayed one step at a time through a human. The two genuinely destructive, downtime-causing actions from Task 1 (Docker daemon restart, VM reboot) were still gated on explicit human confirmation before being triggered — consistent with this project's established credential/downtime-handling norms (see the "Manual deploy — Plan 05-04" precedent already in the runbook).
 - **Task 2 method substitution:** the plan's literal suggested method (force rotation via repeated health-check calls) was tried first and empirically shown to produce near-zero log growth. Rather than hammering a live, personal-scale production service with an impractically large request volume to force real rotation, substituted a same-daemon/same-driver/same-options throwaway container — proving the underlying mechanism the acceptance criteria actually care about, without touching the live services.
 - **Task 3 Part A is a verification, not an action:** the prior session's claim that AWS-era secrets were "still present and unrevoked" was re-checked and found stale/wrong. Recorded as an already-satisfied finding rather than fabricating a deletion that never happened.
-- **Task 3 Part C deferred as a genuine checkpoint:** no Docker Hub credentials or console access exists in this session, and a known auth bug in `cleanup-old-images`' DELETE calls (filed in `.planning/todos/pending/2026-08-16-cleanup-old-images-delete-calls-rejected-unauthorized.md`) complicates it further. Not attempted, not fabricated.
+- **Task 3 Part C deferred, then closed same-day via CI-only fixes:** no Docker Hub credentials or console access existed in this session, and a known auth bug in `cleanup-old-images`' DELETE calls (filed in `.planning/todos/pending/2026-08-16-cleanup-old-images-delete-calls-rejected-unauthorized.md`) complicated it further. Rather than requiring interactive Docker Hub console access, the fix was made entirely through the CI job's own code (the JWT exchange and pagination follow-`next` loop), each verified by reading that job's live run output — no credentials were read or requested by the agent at any point. Not attempted-and-guessed; found, fixed, and confirmed live.
 
 ## Deviations from Plan
 
@@ -170,17 +173,17 @@ Each task was committed atomically:
 
 ## User Setup Required
 
-None - no external service configuration required for the completed portions. Task 3 Part C (Docker Hub tag pruning) requires either manual Docker Hub console access or a fix to `cleanup-old-images`' auth bug — see the CHECKPOINT below.
+None — no external service configuration required. Task 3 Part C ended up needing no Docker Hub console access either; both bugs were fixable and verifiable entirely from the CI job's own code and logs.
 
 ## Next Phase Readiness
 
-- **INFRA-07 and INFRA-08 are fully proven by measurement** — no further work needed on network reachability or log-rotation bounds.
-- **INFRA-05 is two-thirds complete:** the dead credential surface is confirmed gone and the documentation now describes reality, but Docker Hub tags accumulated during the migration window are still unpruned, and the restored `cleanup-old-images` job's DELETE calls are still failing with `unauthorized` (a separate, already-filed bug). This blocks marking Phase 5 fully complete until a human resolves Part C.
-- **Blocker for phase completion:** Task 3 Part C (Docker Hub tag pruning) — see CHECKPOINT in the executor's return message. Once resolved, the orchestrator should re-run the state-update step to mark INFRA-05 complete and close out Phase 5.
+- **INFRA-05, INFRA-07, and INFRA-08 are all fully proven by measurement** — no further work needed on network reachability, log-rotation bounds, or credential/tag decommissioning.
+- **Phase 5 (Infra Migration) is now fully complete** — all 6 plans done, all 8 phase requirements (INFRA-01 through INFRA-08) satisfied. This was also the last phase of milestone v1.2 (Infra Migration & Schema Registry) per `.planning/ROADMAP.md`.
+- Pending todo `.planning/todos/pending/2026-08-16-cleanup-old-images-delete-calls-rejected-unauthorized.md` should be closed with this resolution.
 
 ---
 *Phase: 05-infra-migration*
-*Completed: 2026-08-17 (partial — Task 3 Part C outstanding)*
+*Completed: 2026-08-17*
 
 ## Self-Check: PASSED
 
