@@ -1,144 +1,149 @@
 # Project Research Summary
 
-**Project:** Kanban Board Backend v1.2 — Infra Migration & Schema Registry
-**Domain:** Self-hosted infra migration (Oracle Cloud A1 Flex + Redpanda + Neon serverless Postgres + GitHub Actions CI/CD) combined with Kafka Schema Registry (Avro) adoption on an existing Spring Boot 3.5.0 / Java 21 backend
-**Researched:** 2026-08-03
-**Confidence:** MEDIUM
+**Project:** Kanban Board Backend v1.3 — Nonprod Environment & CI Hardening
+**Domain:** Adding a second (nonprod/staging) deploy environment to an existing, live single-VM production system, so a future frontend repo's Playwright E2E suite has a real, non-mocked target
+**Researched:** 2026-08-17
+**Confidence:** HIGH on approach/architecture, MEDIUM on the one genuine open unknown (nonprod Redpanda memory floor)
 
 ## Executive Summary
 
-This milestone bolts two largely independent workstreams onto an already-shipped, working system: (1) replacing the deleted AWS EC2/RDS deploy target with a free-tier Oracle Cloud A1 Flex VM running self-hosted Redpanda and Neon serverless Postgres, redeployed via GitHub Actions, and (2) introducing a Kafka Schema Registry (Avro) in front of the existing 5-event-type activity-log pipeline, closing the "convention-based agreement" risk flagged in v1.1. Neither area requires new application frameworks or touches the controller/service/repository stack; Redpanda is Kafka-wire-protocol-compatible (zero producer/consumer code changes) and Neon is wire-compatible Postgres (zero JPA/Hibernate code changes). The real work is concentrated in configuration, deployment topology, and — for the schema registry specifically — a genuinely new mapping layer between the project's deliberately plain `ActivityEvent` sealed records and Avro's schema-first, codegen-based serialization model.
+The recommended approach is to **colocate nonprod alongside production on the existing Netcup VPS Lite 2 G12s**, not provision a second VM. A shrunk `app-nonprod` + `redpanda-nonprod` pair, gated behind Docker Compose `profiles:` in the same host, pairs with a dedicated Neon database branch (free, near-instant, already available on the project's plan) and a second Caddy site block on a second free DuckDNS subdomain. This costs zero application code changes — Redpanda is Kafka-wire-compatible and Neon is wire-compatible Postgres, exactly as was already proven true for production in v1.2 Phase 5.
 
-The recommended approach is Schema Registry first, Infra Migration second, because ~95% of the schema-registry work (5 `.avsc` schemas, Gradle Avro codegen, producer/consumer mapping layers, DLT-under-Avro re-verification) can be built and fully verified against the existing local docker-compose stack with no dependency on the OCI VM, Neon, or GitHub Actions changes existing yet. This ordering also cleanly separates an app-logic-adjacent phase (new mapping code, real architectural decisions about domain-event vs. wire-format boundaries) from a pure-ops phase (VM provisioning, Redpanda compose swap, Neon connection config, CI/CD retargeting), matching the project's existing one-epic-per-PR review discipline.
+The one place this diverges from a naive reading of "just add a second broker" is Kafka isolation: topic-name-prefixing on the *shared* production broker was considered and rejected, because this codebase's Avro Schema Registry uses `RecordNameStrategy` keyed by class name, not topic — prefixing topics would still leave the registry itself shared, so a deliberately schema-breaking nonprod test could mutate production's registered compatibility history. A second, separate Redpanda broker instance avoids this with zero `src/main` changes.
 
-The two biggest risk clusters are resource contention on a shrunk, shared 2 OCPU/12 GB VM (Redpanda's default memory/CPU auto-detection assumes it owns the whole box, and will starve the co-resident JVM app if left untuned) and correctness regressions specific to the Avro cutover (the DLT's proven JSON byte-fidelity guarantee does not automatically carry over to Avro poison messages, and Avro's strict field-default model can silently break implicit JSON permissiveness the 5 event types currently rely on). Both are addressable with known, documented mitigations (explicit `--overprovisioned`/`--memory`/`--smp` caps; a byte-array serializer dedicated to the DLT path; per-field classification against real historical event shapes) — the risk is in forgetting to apply them under the "no code changes needed" framing, not in the mitigations being unknown.
+The binding constraint is host memory: production's current *reserved* caps (app `mem_limit: 3g` + redpanda `mem_limit: 2200m`) leave roughly 2.65GB unreserved on the 7.8GB host. Real measured production usage is well under those caps (~15-17%), which is genuine headroom — but the combined worst-case ceiling if every cap were maxed simultaneously is tight (~7.3-7.4GB of 7.8GB). This needs live measurement after a real nonprod deploy, the same discipline that already corrected production's own Redpanda memory cap once (a documented incident: setting `mem_limit` numerically equal to `--memory` broke every restart due to cgroup accounting overhead). A concrete, cheap fallback exists if colocation doesn't hold up under measurement: a second small Netcup VPS Lite 1 (~€4/month).
+
+Research also surfaced four genuinely load-bearing safety findings that must gate the CI-automation work, not just the infra work: (1) the existing `deploy-to-netcup` job hardcodes its target directory and the Compose project name is pinned (`kanban-board-backend`) — a nonprod deploy job that doesn't change every one of these axes will silently converge onto and mutate the *live* production containers, not create a second stack; (2) zero GitHub Environments exist today, so every one of the 10 existing repository secrets is unscoped — a nonprod CI job inherits full production secret access unless Environments are introduced first; (3) the already-twice-buggy `cleanup-old-images` job deletes every Docker Hub tag except its own run's — reusing the same Docker Hub repository for nonprod images would let the next production push delete nonprod's live tag; (4) the original todo's own framing ("deploy nonprod → run frontend Playwright → only then promote to prod") would make this backend repo's production release gate on a *different* repository's test suite — flagged as a probable inverted-ownership anti-pattern; the frontend repo gating itself on nonprod reachability is the recommended alternative, since nonprod deploys continuously on every push and is therefore already a stable target with no cross-repo CI plumbing required from this side.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The stack additions are narrowly scoped: Oracle Cloud A1 Flex (2 OCPU/12 GB Always Free, post-June-2026 halving) replaces the deleted EC2 instance; Redpanda v26.2.x (Kafka-wire-compatible, ships Schema Registry built into the broker binary) replaces `apache/kafka-native` in the deploy target only (local dev can keep the existing image); Neon serverless Postgres (wire-compatible, scale-to-zero) replaces RDS; Confluent's `kafka-avro-serializer` + Apache Avro + `gradle-avro-plugin` provide Avro schema authoring, codegen, and (de)serialization against Redpanda's Confluent-API-compatible built-in registry. Caddy is recommended over Nginx for reverse-proxy/auto-TLS given the single-domain, single-service scale. Everything already validated in v1.1 (Spring Boot 3.5.0, Java 21, JPA/Hibernate, Spring Security/Session, MapStruct, springdoc-openapi, Lombok, ULID Creator, Vavr, Guava, REST Assured, H2) is explicitly unchanged.
+Colocated nonprod stack on the existing Netcup VPS: `app-nonprod` (suggested `mem_limit: 1g`) + `redpanda-nonprod` (suggested `mem_limit: 900m`, `--memory 700M` as a starting point — genuinely unmeasured, see Gaps), gated via Compose `profiles:` in the same `docker-compose.prod.yml` (or a sibling file with the project name explicitly pinned, matching the fix already applied to prod after its own project-name-collision incident). Neon branching provides nonprod's database with zero new infrastructure — one persistent branch off `production`, migrated by a Flyway-verify-style CI job against its own direct (non-pooler) endpoint. A second Redpanda broker instance (not topic-prefixing) provides Kafka/Schema-Registry isolation.
 
 **Core technologies:**
-- Oracle Cloud A1 Flex VM (2 OCPU/12 GB) — compute host — only remaining zero-cost ARM compute tier after Oracle's undocumented free-tier halving; must be re-verified against the actual tenancy before finalizing resource budgets
-- Redpanda v26.2.x — Kafka broker + built-in Schema Registry — wire-compatible with existing spring-kafka code, avoids standing up a separate registry container on a resource-constrained VM
-- Neon serverless Postgres — production DB — wire-compatible Postgres, only connection string/SSL config changes, not JPA/Hibernate code
-- Confluent `kafka-avro-serializer` + Apache Avro + `gradle-avro-plugin` — schema definition, codegen, Avro (de)serialization — works unmodified against Redpanda's Confluent-API-compatible registry
-- Caddy — reverse proxy + automatic HTTPS — right-sized for a single-VM, single-domain deployment versus Nginx+Certbot's manual cert-renewal maintenance
+- Docker Compose `profiles:` — gates the second app+redpanda pair in the same host without a second `docker-compose` invocation model
+- Neon branching — free, near-instant, isolated Postgres per environment on the project's existing plan tier
+- A second Redpanda broker instance — Kafka + Schema Registry isolation, avoiding shared-registry compatibility-history risk
+- Caddy (existing container, unmodified) — gains a second site block; only one process can bind host 80/443, so nonprod does NOT get its own Caddy container
+- A second free DuckDNS subdomain — the account supports up to 5, one more is trivial
 
 ### Expected Features
 
-For a portfolio-reviewer audience, "done" means externally verifiable: real HTTPS (not bare HTTP/IP), automated CI/CD redeploy (not manual SSH), basic reachability monitoring, and — for the schema registry specifically — explicitly registered/versioned schemas with a deliberately chosen (not default) compatibility mode covering all 5 existing event types without silently dropping any.
+**Must have (table stakes) — buildable now, zero dependency on the frontend repo:**
+- Nonprod deploy target reachable over HTTPS at a stable hostname
+- Isolated database (Neon branch) and isolated Kafka/Schema Registry (second broker)
+- CI job deploying to nonprod on push to master, alongside (not gating, not gated by) the existing production deploy
+- A test-data reset/seed mechanism, curl-verifiable today — this needs to cover Kafka/activity-log state too, not just Postgres, which generic guidance doesn't address but this project's own architecture requires
+- CORS allow-list extension is zero backend code change (`CorsConfig.java` already externalizes origins via `app.cors.allowed-origins`) — just a deployment-time env var once the frontend's nonprod origin is known
 
-**Must have (table stakes):**
-- Public HTTPS endpoint via Caddy with correct DNS + both OCI firewall layers opened
-- App + Redpanda `restart: unless-stopped` with basic healthchecks
-- Automated GitHub Actions redeploy on merge (new secrets, not reused AWS ones)
-- Log rotation on the VM (unbounded logs will fill the free-tier disk)
-- Explicit, versioned schema registration with an enforced (not default) compatibility mode
-- All 5 existing event types represented in Avro without silently dropping any
+**Should have (once the frontend repo exists) — explicitly deferred, not attempted this milestone:**
+- `repository_dispatch` cross-repo CI trigger — hard-blocked on the frontend repo having a workflow file to dispatch into; there is nothing to build on this side yet
 
-**Should have (competitive/differentiator):**
-- Documented compatibility-mode rationale (why BACKWARD or FULL, not just "the default")
-- Redpanda's built-in Schema Registry instead of a separate Confluent container (lower footprint, consistent with the self-hosted-Redpanda decision)
-- A pre-merge schema-compatibility CI check, mirroring the already-planned pre-merge DDL verification step
-
-**Defer (v2+):**
-- Full observability stack (Prometheus/Grafana) — disproportionate to actual traffic
-- Multi-broker Redpanda / true HA — meaningless on a single VM
-- True zero-downtime blue-green deploys — resource cost outweighs benefit at this scale
-- Long-lived dual-format (JSON+Avro) topic migration tooling — not applicable given the single-deployable producer/consumer topology
+**Defer/anti-features (explicitly rejected for this milestone):**
+- Per-PR ephemeral nonprod environments — solves a parallel-review-contention problem a solo project structurally doesn't have
+- A second Neon project (vs. a branch) — over-engineering for one persistent staging target
+- Backend gating its own production promotion on the frontend repo's E2E results — inverted ownership; the frontend should gate itself on nonprod reachability instead
 
 ### Architecture Approach
 
-The controller → service → repository → entity stack is entirely unchanged. The three architectural deltas are: the Postgres datasource moves off-box and gains a TLS/cold-start dimension (Neon), the Kafka broker becomes Redpanda in the deploy target only (different docker-compose configuration surface — `KAFKA_*` env vars vs. `rpk`/`redpanda start` CLI flags, not a like-for-like swap), and a Schema Registry client threads into the existing `KafkaEventPublisher`/`KafkaConsumerConfig`/`ActivityLogConsumer` touchpoints via configuration only — except for one genuinely new piece of code: a mapping layer between the plain, dependency-free `ActivityEvent` sealed records and Avro-generated `SpecificRecord` classes, needed because Avro's Java tooling has no push-button path from a Java sealed interface to a schema.
+Nonprod integrates into the existing single-VM, single-pipeline architecture via three changes: a second Compose project (name-pinned, on a new shared `edge` external Docker network so Caddy can reach `app-nonprod` without exposing new host ports), a second Caddy site block (no second Caddy container), and two new sibling GitHub Actions jobs (`flyway-verify-nonprod`, `deploy-to-nonprod`) extending the existing `deploy.yml` rather than a new workflow file — both depend only on the already-built `build-and-push-docker-image` output and run parallel to, not gating, `deploy-to-netcup`.
 
 **Major components:**
-1. New Avro schema files (5 `.avsc`, one per event type) + Gradle-generated Java classes — new, checked into `build/generated` like MapStruct output
-2. Mapping layer (Avro DTO ↔ domain `ActivityEvent`) at the publish and consume boundaries — new code, the single largest net-new application-code piece in this milestone
-3. `docker-compose.yml` Redpanda service block — replaced wholesale (different config vocabulary from `apache/kafka-native`), not edited in place
-4. `application.properties` datasource block — modified (explicit `sslmode=require`, Hikari pool re-derived for Neon's pooled topology)
-5. GitHub Actions `deploy.yml` — modified (new secrets for OCI VM, new pre-merge DDL verification step against Neon)
+1. `docker-compose.nonprod.yml` (or profile-gated block in the existing file) — nonprod `app`/`redpanda`, name-pinned, resource-capped
+2. Caddy (existing container) — second site block, second DuckDNS subdomain, automatic Let's Encrypt cert for the new hostname
+3. `deploy.yml` — two new jobs (`flyway-verify-nonprod`, `deploy-to-nonprod`), gated behind GitHub Environments once introduced
 
 ### Critical Pitfalls
 
-1. **Redpanda's default memory/CPU auto-detection assumes it owns the whole VM** — set `--overprovisioned` and explicit `--memory`/`--smp` caps plus cgroup limits on both containers before first deploy; un-tuned defaults will OOM-kill the co-resident JVM app under real traffic, not just at scale.
-2. **HikariCP tuned for always-on RDS breaks against Neon's scale-to-zero cold start** — use Neon's pooled (`-pooler`) connection string for the app's runtime datasource, widen `connectionTimeout` with real margin, and reserve the direct connection string only for the DDL-verification step.
-3. **The DLT's proven JSON byte-fidelity guarantee does not automatically carry over to Avro** — re-using the main pipeline's Avro-aware serializer for the DLT-publishing path will itself throw on poison messages; configure `DeadLetterPublishingRecoverer` with a raw byte-array serializer and write a new Avro-specific poison-message test.
-4. **Avro's strict field-default model can silently break implicit JSON permissiveness** — classify every field of all 5 event types (required-with-no-default vs. optional-with-explicit-default) against real historical event shapes before writing schemas, rather than mechanically converting the Java record field list.
-5. **OCI's three additive network layers (Security List + NSG + OS firewall) mean "I opened the port" doesn't guarantee reachability or safety** — audit all three layers together and verify externally (port scan/curl from outside), especially to ensure Redpanda's 9092 listener is never publicly reachable.
+1. **Deploy-job overwrite of live production** — the existing `deploy-to-netcup` job's hardcoded target directory and Compose's pinned project name mean a copy-pasted nonprod job that doesn't change every one of these axes converges onto and mutates production, not a second stack. This project already hit the less-severe sibling of this bug once (project-name collision via a directory move). Prevention: every identity axis (directory, Compose project name, container names, network name, volume names) must differ between prod and nonprod jobs, verified explicitly, not assumed from "it's a different job."
+2. **No GitHub Environments exist today** — all secrets are plain, unscoped repository secrets. A nonprod job inherits full production secret access by default. Prevention: introduce `production`/`staging` GitHub Environments as a prerequisite step *before* the nonprod CI job is added, not bolted on after.
+3. **Resource contention is a cgroup problem, not an arithmetic one** — `mem_limit` is a per-container hard cap, not a host-level reservation; summed caps across both stacks can overcommit the host even when each individually looks safe on paper. This project has already proven a cgroup-accounting surprise once at exactly this kind of boundary. Prevention: live-measure nonprod's actual Redpanda memory floor via iterative restart cycles, the same discipline v1.2 Phase 5 Task 3 already used for production — do not assume a value from arithmetic (e.g., "just halve prod's cap").
+4. **`cleanup-old-images` would delete nonprod's live tag** — it deletes every Docker Hub tag except its own run's; sharing the production image repository between environments means the next production push deletes whatever tag nonprod is currently running. Prevention: separate Docker Hub repository for nonprod images, or scope the cleanup job's tag-matching explicitly.
+5. **DuckDNS is a shared public suffix** — any cookie/CORS config that pattern-matches `*.duckdns.org` instead of enumerating the two full hostnames leaks scope to unrelated tenants on the same suffix, not just this project's own environments. Prevention: always enumerate exact hostnames, never wildcard-match the shared suffix.
 
 ## Implications for Roadmap
 
 Based on research, suggested phase structure:
 
-### Phase 1: Schema Registry (local dev only)
-**Rationale:** ~95% of this work can be built and fully verified against the existing local docker-compose stack with zero dependency on the OCI VM, Neon, or GitHub Actions — no reason to block it on infra provisioning, and it's the more code-heavy, more interesting/reviewable phase.
-**Delivers:** 5 `.avsc` schemas + Gradle Avro codegen wiring, producer-side and consumer-side mapping layers (Avro DTO ↔ `ActivityEvent`), updated serializer/deserializer config, compatibility mode explicitly chosen and documented per subject, DLT re-verified with a raw byte-array serializer and a new Avro-poison-message test, historical-data compatibility rehearsal (sample real topic data through the new schemas before any cutover).
-**Addresses:** Explicit versioned schema registration, enforced compatibility mode, all 5 event types represented without loss (table stakes); documented compatibility rationale, Redpanda-built-in-registry framing (differentiators).
-**Avoids:** Pitfalls 9 (unexamined default compatibility mode), 10 (Avro strict-field-default breakage), 11 (DLT byte-fidelity regression), 12 (hard cutover against real historical data without rehearsal).
+### Phase 1: Nonprod Infrastructure Bootstrap
+**Rationale:** Standard, well-documented patterns (Neon branching, DNS, Docker networking) with no genuine unknowns — can proceed directly to planning without a research-phase detour.
+**Delivers:** Neon nonprod branch + secrets, new DuckDNS subdomain, shared `edge` Docker network, Caddy second site block.
+**Addresses:** Isolated database, reachable HTTPS hostname (table stakes).
+**Avoids:** Pitfall 5 (DuckDNS wildcard scope leak) by enumerating exact hostnames from the start.
 
-### Phase 2: Infra Migration (Oracle Cloud + Redpanda + Neon + CI/CD)
-**Rationale:** Pure ops/infrastructure work, independent of the schema-registry app-logic changes; landing it second avoids conflating an app-logic-adjacent phase with a pure-ops phase in one PR, matching the project's one-epic-per-PR discipline. The only schema-registry task that lands here is the last-mile cutover: repoint `schema.registry.url` from the local/standalone registry to Redpanda's built-in registry on the OCI VM and re-run Phase 1's verification suite against the real target.
-**Delivers:** Oracle Cloud VM provisioned (with tenancy resource shape re-verified in-console first), Redpanda docker-compose service block authored with explicit `--overprovisioned`/`--memory`/`--smp` caps, Neon wired via pooled connection string with re-derived HikariCP sizing and `sslmode=require`, Caddy reverse proxy with automatic HTTPS, GitHub Actions retargeted with locally-generated SSH keys and pinned `known_hosts`, new pre-merge DDL verification step against Neon's direct connection string, log rotation configured, restart policies and healthchecks on app + Redpanda, OCI Security List + NSG + OS firewall audited and externally verified.
-**Uses:** Oracle Cloud A1 Flex, Redpanda v26.2.x, Neon serverless Postgres, Caddy, GitHub Actions (`appleboy/ssh-action`, `docker/build-push-action`).
-**Implements:** Replaced `docker-compose.yml` Redpanda service block; modified `application.properties` datasource block; modified `deploy.yml`.
+### Phase 2: Nonprod Stack Deployment & Resource Measurement
+**Rationale:** This is the critical path and cannot be compressed — the nonprod Redpanda memory floor is a genuine unknown requiring live, iterative measurement (2-4 restart cycles), mirroring how production's own Redpanda caps were corrected in v1.2 Phase 5 Task 3. Manual deploy first, matching the project's own established tracer-before-automation pattern (Phase 5 Plan 04 did a manual deploy before Plan 05 automated it).
+**Delivers:** `docker-compose.nonprod.yml` (name-pinned, Compose `profiles:`-gated), a manually-verified-healthy nonprod stack on the existing VPS, measured (not assumed) resource caps.
+**Uses:** Docker Compose `profiles:`, second Redpanda broker instance.
+**Implements:** The colocated-stack architecture component.
+
+### Phase 3: Kafka Isolation & Data Reset Mechanism
+**Rationale:** Buildable and fully verifiable independently of CI automation or the frontend repo — a curl-verifiable reset endpoint needs no Playwright suite to exist yet.
+**Delivers:** Confirmed second-broker Kafka/Schema-Registry isolation, a test-data reset/seed mechanism covering both Postgres and activity-log/Kafka state.
+**Addresses:** The data-isolation and flake-prevention table-stakes features.
+
+### Phase 4: CI Automation & GitHub Environments
+**Rationale:** Automates the now-proven manual path. GitHub Environments must land as a prerequisite *within* this phase, before the nonprod deploy job exists — sequencing this the other way around would mean the nonprod job runs unscoped-secret first and gets re-gated later, a worse rollout than doing it right the first time.
+**Delivers:** `production`/`staging` GitHub Environments, `flyway-verify-nonprod` + `deploy-to-nonprod` jobs extending `deploy.yml`, a decision on separate-vs-shared Docker Hub repo for nonprod images (separate recommended, per Pitfall 4).
+**Uses:** The existing `deploy.yml` job-graph conventions.
+**Avoids:** Pitfalls 1, 2, and 4 (deploy-job overwrite, unscoped secrets, tag-deletion cross-contamination) — each has an explicit verification step in this phase.
+
+### Phase 5: Cross-Repo E2E Dispatch (deferred, not this milestone)
+**Rationale:** Hard-blocked on the frontend repo existing — there is no workflow file to `repository_dispatch` into yet, and no code to write on this side.
+**Delivers:** Nothing in this milestone. Tracked as a follow-on todo/future milestone item.
+**Note:** Not a blocker to shipping v1.3 — nonprod deploying continuously on every master push already gives the eventual frontend CI a stable, always-current target to point Playwright at directly, no cross-repo plumbing required from this side.
 
 ### Phase Ordering Rationale
 
-- Schema Registry work has zero dependency on the new deploy target and is the higher-risk, more code-heavy area (new mapping layer, real architectural decision) — sequencing it first means it gets full attention and isolated review before infra-provisioning noise is introduced.
-- Infra Migration is entirely ops/config and benefits from Schema Registry being already proven locally, so the only cross-phase task is a narrow, well-scoped cutover step (repoint one URL, re-run one verification suite).
-- This ordering directly avoids Pitfall 12's highest-cost failure mode (hard cutover against already-shipped historical data without rehearsal) by forcing the historical-data rehearsal to happen against the stable local stack before any production deploy-target risk is introduced.
-- Both phases share a "config change, not code change" temptation (per PROJECT.md's framing) that research flags repeatedly as a place real work gets skipped — each phase's plan should explicitly call out the config-only changes that are nonetheless mandatory (Neon SSL/pool sizing, Redpanda resource caps, DLT serializer).
+- Phase 1 before Phase 2: external provisioning (Neon, DNS) has no dependency on the nonprod stack existing yet and can be verified independently, unblocking Phase 2 immediately.
+- Phase 2 before Phase 3: the reset mechanism and Kafka isolation need a running, resource-verified nonprod stack to test against.
+- Phase 4 last (of the buildable phases): CI automation should wrap a manually-proven-healthy target, exactly mirroring how v1.2 Phase 5 sequenced its own manual-tracer-then-automate approach.
+- Phase 5 explicitly out of this milestone's scope: automating a nonexistent trigger destination is not real work, just a placeholder.
 
 ### Research Flags
 
 Phases likely needing deeper research during planning:
-- **Phase 1 (Schema Registry):** The Avro/sealed-interface mapping layer has no ready-made tooling shortcut (confirmed — no Baeldung/Apache Avro doc generates Avro schemas directly from a Java sealed interface + records); this design decision (mapper vs. `@Union` reflection-based serialization) needs its own research/design pass at phase-planning time.
-- **Phase 2 (Infra Migration):** Redpanda resource budgeting on the actual (possibly-changed) OCI tenancy shape needs to be verified against the real, current allocation before finalizing `--memory`/`--smp` values — do not plan purely against the publicly-reported 2 OCPU/12 GB figure without an in-console check first.
+- **Phase 2:** The Redpanda memory floor is a binding, currently-unmeasured unknown. Budget real iteration time; if no value under roughly 1.0-1.2GB reaches a healthy restart, the fallback (separate small VPS for nonprod) needs to be exercised, not just documented as an option.
 
-Phases with standard patterns (skip research-phase):
-- **Phase 2 (Infra Migration) — Caddy/GitHub Actions/SSH deploy mechanics specifically:** Well-documented, standard patterns (official docs for `appleboy/ssh-action`, Caddy auto-TLS, Docker restart policies) with no project-specific ambiguity once the security hardening steps (locally-generated keys, pinned `known_hosts`) are applied.
+Phases with standard patterns (skip research-phase, proceed direct to planning):
+- **Phase 1:** Neon branching, DNS, and Docker networking are all officially documented with no project-specific unknowns.
+- **Phase 3:** Topic/consumer-group prefixing and a reset endpoint are config-driven, low-risk once the second-broker decision is made (it already has been, in this research).
+- **Phase 4:** GitHub Actions job placement and Environments are well-documented, and this repo already has deploy-job precedent to extend.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | MEDIUM-HIGH | Official docs confirmed for Redpanda/Neon/Confluent client mechanics; Oracle's free-tier limit change is confirmed by multiple independent outlets but never officially published by Oracle |
-| Features | MEDIUM | Cross-checked across official Confluent/Redpanda/Oracle/Neon docs; the JSON→Avro gradual-migration pattern and sealed-interface→Avro mapping specifics are LOW confidence — no authoritative source addresses this project's exact shape |
-| Architecture | MEDIUM | Cross-checked against Neon/Redpanda/Spring Kafka official docs and multiple independent sources; no first-party benchmark was run against the actual OCI A1 Flex target |
-| Pitfalls | LOW-MEDIUM | General web sources plus official vendor docs, not independently cross-verified per individual claim; the Oracle free-tier reduction is corroborated across three independent tech-press sources plus a primary user report, raising that specific claim to MEDIUM |
+| Stack | HIGH | Grounded directly in this repo's own already-proven prod stack, official Neon/Caddy docs, and this project's own measured production baseline |
+| Features | MEDIUM | Table-stakes/anti-feature split is well-reasoned and grounded in this project's own PROJECT.md/deploy.yml constraints, but the general staging-environment pattern research is web-sourced, not framework-mandated |
+| Architecture | HIGH | Verified against this repo's own documented incident history (Compose collision, Redpanda mem_limit) plus current official Docker/Caddy docs |
+| Pitfalls | HIGH | Five of nine pitfalls sourced directly from this repo's own `docs/INFRA_RUNBOOK.md` and `.github/workflows/deploy.yml`, not inferred from general guidance |
 
-**Overall confidence:** MEDIUM
+**Overall confidence:** HIGH on approach and phase structure; MEDIUM specifically on the one genuine open unknown (nonprod Redpanda memory floor), which Phase 2 exists specifically to resolve.
 
 ### Gaps to Address
 
-- **Oracle A1 Flex tenancy shape:** Confirm the actual current OCPU/RAM allocation for this specific tenancy in-console before finalizing Redpanda resource budgets — the publicly reported 2 OCPU/12 GB figure may not apply uniformly (some tenancies may be grandfathered, others may still be affected retroactively).
-- **Avro mapping-layer design:** No existing tooling or pattern found for mapping a Java sealed interface + records directly to Avro; the choice between hand-authored mapper classes (MapStruct-style, matching existing Entity↔DTO convention) vs. `@org.apache.avro.reflect.Union` reflection-based serialization needs its own design pass at Phase 1 planning time.
-- **Exact Confluent serializer patch version:** `io.confluent:kafka-avro-serializer` should be re-verified against Confluent's published interoperability matrix at merge time (the ~7.7.x/7.8.x line is a best estimate, not a locked version, given Confluent ships new patches frequently).
-- **Confluent client vs. Redpanda registry edge cases:** Two open GitHub issues note incompatibilities between Confluent's Java client and Redpanda's Schema Registry for Protobuf schemas with map fields and Avro namespace-tag handling — not directly relevant since this project uses Avro without map-field Protobuf, but worth a smoke test against the real Redpanda registry (not just Confluent's) before committing.
-- **Compatibility mode decision (BACKWARD vs. FULL):** FEATURES.md recommends BACKWARD as the standard default matching this project's single-deployable topology; PITFALLS.md argues FULL may actually be safer/affordable given producer and consumer are the same app process redeployed together. This is a real, unresolved tension between the two research files — Phase 1 planning must make and document an explicit choice rather than defaulting to either recommendation unreviewed.
+- **Redpanda `--memory` floor for nonprod** — the single binding unknown across all four research files. Not resolvable by research; requires the live iterative measurement Phase 2 is built around. If it resolves negative (no safe value fits), the documented fallback (second small VPS, ~€4/month) needs to actually be exercised, not left as an unexercised contingency.
+- **Docker Hub repository decision** (separate vs. shared repo for nonprod images) — recommended separate, to avoid `cleanup-old-images` cross-contamination, but not a hard blocker either way; a scoping fix to the cleanup job's own tag-matching would also work. Decide during Phase 4 planning.
+- **GitHub Environments migration scope** — which of the 10 existing repo secrets move to a `production` Environment vs. stay repo-level, and whether to add a required-approval gate on `production` as additional blast-radius defense. Not resolved by this research; a Phase 4 planning decision.
+- **Ephemeral vs. persistent Neon branch** — a persistent nonprod branch (this research's recommendation) is sufficient for v1; Neon's `reset-from-parent` operation is a lighter-weight alternative to true per-run ephemeral branches if flakiness from accumulated test state ever becomes a real problem — deferred, not needed for v1.
+- **Full-copy vs. schema-only Neon branch** — a genuine privacy-vs-fixture-parity tradeoff, not a research gap; this is an operator decision for Phase 1 planning.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Redpanda Requirements and Recommendations, Sizing Guidelines, Schema Registry overview (official docs, docs.redpanda.com) — broker/registry mechanics, ARM64 support, sizing
-- Neon: Connection pooling, Choosing your connection method, Connect securely, Connection latency (official docs, neon.com/docs) — pooled vs. direct connection guidance, cold-start latency numbers, SSL requirements
-- Confluent: Schema Evolution & Compatibility Types, Apache Avro for Kafka serdes (official docs, docs.confluent.io) — compatibility modes, Avro serdes mechanics
-- Oracle Cloud Free Tier, Always Free Resources, Security Lists, Network Security Groups (official docs, docs.oracle.com) — networking model, free-tier terms
-- davidmc24/gradle-avro-plugin, appleboy/ssh-action (official GitHub repos) — build tooling, CI/CD deploy mechanics
-- GitHub Docs: Managing deploy keys, Using secrets in GitHub Actions — SSH deploy key hygiene
+- This project's own `docs/INFRA_RUNBOOK.md`, `docker-compose.prod.yml`, `Caddyfile`, `.github/workflows/deploy.yml`, `CorsConfig.java`, `KafkaTopics.java` — read directly, not inferred
+- Official Neon docs — branching mechanics, plan-tier limits
+- Official Caddy docs — multi-site TLS/DNS configuration
 
 ### Secondary (MEDIUM confidence)
-- InfoQ, heise online: Oracle Quietly Halves Free Tier Ampere A1 Compute Limits — cross-corroborated Oracle free-tier reduction (June 2026, undocumented by Oracle itself)
-- Redpanda GitHub issues #5771, #11912; TSB-2025-18 (official support advisory) — Confluent client vs. Redpanda registry edge cases (Protobuf map fields, Avro namespace tags)
-- Redpanda blog: Solving OOM Killer events, Need for speed performance tips — resource-tuning vendor guidance
+- Community/third-party sources on Netcup VPS Lite pricing tiers (cross-corroborated across multiple independent sources, not scraped from a live vendor pricing page)
+- General GitHub Actions Environments and cross-repo `repository_dispatch` documentation and community patterns
 
 ### Tertiary (LOW confidence)
-- TerminalBytes: Oracle Cloud free tier 2026 changes — specific 4→2 OCPU / 24→12 GB numbers, cross-checked against tech press but not vendor-confirmed
-- Community setup guides for Oracle Cloud + Docker networking, HikariCP tuning blogs, Java virtual-threads pinning writeups — individually LOW confidence, used only where independently converged on the same finding (e.g., the two-layer OCI firewall gotcha)
-- Baeldung "Generate Avro Schema From Certain Java Class" — confirms no tooling generates Avro schemas directly from a sealed interface; needs validation during Phase 1 design
+- DuckDNS account subdomain-count limit (single secondary-source corroboration — confirm directly at registration time if it becomes load-bearing)
 
 ---
-*Research completed: 2026-08-03*
+*Research completed: 2026-08-17*
 *Ready for roadmap: yes*

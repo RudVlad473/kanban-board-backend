@@ -1,187 +1,182 @@
 # Feature Research
 
-**Domain:** (1) Single-VM production deployment of a small Spring Boot app (reverse proxy/TLS, process supervision, CI/CD) and (2) Schema Registry (Avro/Protobuf) in front of an existing 5-event-type Kafka activity-log pipeline
-**Researched:** 2026-08-03
-**Confidence:** MEDIUM (web-sourced, cross-checked across multiple independent sources including official Confluent/Redpanda/Oracle/Neon docs where cited; a few items — the JSON→Avro gradual-migration pattern and the sealed-interface→Avro mapping specifics — are LOW confidence, no authoritative source found addressing this project's exact shape)
+**Domain:** Nonprod/staging environment + Playwright E2E CI gate, for a solo/portfolio single-VPS backend feeding a not-yet-built separate frontend repo
+**Researched:** 2026-08-17
+**Confidence:** MEDIUM (patterns cross-checked across multiple independent web sources; no vendor-authoritative doc dive was needed since the mechanisms — GitHub Actions events, Neon branching, Docker Compose resource limits — are already used or directly analogous to what this project's `deploy.yml` and infra already do. Individual source confidence is LOW per this project's classify-confidence tier for general web search; treat specifics as directional, not vendor-guaranteed.)
 
-## Context
+## Framing: what this repo can actually build right now
 
-This milestone has two independent feature areas bolted onto an already-shipped, already-working system. Nothing here is new application logic — it is entirely infrastructure and serialization-format plumbing around code that already works (5 typed domain events, `KafkaEventPublisher`, `ActivityLogConsumer`, Docker Compose local stack). The research below treats each area separately because they have almost no shared dependency: the deploy migration must land first only insofar as there must *be* a reachable environment before "does the schema registry work end-to-end in prod" is even askable, but the schema registry work itself is orthogonal to Caddy/Oracle Cloud/Neon.
+The stated goal names two repos: this backend repo, and a **separate frontend repo that does not yet exist** (or is early-stage). The milestone's job is explicitly scoped to "provide that target" — i.e., everything below is filtered into:
 
-**Existing code confirmed as in-scope for touching (schema registry area):**
-- `src/main/resources/application.properties` — `spring.kafka.producer.value-serializer=...JsonSerializer` and `spring.kafka.consumer.properties.spring.deserializer.value.delegate.class=...JsonDeserializer` (plus `spring.json.trusted.packages` / `spring.json.use.type.headers`) are the exact lines that get swapped for Avro/Protobuf equivalents.
-- `KafkaEventPublisher` (`config/KafkaEventPublisher.java`) — currently typed `KafkaTemplate<String, Object>`, calls `kafkaTemplate.send(topic, key, event)` where `event` is a plain `ActivityEvent` record. This is the one place that would need a serializer-compatible payload type.
-- `ActivityLogConsumer` (`activitylog/ActivityLogConsumer.java`) — currently receives a deserialized `ActivityEvent` directly via Spring Kafka's type-header-driven `JsonDeserializer`; an Avro/Protobuf swap changes what shows up at this method boundary unless a translation layer sits in front of it.
-- The 5 sealed-permitted records (`TaskCreatedEvent`, `TaskMovedEvent`, `TaskDeletedEvent`, `BoardCreatedEvent`, `ColumnCreatedEvent`) implementing `ActivityEvent` — none of these map automatically to Avro; Avro's Java tooling is schema-first (`.avsc` + codegen plugin) or reflection-based via an annotation on a base type, not "point it at an existing sealed interface and get a union for free."
-- `docker-compose.yml` (local Kafka stack) — gains a schema-registry service (Confluent's separate container, or none at all if Redpanda's built-in registry is chosen, since it ships inside every broker with no extra container).
+- **Buildable now, independent of the frontend repo** — infra shape, data isolation, a reset/seed mechanism, CORS placeholder. All of this is verifiable today with `curl`/manual HTTP calls, with zero dependency on Playwright or the frontend repo existing.
+- **Blocked on the frontend repo existing** — anything that requires a live GitHub Actions workflow *in that repo* to dispatch into, wait on, or read results from. This cannot be meaningfully built or tested from this repo alone; wiring it "speculatively" now means guessing at a workflow file, event name, and base-URL env var convention that repo hasn't chosen yet.
+
+This split is the single biggest scoping decision for this milestone and is reflected in the MVP Definition below.
 
 ## Feature Landscape
 
-### Table Stakes (Users/Reviewers Expect These)
+### Table Stakes (Expected for This Capability to Exist)
 
-For a portfolio project, "users" here means a technically literate reviewer (hiring manager, senior engineer) evaluating whether the deploy and the schema registry are real or decorative.
+Missing these = there is no real target for the frontend's E2E suite to hit, or the target is unsafe/unusable.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Public HTTPS endpoint, not bare HTTP or an IP:port | An unencrypted or self-signed-cert API reads as unfinished/toy-grade to any reviewer who checks. TLS is the single most visible signal of "this is deployed for real." | LOW–MEDIUM | Caddy in front of the app container, one `Caddyfile` line (`your-domain { reverse_proxy app:8080 }`) gets automatic Let's Encrypt HTTPS. Requires a real DNS A record pointed at the Oracle VM's public IP first — Caddy cannot provision a cert for a name that doesn't resolve to the running box. |
-| App survives a crash/restart without manual intervention | Table stakes for "production" in any meaningful sense — a demo that silently stays down after an OOM or a bad deploy is not production. | LOW | `restart: unless-stopped` on the app and Redpanda services in `docker-compose.yml`. Do not use `restart: always` (can unexpectedly restart something a human deliberately stopped). |
-| Automated deploy on merge to master (CI/CD), not manual SSH-and-copy | This project already had this at the AWS stage (`.github/workflows/deploy.yml`); regressing to manual deploys after "redeploying with CI/CD" is explicitly in the milestone goal would be a visible step backward. | LOW–MEDIUM | GitHub Actions job: build/push image (or build on the VM), SSH in, `docker compose pull && docker compose up -d`. Brief request-dropping blip during restart is acceptable for a personal project — see Anti-Features below on why true zero-downtime is over-engineering here. |
-| Basic reachability/health monitoring | If the free-tier VM or Neon or Redpanda silently goes down, "it's deployed" becomes false without anyone noticing — undermines the whole point of redeploying. | LOW | A Spring Boot Actuator `/actuator/health` endpoint (if not already present, cheap to add) polled by a free external uptime pinger (UptimeRobot, healthchecks.io free tier) or a simple GitHub Actions scheduled workflow hitting the endpoint. No need for Prometheus/Grafana at this scale. |
-| Log rotation on the VM | Docker's default `json-file` log driver has no size cap; an unbounded app + Redpanda log will eventually fill the free-tier VM's disk and take the whole stack down. | LOW | Set `max-size`/`max-file` on the `json-file` log driver in `docker-compose.yml` (a few lines per service), or rely on `logrotate` if logs are also written to files. This is a real, concrete risk on a small always-free VM (limited disk), not decorative. |
-| Firewall rules opened correctly for the exposed ports | Oracle Cloud's default security list blocks everything but SSH/22 inbound; if this isn't set up correctly the "public HTTPS endpoint" simply doesn't work, at two separate layers. | LOW–MEDIUM | Two layers to configure, both required: (1) the OCI VCN Security List / Network Security Group (console-level ingress rules for 80/443), and (2) the instance's own OS firewall (`iptables`/`firewalld` on Oracle Linux, `ufw` on Ubuntu) — missing either one silently blocks traffic and is a common gotcha specific to OCI. |
-| Explicit, versioned schema registration (not ad-hoc auto-registration) | A schema registry whose schemas are never explicitly registered/reviewed (just auto-created by whatever the producer happens to send) isn't meaningfully different from the current "convention-based agreement" this milestone is trying to fix (SEED-001). | LOW–MEDIUM | Confluent/Redpanda Schema Registry supports producer auto-registration, but it's explicitly discouraged for production — register schemas via a build/CI step instead, so a schema change is a reviewable diff, not a runtime side effect. |
-| A compatibility mode is set and enforced, not left at whatever the registry's out-of-the-box default silently is | The entire point of adding a registry is "reject a producer/consumer schema mismatch before it corrupts the topic," not just "store schemas somewhere." Leaving compatibility unset/default defeats the purpose. | LOW | `BACKWARD` is the standard default and the right choice for this project's single-producer/single-consumer, same-deploy-unit shape (see Differentiators/dependency notes below for why). |
-| All 5 existing event types are representable in the new schema format without silently dropping any | The producer/consumer already handle exactly 5 event types via an exhaustive sealed-interface `switch` with no `default` arm — a schema-registry migration that "forgets" one event type would be a functional regression, not just a format change. | MEDIUM | Each of `TaskCreatedEvent`/`TaskMovedEvent`/`TaskDeletedEvent`/`BoardCreatedEvent`/`ColumnCreatedEvent` needs an explicit Avro/Protobuf schema (either 5 separate schemas + producer-side dispatch, or one schema with a union/oneof) — this is genuinely the bulk of the schema-registry work, not the registry setup itself. |
+| Long-lived, reachable nonprod deploy target (colocated resource-capped Compose stack on the existing Netcup VPS, or a second small free-tier VM) | A Playwright suite needs a stable base URL to point at; without this there is nothing to build a gate around | MEDIUM | Colocation is the pragmatic default at this scale (see Pattern Analysis) — a second dedicated VM is the fallback only if resource contention with prod proves real, not a default |
+| DB isolation (separate Neon branch for nonprod, not shared with prod) | Prevents E2E test writes/deletes from touching real production data; already a native, free Neon capability this project depends on | LOW | Neon branching is documented as near-instant and cheap enough to use freely — this is the lowest-effort isolation win available |
+| Kafka isolation (topic-name prefix per environment on the existing single Redpanda broker) | Prevents nonprod activity-log events from mixing into production's Kafka topics/consumer groups | LOW–MEDIUM | Topic-prefix isolation on the *existing* broker, not a second broker — see Anti-Features |
+| Nonprod CI deploy job in this repo (reusing `deploy.yml`'s build → Flyway-verify → deploy pattern, targeted at nonprod) | The existing prod pipeline is the only proven deploy mechanism this project has; a second bespoke mechanism for nonprod would be unjustified extra surface | LOW–MEDIUM | Structurally the same job graph as today's `deploy-to-netcup`, parameterized by target host/env file |
+| CORS entry for the eventual frontend's nonprod origin | Phase 07.1 already wired CORS for local dev origins only; a deployed nonprod frontend origin is a new, real origin the browser will send | LOW | Buildable now with a placeholder/expected subdomain even before the frontend repo exists |
+| A safe, documented data reset/seed mechanism reachable before an E2E run (test-only reset endpoint, or a re-runnable seed script/Flyway-adjacent data script) | Standard Playwright-against-real-backend guidance converges on this: seed before, and guarantee a clean slate, rather than trust tests to self-clean | MEDIUM | This is the one piece worth building and *manually* verifying now (via curl) even with no consumer yet — it's independently useful and de-risks the eventual E2E wiring |
+| DNS/TLS for nonprod (second Caddy vhost + subdomain) | Matches the existing production pattern (Caddy automatic HTTPS); a plain-HTTP or self-signed nonprod target would make it a worse stand-in for the real deploy shape it's meant to validate | LOW | Same mechanism already proven in prod; just a second vhost entry |
 
-### Differentiators (Portfolio/Competitive Value)
+### Differentiators (Real Value, Justifiably Deferred Until the Frontend Repo Exists)
 
-Not required for the pipeline to function; these are what make the milestone demonstrate real depth rather than "installed a thing."
+Not required for this milestone's *buildable* scope, but the right next step once there's a real consumer.
 
 | Feature | Value Proposition | Complexity | Notes |
-|---------|--------------------|------------|-------|
-| Automatic HTTPS via Caddy instead of manual Certbot/Nginx cron jobs | Shows judgment about picking the right-sized tool (Caddy's one-line automatic HTTPS) over the more "enterprise-familiar" but more manually-maintained Nginx+Certbot combo — a good signal of pragmatic engineering rather than defaulting to what's most commonly seen in tutorials. | LOW | Caddy is the recommended default here specifically because this is a single-VM, single-domain, no-exotic-routing-needs deployment — exactly Caddy's sweet spot. Nginx would be defensible too but adds manual cert-renewal maintenance for zero added benefit at this scale. |
-| Documented compatibility-mode choice with an explicit rationale (BACKWARD, and why) | Distinguishes "understood the schema-evolution tradeoff" from "copy-pasted the registry quickstart." A reviewer skimming the PR description or code comments who sees *why* BACKWARD was chosen (vs FORWARD or FULL) reads as depth, matching the project's existing convention of documenting non-obvious decisions in Javadoc. | LOW (documentation, not code) | This project's Javadoc convention (see `KafkaEventPublisher`'s D-01/D-02 comments) is exactly the right place for this — one paragraph explaining the choice, same style already established. |
-| A real Avro/Protobuf schema per event type registered and versioned in CI, not hand-waved | Demonstrates the actual schema-evolution workflow (register → compatibility-check → version bump) the milestone is meant to close the gap on, rather than just switching serializer class names. | MEDIUM–HIGH | This is the genuine "differentiator" of the whole schema-registry effort — the bulk of the real work and the real narrative value (closing SEED-001's flagged risk) lives here, not in which registry vendor is chosen. |
-| Redpanda's built-in Schema Registry instead of a separately-deployed Confluent Schema Registry container | Since this project already chose self-hosted Redpanda over Confluent-branded Kafka for the broker itself, using Redpanda's integrated, Confluent-API-compatible registry (no extra container, no extra port, no extra service to keep alive on an already resource-constrained free-tier VM) is the more consistent and lower-footprint choice — a legitimate architectural decision worth stating explicitly, not just "it happened to be there." | LOW (once Redpanda is already the broker) | Confirmed via Redpanda's own docs: the registry is an integrated component of every broker, storing schemas in an internal compacted topic, and is API-compatible with Confluent's REST API/clients — so `KafkaAvroSerializer`/`KafkaAvroDeserializer` (the standard Confluent Java client classes) work unmodified against it. |
-| A pre-merge schema-compatibility check in CI (registry `/compatibility` API call before merge) | Mirrors the project's existing pattern of a pre-merge DDL verification step (already planned for the Postgres migration) — applying the same "verify against the real target before merge" discipline to the new Kafka schema surface would be a nice structural parallel worth calling out, not a separate invention. | LOW–MEDIUM | Natural pairing with the milestone's already-planned "new pre-merge DDL verification step against the new deploy target" — same shape of problem (verify compatibility with a live external system before merge), same solution pattern. |
+|---------|-------------------|------------|-------|
+| `repository_dispatch` from this repo's nonprod-deploy job into the frontend repo, to kick off its Playwright suite against the freshly-deployed nonprod URL | Closes the loop the milestone is ultimately for — "deploy nonprod, then something runs E2E against it" | MEDIUM | Idiomatic mechanism for cross-repo triggering (custom `event_type`+payload, runs on target's default branch, needs a PAT with `repo` scope stored as a secret) — but genuinely cannot be finished/tested without the frontend repo's workflow file to dispatch into |
+| Readiness/health gate before declaring nonprod deployed (poll a health endpoint until 200 before firing any downstream signal) | Avoids racing a not-yet-warmed-up container; matches the HTTPS health check already used to verify prod in Phase 5 | LOW | Cheap and buildable now, independent of the frontend repo — arguably should move up to Table Stakes if effort allows |
+| Ephemeral Neon branch swap per E2E run (fresh branch off a known-good parent per run, instead of one stable nonprod branch + reset) | Stronger isolation — no cross-run bleed even under a bug in the reset mechanism | MEDIUM–HIGH | Requires the CI job to dynamically create a branch, rewrite the app's DB connection string, and restart/redeploy the app pointed at it — real extra CI wiring for a solo project with no PR-concurrency problem to justify it (see Pattern Analysis) |
 
-### Anti-Features (Commonly Suggested, Over-Engineering at This Scale)
+### Anti-Features (Would Look Sophisticated, Wrong for This Project's Scale)
 
-Things a "proper production setup" checklist would suggest that are actively the wrong call for a single-VM, always-free-tier, personal-portfolio deployment.
-
-| Feature | Why It Gets Suggested | Why It's Wrong Here | Alternative |
-|---------|------------------------|----------------------|-------------|
-| True zero-downtime blue-green deploys (spin up new container, health-check, atomically swap proxy target, tear down old) | Standard practice at any company with real traffic and SLAs; every "production deploy" guide mentions it. | This VM has one core-2 (or similar) always-free tier's worth of CPU/RAM, already running app + Postgres client + Redpanda; running two full app instances simultaneously during every deploy risks resource exhaustion on the free tier for a project with effectively zero concurrent users. The "downtime" from a plain `docker compose up -d --force-recreate` is a few seconds of dropped requests on a project nobody is hitting concurrently. | Simple restart-based redeploy (`docker compose pull && up -d`) is the right-sized choice; note the tradeoff explicitly (a few seconds of unavailability during deploy) rather than silently accepting it. |
-| Full observability stack (Prometheus + Grafana + alerting) | The "correct" companion to any production Kafka pipeline in enterprise contexts, heavily represented in Kafka/Spring Boot tutorials. | Massive resource and maintenance overhead relative to the actual signal needed ("is it up") on a free-tier VM already hosting three services; would itself become the thing that needs maintaining/monitoring. | Actuator `/health` + a free external uptime pinger is proportionate; this is explicitly a personal-project-scale decision, not a permanent architectural stance. |
-| Multi-broker Redpanda cluster for HA/replication | Redpanda's own docs recommend 3+ brokers for production. | A single-node broker on a single VM has no meaningful HA story regardless of broker count — if the VM dies, a 3-broker cluster on the same box dies with it. Multi-broker only makes sense across multiple machines, which contradicts the "single self-managed VM" constraint entirely. | Single-node Redpanda, explicitly documented as the accepted tradeoff (matches Redpanda's own "single broker is for dev/small-scale" framing, applied deliberately here rather than by accident). |
-| FULL compatibility mode "to be safe" for the schema registry | Sounds like the strictest/safest choice, and "safest" often gets picked by default when unsure. | FULL is the most restrictive mode (requires both backward AND forward compatibility on every change) and is meant for scenarios where producer/consumer upgrade order can't be controlled — not applicable here, where the producer (`KafkaEventPublisher`) and consumer (`ActivityLogConsumer`) live in the *same deployable* and ship together on every merge. FULL would reject legitimate schema changes (e.g., a field removal without a default) that are perfectly safe in a same-deploy-unit setup. | BACKWARD compatibility — matches this project's actual deployment topology (single artifact, single deploy) and is also required if the activity-log topic is ever replayed from the beginning (a real future scenario given the append-only activity feed). |
-| A generic/schema-per-message "envelope" format that can hold any future event type without a new schema | Feels forward-compatible and DRY — "why write 5 schemas when 1 generic one avoids future work." | Directly contradicts this project's own established decision (v1.1's Out of Scope table explicitly rejected "generic/pluggable event schema... loses compile-time safety for no gain at 5 event types") — the same reasoning applies with even more force once a schema registry is enforcing structure. | One schema per event type (or one Avro union referencing all 5), keeping the exhaustive-switch/compile-time-safety property the sealed interface already gives in Java, now enforced at the wire level too. |
-| Long-lived dual-topic JSON+Avro migration (indefinite parallel writes to both formats) | The textbook-correct way to migrate a large multi-team system without a flag day. | Overkill for a single producer and single consumer under one deploy — there's no second team or independently-deployed consumer that needs a gradual cutover; both sides change together in one PR/merge. | A coordinated single deploy (producer and consumer both switch serializer format in the same merge), with a short overlap/rollback window if genuinely needed — no long-lived dual-topic infrastructure. |
-| Protobuf `oneof`/code-first generation as a way to "cleanly" express the sealed interface | Protobuf's stronger forward-compatibility story and more explicit generated code (cited by teams like ClearStreet as their reason to prefer Protobuf over Avro) is a real, legitimate argument. | For *this* project specifically, Avro is the more natural fit: it's the more common default paired with Confluent/Redpanda Schema Registry tooling in Java/Spring shops, and neither format offers push-button mapping from a Java sealed interface regardless — so there's no clear win from Protobuf's extra tooling investment for 5 event types that don't change often. This is a judgment call, not a hard rule; flag it as one, don't treat it as settled. | Avro, chosen as the pragmatic default given the Confluent/Redpanda ecosystem's Avro-first tooling maturity, not because Protobuf is worse. |
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|---------------|------------------|-------------|
+| Per-PR ephemeral full-stack preview environments (spin up a whole VM/Compose stack + DB + Kafka per PR, tear down on close) | Feels like "the professional way" teams do staging | Solves a parallel-review-contention problem this project structurally cannot have (one developer, one branch in flight at a time); real platform-engineering cost to build and maintain the provisioning layer itself, for a benefit that never materializes at this scale | One static, long-lived nonprod environment (Table Stakes above) |
+| A second dedicated Kafka/Redpanda broker for nonprod | "Isolation" instinct — separate infra per environment | Duplicates the exact resource-capped single-node pattern prod already uses, on a VPS that's explicitly capacity-constrained, for isolation that topic-name prefixing already delivers at near-zero cost | Topic-prefix isolation (`nonprod.` vs no prefix, or similar) on the one existing broker |
+| Backend CI blocking/gating its own promotion-to-production on the frontend repo's E2E suite passing | The milestone's own prior-todo framing ("deploys to nonprod, runs Playwright, only then promotes to prod") reads this way | Inverts normal repo ownership — each repo should verify itself; making *this* repo's prod deploy depend on a suite that lives and runs in a *different* repo is a real coupling/blocking-radius risk (a frontend test flake or outage would block a backend-only fix from shipping) for a benefit ("prod backend regressions caught pre-promotion") that a good nonprod smoke/health check already covers more cheaply | Deploy to nonprod, verify health, promote to prod on backend's own tests passing (as today) — let the frontend repo's *own* CI gate on nonprod being reachable, not the reverse |
+| Building the full cross-repo dispatch-and-wait wiring speculatively now, before the frontend repo exists | Wanting to "finish the whole feature" in one pass | Nothing to test it against yet; the frontend repo hasn't chosen its workflow file shape, event name, or base-URL env var convention — anything built now is a guess that will likely need rework once that repo's actual CI is written | Build and verify the nonprod target + reset mechanism now (fully testable via curl); defer the dispatch wiring to when the frontend repo's first workflow exists |
 
 ## Feature Dependencies
 
 ```
-[Public HTTPS endpoint (Caddy + DNS)]
-    └──requires──> [Oracle Cloud VM reachable] ──requires──> [OCI security-list + OS firewall rules opened for 80/443]
+Nonprod deploy target (Compose stack, Caddy vhost)
+    └──requires──> Neon nonprod branch
+    └──requires──> Kafka topic-prefix isolation
+    └──requires──> CORS entry for nonprod frontend origin
 
-[GitHub Actions CI/CD deploy]
-    └──requires──> [SSH access + secrets configured for the new VM] (old EC2 secrets are dead, need replacing, not reusing)
-    └──enhances──> [Automated redeploy on merge] (already existed for AWS; must not regress)
+CI job: deploy-to-nonprod (this repo)
+    └──requires──> Nonprod deploy target existing
 
-[App + Redpanda restart-on-crash]
-    └──requires──> [docker-compose.yml restart policies + healthchecks]
+Data reset/seed mechanism
+    └──enhances──> Nonprod deploy target (buildable and manually verifiable independently — no hard dependency)
 
-[Neon Postgres swap]
-    └──requires──> [Connection string / env var change only] (JPA/Hibernate layer untouched, per PROJECT.md)
-    └──conflicts──> [Assuming zero cold-start latency] (scale-to-zero has a real ~300ms-few-second first-query cost; must be an accepted/documented tradeoff, not a surprise)
+repository_dispatch → frontend Playwright run
+    └──requires──> Nonprod deploy target reachable over HTTPS
+    └──requires──> Frontend repo existing, with its own workflow to dispatch into   [BLOCKED — not yet buildable]
+    └──enhances──> Readiness/health gate (should fire dispatch only after nonprod is confirmed warm)
 
-[Schema Registry (Redpanda built-in or Confluent)]
-    └──requires──> [Redpanda broker already running] (if using Redpanda's built-in registry — no separate service)
-    └──requires──> [Avro/Protobuf schema authored per event type] ──requires──> [Mapping layer between sealed ActivityEvent records and Avro-generated classes]
-                       └──requires──> [avro-maven-plugin/avro-gradle-plugin (or reflection-based @Union) added to build.gradle]
-
-[KafkaEventPublisher serializer swap] ──requires──> [application.properties producer.value-serializer change]
-[ActivityLogConsumer deserializer swap] ──requires──> [application.properties consumer delegate.value-deserializer change]
-    Both changes are coupled: producer and consumer must switch together in the same deploy (see BACKWARD-compatibility dependency note below) since they are the same deployable.
-
-[Compatibility mode = BACKWARD] ──enhances──> [Safe topic replay from offset 0] (the activity feed is append-only and unbounded; replay is a realistic future need)
-
-[Pre-merge schema-compatibility CI check] ──enhances──> [Schema Registry], mirroring the already-planned [pre-merge DDL verification step]
+Ephemeral Neon branch per E2E run
+    └──conflicts with──> "one stable nonprod branch" simplicity — pick one, not both, for v1
 ```
 
 ### Dependency Notes
 
-- **Public HTTPS requires the VM be reachable first, which requires both OCI firewall layers opened:** this is a two-step gotcha specific to Oracle Cloud (security list at the VCN level, then OS-level firewall on the instance itself) — missing either one silently breaks the "public HTTPS endpoint" table-stakes item with no obvious error message pointing at the cause.
-- **GitHub Actions CI/CD cannot reuse the old EC2 secrets:** `EC2_SSH_KEY`/`EC2_HOST`/`EC2_USER` all pointed at the deleted instance; this milestone needs entirely new GitHub Secrets for the Oracle Cloud VM, not a rename of the old ones — a good place for the roadmap to flag a discrete task ("recreate CI/CD secrets for the new host") so it isn't discovered mid-phase as a blocker.
-- **Neon's scale-to-zero conflicts with an assumption of consistently low latency:** the milestone should decide, and document, whether to accept the cold-start hit (free/default behavior) or pay to disable auto-suspend — this is a real tradeoff decision belonging in Key Decisions, not something to leave implicit.
-- **The schema-registry migration is coupled producer+consumer, not incremental:** because `KafkaEventPublisher` and `ActivityLogConsumer` are both in the same Spring Boot deployable and always ship together, there is no meaningful "consumer lags behind producer for weeks" scenario to design gradual migration around — this is the concrete reason the "dual-topic gradual migration" anti-feature is over-engineering *for this specific codebase's topology*, even though it is a legitimate pattern in general (e.g., Kafka Streams with independently-deployed multi-team consumers).
-- **The Avro/sealed-interface mapping layer is the one place with no ready-made shortcut:** no tooling found (Baeldung, Apache Avro docs) that generates Avro schemas directly from a Java sealed interface + records; expect to hand-author 5 `.avsc` files (or one union schema) and either (a) generate Avro `SpecificRecord` classes via `avro-gradle-plugin` and add an explicit mapper between them and the existing `ActivityEvent` records, or (b) use `@org.apache.avro.reflect.Union` reflection-based serialization directly on the interface. This is a real, non-trivial design decision the roadmap should flag as needing its own research/design pass at phase-planning time, not something to estimate as "just swap the serializer."
+- **Nonprod deploy target requires Neon branch + Kafka isolation + CORS:** none of these are optional add-ons — a nonprod environment sharing prod's DB branch or Kafka topics isn't isolated at all, and without the CORS entry a browser-driven Playwright suite (not just Playwright's HTTP-only `request` context) cannot even complete a credentialed request against it.
+- **`repository_dispatch` wiring is blocked on the frontend repo existing:** this is the one item in the whole landscape that is not a complexity/effort call but a hard external dependency. It should be tracked as an explicit follow-on, not attempted in this milestone.
+- **Data reset mechanism enhances rather than requires the deploy target:** it's valuable and testable on its own (hit it with curl against the nonprod DB), so there's no reason to defer it just because the dispatch wiring is blocked.
+- **Ephemeral-branch-per-run conflicts with stable-branch-plus-reset:** these are two different answers to the same problem (test isolation) — picking both adds CI complexity (dynamic connection-string rewrites) for marginal benefit over the simpler option at this project's scale (see Pattern Analysis).
 
 ## MVP Definition
 
-### Launch With (v1 — this milestone)
+### Launch With (v1 — this milestone, all buildable now regardless of frontend repo status)
 
-Minimum to call the deploy "real" and the schema registry "actually adopted," not decorative.
+- [ ] Nonprod Compose stack, resource-capped, colocated on the existing Netcup VPS (or a second free-tier VM if colocation proves resource-constrained) — mirrors prod's shape (app + Caddy)
+- [ ] Neon nonprod branch, wired via its own env file/secrets, kept structurally separate from `.env.prod`
+- [ ] Kafka topic-prefix isolation on the existing single Redpanda broker
+- [ ] Second Caddy vhost + subdomain, real HTTPS (matches prod's proven pattern)
+- [ ] CORS entry for the expected nonprod frontend origin (placeholder domain acceptable pre-frontend-repo)
+- [ ] CI job in this repo that deploys to nonprod, reusing `deploy.yml`'s build/Flyway-verify/deploy job graph, parameterized by target
+- [ ] A test-data reset/seed mechanism, built and manually verified (curl) even with no Playwright consumer yet
+- [ ] Readiness/health check confirming the nonprod deploy actually came up before considering it "provided"
 
-- [ ] Oracle Cloud VM reachable over public HTTPS via Caddy (DNS + firewall correctly opened at both layers) — without this, nothing else in the milestone is externally verifiable
-- [ ] App + Redpanda containers with `restart: unless-stopped` and basic healthchecks — the "doesn't silently stay down" bar
-- [ ] Neon Postgres wired via env vars only, scale-to-zero tradeoff explicitly accepted/documented (or explicitly paid to disable, if that's the call)
-- [ ] Self-hosted single-node Redpanda replacing local-only Kafka, no producer/consumer/DLQ code changes (per PROJECT.md's stated constraint)
-- [ ] GitHub Actions CI/CD redeploying on merge to the new host (new secrets, not reused AWS ones)
-- [ ] A new pre-merge DDL verification step against the new Neon target
-- [ ] Log rotation configured on the VM (disk-fill risk is real and concrete on a free-tier box)
-- [ ] Schema Registry stood up (Redpanda built-in, given Redpanda is already the broker choice) with explicit compatibility mode set to BACKWARD
-- [ ] All 5 existing event types (`TaskCreatedEvent`/`TaskMovedEvent`/`TaskDeletedEvent`/`BoardCreatedEvent`/`ColumnCreatedEvent`) have Avro (or Protobuf) schemas registered, and `KafkaEventPublisher`/`ActivityLogConsumer` switched over together in one deploy
+### Add After Validation (v1.x — once the frontend repo exists with its own first workflow)
 
-### Add After Validation (v1.x)
+- [ ] `repository_dispatch` (or equivalent) from this repo's nonprod-deploy job into the frontend repo's workflow
+- [ ] Decide — with the frontend repo's actual shape in hand — whether backend-side waiting/gating on the frontend E2E result is even the right direction of coupling, versus the frontend repo gating itself on nonprod reachability
 
-- [ ] A basic external uptime check (free tier UptimeRobot/healthchecks.io, or a scheduled GitHub Actions ping) — add once the endpoint is stable and worth monitoring, not before
-- [ ] Pre-merge schema-compatibility CI check against the live registry — natural follow-on once the registry itself is proven working, mirroring the DDL-check pattern
+### Future Consideration (v2+ — only if a concrete need surfaces)
 
-### Future Consideration (v2+)
-
-- [ ] Full observability stack (Prometheus/Grafana/alerting) — explicitly deferred; disproportionate to this project's actual traffic/stakes
-- [ ] Multi-broker Redpanda / true HA — deferred; meaningless on a single VM regardless of broker count
-- [ ] True zero-downtime blue-green deploys — deferred; resource cost on the free tier outweighs the benefit for a near-zero-concurrency personal project
-- [ ] Long-lived dual-format (JSON+Avro) topic migration tooling — deferred; not applicable given the single-deployable producer/consumer topology
+- [ ] Per-PR ephemeral environments (only relevant if this ever becomes a multi-contributor project)
+- [ ] Ephemeral Neon branch per E2E run instead of stable-branch-plus-reset (only if the reset mechanism proves insufficiently isolated in practice)
+- [ ] A second dedicated nonprod Kafka broker (only if topic-prefix isolation proves insufficient)
 
 ## Feature Prioritization Matrix
 
-| Feature | User/Reviewer Value | Implementation Cost | Priority |
-|---------|----------------------|----------------------|----------|
-| Public HTTPS via Caddy | HIGH | LOW | P1 |
-| Restart-on-crash (docker compose policies) | HIGH | LOW | P1 |
-| Neon Postgres swap | HIGH | LOW | P1 |
-| Self-hosted Redpanda swap | HIGH | LOW–MEDIUM | P1 |
-| GitHub Actions CI/CD to new host | HIGH | MEDIUM | P1 |
-| Pre-merge DDL check vs new target | MEDIUM | LOW | P1 |
-| Log rotation | MEDIUM | LOW | P1 |
-| Schema Registry stood up + BACKWARD mode | HIGH (narrative value) | MEDIUM | P1 |
-| Avro/Protobuf schemas for all 5 event types + producer/consumer switch | HIGH (this is the actual differentiator) | MEDIUM–HIGH | P1 |
-| External uptime monitoring | MEDIUM | LOW | P2 |
-| Pre-merge schema-compatibility CI check | MEDIUM | LOW–MEDIUM | P2 |
-| Full observability stack | LOW (at this scale) | HIGH | P3 |
-| Multi-broker Redpanda | LOW (at this scale) | HIGH | P3 |
-| Zero-downtime blue-green deploys | LOW (at this scale) | HIGH | P3 |
+| Feature | User Value | Implementation Cost | Priority |
+|---------|------------|---------------------|----------|
+| Nonprod deploy target (Compose + Caddy vhost) | HIGH | MEDIUM | P1 |
+| Neon nonprod branch | HIGH | LOW | P1 |
+| Kafka topic-prefix isolation | MEDIUM | LOW | P1 |
+| CORS entry for nonprod frontend origin | MEDIUM | LOW | P1 |
+| CI deploy-to-nonprod job | HIGH | MEDIUM | P1 |
+| Data reset/seed mechanism | HIGH | MEDIUM | P1 |
+| Readiness/health gate | MEDIUM | LOW | P1–P2 |
+| `repository_dispatch` into frontend repo | HIGH (eventually) | MEDIUM | P2 (blocked) |
+| Ephemeral Neon branch per run | LOW–MEDIUM | MEDIUM–HIGH | P3 |
+| Per-PR ephemeral environments | LOW at this scale | HIGH | P3 (reject unless team scale changes) |
+| Second dedicated nonprod Kafka broker | LOW | MEDIUM | P3 (reject unless prefix isolation fails) |
 
 **Priority key:**
-- P1: Must have for this milestone to be considered genuinely shipped
-- P2: Should have, natural immediate follow-on, low cost to add once P1 is stable
-- P3: Explicitly deferred — would be over-engineering relative to this project's actual scale and stakes
+- P1: Buildable and warranted this milestone
+- P2: Correct next step, but genuinely blocked on the frontend repo existing
+- P3: Deferred/rejected at current scale — revisit only on a concrete triggering need
+
+## Pattern Analysis
+
+Reframed from a competitor comparison into a comparison of the standard shapes this kind of setup takes, evaluated against this project's actual scale (solo developer, one small VPS, no dedicated ops team, no PR-concurrency problem).
+
+### Staging environment shape
+
+| Criterion | Static long-lived shared staging | Ephemeral per-PR preview | Shared staging, data reset per run |
+|-----------|-----------------------------------|---------------------------|--------------------------------------|
+| Fits solo/portfolio scale | Yes — no contention to solve | No — solves a problem this project doesn't have | Yes |
+| Infra/CI build cost | LOW–MEDIUM (one Compose stack, one CI job) | HIGH (dynamic provisioning + teardown automation) | LOW–MEDIUM (same infra as static, plus a reset step) |
+| Matches prod's own shape (validates deploy pipeline) | Yes | Yes, but a different pipeline than prod's | Yes |
+| Recommendation | **This project's actual answer**, combined with the data-reset column | Reject — gold-plating for this scale | **This is really the same environment as column 1, with a reset discipline layered on — treat as one recommendation, not three separate options** |
+
+### Cross-repo CI trigger for the eventual frontend E2E run
+
+| Criterion | `repository_dispatch` | `workflow_dispatch` (cross-repo via API) | Polling "wait-for-workflow" actions |
+|-----------|------------------------|--------------------------------------------|----------------------------------------|
+| Purpose-built for cross-repo, event-driven triggering | Yes — custom `event_type`+payload is exactly this shape | Partial — more naturally a manual/same-repo trigger; usable cross-repo via API but less idiomatic for this | N/A — these poll for a *result*, not trigger a run |
+| Needed if this repo also wants to *block on* the frontend's result | No (fire-and-forget) | No | Yes, if that blocking behavior is actually wanted |
+| Auth requirement | PAT with `repo` scope (not `GITHUB_TOKEN`) stored as a secret | Same | Same, plus repeated polling calls against GitHub's REST API (rate-limit aware interval) |
+| Recommendation | **Right mechanism for "deploy nonprod, then notify the frontend repo"** once that repo exists | Not the idiomatic choice here | Only add if backend-gating-on-frontend is deliberately chosen (see Anti-Features doubt above) — otherwise skip entirely |
+
+### Data-seeding/reset strategy
+
+| Criterion | Fresh Neon branch per E2E run | Stable nonprod branch + reset endpoint/script |
+|-----------|-------------------------------|-----------------------------------------------|
+| Isolation strength | Highest — literally can't leak state between runs | Good, contingent on the reset mechanism being correct and complete (including Kafka topic state, not just Postgres) |
+| CI wiring cost | Higher — needs dynamic branch create/delete and a connection-string rewrite + app restart per run | Lower — one stable connection string, one HTTP call or script invocation before each run |
+| Cost/overhead at Neon's advertised branching speed/pricing | Low per Neon's own model (branching described as near-instant, usable per-run without meaningful overhead) | Lowest — no extra branch lifecycle to manage at all |
+| Recommendation | Legitimate v2 upgrade once the reset-endpoint approach is proven and a real E2E suite exists to notice cross-run bleed | **Right choice for v1** — lower cost, and this project's own Kafka-backed activity log needs an equivalent reset step regardless (topic/consumer-group state), which the "fresh Postgres branch" approach alone would not solve either |
 
 ## Sources
 
-- [Using Caddy as a Reverse Proxy for Spring Boot Applications - Bomberbot](https://www.bomberbot.com/proxy/using-caddy-as-a-reverse-proxy-for-spring-boot-applications/)
-- [Streamlining DevOps: Automatic HTTPS Reverse Proxy with Caddy and Docker Compose](https://earezki.com/ai-news/2026-03-02-automatic-https-reverse-proxy-in-one-docker-compose-caddy-your-app/)
-- [Nginx vs Caddy in 2026: Which Reverse Proxy Should You Use?](https://privatedevops.com/articles/nginx-vs-caddy-2026-reverse-proxy-comparison)
-- [How to Use Docker Compose restart Policy Options](https://oneuptime.com/blog/post/2026-02-08-how-to-use-docker-compose-restart-policy-options/view)
-- [Docker Compose Healthcheck: Setup, Examples & Best Practices - Last9](https://last9.io/blog/docker-compose-health-checks/)
-- [Docker Compose Production Deployment: Health Checks, Restart Policies, and Resource Limits](https://eastondev.com/blog/en/posts/dev/20260424-docker-compose-production/)
-- [Zero-Downtime Deployments with Docker, Nginx, and GitHub Actions - Medium](https://medium.com/@connect.hashblock/zero-downtime-deployments-with-docker-nginx-and-github-actions-e3769ddac7da)
-- [Zero Downtime Deployment with Docker Compose in an OCI VPS using GitHub Actions - DEV Community](https://dev.to/thayto/zero-downtime-deployment-with-docker-compose-in-an-oci-vps-using-github-actions-1fbd)
-- [Ways to Secure a Network - Oracle Docs](https://docs.oracle.com/en-us/iaas/Content/Network/Concepts/waystosecure.htm)
-- [Always Free Resources - Oracle Docs](https://docs.oracle.com/en-us/iaas/Content/FreeTier/resourceref.htm)
-- [Neon Postgres Review: Serverless PostgreSQL That Actually Scales to Zero - Medium](https://medium.com/@philmcc/neon-postgres-review-serverless-postgresql-that-actually-scales-to-zero-ee14d4e109ba)
-- [Benchmarking latency in Neon's serverless Postgres - Neon Docs](https://neon.com/docs/guides/benchmarking-latency)
-- [What are the best Postgres databases for teams that want to stop paying for idle compute - Neon FAQs](https://neon.com/faqs/best-postgres-databases-reduce-idle-compute-costs)
-- [Requirements and Recommendations - Redpanda Self-Managed Docs](https://docs.redpanda.com/current/deploy/deployment-option/self-hosted/manual/production/requirements)
-- [Start a Single Redpanda Broker with Redpanda Console in Docker - Redpanda Labs](https://docs.redpanda.com/redpanda-labs/docker-compose/single-broker/)
-- [Schema Registry for Confluent Platform - Confluent Docs](https://docs.confluent.io/platform/current/schema-registry/index.html)
-- [Apache Avro for Kafka | Serialization, Schema, KafkaAvroSerializer - Confluent Docs](https://docs.confluent.io/platform/current/schema-registry/fundamentals/serdes-develop/serdes-avro.html)
-- [Schema Registry 101 - Managing Schemas - Confluent Developer](https://developer.confluent.io/learn-kafka/schema-registry/manage-schemas)
-- [Schema Evolution & Compatibility Types | Backward, Forward, Full, Transitive - Confluent Docs](https://docs.confluent.io/platform/current/schema-registry/fundamentals/schema-evolution.html)
-- [Schema Registry 101 - Testing Schema Compatibility - Confluent Developer](https://developer.confluent.io/learn-kafka/schema-registry/schema-compatibility/)
-- [Schema Evolution: 8 Kafka Best Practices - Conduktor](https://www.conduktor.io/glossary/schema-evolution-best-practices)
-- [Producing and consuming Avro messages with Redpanda schema registry - Redpanda](https://www.redpanda.com/blog/produce-consume-apache-avro-tutorial)
-- [Redpanda Schema Registry - Redpanda Self-Managed Docs](https://docs.redpanda.com/current/manage/schema-reg/schema-reg-overview/)
-- [Which Kafka Schema Registry is Right for Your Architecture in 2026? - AutoMQ Blog](https://www.automq.com/blog/kafka-schema-registry-confluent-aws-glue-redpanda-apicurio-2025)
-- [Generate Avro Schema From Certain Java Class - Baeldung](https://www.baeldung.com/java-class-generate-avro-schema)
-- [Apache Avro 1.11.1 Getting Started (Java)](https://avro.apache.org/docs/1.11.1/getting-started-java/)
-- [Avro vs Protobuf vs JSON Schema: Kafka Serialization Compared (2026) - Conduktor](https://www.conduktor.io/glossary/avro-vs-protobuf-vs-json-schema)
-- [Avro vs Protobuf for Kafka Schema Registry: The Real-World Trade-Offs](https://sivaro.in/articles/avro-vs-protobuf-for-kafka-schema-registry-the-real-world/)
-- Codebase-derived (this repo): `src/main/java/com/vrudenko/kanban_board/config/KafkaEventPublisher.java`, `src/main/java/com/vrudenko/kanban_board/activitylog/ActivityLogConsumer.java`, `src/main/java/com/vrudenko/kanban_board/event/ActivityEvent.java`, `src/main/resources/application.properties` (Kafka serializer/deserializer config), `.planning/codebase/INTEGRATIONS.md`
+- Autonoma AI — [Staging Environment vs Preview Environment](https://getautonoma.com/blog/staging-environment-vs-preview-environment)
+- Upsun — [Fix the staging bottleneck with preview environments](https://upsun.com/blog/staging-bottleneck-preview-environments/)
+- Shipyard — [A Guide to Preview Environments](https://shipyard.build/preview-environments/)
+- GitHub Docs — [Events that trigger workflows](https://docs.github.com/actions/using-workflows/events-that-trigger-workflows)
+- Marc Nuri — [Triggering GitHub Actions across different repositories](https://blog.marcnuri.com/triggering-github-actions-across-different-repositories)
+- Juraj Sim — [Calling vs Dispatching: GitHub Actions Comparison](https://jurajsim.hashnode.dev/a-comparison-of-calling-vs-dispatching-workflows-in-github-actions)
+- OneUptime — [How to Set Up Cross-Repository Workflows in GitHub Actions](https://oneuptime.com/blog/post/2025-12-20-cross-repository-workflows-github-actions/view)
+- Neon — [Database branching workflow primer](https://neon.com/docs/get-started/workflow-primer)
+- Neon — [A database for every preview environment using Neon, GitHub Actions, and Vercel](https://neon.com/blog/branching-with-preview-environments)
+- Neon — [Database Branching Workflows](https://neon.com/branching)
+- Neon FAQs — [Which Postgres services integrate with GitHub Actions to create a fresh database for every pull request automatically?](https://neon.com/faqs/postgres-services-github-actions-fresh-database-pull-requests)
+- Qaskills — [Playwright test data management guide](https://qaskills.sh/blog/playwright-test-data-management-guide-2026)
+- Seedfast — [E2E Test Fixtures: Generate Playwright & Cypress Data](https://seedfa.st/blog/e2e-test-fixtures)
+- techresolve — [Docker compose single file or multiple yaml files?](https://techresolve.blog/2025/12/23/docker-compose-single-file-or-multiple-yaml-files/)
+- Tomer Ben David — [Docker Compose for Side Projects on VPS](https://medium.com/@Tom1212121/docker-compose-for-side-projects-on-vps-cd2b6b380081)
+- DCHost — [Hosting Architecture For Dev, Staging And Production: One VPS Or Separate Servers?](https://www.dchost.com/blog/en/hosting-architecture-for-dev-staging-and-production-one-vps-or-separate-servers/)
+- GitHub Marketplace — [Trigger Workflow and Wait](https://github.com/marketplace/actions/trigger-workflow-and-wait)
+- GitHub — [convictional/trigger-workflow-and-wait](https://github.com/convictional/trigger-workflow-and-wait)
+- GitHub Marketplace — [Wait for workflow](https://github.com/marketplace/actions/wait-for-workflow)
+- This project's own `.github/workflows/deploy.yml` and `.planning/PROJECT.md` — used to ground every recommendation above in the actual existing stack (Netcup VPS Lite 2, Neon, self-hosted single-node Redpanda, Caddy, GitHub Actions) rather than generic advice
 
 ---
-*Feature research for: kanban-board-backend v1.2 (Infra Migration & Schema Registry)*
-*Researched: 2026-08-03*
+*Feature research for: nonprod/staging environment + Playwright E2E CI gate*
+*Researched: 2026-08-17*
