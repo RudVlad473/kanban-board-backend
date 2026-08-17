@@ -234,15 +234,26 @@ jobs:
             exit 1
           fi
 
-          # Get list of all tags
-          TAGS_HTTP_STATUS=$(curl -s -o /tmp/tags.json -w "%{http_code}" \
-            -H "Authorization: JWT ${HUB_TOKEN}" \
-            "https://hub.docker.com/v2/repositories/${{ needs.setup.outputs.base_image_name }}/tags/")
-          if [ "$TAGS_HTTP_STATUS" != "200" ]; then
-            echo "::error::Listing tags failed with HTTP $TAGS_HTTP_STATUS: $(cat /tmp/tags.json)"
-            exit 1
-          fi
-          TAGS=$(jq -r '.results[].name' /tmp/tags.json)
+          # Get list of all tags, following pagination -- Hub API v2 paginates at 10/page by
+          # default. DISCOVERED LIVE (2026-08-17, first successful run after the auth fix above):
+          # the unpaginated single-request version only ever saw page 1, so with 41 accumulated
+          # tags it deleted just the 9 most recent non-current ones and silently left the other
+          # 32 -- a real, previously-latent gap that only became visible once deletes started
+          # actually succeeding. Follows `next` until null rather than a one-time page_size bump,
+          # so this keeps working if the backlog ever exceeds one page's page_size again.
+          TAGS=""
+          NEXT_URL="https://hub.docker.com/v2/repositories/${{ needs.setup.outputs.base_image_name }}/tags/?page_size=100"
+          while [ -n "$NEXT_URL" ] && [ "$NEXT_URL" != "null" ]; do
+            TAGS_HTTP_STATUS=$(curl -s -o /tmp/tags.json -w "%{http_code}" \
+              -H "Authorization: JWT ${HUB_TOKEN}" \
+              "$NEXT_URL")
+            if [ "$TAGS_HTTP_STATUS" != "200" ]; then
+              echo "::error::Listing tags failed with HTTP $TAGS_HTTP_STATUS: $(cat /tmp/tags.json)"
+              exit 1
+            fi
+            TAGS="$TAGS $(jq -r '.results[].name' /tmp/tags.json)"
+            NEXT_URL=$(jq -r '.next' /tmp/tags.json)
+          done
 
           # Delete all tags except the current one
           FAILED=0
