@@ -84,3 +84,31 @@ docs or a live test before landing -- the snippet above is a starting point,
 not a pre-verified fix.
 
 **Trigger:** any time after this todo is picked up; not gating Phase 5 completion.
+
+## Resolution (2026-08-17)
+
+Fixed in two commits, live-verified, not the guessed header scheme this todo originally flagged
+as unconfirmed:
+
+1. **`8a31d85`** — added the login-token exchange exactly as this todo's snippet suggested, and
+   confirmed the header scheme empirically: `Authorization: JWT <token>` (not `Bearer`) is
+   accepted. Both the tag-list and delete calls now check their HTTP status explicitly and fail
+   loudly, rather than trusting a body inspection that a 404 (the original path-segment bug) or
+   401 (this bug) would both silently pass. First live run (CI run `32016633112`) succeeded per
+   its own status checks — but deleted only 9 of 41 accumulated tags.
+
+2. **`faacda4`** — root-caused the partial deletion: Hub API v2 paginates tag listings at 10/page,
+   and the list call only ever read page 1. Fixed by following the response's `next` cursor until
+   `null` (starting from `page_size=100` so the common case stays a single request). CI run
+   `32017867204` (2026-08-17T09:58Z) is the live proof this is fully closed: `cleanup-old-images`
+   deleted all 32 remaining non-current tags, the job's own `FAILED` counter (incremented on any
+   non-204 delete response) stayed at 0, and the job concluded success with zero `::warning`/
+   `::error` lines.
+
+This satisfies the "verify live, don't trust documentation" standard this todo itself insisted
+on (see its Solution section) via the job's own per-call status checking rather than a separate
+follow-up `GET` — the mechanism that would have surfaced a partial failure (a nonzero `FAILED`
+count driving the job's exit code) is the same one that ran clean in `32017867204`.
+
+Phase 5's INFRA-05 requirement (Docker Hub tags pruned) is now fully satisfied — see
+`.planning/phases/05-infra-migration/05-06-SUMMARY.md` coverage item D4.
