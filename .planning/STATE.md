@@ -1,20 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: Infra Migration & Schema Registry
-status: Awaiting next milestone
-stopped_at: "v1.2 (Infra Migration & Schema Registry) fully archived: Phase 07.1 independently re-verified (was missing VERIFICATION.md despite 9/9 plans complete -- 10/10 goal truths, 118 tests run live, 0 gaps), SEED-001's stale dormant status corrected, all 31 open pending-todo/quick-task items acknowledged at close, ROADMAP.md collapsed to milestone-grouped summary, PROJECT.md given a full evolution review, RETROSPECTIVE.md updated, and this file (STATE.md) trimmed of the v1.0-v1.2 per-plan decision log and quick-task table now that both are preserved in git history and .planning/milestones/v1.2-phases/. Ready for /gsd-new-milestone."
-last_updated: "2026-08-17T11:35:00.000Z"
+milestone: v1.3
+milestone_name: Nonprod Environment & CI Hardening
+status: planning
+last_updated: "2026-08-17T11:56:17.001Z"
 last_activity: 2026-08-17
-last_activity_desc: "Milestone v1.2 completed and archived -- all 7 phases (4, 04.1, 04.2, 5, 6, 7, 07.1) verified, 39/39 plans, 107 tasks."
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 39
-  completed_plans: 39
-  percent: 100
-current_phase: null
-current_phase_name: null
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -24,14 +20,14 @@ current_phase_name: null
 See: .planning/PROJECT.md (updated 2026-08-17)
 
 **Core value:** v1.0 through v1.2 shipped the backend-depth showcase and made the project reachable and cheaply/reliably deployable again on Netcup + Neon + self-hosted Redpanda after the AWS EC2/RDS deletion. The backend is now feature-complete against its own mock-ups and live in production.
-**Current focus:** v1.2 milestone complete and archived — awaiting `/gsd-new-milestone` to scope what's next
+**Current focus:** v1.3 (Nonprod Environment & CI Hardening) — defining requirements, research in progress
 
 ## Current Position
 
-Phase: Milestone v1.2 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-08-17 — Milestone v1.2 completed and archived
+Status: Defining requirements
+Last activity: 2026-08-17 — Milestone v1.3 started
 
 ## Performance Metrics
 

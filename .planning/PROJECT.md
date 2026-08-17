@@ -8,9 +8,17 @@ A Spring Boot 3.5.16 / Java 21 REST API backend for a Kanban board application (
 
 v1.0 through v1.2 shipped the backend-depth showcase (JPA/Hibernate optimistic locking, Kafka event sourcing with dead-letter reliability, idempotent consumption, Avro schema governance — all proven against real Postgres/Kafka, not mocks) and, after the AWS EC2/RDS deploy target was deleted (2026-08-03, cost-risk driven), made the project reachable and cheaply/reliably deployable again on Netcup + Neon + self-hosted Redpanda. The backend is now feature-complete against its own mock-ups and live in production; the differentiator going forward is less "does the backend do X" and more "is the whole system, including a real frontend against this real deploy, provably reliable."
 
-## Current Milestone
+## Current Milestone: v1.3 Nonprod Environment & CI Hardening
 
-v1.2 (Infra Migration & Schema Registry) shipped 2026-08-17. Next milestone not yet scoped — candidate direction under discussion: a nonprod/staging environment + CI gate for a separate frontend repo's Playwright E2E suite to run against (see `.planning/todos/pending/2026-08-12-add-nonprod-staging-environment-and-playwright-e2e-ci-gate.md`). Run `/gsd-new-milestone` to formally scope it.
+**Goal:** Provision a resource-shrunk nonprod/staging environment (co-located on the existing Netcup VPS if capacity allows, exact sizing to be confirmed by research) with its own DB/Kafka isolation and a CI deploy gate, so a separate frontend repo's Playwright E2E suite has a real, non-mocked target to run against — bundled with the smaller CI/deploy hardening todos that were unblocked by v1.2 shipping.
+
+**Target features:**
+- Nonprod/staging deploy target (Netcup-colocated or a second small VPS, decided by research) with its own Neon branch and Kafka/topic isolation
+- CI job deploying to nonprod ahead of/alongside the existing production deploy
+- Dependabot `github-actions` ecosystem entry (deferred during v1.2's in-flight deploy.yml rewrite, now unblocked)
+- CI hardening: TruffleHog live-credential verification pass, GitHub Actions digest-pinning, gradle cache in `run-tests`, gitleaks-in-worktree fix, `security-scan.yml` stale comment/action-version cleanup
+- Session cookie `Secure` flag, now that real TLS exists in production (v1.2 Phase 5)
+- README expanded into a full project architecture showcase
 
 ## Requirements
 
@@ -39,7 +47,7 @@ v1.2 (Infra Migration & Schema Registry) shipped 2026-08-17. Next milestone not 
 
 ### Active
 
-(None yet — next milestone's scope not yet defined. Candidate direction: a nonprod/staging environment for a separate frontend repo's Playwright E2E CI gate — feasibility not yet researched. Run `/gsd-new-milestone` to scope formally.)
+v1.3 (Nonprod Environment & CI Hardening) scoped 2026-08-17 — see Current Milestone above. Requirements not yet finalized; pending research into Netcup capacity, Neon branching, and Kafka isolation before REQUIREMENTS.md is written.
 
 ### Out of Scope
 
@@ -108,4 +116,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-17 after v1.2 (Infra Migration & Schema Registry) milestone completion — full requirements/decisions review*
+*Last updated: 2026-08-17 — v1.3 (Nonprod Environment & CI Hardening) scoped, research pending*
