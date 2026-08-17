@@ -54,7 +54,11 @@ Tracker for [the backend modernization plan](README.md). Update as epics are sta
   immediately before merging/deploying this phase's PR.** This is one-way: master auto-deploys to
   EC2 on every push (`.github/workflows/deploy.yml`), so if the column is missing when the new
   code ships, every request touching a Task or Column hits a missing-column SQL error in
-  production. **Flag raised and resolved during discussion:** the initial instinct was to defer
+  production. **Annotation (2026-08-17, not a rewrite of the historical reasoning above):** the
+  EC2 host this paragraph describes no longer exists — it was torn down on cost grounds and the
+  deploy target moved to a Netcup VPS (see `docs/INFRA_RUNBOOK.md`). The auto-deploy-on-push
+  *shape* this paragraph's urgency depends on is still accurate for the current pipeline, just
+  against a different host. **Flag raised and resolved during discussion:** the initial instinct was to defer
   this DDL to Epic 3's Flyway migration work, but that was explicitly rejected — it would leave
   production broken between merge and whenever Epic 3 actually lands. Running it manually now,
   right before merge, was chosen instead. **Epic 3 must not silently re-apply or lose this step**

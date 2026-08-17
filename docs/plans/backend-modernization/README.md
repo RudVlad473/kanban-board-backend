@@ -10,7 +10,12 @@ checklist.
 
 **Repo:** `RudVlad473/kanban-board-backend` — Spring Boot 3.5.0, Java 21, Gradle, PostgreSQL,
 Hibernate/JPA, Spring Security (session-based), MapStruct, springdoc-openapi, Testcontainers
-PostgreSQL for tests (Epic 5, delivered — see below), single-EC2 Docker deploy via GitHub Actions.
+PostgreSQL for tests (Epic 5, delivered — see below). **Historical note (2026-08-17):** this
+originally described a single-EC2 Docker deploy via GitHub Actions, current when this plan was
+written. The AWS EC2 host was later torn down on cost grounds; the app now deploys to a Netcup VPS
+via a rewritten GitHub Actions pipeline — see `docs/INFRA_RUNBOOK.md` and
+`docs/INFRA_ARCHITECTURE.md` for the current deploy target. Left here as provenance for this
+plan's original assumptions, not corrected in place.
 
 **Domain, confirmed from code:** `UserEntity → BoardEntity → ColumnEntity → TaskEntity →
 SubtaskEntity`, all child→parent `@ManyToOne`, ownership enforced by

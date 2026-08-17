@@ -23,6 +23,14 @@
 -- Task or Column hits a missing-column SQL error in production. Do not merge
 -- the PR before running this.
 --
+-- ANNOTATION (2026-08-17, historical rationale above left intact, not
+-- rewritten): the EC2 host this reasoning names no longer exists -- it was
+-- torn down on cost grounds and the auto-deploy target moved to a Netcup
+-- VPS during v1.2's infra migration (see docs/INFRA_RUNBOOK.md). This script
+-- is already superseded per the note at the top of this file regardless, so
+-- the stale host name has no live operational effect -- recorded here only
+-- so a future reader is not reasoning from a host that no longer exists.
+--
 -- WHAT THIS IS NOT
 -- This is a one-off manual bridge step for Epic 2 only. It is NOT a
 -- replacement for Epic 3's Flyway migration tooling — when Epic 3 lands, this

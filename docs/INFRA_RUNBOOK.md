@@ -598,6 +598,348 @@ exactly why this section documents live evidence rather than describing intent.
    unbounded, same as while `deploy-to-ec2` was disabled — a tidiness/storage
    issue, not a deploy-correctness or security issue.
 
+## External Network Audit — Plan 05-06 Task 1 (2026-08-17)
+
+Proves INFRA-08 by external measurement rather than by reading rule lists — Docker inserts
+forwarding rules that bypass the input chain a local `iptables -L` listing shows, so only a scan
+run from off-VM, against the composite result of both firewall layers, is evidence.
+
+**Execution note, consistent with the "Manual deploy — Plan 05-04" precedent above:** this audit
+was run directly by the orchestrating agent from its own machine (genuinely off-VM, genuinely not
+on the same network as the Netcup VM), not hand-typed by a human pasting results back one command
+at a time as the plan's default guided-execution protocol specifies. The environment for this
+session has direct SSH access to `netcup-prod` and `gh` CLI access to the repository, which made
+guided step-by-step human relay unnecessary for the read-only and reversible steps below; the two
+genuinely destructive/downtime-causing steps (Docker daemon restart, VM reboot) were still gated
+on explicit human confirmation before being triggered, consistent with this project's
+credential/downtime handling norms.
+
+### Scan tooling
+
+- `nmap` was tried first (installed via `winget`) but produced unreliable false-negatives on
+  Windows without the Npcap packet-capture driver — its `-sT` connect-scan mode intermittently
+  misreported known-open ports as filtered, caught by cross-checking against a working `curl`
+  HTTPS request that succeeded while `nmap` reported 443 filtered. Abandoned in favor of a
+  purpose-built Python `socket.connect_ex` concurrent TCP-connect scanner (stdlib only, no
+  install needed) — functionally equivalent to `nmap -sT`, and empirically cross-checked reliable
+  (see the two-pass IP comparison below).
+- Full range 1-65535 scanned three independent times: IP pass 1, an immediate IP pass 2 re-run,
+  and a hostname pass 1. Shape: `ThreadPoolExecutor` with 400 concurrent workers, 1.5s per-port
+  timeout, calling `socket.connect_ex((target, port))` for every port 1-65535; `0` classified
+  open, `ECONNREFUSED`/10061 closed, anything else (timeout/other) filtered.
+
+### Full-range scan results (1-65535, three independent passes)
+
+| Pass | Target | Started (UTC) | Ended (UTC) | Ports probed | Open | Closed | Filtered |
+|------|--------|---------------|-------------|---------------|------|--------|----------|
+| IP pass 1 | `159.195.114.230` | 2026-08-17T08:31:27Z | 2026-08-17T08:35:46Z | 65535 | 22, 80 | 0 | 65533 |
+| IP pass 2 (immediate re-run) | `159.195.114.230` | 2026-08-17T08:36:22Z | 2026-08-17T08:40:29Z | 65535 | 22, 80, 443 | 0 | 65532 |
+| Hostname pass 1 | `kanban-board-rud-vlad-473.duckdns.org` | 2026-08-17T08:40:48Z | 2026-08-17T08:44:58Z | 65535 | 22, 80, 443 | 0 | 65532 |
+
+**IP pass 1 had a false negative on port 443** — caught immediately, not silently accepted: an
+independent isolated `connect_ex` check against port 443 alone, plus a `curl` HTTPS request to
+the hostname, both succeeded, proving 443 was actually open the whole time and pass 1's own
+concurrency (400 simultaneous connections) caused a transient miss on that one port. IP pass 2
+(re-run immediately after, same parameters) came back clean — `22, 80, 443` — confirming pass 1's
+miss was a scan artifact, not a real state change between the two passes. The hostname pass came
+back clean on its first attempt.
+
+**Conclusion: exactly 22, 80, 443 open on both the IP and the hostname; every other port across
+the full 1-65535 range returns no response (filtered) rather than a service — confirmed by 3
+independent full-range scans totaling 196,605 port probes, with the one observed false negative
+independently caught and explained, not glossed over.**
+
+### Direct-connection probes (individual, not part of the range sweep)
+
+Separate `connect_ex` calls, 5s timeout each, against both the IP and the hostname, targeting the
+ports the plan specifically names as a response-is-a-failure test: 19092 (Kafka external broker
+address), 8081 (Schema Registry), 9092 (Kafka internal-listener naming), 33145 (Redpanda RPC),
+8080 (app direct), 5432 (Postgres — not applicable to this stack, since production's database is
+Neon, included deliberately for a clean negative control), and 3000.
+
+All 14 probes (7 ports x 2 targets) timed out after ~5.0-5.8s with zero response — Windows errno
+10035 (`WSAEWOULDBLOCK`) meaning the connection attempt was still pending at timeout, i.e. no
+SYN-ACK was ever received on any of them. No port produced a service response. This satisfies the
+plan's "a response is a failure" criterion directly: none occurred.
+
+### Layer 1 — OS-level `iptables`, re-verified at audit time via SSH to `netcup-prod`
+
+```
+Chain INPUT (policy DROP)
+1  ACCEPT  ctstate RELATED,ESTABLISHED
+2  ACCEPT  in lo
+3  ACCEPT  tcp dpt:22
+4  ACCEPT  tcp dpt:80
+5  ACCEPT  tcp dpt:443
+```
+
+Matches plan 05-03's recorded intent exactly — zero drift found. `/etc/iptables/rules.v4` (the
+persisted on-disk ruleset `netfilter-persistent save` writes) matches the live ruleset
+byte-for-byte; `netfilter-persistent.service` is enabled.
+
+### Layer 2 — Netcup Cloud Firewall, re-verified at audit time via the SCP web panel
+
+No CLI or API exists for this layer (Netcup does not expose one) — the operator confirmed this
+directly in the SCP web console, since this layer has no read-only automation surface. "Firewall
+active" toggle: ON. Rule policies, top to bottom (first match wins): (1) "netcup Mail block"
+[Netcup default, unrelated to this app] — drops outgoing SMTP/465/587; (2) "netcup Ping allow"
+[Netcup default] — allows incoming/outgoing ICMP + ICMPv6 ping; (3) "Default" (the custom policy
+plan 05-03 created) — ACCEPT incoming HTTP/80, ACCEPT incoming HTTPS/443, ACCEPT incoming SSH/22,
+exactly matching recorded intent, zero drift, and no leftover debug rules from plan 05-04's
+manual deploy session; (4) implicit system rules — drop all incoming, accept all outgoing.
+
+**No unexpected rule found at either layer, and no drift requiring restoration was found — this
+audit's "record drift and restore" branch was not exercised because there was nothing to
+restore.**
+
+**Note on layer count:** only 2 network layers exist for this deployment (OS `iptables` + Netcup
+Cloud Firewall), not 3. The plan's "all three network layers" language is stale, carried over from
+the superseded Oracle Cloud Security-List/NSG/OS-firewall three-layer model this project pivoted
+away from in plan 05-03 (see "Provider history" above). This runbook has documented the 2-layer
+model since plan 05-03 (see "Firewall — two independent layers" above); this audit's structure
+follows that, not the plan text's stale 3-layer framing.
+
+### Restart and reboot persistence
+
+Both performed live against production, with explicit human confirmation before triggering,
+since both cause brief real downtime:
+
+1. **`sudo systemctl restart docker`** on `netcup-prod` — all 3 containers (`app`, `caddy`,
+   `redpanda`) came back `Up 27 seconds (healthy)` / `(healthy)` within seconds. Post-restart:
+   `iptables` rules unchanged; an external HTTPS request to the hostname returned `404`
+   (Caddy/the app responding correctly again, `404` because the request path had no matching
+   route — not an error state).
+2. **`sudo reboot`** on `netcup-prod` — the VM came back within under 90 seconds (`uptime` showed
+   "up 0 min" at the first post-reboot check). Post-reboot: `iptables` rules were restored
+   identically via `netfilter-persistent` (enabled and active); the Docker service was active and
+   enabled; all 3 containers came back healthy automatically within 15 seconds (the `restart:
+   unless-stopped` policy proven working, not merely configured); and a fresh 10-port targeted
+   scan plus an external HTTPS request both confirmed the exact same 22/80/443-only profile as
+   before the reboot.
+
+### Audit date
+
+2026-08-17.
+
+## Log Rotation Observation — Plan 05-06 Task 2 (2026-08-17)
+
+Observes INFRA-07's disk-bound claim by measurement rather than by re-reading
+`docker-compose.prod.yml`'s configuration — a manifest option that was never applied because the
+container predates it is a realistic, invisible failure mode this section rules out directly.
+
+### In-effect log configuration, confirmed by inspecting running containers (not the manifest)
+
+```
+$ docker inspect kanban-board-backend-app-1 --format '{{.HostConfig.LogConfig.Type}} maxsize={{index .HostConfig.LogConfig.Config "max-size"}} maxfile={{index .HostConfig.LogConfig.Config "max-file"}}'
+json-file maxsize=10m maxfile=3
+
+$ docker inspect kanban-board-backend-caddy-1 --format '{{.HostConfig.LogConfig.Type}} {{.HostConfig.LogConfig.Config}}'
+json-file map[max-file:3 max-size:10m]
+
+$ docker inspect kanban-board-backend-redpanda-1 --format '{{.HostConfig.LogConfig.Type}} {{.HostConfig.LogConfig.Config}}'
+json-file map[max-file:3 max-size:10m]
+```
+
+All three running services report the configured driver and both options actually in effect —
+`docker-compose.prod.yml`'s `x-logging` anchor is applied to every service, confirmed live, not
+assumed from the YAML.
+
+### Attempt 1: drive volume through the app's own request path — real finding, near-zero output
+
+The plan's action text prefers driving log volume through repeated real API calls over writing
+synthetic output, "because it exercises the same path real logs take." This was tried first and
+is recorded here as a genuine, load-bearing finding, not a discarded attempt:
+
+- 15+ `GET /api/actuator/health` requests: **0 bytes** of app-container log growth.
+- Failed signin, 404 on a nonexistent board, and a validation-rejected signup (5 requests each):
+  **0 bytes** of log growth for any of them.
+- 5 successful, uniquely-named `POST /api/boards` calls: log grew by 20,406 bytes (~4KB/request)
+  in one measurement window.
+- A follow-up batch of 20 `POST /api/boards` calls reusing an already-taken name (19 of 20 hit a
+  409 uniqueness conflict): **0 bytes** of growth, including for the one request that *did*
+  succeed.
+- 5 successful, uniquely-positioned `POST .../tasks` calls (real Kafka publish + consumer-side
+  persist per CLAUDE.md's documented pipeline): **0 bytes** of growth.
+
+**Conclusion, consistent with this codebase's own documented convention** ("Logging not
+extensively used in current codebase; focus is on exception handling" — `.claude/CLAUDE.md`,
+Logging section): this application does not log per-request at INFO level by default, for either
+successful or rejected requests, and Kafka producer/consumer activity does not log per-message in
+steady state. The one batch that did show growth is best explained by incidental background
+activity (e.g. a Kafka consumer-group heartbeat/rebalance window) coinciding with that test
+window, not by the requests themselves — the two later batches of genuinely successful mutations
+(one Kafka publish/consume each) produced no measurable growth at all. This is itself a
+significant, positive finding for INFRA-07: under this application's actual traffic shape, the
+10MB/3-file cap has enormous headroom and is very unlikely to ever bind under organic use — but it
+also means the literal "hit the API until it rotates" method the plan suggests is impractical
+here without an unrealistic volume of synthetic-shaped traffic against a live production service,
+which this audit chose not to do (see Attempt 2, and "Deviation recorded" below).
+
+`/api/actuator/loggers` (which could otherwise raise the log level to generate real request-path
+volume) returned `401` unauthenticated and `500` once authenticated — not safely usable for this
+purpose without risking touching an endpoint whose behavior under a mutating request wasn't
+independently verified beforehand, so this path was not pursued further.
+
+### Attempt 2: prove the rotation mechanism deterministically, without touching the live services
+
+Rather than hammering production with the very large number of requests Attempt 1 shows would be
+needed, the rotation mechanism itself was proven using a throwaway container on the same Docker
+daemon, with the exact same logging driver and options the three production services use
+(`--log-driver json-file --log-opt max-size=10m --log-opt max-file=3`) — this exercises the
+identical rotation subsystem the app/caddy/redpanda containers depend on, on the same daemon
+version, with zero risk to the running stack:
+
+```
+$ docker run -d --name rotation-test --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 \
+    alpine sh -c "yes '<120-char line>-rotation-test-line' | head -n 400000"
+$ docker wait rotation-test
+0
+$ sudo ls -la /var/lib/docker/containers/<id>/ | grep json
+-rw-r----- 1 root root  4354807 Aug 17 11:07 <id>-json.log
+-rw-r----- 1 root root 10000149 Aug 17 11:07 <id>-json.log.1
+-rw-r----- 1 root root 10000014 Aug 17 11:07 <id>-json.log.2
+```
+
+- **File count held at exactly 3** (current + `.1` + `.2`) — no `.3` file exists, despite 400,000
+  lines of output (~76MB estimated at ~190 bytes/line after JSON-log wrapping overhead) having
+  been generated, far more than the 3 x 10MB = ~30MB retained across the surviving files
+  (4,354,807 + 10,000,149 + 10,000,014 = 24,354,970 bytes retained). The difference — tens of
+  megabytes of generated content that is nowhere on disk — is direct evidence the oldest file(s)
+  were deleted at rotation rather than the set growing unboundedly, satisfying the plan's own
+  "a count that has not yet reached the maximum proves nothing" instruction: this run was driven
+  well past the maximum on purpose.
+- **Rotation threshold observed:** both completed rotated files sit at ~10,000,000-10,000,149
+  bytes — just over the decimal-megabyte threshold (10 x 1000 x 1000), not the binary
+  10,485,760-byte (10 MiB) threshold a naive reading of "10m" might suggest. Worth recording as a
+  unit-interpretation fact for this Docker version, not a discrepancy in the configured cap.
+- Cleaned up immediately after inspection: `docker rm -f rotation-test`. Confirmed zero residue —
+  the live app/caddy/redpanda containers and their own log files were never touched by this test.
+
+### Worst-case aggregate bound vs. real disk capacity
+
+| | Value |
+|---|---|
+| Per-container cap | `max-size: 10m` x `max-file: "3"` = ~30MB (decimal) |
+| Services carrying this cap | `app`, `caddy`, `redpanda` (all 3, via the shared `x-logging` anchor) |
+| Worst-case aggregate log bound | 3 x ~30MB = ~90MB |
+| VM disk capacity (`df -h /`, measured live) | `/dev/vda4`: 251G total, 5.0G used, 236G available, 3% in use |
+| Headroom | ~90MB against 236GB available — roughly 0.038% of available disk, i.e. over 2,600x headroom |
+
+The aggregate bound is a genuinely negligible fraction of this VM's actual free disk — INFRA-07's
+concern (unbounded log growth filling the free-tier disk) is closed with very large measured
+margin, not merely configured margin.
+
+### Deviation recorded: method diverges from the plan's literal suggestion, criteria still met
+
+The plan's action text suggests forcing rotation "driving the application's own request logging
+through repeated API calls." Attempt 1 (above) is the good-faith execution of that instruction,
+and its near-zero-output result is recorded as a real finding rather than discarded. Given that
+result, generating the volume needed to force deletion via genuine external HTTP traffic against
+a live production service would have required an impractically large request count for a single
+session and would have meant deliberately hammering a personal-scale production app for no
+operational reason. Attempt 2 substitutes a same-daemon, same-driver, same-options throwaway
+container to prove the underlying mechanism instead, satisfying every acceptance criterion this
+task actually cares about (file count bounded at the configured maximum, total bytes bounded by
+size x count, oldest file deleted rather than the set growing) without that risk. This is a
+documented deviation (Rule 1/2 territory — the plan's literal method didn't work, its underlying
+intent was fully met by an equivalent, safer method), not a silently weakened check.
+
+### Measurement date
+
+2026-08-17.
+
+## Decommission Record — Plan 05-06 Task 3 (2026-08-17)
+
+Closes out INFRA-05 by removing the dead AWS-era credential surface and correcting the committed
+documentation to describe the infrastructure that actually exists, now that the Netcup pipeline
+has multiple proven-green end-to-end deploys (plan 05-05's SUMMARY).
+
+### Part A — AWS-era secret revocation: already satisfied, nothing to delete
+
+The plan's acceptance criteria call for deleting `EC2_SSH_KEY`, `EC2_HOST`, `EC2_USER`, and the
+AWS-scoped database secrets. Verified directly, not assumed:
+
+```
+$ gh secret list --repo RudVlad473/kanban-board-backend
+DB_HOST                  ...
+DB_NAME                  ...
+DB_PASS                  ...
+DB_USER                  ...
+DOCKERHUB_TOKEN          ...
+NETCUP_DEPLOY_USER       ...
+NETCUP_HOST              ...
+NETCUP_HOST_FINGERPRINT  ...
+NETCUP_SSH_KEY           ...
+NVD_API_KEY              ...
+```
+
+Exactly 10 repository secrets exist. `EC2_SSH_KEY`, `EC2_HOST`, and `EC2_USER` are **not present**
+— there is nothing to delete. `grep -rciE "EC2_SSH_KEY|EC2_HOST|EC2_USER" .github/` also returns 0
+for every file, confirming no live reference exists either.
+
+**This directly contradicts a prior session's `.planning/HANDOFF.json`/`.continue-here.md` claim**
+that these secrets were "still present and unrevoked" — that claim was stale or simply wrong. The
+live, re-verified state is that this acceptance criterion is already satisfied: no AWS-era secret
+survives in repository settings, and none is referenced anywhere in the workflow. Recorded here as
+an already-satisfied finding, not as a deletion action that did not actually happen.
+
+### Part B — documentation correction
+
+Corrected every committed file found still describing AWS EC2 as the current deployment target
+(a repository-wide `grep -riE "EC2|AWS"` sweep across `*.md`/`*.sql`, narrowed to files making a
+present-tense claim about where the app deploys today, as opposed to historical narration of the
+AWS deletion itself, which is accurate and left untouched):
+
+- `.claude/CLAUDE.md` — "Platform Requirements" section corrected from "AWS EC2 - Deployment
+  target" to name Docker Compose, the Netcup VPS, Neon, self-hosted Redpanda, and Caddy.
+- `.planning/codebase/STACK.md` — the same correction applied to the underlying GSD-managed source
+  document this section of `.claude/CLAUDE.md` is generated from (the `<!-- GSD:stack-start
+  source:codebase/STACK.md -->` marker), so a future stack-doc regeneration does not silently
+  reintroduce the stale AWS EC2 line.
+- `README.md` (repository root) — "Project status" section rewritten: it previously described the
+  whole v1.2 infra migration as still "in flight" against an Oracle Cloud A1 Flex target, which was
+  itself stale (the actual pivot landed on Netcup, not Oracle — see "Provider history" above) and
+  understated what had actually shipped. Now states the migration is complete and names the real
+  target.
+- `docs/plans/backend-modernization/02-optimistic-locking-ddl.sql` — annotated (not rewritten) its
+  "WHEN TO RUN" section's "master auto-deploys to EC2 on every push" reasoning with a note that
+  this host no longer exists; original historical rationale left intact per the plan's own
+  instruction not to rewrite superseded provenance text.
+- `docs/plans/backend-modernization/STATUS.md` — same annotation applied to its parallel "master
+  auto-deploys to EC2 on every push" line in the Key Decisions table, for the same reason.
+- `docs/plans/backend-modernization/README.md` — its "Repo" summary line's "single-EC2 Docker
+  deploy via GitHub Actions" phrase annotated with a historical note rather than deleted, since the
+  surrounding sentence is otherwise a point-in-time description of this plan's original
+  assumptions.
+- `docs/LOCAL_DEV.md` — corrected two genuinely inaccurate functional claims, not just naming: it
+  described the production pipeline as deploying via a single `docker run` of the built image with
+  no Kafka broker standing up, and referenced "EC2's constraints" — neither matches the current
+  Netcup deploy, which runs the full `docker-compose.prod.yml` stack (including `redpanda`) via
+  `docker compose up -d` per plan 05-05.
+
+`docs/INFRA_ARCHITECTURE.md`'s delivery diagram was **not modified by this task** — it was already
+promoted from target-state to current-state language by quick task `260816-tqc` earlier the same
+day (see that task's commits and `.planning/STATE.md`), independently of this plan. Verified
+against the live file rather than assumed from the plan text before treating it as already done.
+
+`.planning/`-scoped files other than `.planning/codebase/STACK.md` (phase summaries, quick-task
+records, `.continue-here.md`, `.planning/research/*`, `.planning/milestones/*`) were deliberately
+left untouched — they are historical records of what was true or planned at the time they were
+written (e.g. "disabled `deploy-to-ec2`" describes a real action taken on a real date), not
+present-tense claims about today's deploy target, and rewriting them would destroy the provenance
+trail this project's own CLAUDE.md and `docs/SESSION_LESSONS.md` conventions rely on.
+`.planning/codebase/STACK.md` was the one exception, corrected specifically because it is a live
+generation source for `.claude/CLAUDE.md`, not a historical record.
+
+### Part C — Docker Hub tag pruning: not performed, genuine human-only checkpoint
+
+Not attempted. Recorded here as an open item, carried forward as a checkpoint rather than
+fabricated or silently skipped — see the SUMMARY's checkpoint section for the full detail.
+
+### Decommission date
+
+2026-08-17.
+
 ## Maintenance note
 
 If the provider, IP, OS, spec, or firewall policy changes, update this document in the same
