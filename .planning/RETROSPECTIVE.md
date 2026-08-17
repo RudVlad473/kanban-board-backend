@@ -71,6 +71,44 @@
 
 ---
 
+## Milestone: v1.2 — Infra Migration & Schema Registry
+
+**Shipped:** 2026-08-17
+**Phases:** 7 (4, 04.1, 04.2, 5, 6, 7, 07.1) | **Plans:** 39 | **Sessions:** many, spanning 2026-08-03 to 2026-08-17
+
+### What Was Built
+- A versioned Avro Schema Registry in front of the Kafka activity-log pipeline (5→14 `ActivityEvent` types over the milestone), enforced BACKWARD compatibility, build-time registration, and DLT byte-fidelity re-proven under Avro
+- Flyway-managed domain schema (V1→V7 by milestone end) reconstructing the app's real DDL evolution, `ddl-auto=validate` outside tests, and the whole test suite cut over from H2 to a real Testcontainers Postgres executing the same migrations production runs
+- Production redeploy after the AWS EC2/RDS deletion — pivoted from Oracle Cloud (structurally capacity-constrained) to a Netcup VPS, with Neon serverless Postgres, self-hosted resource-capped Redpanda, Caddy automatic HTTPS, and a full GitHub Actions CI/CD pipeline (build → Flyway-verify → deploy → cleanup)
+- Six mock-up-vs-API feature gaps closed (board creation, column deletion, task/column ordering, nested full-board read, per-user theme, subtask locking) plus a monotonic Snowflake-style `eventId`
+- A test-suite reorganization (support/ package split, tier downgrades where a real socket/Kafka wasn't needed) and a frontend-integration-readiness pass (RFC 7807 envelope, 401/403 split, CORS, Board locking, adversarial security test coverage)
+
+### What Worked
+- Tracer-first sequencing continued to pay off at larger scale — Phase 4's Avro cutover, Phase 05-04's manual end-to-end deploy before CI/CD automation, and Phase 06-01's Flyway V5 tracer before the rest of that phase's feature work all followed the same prove-once-then-extend shape v1.0 established
+- Live-infrastructure verification kept finding real bugs mocked tests structurally can't: `cleanup-old-images`' Docker Hub auth (two separate bugs, both only visible on a real API call), a Redpanda memory-limit boundary that only broke on an actual container restart, and a genuine `POST /logout` 500 a live `/claude-security` scan surfaced
+- Deliberately choosing to independently re-verify rather than override past a gap, twice in one milestone-close pass (Phase 5's stale checkpoint bookkeeping, Phase 07.1's missing VERIFICATION.md) — both driven by tooling signals (`gsd_run query init.manager`) rather than manual inspection, which is what made them findable at all
+
+### What Was Inefficient
+- **The exact v1.1 lesson recurred, twice, within this single milestone.** Phase 07.1 (9/9 plans, all summarized) reached milestone-close with no `VERIFICATION.md` ever produced — the identical failure mode v1.1's retrospective already named ("execution completeness ≠ verification completeness"). Separately, Plan 05-06 halted at a genuine checkpoint, was resolved by two follow-on commits in a later session, and the SUMMARY/todo/STATE bookkeeping was never updated to match — a related but distinct gap (verification artifact exists and is stale, rather than missing outright). Both were only caught by deliberately running readiness tooling before archiving, not by trusting `has_summary: true` or a phase's own narrative.
+- A tooling bug in `gsd-tools`' STATE.md progress-percent writer was filed mid-milestone (real, reproduced twice) rather than fixed — the workaround was manual STATE.md correction each time it recurred, which is exactly the kind of drift this milestone's close then had to spend real effort reconciling.
+- SEED-001 (Confluent Schema Registry) sat with `status: dormant` in its own tracking file for the entire milestone despite being fully delivered by Phase 4 in the first week — nothing downstream depended on that field being correct, but it meant the milestone-close artifact audit flagged a fully-shipped feature as an open item, adding noise to a process step meant to catch real gaps.
+
+### Patterns Established
+- Independent `gsd-verifier` dispatch as the standard way to close a "plans done, verification missing/stale" gap, rather than either overriding past it or hand-declaring completion — used twice this milestone (Phase 5, Phase 07.1), both times finding zero real gaps but producing a durable, evidence-backed `VERIFICATION.md` that didn't exist before
+- When a plan halts at a genuine human-only checkpoint and a later session resolves it via code-only fixes, treat the SUMMARY/todo/STATE reconciliation as its own explicit step, not an assumed side effect of the fix commits landing — the fix being live and correct is not the same as the planning record reflecting that
+- Milestone-close readiness checks (`init.manager`, `audit-open`) are worth running even when the operator's own mental model says "everything's done" — every phase-level gap this milestone's close caught was invisible from ROADMAP.md/STATE.md's own prose, only visible via the structured tooling queries
+
+### Key Lessons
+1. **A lesson from a prior milestone's retrospective is not automatically internalized process** — v1.1 explicitly named "execution completeness ≠ verification completeness" as a lesson, and v1.2 reproduced the identical gap on a different phase. Naming a lesson in a retrospective doesn't prevent recurrence; only a structural check run at the right time (milestone-close readiness, not just phase-close) reliably catches it.
+2. **Tracking-file staleness (a seed's `status`, a todo's location, a checkpoint's narrative) accumulates silently across a long milestone and is cheapest to fix at the first sign of drift, not batched at milestone-close** — none of this milestone's bookkeeping gaps were hard to fix once found, but finding all of them at once during close cost more total effort than fixing each as it happened would have.
+3. **Live evidence beats narrative confidence at every scale, from a single CI job to an entire phase** — the pattern that resolved Plan 05-06's Docker Hub bug (read the actual job log, not the commit message) is the same pattern that resolved Phase 07.1's missing verification (run the actual tests, don't trust the SUMMARY) and the same one that caught SEED-001's stale status (check the shipped feature against the tracking file, don't assume they stayed in sync).
+
+### Cost Observations
+- Sessions: many, spanning roughly two weeks (2026-08-03 → 2026-08-17), including several single-topic "quick task" sessions interleaved between phases (matching v1.1's pattern)
+- Notable: milestone-close alone required two full `gsd-verifier` dispatches (Phase 5, Phase 07.1) beyond the phases' own original execution — a direct cost of the verification-completeness gap recurring, not inherent to the milestone's feature scope
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -79,6 +117,7 @@
 |-----------|----------|--------|------------|
 | v1.0 | 1 | 1 | First milestone — established the tracer-then-reuse plan-sequencing pattern for symmetric entity work (Task then Column) |
 | v1.1 | several | 2 | Extended tracer-first sequencing to producer/consumer Kafka slices; surfaced a real process gap (a phase can finish execution with zero verification) that the pre-milestone-close audit is now the catch for |
+| v1.2 | many (~2 weeks) | 7 | Largest milestone by phase/plan count so far; the v1.1 verification-completeness gap recurred twice (Phase 07.1's missing VERIFICATION.md, Plan 05-06's stale-but-resolved checkpoint) — caught both at milestone-close via `init.manager`/`audit-open` readiness tooling rather than by trusting phase narratives |
 
 ### Cumulative Quality
 
@@ -86,9 +125,10 @@
 |-----------|-------|----------|-------------------|
 | v1.0 | 118+ (full suite) | Not tracked | 0 |
 | v1.1 | 178 (full suite, E2E included) | Not tracked | 0 (spring-kafka/Testcontainers-Kafka were already anticipated by the epic spec) |
+| v1.2 | 278 at Phase 7 close, growing further through 07.1 (118 tests independently re-run live across 6 classes at milestone-close verification, 0 failures); JaCoCo ratchet gate added (INSTRUCTION/LINE≥0.90, BRANCH≥0.75) | Ratcheted via JaCoCo (see above) | Flyway, Testcontainers PostgreSQL, gradle-avro-plugin/Avro, OWASP dependency-check, gitleaks — all directly load-bearing for this milestone's own goals (schema governance, prod-parity testing, deploy security), not incidental |
 
 ### Top Lessons (Verified Across Milestones)
 
 1. Tracer-first plan sequencing (prove the pattern once end-to-end, then mechanically reuse for symmetric entities) reduces deviations in follow-on plans — v1.0 Plan 01 had 4 auto-fixed deviations, Plan 02 had 0.
-2. Execution completeness (`has_summary: true`) and verification completeness (`VERIFICATION.md` exists and passed) are two different facts — v1.1 Phase 2 had the former without the latter for its entire lifetime until the milestone-close audit caught it. Check both before treating any phase as done.
-3. Live-infrastructure verification (a real broker, a real running stack) finds a class of bug — bean-resolution ambiguity, conditional-bean suppression — that mocked tests and code review both structurally miss, regardless of how carefully either is done.
+2. Execution completeness (`has_summary: true`) and verification completeness (`VERIFICATION.md` exists, passed, and still matches reality) are different facts, and naming this as a lesson doesn't prevent recurrence — v1.1 Phase 2 had the gap once; v1.2 reproduced it twice on two different phases despite the standing lesson. Only a structural check run at milestone-close (not phase-close alone) has reliably caught it so far.
+3. Live-infrastructure verification (a real broker, a real running stack, a real CI job log) finds a class of bug — bean-resolution ambiguity, conditional-bean suppression, auth-header/pagination mismatches on a real third-party API — that mocked tests and code review both structurally miss, regardless of how carefully either is done. This held at every scale tried so far: a single Kafka bean (v1.1), a whole production deploy pipeline (v1.2).
