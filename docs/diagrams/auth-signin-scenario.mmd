@@ -1,0 +1,56 @@
+sequenceDiagram
+    actor C as Client
+    participant AC as AuthenticationController
+    participant AM as AuthenticationManager
+    participant UAP as UserAuthenticationProvider
+    participant SAS as sessionAuthenticationStrategy
+    participant SCR as SecurityContextRepository
+    participant DB as Postgres (users, spring_session*)
+
+    Note over C,DB: one of only two routes reachable without a session -- the other is /signup
+
+    C->>AC: POST /api/signin {email, password}
+
+    alt request body fails Jakarta validation
+        AC--xAC: MethodArgumentNotValidException (before this method body runs)
+        AC-->>C: 400 ProblemDetail {code: VALIDATION_FAILED, errors: {field: message}}
+        Note over AC: identical shape to signup's 400 arm -- see auth-signup-scenario.mmd
+    else request body valid
+        AC->>DB: userService.findByEmail(email)
+        alt email not registered
+            DB-->>AC: not found
+            AC->>AC: passwordEncoder.matches(password, equalizerHash)<br/>(result discarded)
+            Note over AC: finding F1 (2026-08-10 /claude-security scan): without this discarded<br/>comparison, an unknown email would fast-fail with zero BCrypt work while a<br/>registered email below always pays one -- so response TIMING would let anyone<br/>enumerate who has an account, even though the response BODY is already<br/>identical either way. Performing the same comparison here closes that gap.
+            AC-->>C: 401 ProblemDetail {code: BAD_CREDENTIALS}
+        else email registered
+            DB-->>AC: UserEntity
+            Note over AC,SCR: everything from here shares its code with signup's own success<br/>path -- see auth-signup-scenario.mmd for the token-from-id/provider/<br/>principal beats drawn identically there
+            AC->>AC: build unauthenticated token from user.id (NOT the email address)
+            AC->>AM: authenticationManager.authenticate(token)
+            AM->>UAP: authenticate(token)
+            UAP->>DB: loadUserByUsername(id)
+            DB-->>UAP: stored credential
+            UAP->>UAP: passwordEncoder.matches(password, storedHash)
+            alt password does not match
+                UAP--xAC: throws BadCredentialsException
+                AC-->>C: 401 ProblemDetail {code: BAD_CREDENTIALS}
+            else password matches
+                Note over UAP: builds a MINIMAL principal (username only, no password hash) --<br/>this is the object Spring Session serializes into the session store
+                UAP-->>AM: Authentication(principal=User, no password)
+                AM-->>AC: Authentication
+                AC->>SAS: sessionAuthenticationStrategy.onAuthentication(authentication, request, response)
+                Note over SAS: this strategy is a COMPOSITE, run in a deliberate order: the<br/>2-session ceiling check runs FIRST, against the live session count for<br/>this principal, and session-id rotation runs SECOND -- a login the<br/>ceiling is about to refuse must not rotate the caller's existing<br/>session id as a side effect of a failed request
+                alt already at the 2-session ceiling
+                    SAS--xAC: throws SessionAuthenticationException
+                    Note over AC,C: THIS IS THE HEADLINE OF THIS DIAGRAM. The ceiling rejection<br/>collapses to the exact same response as the wrong-password arm above --<br/>same status, same code, same body. This is deliberate (decision D-08),<br/>not an oversight: giving the ceiling its own status would hand an<br/>attacker a validity oracle for "these credentials are correct, this<br/>account just has sessions open." A test seeing a 401 here has NO way<br/>to tell which of the two causes fired.
+                    Note over SAS,DB: the ceiling permits a small, bounded, self-correcting<br/>overshoot under genuinely simultaneous logins for one principal --<br/>see SecurityConfiguration.sessionAuthenticationStrategy's Javadoc<br/>(finding F6, 2026-08-10 scan) for the measured detail
+                    AC-->>C: 401 ProblemDetail {code: BAD_CREDENTIALS}
+                else ceiling not reached
+                    AC->>SCR: securityContextRepository.saveContext(context, request, response)
+                    Note over SCR,DB: written into a request-scoped session here -- the session<br/>rows are committed to Postgres only as the response is flushed,<br/>AFTER this handler has already returned
+                    AC-->>C: 200 Set-Cookie: JSESSIONID (rotated id)<br/>body {id, email, displayName, theme}
+                    Note over AC,C: two differences from signup's success response: the status<br/>(200, not 201) and no Location header
+                end
+            end
+        end
+    end
