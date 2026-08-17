@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 Phase: Not started (defining requirements)
 Plan: —
 Status: Defining requirements
-Last activity: 2026-08-17 — Milestone v1.3 started
+Last activity: 2026-08-17 - Completed quick task 260817-tvd: Create authentication sequence diagrams (sign up and sign in flows) for frontend E2E test planning
 
 ## Performance Metrics
 
@@ -73,6 +73,12 @@ No decisions recorded yet for the next milestone.
 ### Blockers/Concerns
 
 None currently open. All blockers recorded during v1.2 (Oracle A1 Flex tenancy sizing, Avro/sealed-interface mapping design, BACKWARD-vs-FULL compatibility mode, production Kafka/Redpanda config) were resolved during the milestone — see `.planning/milestones/v1.2-ROADMAP.md` and `.planning/RETROSPECTIVE.md` for how each was settled.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260817-tvd | Create authentication sequence diagrams (sign up and sign in flows) for frontend E2E test planning | 2026-08-17 | ce46464 | [260817-tvd-create-authentication-sequence-diagrams-](./quick/260817-tvd-create-authentication-sequence-diagrams-/) |
 
 ### Roadmap Evolution (v1.0–v1.2, for reference)
 
