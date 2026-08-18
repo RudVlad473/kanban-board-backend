@@ -126,7 +126,7 @@ services:
   app-nonprod:
     profiles: ["nonprod"]
     container_name: kanban-nonprod-app
-    image: rudenkovladimir/kanban-board-backend:${IMAGE_TAG}
+    image: rudenkovladimir/kanban-board-backend-nonprod:${IMAGE_TAG}
     restart: unless-stopped
     mem_limit: 1g
     depends_on:
