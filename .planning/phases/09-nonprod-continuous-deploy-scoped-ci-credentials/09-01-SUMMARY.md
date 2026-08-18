@@ -14,13 +14,14 @@ provides:
   - "Linux user deploy-nonprod on the Netcup VM, docker-group member, confined by Unix filesystem permissions to /opt/deploy/kanban-board-nonprod/, proven locked out of /opt/deploy/kanban-board-backend/ by measured Permission denied output"
   - "Public Docker Hub repository rudenkovladimir/kanban-board-backend-nonprod"
   - "Task 1's decision checkpoint resolved (option-a) and recorded, with both residual risks (T-09-03 docker-group root-equivalence, T-09-09 account-wide Docker Hub token) written into docs/INFRA_RUNBOOK.md"
+  - "deploy.yml wired with flyway-verify-nonprod and deploy-to-nonprod, dual-tag single build, environment: retrofit on every production job (commit 58bdee9, live on master) — edit is structurally correct but its live run has not yet gone green; NOT yet a usable green-run precedent for plans 09-02/09-03 until the NETCUP_HOST_FINGERPRINT defect below is fixed and re-run"
 affects: [09-02-nonprod-continuous-deploy-scoped-ci-credentials, 09-03-nonprod-continuous-deploy-scoped-ci-credentials]
 
 # Actuals (#2632)
 actuals:
-  tokens: 5300
-  tasks: 2
-  commits: 3
+  tokens: 8900
+  tasks: 3
+  commits: 4
 
 # Tech tracking
 tech-stack:
@@ -28,15 +29,17 @@ tech-stack:
   patterns:
     - "GitHub Environments used purely as a secret-scoping mechanism (zero protection rules, D-04) rather than for approval gates"
     - "Deploy credentials recovered from the VM's own already-deployed env files where possible, rather than re-typed by the operator, wherever GitHub's write-only secret store made the original value otherwise unrecoverable"
+    - "One build, two Docker Hub tags: docker/build-push-action's tags: list takes a multi-line block, avoiding a second build step for the second environment's image"
 
 key-files:
   created: []
   modified:
     - "docs/INFRA_RUNBOOK.md — new section '## Nonprod CI deploy identity and environment-scoped secrets — Plan 09-01', corrected '### Operator note — deploying nonprod'"
+    - ".github/workflows/deploy.yml — added flyway-verify-nonprod, deploy-to-nonprod; environment: production retrofit on flyway-verify/deploy-to-netcup/cleanup-old-images/cleanup-unused-image; dual-tag build-and-push-docker-image"
 
 key-decisions:
   - "Task 1 checkpoint resolved by human operator: option-a — deploy-nonprod VM identity confined by Unix filesystem permissions only (docker group membership root-equivalence accepted as residual risk), plus one Docker Hub token duplicated into both GitHub Environments (account-wide token scope accepted as residual risk). Mechanical names confirmed as proposed: Linux user deploy-nonprod, Docker Hub repository rudenkovladimir/kanban-board-backend-nonprod, GitHub Environments production/staging, identical secret NAMES in both environments with per-environment values."
-  - "Task 3 (the .github/workflows/deploy.yml edit and the live push-to-master that proves it) deliberately deferred to the orchestrator, per explicit coordinator instruction: this session ran inside an isolated worktree, and Task 3 pushes directly to origin/master triggering a real production-impacting deploy run, which must happen under the human operator's direct observation, not unattended from a background agent."
+  - "Task 3 (the .github/workflows/deploy.yml edit and the live push-to-master that proves it) was executed directly on the sequential (non-worktree) working tree by explicit coordinator instruction, since it pushes to origin/master and must happen from the real working tree, not an isolated branch. The edit landed and pushed cleanly (commit 58bdee9), but the live run FAILED — see Issues Encountered. Task 3 is NOT complete; this plan remains halted pending human remediation of a Task 2 provisioning defect (wrong NETCUP_HOST_FINGERPRINT value) discovered by this run."
 
 patterns-established: []
 
@@ -68,28 +71,31 @@ coverage:
         status: pass
     human_judgment: false
   - id: D4
-    description: "Task 3 (.github/workflows/deploy.yml edit and live end-to-end deploy proof) not executed this session — deliberately deferred to the orchestrator"
-    verification: []
+    description: "Task 3 (.github/workflows/deploy.yml edit and live end-to-end deploy proof) executed on the sequential working tree; the workflow edit itself is structurally correct (all static acceptance criteria pass) and is live on master (commit 58bdee9), but the live run failed both deploy jobs on an SSH host-key fingerprint mismatch traced to a Task 2 provisioning defect, not to this task's own code. Task 3's live-verification acceptance criteria (green run, docker inspect, both health endpoints reflecting the new commit) are NOT met."
+    verification:
+      - kind: other
+        ref: "python yaml.safe_load parses clean; job-id/environment-scoping/concurrency-group/dual-tag/needs-graph/identity-axis static checks all pass (see Issues Encountered for the corrected extraction command); gh run view 32179763451 --json conclusion == failure (deploy-to-netcup, deploy-to-nonprod both failed on ssh handshake); production and nonprod health endpoints both still return 200, both still running their PRE-this-run images (production 8d8f046, nonprod 777cb27) — the SCP step failed before touching either VM directory, so no partial/inconsistent state was left on the VM"
+        status: fail
     human_judgment: true
-    rationale: "Task 3 pushes to origin/master and triggers a real, production-impacting GitHub Actions deploy run; per explicit coordinator instruction this must happen under the human operator's direct observation once this worktree's commits land on master, not unattended from an isolated background agent. No automated verification applies to work that was not performed."
+    rationale: "The failure requires resetting a GitHub Environment secret value (NETCUP_HOST_FINGERPRINT in both production and staging), which this session's explicit instructions prohibit attempting autonomously ('do NOT attempt undocumented recovery — halt with a clear report ... so the human operator can assess'). A human must confirm the correct fingerprint and reset the secret before Task 3 can be re-run and marked complete."
 
 # Metrics
-duration: ~1h10min (across three halts/resumes; see Performance below)
+duration: ~1h50min (across four halts/resumes/attempts; see Performance below)
 completed: 2026-08-18
 status: halted
 ---
 
 # Phase 09 Plan 01: Nonprod CI deploy identity and scoped secrets — Summary
 
-**Two GitHub Environments (production/staging, zero protection rules) populated with nine scoped deploy secrets each, a filesystem-confined deploy-nonprod VM identity proven locked out of production's directory, and a public Docker Hub repository for nonprod — Task 3's live workflow wiring deliberately deferred to the orchestrator.**
+**Two GitHub Environments (production/staging, zero protection rules) populated with nine scoped deploy secrets each, a filesystem-confined deploy-nonprod VM identity proven locked out of production's directory, a public Docker Hub repository for nonprod, and both nonprod CI jobs wired into deploy.yml and pushed live — but the first live run failed on an SSH host-key fingerprint mismatch traced to a Task 2 provisioning defect, leaving Task 3 unverified and this plan still halted.**
 
 ## Performance
 
-- **Duration:** ~1h10min total across three phases: Task 1 checkpoint reached and halted (~10 min, including Windows Gradle/pre-commit-hook file-lock recovery), checkpoint resolved and Task 2 precondition re-checked and found unmet (~5 min, second halt), then Task 2 fully provisioned and committed after the operator supplied SSH access and recoverable-secret guidance (~55 min, including a mid-task key-rotation fix)
+- **Duration:** ~1h50min total across four phases: Task 1 checkpoint reached and halted (~10 min, including Windows Gradle/pre-commit-hook file-lock recovery), checkpoint resolved and Task 2 precondition re-checked and found unmet (~5 min, second halt), Task 2 fully provisioned and committed after the operator supplied SSH access and recoverable-secret guidance (~55 min, including a mid-task key-rotation fix), then Task 3 executed on the sequential working tree — deploy.yml edited, verified statically, committed (~15 min, including two Windows Gradle/Testcontainers pre-commit-hook file-lock recoveries), pushed to master, and the live run diagnosed after both deploy jobs failed (~25 min)
 - **Started:** 2026-08-18T18:19:14Z (approx, per STATE.md)
-- **Completed:** 2026-08-18
-- **Tasks:** 2 of 3 completed (Task 1's checkpoint resolved, Task 2 fully provisioned and verified; Task 3 deliberately not started)
-- **Files modified:** 1 (`docs/INFRA_RUNBOOK.md`) plus this SUMMARY.md
+- **Completed:** 2026-08-18 (Tasks 1-2 only; Task 3 attempted but not verified complete)
+- **Tasks:** 2 of 3 fully completed and verified (Task 1's checkpoint resolved, Task 2 fully provisioned and verified); Task 3 attempted — workflow edit committed and pushed to master, but the live run it requires failed and remains unresolved
+- **Files modified:** 2 (`docs/INFRA_RUNBOOK.md`, `.github/workflows/deploy.yml`) plus this SUMMARY.md
 
 ## Accomplishments
 
@@ -101,23 +107,25 @@ status: halted
   - Populated all nine deploy secrets in both environments, recovering `DB_*` values as root from the VM's own already-deployed `.env.prod`/`.env.nonprod` files, reusing the operator's existing local `netcup_deploy_key` for production, and piping `DOCKERHUB_TOKEN` directly from a local file into `gh secret set` — no secret value was ever printed, echoed, or written into this repository.
   - Recorded the full provisioning, every verbatim proof output, and both accepted residual risks (T-09-03 docker-group root-equivalence, T-09-09 account-wide Docker Hub token) in `docs/INFRA_RUNBOOK.md`.
   - Corrected the pre-existing `### Operator note — deploying nonprod` section, which previously instructed running nonprod Compose commands as `deploy` — now correctly says `deploy-nonprod`.
-- **Task 3 deliberately not started**, per explicit coordinator instruction (scope change, see Decisions Made): `.github/workflows/deploy.yml` is unmodified; no push to `master`; no live GitHub Actions run was triggered.
+- **Task 3 executed on the sequential (non-worktree) working tree**, per explicit coordinator instruction: `.github/workflows/deploy.yml` edited per the task's action spec (A-F), all static acceptance criteria verified locally, committed (`58bdee9`), and pushed to `origin/master`. The push triggered a real GitHub Actions run (`32179763451`) that built and pushed both image tags from one build and ran both new Flyway-verify jobs successfully, but **both deploy jobs (`deploy-to-netcup`, `deploy-to-nonprod`) failed** with `ssh: handshake failed: ssh: host key fingerprint mismatch`. Diagnosed as a Task 2 provisioning defect (wrong `NETCUP_HOST_FINGERPRINT` value in one or both GitHub Environments), not a bug in Task 3's own workflow edit — see Issues Encountered. Production and nonprod were independently confirmed unaffected: both health endpoints return `200`, both containers are still running their pre-run images (`docker inspect` on the VM: production `8d8f046`, nonprod `777cb27`), because the SCP step failed before touching either VM directory.
 
 ## Task Commits
 
-Each halt/resume step was committed atomically:
+Each halt/resume/attempt step was committed atomically:
 
 1. **Checkpoint halt (Task 1 unresolved)** - `8e2bafd` (docs)
 2. **Checkpoint resolution recorded, second halt (Task 2 precondition unmet)** - `d52db5a` (docs)
 3. **Task 2: provision GitHub Environments, deploy-nonprod VM identity, Docker Hub repository, runbook documentation** - `d15e37e` (feat)
+4. **Task 3: wire flyway-verify-nonprod and deploy-to-nonprod into deploy.yml, retrofit `environment:` onto every production job, dual-tag the one build** - `58bdee9` (feat) — edit is correct and live on `master`; the live run it enables still fails (see above), so this task is not marked complete
 
-**Plan metadata:** (this SUMMARY.md update, committed alongside or immediately after `d15e37e`)
+**Plan metadata:** this SUMMARY.md update (committed immediately after `58bdee9`)
 
-_Note: no `test`/`refactor` commits — this plan is infra provisioning, not application code; the project's own `spotlessCheck`+`fastTest` pre-commit hook ran clean on every commit regardless._
+_Note: no `test`/`refactor` commits — this plan is infra provisioning and CI configuration, not application code; the project's own `spotlessCheck`+`fastTest` pre-commit hook ran clean on every commit regardless (twice recovering from a Windows Gradle/Testcontainers file-lock, see Issues Encountered)._
 
 ## Files Created/Modified
 
 - `docs/INFRA_RUNBOOK.md` - new section "Nonprod CI deploy identity and environment-scoped secrets — Plan 09-01" (identities table, verbatim proof outputs, secret inventory, accepted residuals); corrected "Operator note — deploying nonprod"
+- `.github/workflows/deploy.yml` - added `flyway-verify-nonprod` and `deploy-to-nonprod` jobs; extended `build-and-push-docker-image` to push a second `kanban-board-backend-nonprod`-repository tag from the one build; retrofitted `environment: production` onto `flyway-verify`, `deploy-to-netcup`, `cleanup-old-images`, `cleanup-unused-image`; added `DOCKERHUB_REPOSITORY_NONPROD` env var and `setup`'s `base_image_name_nonprod` output
 - `.planning/phases/09-nonprod-continuous-deploy-scoped-ci-credentials/09-01-SUMMARY.md` - this file
 
 **External resources created (not repository files, but part of this plan's deliverable):**
@@ -132,7 +140,7 @@ _Note: no `test`/`refactor` commits — this plan is infra provisioning, not app
 - **Selected: option-a** — confirm as planned: `deploy-nonprod` VM identity confined by standard Unix filesystem permissions only (`docker` group membership's root-equivalence explicitly accepted as a residual risk, per D-02's rejection of forced-command/restricted-shell hardening), plus one Docker Hub token duplicated into both GitHub Environments (account-wide token scope explicitly accepted as a residual risk, since per-repository Docker Hub token scoping is a paid-plan feature). Both residuals recorded in `docs/INFRA_RUNBOOK.md` (T-09-03, T-09-09 in the plan's threat register).
 - **Mechanical resource names confirmed as proposed:** Linux user `deploy-nonprod`; Docker Hub repository `rudenkovladimir/kanban-board-backend-nonprod`; GitHub Environments `production` and `staging`; identical secret NAMES in both environments with per-environment values.
 
-**Scope change — Task 3 deferred by explicit coordinator instruction:** this worktree is isolated; its commits live on a private per-agent branch until the orchestrator merges them to `master`. Task 3 as written pushes directly to `origin/master` and triggers a real, production-impacting GitHub Actions deploy run — a genuinely hard-to-reverse, production-impacting action the coordinator determined the human operator should watch happen live rather than have fire unattended from a background agent inside an isolated worktree. `.github/workflows/deploy.yml` was not touched this session.
+**Task 3 executed on the sequential working tree, per explicit coordinator instruction:** Task 3 pushes directly to `origin/master` and triggers a real, production-impacting GitHub Actions deploy run, which the coordinator determined must happen from the real working tree (not an isolated worktree/branch) so hooks and the push target are the genuine ones. `.github/workflows/deploy.yml` was edited, verified statically, committed and pushed. The live run it enables failed — see Issues Encountered for full diagnosis. Per the coordinator's explicit instruction for this exact scenario ("do NOT attempt undocumented recovery — halt with a clear report ... so the human operator can assess"), no attempt was made to reset the failing secret or otherwise self-heal the live run.
 
 ## Deviations from Plan
 
@@ -146,27 +154,44 @@ _Note: no `test`/`refactor` commits — this plan is infra provisioning, not app
 - **Verification:** Re-ran the plan's full Task 2 automated `<verify>` block after the rotation — all checks passed (`gh api .../environments` → `2`; both environments' secret name lists match exactly; repository secrets still `10`; Docker Hub `is_private: false`; runbook heading present). Fingerprints re-confirmed distinct from production's key and matching between the local file and the VM's `authorized_keys`.
 - **Committed in:** `d15e37e` (Task 2 commit — the rotation happened before the commit, so the final committed runbook state already reflects the corrected key)
 
+**2. [Rule 3 - Blocking, discovered not fixed] Task 3's own `<verify>` automated block has an awk range-extraction bug**
+- **Found during:** Task 3, local static verification before push
+- **Issue:** The plan's automated verify command extracts the `deploy-to-nonprod` job body with `awk '/^  deploy-to-nonprod:$/,/^  [a-z0-9-]+:$/'`. Because the job-name line itself (`  deploy-to-nonprod:`) also matches the range's own end pattern, GNU awk closes the range on that same line — the "extracted block" is just the one-line job header, so every subsequent `grep -q` against `$B` fails, not because the workflow is wrong but because the extraction never captured the job body at all. Reproduced identically against the pre-existing `deploy-to-netcup` job with the analogous pattern, confirming this is a property of the awk pattern itself, not something introduced by this task's edits.
+- **Fix:** Not applied to the plan text (out of this task's file scope: `<files>` is `.github/workflows/deploy.yml` only). Verified the same acceptance criteria manually instead, using `sed -n "${START},${END}p"` with line numbers from `grep -n`: all six checks (`--profile nonprod`, `--env-file ./.env.nonprod`, `needs.build-and-push-docker-image.outputs.image_tag`, `app-nonprod`, `redpanda-nonprod`, single `/opt/deploy/kanban-board-nonprod` path) pass against the real job body. This is a documentation-only finding — recorded here so a future planner does not re-diagnose the same awk quirk as a workflow bug.
+- **Files modified:** None (verification-only finding).
+- **Verification:** Corrected extraction command run and all six criteria confirmed passing; also independently confirmed via full-file `grep`/manual read that the job body is correct.
+- **Committed in:** n/a (no code change; documented here only)
+
 ---
 
-**Total deviations:** 1 auto-fixed (Rule 1 — bug in the executor's own cleanup step, not in the plan text)
-**Impact on plan:** The fix was necessary to match this project's established credential-retention precedent and to give the operator future manual-access capability consistent with production's `deploy` user. No scope creep — the rotation only replaced the nonprod key end-to-end (VM + GitHub secret), touching nothing else.
+**Total deviations:** 2 (1 auto-fixed — Rule 1, bug in the executor's own cleanup step during Task 2; 1 discovered-not-fixed — Rule 3 class, a pre-existing bug in the plan's own verify-script text, worked around by manual verification rather than edited since it is outside Task 3's file scope)
+**Impact on plan:** Neither affects the shipped `deploy.yml`. The Rule 1 fix was necessary to match this project's established credential-retention precedent. The awk quirk cost verification time but the underlying acceptance criteria are genuinely met, confirmed by an equivalent manual extraction.
 
 ## Issues Encountered
 
-**Windows Gradle/pre-commit-hook file-lock (first checkpoint halt only, not a Task 2 issue):** the first attempt to commit the Task 1 checkpoint SUMMARY.md timed out at 2 minutes mid-`fastTest`; orphaned Gradle Test Executor JVMs from that timeout held Windows file handles open in `build/test-results/fastTest/binary/`, causing the retried commit's `fastTest` task to fail with "Unable to delete directory." Resolved by identifying and killing the three orphaned `java.exe` processes (confirmed via their command lines referencing this exact worktree path — not a sibling agent's work) and removing the now-unlocked, gitignored `build/test-results/fastTest` directory before retrying. Not a plan or implementation issue — a Windows process-lifecycle artifact of the harness's own 2-minute default Bash timeout colliding with a multi-minute Testcontainers-backed test suite.
+**Windows Gradle/pre-commit-hook file-lock (recurred four times this session, not a Task 2/3 issue):** the Bash tool's default 2-minute timeout repeatedly killed the top-level `git commit` process mid-`fastTest` while the Testcontainers-backed suite was still genuinely running (confirmed live via `docker ps` — a real Postgres + Redpanda container pair, not a hang), leaving orphaned `Gradle Test Executor` JVMs holding Windows file handles open in `build/test-results/fastTest/binary/output.bin`. Each retried commit's `fastTest` task then failed immediately with "Unable to delete directory." Resolved each time by identifying and killing the orphaned `java.exe` worker processes (confirmed via command-line inspection referencing this exact worktree path), removing the now-unlocked, gitignored `build/test-results/fastTest` directory, then retrying the commit with an explicit longer `timeout` (480000ms) so the ~7-minute real test run could complete inside one Bash call. Task 3's commit (`58bdee9`) succeeded on the attempt that used the explicit long timeout — `BUILD SUCCESSFUL in 6m 53s`. Not a plan or implementation issue — a Windows process-lifecycle artifact of the harness's own default timeout colliding with a multi-minute Testcontainers-backed test suite, now documented a second time (see Task 1/2's own recurrence above) for a future session to recognize immediately and skip straight to the long-timeout retry.
+
+**Operator error — accidentally stopped two unrelated long-running Docker containers, self-corrected within seconds:** while clearing orphaned Testcontainers state during the file-lock recovery above, a `docker stop $(docker ps -q --filter status=running | grep -v <name> | grep -v <name>)` command was run to spare two unrelated containers (`bitmagnet-gluetun`, `bitmagnet-pyroscope`, both unrelated to this project). The `grep -v` filters were applied to container IDs (`docker ps -q` output), not names, so they matched nothing and every running container — including those two — was stopped. Caught immediately by re-checking `docker ps`; both containers were restarted (`docker start bitmagnet-gluetun bitmagnet-pyroscope`) within seconds and confirmed back up (`bitmagnet-gluetun` health-check passed on restart). No data loss — these are long-running service containers, not one-shot jobs. Recorded here as a real incident, not silently corrected: a future session should filter by name against `docker ps --format` output, not by piping `-q` IDs through a name-based grep.
 
 **Task 2 precondition genuinely unmet on first pass, correctly halted rather than proceeding:** per the coordinator's explicit second-turn instruction, this agent checked Task 2's own `<precondition>` (authorized root SSH session + nine secret values) before attempting any provisioning, found it unmet (no SSH session, no secret values supplied yet), and halted with a second checkpoint rather than attempting to open a session or request values itself. This was the correct, designed behavior for a background agent with no real-time operator channel — not an error.
+
+**Task 3's live run failed — both deploy jobs, identical root cause, diagnosed but not fixed (per explicit instruction):** after `58bdee9` pushed cleanly to `master`, GitHub Actions run `32179763451` ran `setup`, `run-tests`, `build-and-push-docker-image`, `flyway-verify`, and `flyway-verify-nonprod` all successfully (dual-tag build confirmed: both `actual_image_name` and `actual_image_name_nonprod` outputs populated, one `docker/build-push-action` invocation). Both `deploy-to-netcup` and `deploy-to-nonprod` then failed identically at their first step (`Copy Compose manifest ... to the VM`) with `ssh: handshake failed: ssh: host key fingerprint mismatch`. Diagnosis: this is the **first run** in which these jobs resolve `secrets.NETCUP_HOST_FINGERPRINT` through a declared `environment:` (Task 3's own retrofit) rather than the repository-level secret that had been working correctly in every prior run — so the environment-scoped value populated into `production`/`staging` during Task 2 does not match the VM's actual current host key. Independently reproduced the exact command the runbook documents for re-deriving this value (`ssh-keyscan 159.195.114.230 | ssh-keygen -lf -`) and found it returns **three** fingerprint lines (RSA, ECDSA, ED25519) — `256 SHA256:h9aO7t/x4mcCQAFEyDd1ctr2JJ4LKwYZGKEFX0F9N1Q ... (ED25519)` is the one an OpenSSH-compatible client (which `appleboy/scp-action`'s Go SSH library is) will actually negotiate by default, since ED25519 is preferred over RSA/ECDSA in modern default host-key-algorithm ordering. The most likely root cause is that whichever line was captured into the `NETCUP_HOST_FINGERPRINT` secret during Task 2 was not this one, or was malformed in some other way — GitHub environment secrets are write-only, so the actual stored value cannot be inspected to confirm which. **Explicitly NOT auto-fixed**, per this session's own instruction covering exactly this scenario ("If the live run fails or acceptance criteria are not met, do NOT attempt undocumented recovery — halt with a clear report ... so the human operator can assess"). Confirmed both production and nonprod are unaffected by the failed run: both health endpoints return `200`; `docker inspect` on the VM (over the operator's already-authorized `netcup-prod` SSH session, read-only) shows production still on `rudenkovladimir/kanban-board-backend:8d8f046` and nonprod still on `rudenkovladimir/kanban-board-backend-nonprod:777cb27` — the SCP step fails before writing anything to either VM directory. `cleanup-unused-image` then ran (its `if: failure()` condition matched) and deleted the just-pushed `58bdee9` tag's manifest from the **production** Docker Hub repository only, per its existing, unmodified design ("if deployment failed, we need to cleanup the image we pushed, because it won't be used") — this plan adds no equivalent cleanup job for the nonprod repository (that is explicitly out of scope, deferred to a later plan), so the `58bdee9` tag likely still exists in `kanban-board-backend-nonprod` on Docker Hub even though its own deploy also failed; this asymmetry is expected given this plan's declared scope, not a new bug.
 
 ## User Setup Required
 
 None outstanding for Task 1/Task 2 — the operator has already supplied everything needed (SSH session access, guidance on recoverable secrets, the Docker Hub token file path) and it has all been consumed and verified.
 
-**Outstanding for Task 3 (not part of this session's scope):** the orchestrator (or a follow-up session, once this worktree's commits land on `master`) must run Task 3 — edit `.github/workflows/deploy.yml` to add `flyway-verify-nonprod` and `deploy-to-nonprod`, retrofit `environment:` onto every secret-reading job, push to `master`, and verify the live run under the human operator's direct observation.
+**Outstanding for Task 3 — human remediation required before this plan can be marked complete:**
+1. Confirm the correct current SSH host fingerprint for `159.195.114.230` — most likely `SHA256:h9aO7t/x4mcCQAFEyDd1ctr2JJ4LKwYZGKEFX0F9N1Q` (ED25519), reproducible via `ssh-keyscan -t ed25519 159.195.114.230 | ssh-keygen -lf -`.
+2. Reset `NETCUP_HOST_FINGERPRINT` in **both** GitHub Environments: `gh secret set NETCUP_HOST_FINGERPRINT --env production` and `--env staging`, each fed the confirmed value on stdin (never `--body`).
+3. Re-run the workflow against the already-pushed `58bdee9` (e.g. `gh workflow run "CI/CD with Docker" --ref master` or `gh run rerun 32179763451 --failed`) and confirm `deploy-to-netcup` and `deploy-to-nonprod` both go green in the same run.
+4. Re-verify Task 3's live acceptance criteria: `docker inspect kanban-nonprod-app` on the VM shows the `58bdee9`-tagged nonprod image, both public health endpoints return `200`, and production's containers show only the expected `app` recreate.
+5. Once green, update this SUMMARY's `status` to `complete` and D4's `verification[].status` to `pass`.
 
 ## Next Phase Readiness
 
-**Partially blocked, by design.** Task 1 and Task 2 are complete and independently verified — the credential boundary CI-02 requires now exists and is populated. Task 3 (the actual workflow wiring and its live end-to-end proof) was deliberately not run in this isolated worktree session; per the coordinator's explicit instruction, it must be run by the orchestrator (or a follow-up session with direct push access to `master` and the human operator watching) once this worktree's three commits (`8e2bafd`, `d52db5a`, `d15e37e`) have been merged back to `master`. Plans 09-02 (repository-secret sweep) and 09-03 both depend on Task 3's green run and should not be started before it completes.
+**Blocked on human remediation of the Task 2 fingerprint defect, not on new work.** Tasks 1 and 2 remain complete and independently verified. Task 3's workflow edit is itself correct and live on `master` (`58bdee9`) — every static acceptance criterion passes — but its required live proof failed for a reason outside this task's own file scope (a wrong secret value set during Task 2, only exposed now that Task 3's `environment:` retrofit makes that secret load-bearing for the first time). Plans 09-02 (repository-secret sweep) and 09-03 both depend on a green run of this workflow and must not start until the fingerprint is corrected and the run is re-verified green.
 
 ---
 *Phase: 09-nonprod-continuous-deploy-scoped-ci-credentials*
-*Completed: 2026-08-18 (halted — Task 3 deliberately deferred)*
+*Completed: 2026-08-18 (halted — Task 3's workflow edit is live, but its live run failed on a Task 2 provisioning defect; awaiting human remediation)*
