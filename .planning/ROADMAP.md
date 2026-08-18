@@ -101,7 +101,12 @@ Plans:
   4. Running a production deploy and a nonprod deploy back to back leaves both stacks running their own correct image: neither deploy converges onto the other's directory, containers, network, or volumes, and neither run's image-cleanup sweep deletes the tag the other environment is currently running
   5. A push to master that introduces or changes an Avro schema leaves that schema present in both the production and the nonprod registry with no operator running the registrar by hand; a schema change the registry rejects as incompatible fails the deploy visibly rather than surfacing later as a runtime publish failure
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 09-01-PLAN.md — GitHub Environments, the confined `deploy-nonprod` VM identity, the nonprod Docker Hub repository, and an end-to-end tracer deploy (CI-01, CI-02, CI-03)
+- [ ] 09-02-PLAN.md — repository-secret sweep, `health-check-nonprod` bounded poll, and the nonprod image-retention pair (CI-02, CI-03, CI-04)
+- [ ] 09-03-PLAN.md — automated Avro schema registration against both registries, ordered ahead of nonprod's app start (CI-05)
 
 ### Phase 10: CI & Deploy Hardening
 
