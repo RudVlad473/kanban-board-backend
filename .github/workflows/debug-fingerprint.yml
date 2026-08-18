@@ -1,0 +1,31 @@
+# Temporary diagnostic for the 09-01 NETCUP_HOST_FINGERPRINT mismatch (host key fingerprint
+# mismatch on both deploy-to-netcup and deploy-to-nonprod, even after the value was reset to an
+# independently triple-verified-correct value). Prints a SHA256 hash of the secret's value, never
+# the value itself, so the operator can compare against a locally computed hash without exposing
+# anything -- GitHub's log redaction masks exact secret-value substrings, not hashes derived from
+# them. Read-only against the secret store; touches no VM and triggers no deploy.
+#
+# Delete this file once the mismatch is diagnosed and fixed -- it exists only to answer one
+# question: does GitHub actually have the value we think we set?
+name: Debug Fingerprint Hash
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  hash-production:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Hash NETCUP_HOST_FINGERPRINT (production)
+        run: echo -n "${{ secrets.NETCUP_HOST_FINGERPRINT }}" | sha256sum
+
+  hash-staging:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Hash NETCUP_HOST_FINGERPRINT (staging)
+        run: echo -n "${{ secrets.NETCUP_HOST_FINGERPRINT }}" | sha256sum
