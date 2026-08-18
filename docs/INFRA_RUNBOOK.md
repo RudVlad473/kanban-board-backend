@@ -1538,6 +1538,87 @@ measurement's restart cycles or memory pressure. Production's own caps (`app: me
 `redpanda: mem_limit: 2200m`, unchanged) were never modified by this task --
 `git diff --name-only HEAD -- docker-compose.prod.yml` is empty.
 
+### D-07 decision outcome
+
+**Selected: `stay-colocated`.** Decided 2026-08-18 by the developer (not the agent) at the
+`checkpoint:decision` this plan's Task 3 inserted specifically to keep this call out of unattended
+execution, per `08-CONTEXT.md`'s D-07. Reasoning given: no new recurring cost; one host, one firewall
+posture, one Caddy, one deploy user; the measured floor (`128M`/`300m`) is backed by a failing step
+below it -- three independently confirmed crash-looping rungs at `96M`, `64M` and `32M` (Seastar
+allocation failure -> SIGSEGV, `96M`'s failure specifically caught only once monitored continuously
+past a false-positive startup check) -- so the floor is a real boundary, not a guess.
+
+Figures the decision was made on (all recorded above in "Iteration ladder" / "Adopted floor" /
+"Host coexistence"): the adopted `--memory 128M` / `mem_limit 300m` pair (172MiB margin);
+`kanban-nonprod-redpanda`'s peak RSS at ~19.1% of the `mem_limit` cap and ~44.9% of the `--memory`
+request under a real 54-request burst; host `free -m` `available` never below 5.8GiB across every
+iteration in this session, against the plan's own 1024MiB gate; production's health endpoint
+returning 200 across every one of the roughly 15 restart cycles in the descent (the one transient
+`502` recorded in Iteration 0 was independently attributed to an unrelated, concurrent external CI/CD
+redeploy of production's own `app` container, confirmed via `docker inspect` showing a clean
+`RestartCount=0`/`ExitCode=0`/`OOMKilled=false` recreate rather than a crash); and production's own
+`mem_limit` values (`app: 3g`, `redpanda: 2200m`) confirmed unmodified throughout
+(`git diff --name-only HEAD -- docker-compose.prod.yml` empty for every task in this plan).
+
+**Nothing was provisioned.** No second VPS, no new DNS record, no new recurring cost. Both stacks
+remain on the single existing Netcup VPS Lite 2 G12s host.
+
+**End-state re-confirmation** (both stacks at rest, after the decision, 2026-08-18 14:50 UTC):
+
+Both public health endpoints:
+```
+curl https://kanban-board-rud-vlad-473.duckdns.org/api/actuator/health          -> 200
+curl https://kanban-board-rud-vlad-473-nonprod.duckdns.org/api/actuator/health  -> 200
+```
+
+`docker stats --no-stream` for all five containers:
+```
+kanban-board-backend-caddy-1     20.28MiB / 7.759GiB   0.26%   0.00%
+kanban-board-backend-app-1       427.3MiB / 3GiB       13.91%  3.27%
+kanban-board-backend-redpanda-1  526.3MiB / 2.148GiB   23.92%  0.29%
+kanban-nonprod-app                389.2MiB / 1GiB       38.01%  4.04%
+kanban-nonprod-redpanda           57.3MiB / 300MiB      19.10%  0.38%
+```
+
+`free -m`:
+```
+               total        used        free      shared  buff/cache   available
+Mem:            7945        1876        1992           0        4373        6069
+Swap:              0           0           0
+```
+
+`docker ps` (uptimes, images):
+```
+kanban-nonprod-app                Up 9 minutes  (healthy)  rudenkovladimir/kanban-board-backend:777cb27
+kanban-nonprod-redpanda           Up 10 minutes (healthy)  docker.redpanda.com/redpandadata/redpanda:v26.2.1
+kanban-board-backend-app-1        Up 56 minutes (healthy)  rudenkovladimir/kanban-board-backend:9c89613
+kanban-board-backend-caddy-1      Up 3 hours               caddy:2
+kanban-board-backend-redpanda-1   Up 30 hours   (healthy)  docker.redpanda.com/redpandadata/redpanda:v26.2.1
+```
+
+`docker-compose.nonprod.yml`'s `redpanda-nonprod` carries the adopted caps as committed:
+`--memory 128M`, `mem_limit: 300m`.
+
+**Operator note -- what would re-open this decision.** This colocation call is not permanent. Any of
+the following should trigger re-running Task 2's ladder from scratch, not adjusting `--memory` or
+`mem_limit` by judgement:
+- **A materially heavier nonprod workload** (e.g. a real Playwright E2E suite driving sustained
+  concurrent traffic, not the occasional manual/CI burst this measurement used) -- the floor found
+  here is specific to this app's light real traffic shape (see the backstop `must_haves` truth in
+  `08-03-PLAN.md`), not to an arbitrary Kafka workload.
+- **A production cap increase** (`app: mem_limit` or `redpanda: mem_limit` raised above their current
+  `3g` / `2200m`) -- this measurement's host-headroom conclusion assumed production's caps as they
+  stand today.
+- **A Redpanda version bump** on either broker -- Seastar's own minimum viable allocation for log
+  replay/consumer-group recovery (the actual mechanism that set this floor, not steady-state RSS) is
+  an internal implementation detail of the Redpanda version in use, not a guaranteed-stable constant
+  across versions.
+
+Re-opening this decision means re-running Task 2's live iterative ladder against the real deploy
+target and a real workload -- exactly as this plan itself was required to do rather than accept an
+arithmetic derivation. A value chosen by judgement instead of measurement is precisely what
+NONPROD-06 and this plan's own prohibitions forbid.
+
 ## Maintenance note
 
 If the provider, IP, OS, spec, or firewall policy changes, update this document in the same
