@@ -1327,6 +1327,119 @@ straight into production's pre-existing, byte-identical `SecurityConfiguration` 
 
 2026-08-18.
 
+## Nonprod resource measurement — Plan 08-03 (2026-08-18)
+
+`redpanda-nonprod`'s `mem_limit: 1200m` / `--memory 1G` pair, shipped provisional in plan 08-01, is
+replaced in this plan by a floor established through iterative live restart cycles under a real
+workload — not arithmetic, not an idle reading, not a single successful start. This section records
+the full measurement: the reference baseline (Iteration 0, this task), the descent ladder, the
+adopted floor and the failing step below it, host coexistence under simultaneous burst, and the D-07
+decision outcome.
+
+### Workload used to measure
+
+Identical shape to production's own Task 3 measurement (`## Manual deploy — Plan 05-04 Task 3`
+above), fired against the live **nonprod** public HTTPS API instead: sign up one user, create one
+board, then create 6 columns, 24 tasks (4 per column) and 24 subtasks (1 per task) in rapid
+sequential succession through `https://kanban-board-rud-vlad-473-nonprod.duckdns.org/api` — 54
+mutating requests after the initial signup+board pair (56 total HTTP calls), each producing a real
+Avro-serialized Kafka publish against the nonprod registry and a real consumer-side persist. Not a
+synthetic load-test tool — this app's real traffic shape (a personal/portfolio kanban board) is what
+the caps need to be correct for.
+
+### Iteration 0 — provisional caps (baseline)
+
+**Reset first.** `POST /api/admin/reset` against nonprod with the token read directly from
+`/opt/deploy/kanban-board-nonprod/.env.nonprod` over SSH (never typed into this session or written
+to any local file) → `204`, confirming a known-empty baseline before measuring.
+
+**Idle baseline** (both stacks up and quiet >= 60s), `docker stats --no-stream` for all five
+containers plus `free -m`:
+```
+kanban-board-backend-caddy-1     19.93MiB / 7.759GiB   0.25%   0.00%
+kanban-board-backend-app-1       406.6MiB / 3GiB       13.24%  0.30%
+kanban-board-backend-redpanda-1  526.3MiB / 2.148GiB   23.92%  0.33%
+kanban-nonprod-app                405.3MiB / 1GiB       39.58%  0.22%
+kanban-nonprod-redpanda           277.7MiB / 1.172GiB    23.14%  0.34%
+```
+```
+               total        used        free      shared  buff/cache   available
+Mem:            7945        2067        1976           0        4183        5877
+Swap:              0           0           0
+```
+`kanban-nonprod-redpanda` idle: ~277.7MiB, ~23.7% of its provisional 1172MiB (`1200m`) cgroup cap,
+~27.1% of its internal 1024MiB (`1G`) Seastar request.
+
+**Burst — three attempts, one confounded by an unrelated concurrent event.** The burst was run three
+times in this session; only the third is the official record. What happened and why, in order:
+
+1. **First run:** completed cleanly (56/56 responses 2xx, activity feed `totalElements: 55`), 9
+   `docker stats` samples taken throughout — but this run did **not** interleave a production-health
+   poll during the burst window (only before and well after), so it does not satisfy this task's own
+   "before, during, and after" gate. Superseded, not used as the official record.
+2. **Second run (nonprod reset, then re-run with production health interleaved):** while sampling,
+   one poll returned production `502` (`prod health: 502` at `13:53:51Z`), immediately followed by a
+   `docker stats` SSH call that itself failed with an `EOF` — both symptomatic of `caddy` briefly
+   losing its upstream while `kanban-board-backend-app-1` was mid-restart. **Investigated
+   immediately, before continuing:** `docker inspect kanban-board-backend-app-1` showed
+   `RestartCount=0 ExitCode=0 OOMKilled=false StartedAt=2026-08-18T13:53:41Z` — a clean Compose
+   recreate (image retagged to `9c89613`), not a crash, not an OOM kill, and `docker events` /
+   container logs confirmed a normal Spring Boot boot sequence completing seconds later. Three
+   immediate follow-up polls all returned production `200`, and `docker ps` showed every container
+   `Up`/`(healthy)` within about a minute. **Root cause: an external CI/CD deploy of production's own
+   `app` service, coincidentally overlapping this burst window — nothing this plan's burst script
+   does touches `docker-compose.prod.yml` or any production container**, and the single-instance
+   rolling recreate (no blue-green) is the documented, pre-existing behavior of `deploy.yml`, not a
+   finding about nonprod resource contention. Recorded here in full rather than discarded silently,
+   per this plan's own transparency prohibition — but folding a redeploy-induced blip into NONPROD-06's
+   own conclusion would misattribute an unrelated event, so a third, clean run was taken as the
+   official record instead of stitching this one in.
+3. **Third run (nonprod reset again, production confirmed stable and `200` beforehand) — the
+   official Iteration 0 burst record:** 56/56 responses `2xx`, activity feed `totalElements: 55`
+   (1 board-create + 6 column-creates + 24 task-creates + 24 subtask-creates). Production's health
+   endpoint was polled immediately before, 8 times spread across the burst, and immediately after —
+   `200` every single time, with no repeat of the prior run's anomaly:
+
+| Sample | Time (UTC) | Prod health | `caddy` | `app` (prod) | `redpanda` (prod) | `app-nonprod` | `redpanda-nonprod` |
+|---|---|---|---|---|---|---|---|
+| pre-burst | 13:57:00 | 200 | — | — | — | — | — |
+| 1 | 13:57:06 | 200 | 20.07MiB/0.25%/0.08% | 406.7MiB/13.24%/0.54% | 526.3MiB/23.92%/0.35% | 428.7MiB/41.86%/0.19% | 279.8MiB/23.32%/0.30% |
+| 2 | 13:57:17 | 200 | 20.07MiB/0.25%/0.13% | 406.9MiB/13.24%/0.78% | 526.3MiB/23.92%/0.28% | 429.1MiB/41.91%/3.08% | 279.8MiB/23.32%/7.09% |
+| 3 | 13:57:33 | 200 | 20.06MiB/0.25%/0.08% | 407.1MiB/13.25%/0.44% | 526.3MiB/23.92%/0.33% | 429.4MiB/41.94%/1.08% | 279.9MiB/23.32%/7.12% |
+| 4 | 13:57:44 | 200 | 20.06MiB/0.25%/0.15% | 409.1MiB/13.32%/0.38% | 526.3MiB/23.92%/0.29% | 430.0MiB/41.99%/3.59% | 279.9MiB/23.32%/4.65% |
+| 5 | 13:57:59 | 200 | 20.07MiB/0.25%/0.08% | 409.2MiB/13.32%/0.41% | 526.3MiB/23.92%/0.42% | 429.5MiB/41.94%/2.52% | 279.9MiB/23.33%/7.49% |
+| 6 | 13:58:10 | 200 | 20.07MiB/0.25%/0.13% | 412.7MiB/13.44%/0.37% | 526.3MiB/23.92%/0.28% | 430.4MiB/42.03%/7.65% | 279.8MiB/23.32%/0.27% |
+| 7 | 13:58:27 | 200 | 20.08MiB/0.25%/0.15% | 413.0MiB/13.44%/0.33% | 526.3MiB/23.92%/0.46% | 431.1MiB/42.10%/2.18% | 279.8MiB/23.32%/0.38% |
+| 8 | 13:58:43 | 200 | 20.18MiB/0.25%/0.12% | 415.0MiB/13.51%/0.52% | 526.3MiB/23.92%/7.48% | 431.5MiB/42.14%/0.40% | 279.8MiB/23.32%/0.35% |
+| post-burst | 13:59:33 | 200 | — | — | — | — | — |
+
+Columns show `MemUsage / MemPerc / CPUPerc` from `docker stats --no-stream`. `free -m` bracketing the
+official burst (closest available readings; only an unrelated production redeploy and one nonprod
+reset call occurred between them, neither of which is host-memory-relevant beyond the container
+recreate already discussed above):
+```
+# ~13:52:20Z (closest prior reading; before the run 2/run 3 transition, after which the confounding
+# redeploy settled)
+               total        used        free      shared  buff/cache   available
+Mem:            7945        2075        1967           0        4183        5869
+Swap:              0           0           0
+
+# 13:59:33Z (immediately after the official run 3 burst)
+               total        used        free      shared  buff/cache   available
+Mem:            7945        2118        1758           0        4364        5827
+Swap:              0           0           0
+```
+Host `available` stayed comfortably above the 1024 MiB gate throughout (5827-5877MiB across every
+reading taken this session).
+
+**Conclusion.** `kanban-nonprod-redpanda`'s peak RSS across the official burst was **279.9MiB**,
+which is **~23.3% of its provisional `1200m` cgroup cap** and **~27.3% of its provisional `1G`
+internal (`--memory`) request** — RSS did not move at all during the burst (277.7-279.9MiB idle vs.
+under load is measurement noise, not growth), while its CPU briefly touched ~7.5% of its single
+`--smp 1`-pinned core during subtask-creation bursts. This is a **starting reference point for the
+descent, not a floor** — Task 2 below descends `--memory` through a ladder of lower values, restarting
+only `redpanda-nonprod` each step, until it finds the step that fails and adopts the one before it.
+
 ## Maintenance note
 
 If the provider, IP, OS, spec, or firewall policy changes, update this document in the same
