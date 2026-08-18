@@ -73,7 +73,12 @@ Full details: [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
   4. An operator can return nonprod to a known-clean baseline with a single curl that clears both its Postgres state and its activity-log/Kafka state, and the same mechanism is unavailable against production
   5. A browser at the expected nonprod frontend origin completes a credentialed cross-origin request against nonprod without a CORS failure, with no application code changed to allow it
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 08-01-PLAN.md — Nonprod stack live over HTTPS: own Compose project, own Neon branch, own Redpanda broker, second Caddy site block, CORS origin, isolation audit (NONPROD-01..05)
+- [ ] 08-02-PLAN.md — Profile-gated, shared-secret reset endpoint truncating both Postgres and Kafka state, verified live by curl (RESET-01)
+- [ ] 08-03-PLAN.md — Live iterative Redpanda memory-floor measurement with a proven failing step below the floor, and the blocking D-07 colocate-vs-fallback-VPS decision (NONPROD-06)
 
 ### Phase 9: Nonprod Continuous Deploy & Scoped CI Credentials
 
@@ -111,7 +116,7 @@ Phases execute in numeric order: 8 → 9 → 10
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 8. Isolated Nonprod Environment, Live and Resettable | v1.3 | 0/TBD | Not started | - |
+| 8. Isolated Nonprod Environment, Live and Resettable | v1.3 | 0/3 | Planned | - |
 | 9. Nonprod Continuous Deploy & Scoped CI Credentials | v1.3 | 0/TBD | Not started | - |
 | 10. CI & Deploy Hardening | v1.3 | 0/TBD | Not started | - |
 
