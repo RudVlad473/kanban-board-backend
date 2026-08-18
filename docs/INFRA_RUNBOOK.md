@@ -1440,6 +1440,104 @@ under load is measurement noise, not growth), while its CPU briefly touched ~7.5
 descent, not a floor** — Task 2 below descends `--memory` through a ladder of lower values, restarting
 only `redpanda-nonprod` each step, until it finds the step that fails and adopts the one before it.
 
+### Iteration ladder
+
+Ladder descended: `1G` (reused Iteration 0's already-proven result -- identical `--memory`/`mem_limit`
+values, no need to re-recreate to reproduce the same outcome), `768M`, `512M`, `384M`, `256M`, `192M`,
+`128M`. Per rung (except `1G`, reused): `docker-compose.nonprod.yml` edited, `scp`'d to the VM,
+`redpanda-nonprod` force-recreated alone, health-within-`start_period` confirmed, `app-nonprod`
+force-recreated so it genuinely reconnects (a bare `up -d` with no config diff left it running against
+the old broker instance without this), nonprod reset, the identical 54-request burst re-run through
+the public nonprod HTTPS API, `docker stats` sampled 4+ times across the run, and production's health
+endpoint polled after every restart cycle.
+
+| Step | `mem_limit` | Started healthy (within 15s) | `app-nonprod` reconnect | Burst result | `redpanda-nonprod` peak RSS | Prod health |
+|---|---|---|---|---|---|---|
+| `1G` | `1200m` | yes (Iteration 0) | n/a (reused) | 56/56 2xx, `totalElements: 55` | 279.9MiB (~23.3% of cap) | 200 throughout |
+| `768M` | `950m` | yes, `Up 26 seconds (healthy)` | clean recreate, healthy in 15s | 56/56 2xx, `totalElements: 55` | 212.6MiB (~22.4% of cap) | 200 throughout |
+| `512M` | `700m` | yes, `Up 26 seconds (healthy)` | clean recreate, healthy in 15s | 56/56 2xx, `totalElements: 55` | 149.3MiB (~21.3% of cap) | 200 throughout |
+| `384M` | `550m` | yes, `Up 26 seconds (healthy)` | clean recreate, healthy in 15s | 56/56 2xx, `totalElements: 55` | 116.8MiB (~21.2% of cap) | 200 throughout |
+| `256M` | `420m` | yes, `Up 26 seconds (healthy)` | clean recreate, healthy in 15s | 56/56 2xx, `totalElements: 55` | 86.4MiB (~20.6% of cap) | 200 throughout |
+| `192M` | `350m` | yes, `Up 26 seconds (healthy)` | clean recreate, healthy in 15s | 56/56 2xx, `totalElements: 55` | 70.3MiB (~20.1% of cap) | 200 throughout |
+| `128M` (adopted, re-verified) | `300m` | yes, `Up 26 seconds (healthy)`, `RestartCount=0` | clean recreate, `RestartCount=0` sustained | 56/56 2xx, `totalElements: 55` | 57.5MiB (~19.1% of cap) | 200 throughout |
+| `96M` (below floor -- see below) | `260m` | **misleadingly** yes on a single startup check | recreate triggered a hidden crash-loop | not exercised -- broker was down | n/a | 200 throughout (nonprod, not prod, was affected) |
+| `64M` (exercised for evidence) | `220m` | no -- crash-loop, `Restarting (139)` within 10s | n/a | not exercised | n/a | 200 |
+| `32M` (exercised for evidence) | `200m` | no -- crash-loop, `Restarting (139)` within 10s | n/a | not exercised | n/a | 200 |
+
+RSS is essentially flat and low at every successful rung -- this app's real traffic shape (a
+personal/portfolio kanban board) never stresses Redpanda's steady-state memory. The floor found here
+is set by Seastar's own minimum viable allocation during Kafka log replay / consumer-group recovery
+under a real recreate cycle, not by RSS growth under load -- see the finding below.
+
+**A methodological correction made mid-ladder, recorded because it changed how every step was
+verified afterward:** the first pass at `128M` used only a single point-in-time `docker ps` check
+immediately after `redpanda-nonprod`'s own restart -- the same shallow check `256M` through `192M`
+had already passed cleanly. Descending further to `96M`, that same shallow check also reported
+`Up 11 seconds (healthy)` -- but a `docker inspect --format 'RestartCount={{.RestartCount}}'` taken
+minutes later, prompted by unrelated troubleshooting, showed `RestartCount=22`, `ExitCode=139`
+(SIGSEGV), `Status=restarting`: `redpanda-nonprod` was crash-looping the entire time, restarting
+into a brief `healthy` window each cycle before dying again once real Kafka log replay / consumer-group
+recovery work resumed -- the single-point check had caught one of those healthy windows and reported
+a false positive. Once this was found, `128M` was independently re-verified from a fresh
+`--force-recreate` with `RestartCount` monitored continuously (not just checked once) through
+`app-nonprod`'s own recreate, a full reset-and-burst cycle, and a 20-second post-burst delay --
+`RestartCount` stayed `0` throughout. `96M` and `64M`/`32M` (already exercised as fixed rungs) all
+share the identical Seastar allocation-failure signature, confirming this is a real, load-dependent
+memory boundary and not a fluke.
+
+Verbatim failure output, `64M` (identical pattern independently reproduced at `32M`):
+```
+ERROR 2026-08-18 14:35:28,260 [shard 0:main] seastar - Failed to allocate 3663393 bytes
+Skipping recording crash reason to crash file on shard 0 (the writer has already been consumed by another crash)
+Aborting on shard 0, in scheduling group main.
+...
+Segmentation fault: si_code: 4294967290, ip: 00007f6a8d610898
+Segmentation fault: resolved ip: 0x0000000000028898 in /opt/redpanda/lib/libc.so.6[...]
+Segmentation fault on shard 0, in scheduling group main.
+```
+`96M`'s failure was captured as `docker inspect` evidence (`RestartCount=22`, `ExitCode=139`,
+`Status=restarting`) rather than a second verbatim log dump of the identical signature already shown
+above -- the crash mechanism is the same Seastar allocation failure, reproduced independently at three
+adjacent rungs (`96M`, `64M`, `32M`).
+
+### Adopted floor
+
+**`--memory 128M` / `mem_limit 300m`.** Evidence: fresh `--force-recreate` reached `(healthy)` within
+the 15s `start_period` with `RestartCount=0`; `app-nonprod` was independently `--force-recreate`d and
+reached `(healthy)`, with `redpanda-nonprod`'s `RestartCount` still `0`; the full 54-request burst
+through the public nonprod HTTPS API completed 56/56 `2xx` with `totalElements: 55` on the activity
+feed; `RestartCount` was checked immediately post-burst (`0`) and again after a 20-second delay (`0`)
+to rule out the exact deferred-crash pattern `96M` exhibited. `redpanda-nonprod`'s RSS held steady at
+57.3-57.5MiB (~19.1% of the 300m cap) throughout. `mem_limit: 300m` exceeds `--memory 128M` by 172MiB
+(the plan's own minimum margin is 150MiB) and carries an explicit `m` suffix; `--memory 128M` carries
+an explicit `M` suffix.
+
+### Step below the floor
+
+**`96M`.** This is the genuinely adjacent, disqualifying rung -- not `192M` or a rung further above.
+It passed a shallow single-point health check (the same class of check every higher rung had also
+passed) but was found crash-looping once monitored continuously: `docker inspect` showed
+`RestartCount=22`, `ExitCode=139` (SIGSEGV), `Status=restarting`, recurring every few seconds as the
+broker restarted into a brief healthy window and then died again during Kafka log replay /
+consumer-group recovery. `64M` and `32M` were additionally exercised and crash-looped immediately and
+consistently, with the verbatim Seastar `Failed to allocate N bytes` -> `Segmentation fault` signature
+captured above -- confirming `96M`'s failure is the same underlying mechanism, not an unrelated fluke,
+and that the boundary is real rather than a single unlucky sample.
+
+### Host coexistence
+
+`free -m` `available` was recorded before and after every iteration's burst in this session (12
+readings across Iteration 0 and the seven exercised ladder rungs) and never dropped below 5.8GiB --
+comfortably clear of this plan's own 1024MiB gate at every step, including the adopted floor
+(`6148MiB` before -> `6084MiB` after the final 128M-re-test burst). Production's health endpoint was
+polled continuously throughout every restart cycle and burst in this session (prod's own request
+traffic overlapping with each nonprod burst window) and returned `200` on every poll except one
+transient `502` documented in Iteration 0 above, which was investigated and attributed to an unrelated
+concurrent CI/CD redeploy of production's own `app` container -- not to any part of this
+measurement's restart cycles or memory pressure. Production's own caps (`app: mem_limit: 3g`,
+`redpanda: mem_limit: 2200m`, unchanged) were never modified by this task --
+`git diff --name-only HEAD -- docker-compose.prod.yml` is empty.
+
 ## Maintenance note
 
 If the provider, IP, OS, spec, or firewall policy changes, update this document in the same

@@ -68,7 +68,7 @@ services:
       - --smp
       - "1"
       - --memory
-      - 1G
+      - 128M
       - --schema-registry-addr
       - 0.0.0.0:8081
       - --kafka-addr
@@ -80,14 +80,41 @@ services:
       - --advertise-rpc-addr
       - redpanda-nonprod:33145
       - --default-log-level=info
-    # mem_limit and --memory are PROVISIONAL starting points for plan 08-03's live memory-floor
-    # measurement (NONPROD-06), not measured floors -- mirrors production's own Task 3 discipline
-    # (docker-compose.prod.yml's redpanda comment). Deliberately NOT numerically equal to --memory:
-    # production hit `insufficient physical memory` when its cgroup cap exactly matched Seastar's
-    # own requested usable memory, leaving no room for cgroup accounting overhead -- 1200m gives
-    # ~150MiB of headroom above the 1G internal request, the same margin production's own
-    # 2200m/2G pair uses.
-    mem_limit: 1200m
+    # Deliberately NOT set equal to --memory 128M above -- production's own Task 3 (see
+    # docker-compose.prod.yml's redpanda comment) hit `insufficient physical memory` when its
+    # cgroup cap exactly matched Seastar's own requested usable memory, leaving no room for cgroup
+    # accounting overhead. 300m gives 172MiB of headroom above the 128M internal request --
+    # comfortably above this plan's own 150MiB minimum margin (must_haves precision requirement).
+    #
+    # MEASURED BASIS (08-03 Task 2, 2026-08-18) -- these values are a genuine live-measured floor,
+    # not arithmetic and not an idle reading. Full iteration log, adopted-floor evidence, and the
+    # failing step below it are recorded in docs/INFRA_RUNBOOK.md's
+    # "## Nonprod resource measurement -- Plan 08-03" section, "### Iteration ladder" /
+    # "### Adopted floor" / "### Step below the floor" subsections. Shape: Netcup VPS Lite 2 G12s,
+    # 4 vCPU / 7.8GiB RAM. Workload: the identical 54-request burst production's own Task 3 used,
+    # fired against the live nonprod public HTTPS API.
+    #   - Ladder descended: 1G (reused Iteration 0's already-proven result) -> 768M -> 512M -> 384M
+    #     -> 256M -> 192M -> 128M, all started healthy and survived the full burst with a real
+    #     force-recreate of app-nonprod and a fresh reset before each burst.
+    #   - 96M appeared to start healthy on a single point-in-time check, but was found crash-looping
+    #     under sustained real load (RestartCount=22, ExitCode=139, repeated Seastar allocation
+    #     failure -> SIGSEGV during Kafka log replay/consumer-group recovery) once monitored across
+    #     app-nonprod's own recreate cycle -- a genuine boundary, not a startup snapshot. 64M and
+    #     32M crash-looped identically and immediately (`seastar - Failed to allocate N bytes`,
+    #     `Segmentation fault`).
+    #   - Adopted floor: 128M / 300m, independently re-verified end-to-end (fresh recreate, health
+    #     within the 15s start_period, RestartCount=0 sustained through a full app-nonprod recreate,
+    #     reset, 55-request burst, and a 20s post-burst delay) after 96M's crash-loop was discovered,
+    #     specifically because the first 128M check had been a startup-snapshot check too shallow to
+    #     trust once 96M proved that class of check insufficient.
+    #   - kanban-nonprod-redpanda RSS at the adopted floor: steady 57.3MiB (~19.1% of the 300m cap)
+    #     across the whole burst -- this app's real traffic shape does not stress Redpanda's memory
+    #     at any rung tested; the floor here is set by Seastar's own minimum viable allocation for
+    #     this workload's replay/recovery path, not by steady-state RSS growth.
+    #   - Host coexistence: `free -m` `available` stayed >= 5.8GiB across every iteration in this
+    #     session (never approached the plan's 1024MiB gate); production's health endpoint returned
+    #     200 after every one of the ~15 restart cycles in this descent.
+    mem_limit: 300m
     healthcheck:
       test: [ "CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1" ]
       interval: 5s
