@@ -25,6 +25,19 @@ ArchUnit rule rather than by convention (see [Testing](#testing)).
   response — from either producer — carries the same shape and a stable `code` extension property
   (`ErrorCode`). See the error-handling sequence diagram below for the full four-way split
   including 400 and 409.
+- **The error envelope is now a published contract, not merely a runtime one.** The generated
+  OpenAPI document declares the `ProblemDetail` shape on every operation, so a downstream consumer
+  generates its error type from the spec instead of hand-authoring it. The mechanism is a single
+  global springdoc customizer bean, `ProblemDetailOpenApiCustomizer` — not per-endpoint annotation,
+  because springdoc's reflection-based generation only sees a controller method's declared return
+  type and has no visibility into a `@ControllerAdvice` class, so an annotation-based fix would have
+  to be remembered on every future controller method (D-08). The document's `code` enum is derived
+  from `ErrorCode` at document-build time, so the two cannot drift apart.
+  `ProblemDetailOpenApiCustomizerTest` proves both the per-operation coverage and the agreement
+  between the declared schema and what the two producers above actually emit. The gap this closes
+  was invisible to this repo's own tests, which assert runtime response bodies and never the
+  separately-generated document — it was found instead by a downstream frontend consumer trying to
+  generate types from the spec (D-07).
 - **MapStruct for entity ↔ DTO.** Generated at compile time, so mapping mistakes are compile
   errors and the service layer stays free of mapping boilerplate.
 - **Shared base interfaces** (`BaseBoard`, `BaseTask`, …) tie each DTO to the entity shape it
