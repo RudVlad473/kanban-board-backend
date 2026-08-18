@@ -59,6 +59,8 @@ v1.3 decisions so far (from requirements/research, before any phase plan):
 
 Six pending todos are now in-scope v1.3 requirements and should be closed by Phase 10, not re-triaged: dependabot `github-actions` ecosystem (HARDEN-01), TruffleHog live-credential pass (HARDEN-02), digest-pinning (HARDEN-03), gradle cache in `run-tests` (HARDEN-04), gitleaks-in-worktree (HARDEN-05), `security-scan.yml` stale comment/actions (HARDEN-06), cookie `Secure` flag (HARDEN-07), README expansion (HARDEN-08).
 
+Two new tooling todos captured 2026-08-18 during Phase 9's Gradle supply-chain review, not yet promoted to a requirement — candidates for Phase 10's own planning session alongside the HARDEN-* set above: Gradle dependency verification metadata (`gradle/verification-metadata.xml` doesn't exist — exact version pins alone don't catch a compromised artifact republished under the same coordinates+version), and Gradle wrapper integrity validation in CI (no `distributionSha256Sum` pin, no `gradle/actions/wrapper-validation` step in either workflow).
+
 Still open and out of v1.3 scope (representative, see `.planning/todos/pending/` for the complete set — ~20 items):
 
 - [security] Audit penetration-testing/security coverage against OWASP API Security Top 10 (CSRF posture, signin rate-limiting, full-depth IDOR, security headers, DTO mass-assignment).
