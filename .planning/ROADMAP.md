@@ -92,7 +92,7 @@ Plans:
 
 **Goal**: Nonprod stays current with master automatically — deployed, migrated, health-verified, and schema-registered by CI on every push, with the same automated step keeping production's and nonprod's Avro schema registries in step with the deployed code — through credentials scoped so the nonprod path cannot reach, overwrite, or degrade production.
 **Depends on**: Phase 8 (a manually-proven-healthy nonprod stack to automate against, matching this project's own tracer-then-automate precedent from v1.2 Phase 5)
-**Requirements**: CI-01, CI-02, CI-03, CI-04, CI-05
+**Requirements**: CI-01, CI-02, CI-03, CI-04, CI-05, API-01
 **Success Criteria** (what must be TRUE):
 
   1. A push to master leaves nonprod running that commit's image, deployed within the same workflow run as production's deploy — neither job waits on, gates, nor fails because of the other
@@ -100,8 +100,9 @@ Plans:
   3. The nonprod deploy job can read only staging-scoped credentials — production's secrets are unreachable from it, because both environments' secrets are scoped through GitHub Environments rather than shared unscoped repository secrets
   4. Running a production deploy and a nonprod deploy back to back leaves both stacks running their own correct image: neither deploy converges onto the other's directory, containers, network, or volumes, and neither run's image-cleanup sweep deletes the tag the other environment is currently running
   5. A push to master that introduces or changes an Avro schema leaves that schema present in both the production and the nonprod registry with no operator running the registrar by hand; a schema change the registry rejects as incompatible fails the deploy visibly rather than surfacing later as a runtime publish failure
+  6. The generated OpenAPI spec (`/v3/api-docs`) declares the `ProblemDetail` error envelope on every operation that can produce one, enforced centrally (not per-endpoint annotation) and guarded by an automated check so the gap cannot silently reopen — *(API-01, folded in as an explicit scope exception, 2026-08-18: not CI/deploy work, added anyway by user decision after being discovered live by a downstream frontend consumer during this phase's planning)*
 
-**Plans**: 3 plans
+**Plans**: 4 plans
 
 Plans:
 **Wave 1**
@@ -115,6 +116,10 @@ Plans:
 **Wave 3** *(blocked on Wave 2 completion)*
 
 - [ ] 09-03-PLAN.md — automated Avro schema registration against both registries, ordered ahead of nonprod's app start (CI-05)
+
+**Wave 4** *(independent — no file overlap with Waves 1-3; touches OpenAPI/springdoc config, not deploy.yml)*
+
+- [ ] 09-04-PLAN.md — global OpenAPI customizer for the `ProblemDetail` error envelope, plus a spec-completeness regression guard (API-01)
 
 ### Phase 10: CI & Deploy Hardening
 

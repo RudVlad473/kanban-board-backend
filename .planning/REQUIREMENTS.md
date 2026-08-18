@@ -26,6 +26,10 @@
 
 - [x] **RESET-01**: A test-data reset/seed mechanism exists for nonprod, reachable and manually verifiable via curl (no Playwright consumer required to exist yet), covering both Postgres state and Kafka/activity-log state — not Postgres alone
 
+### API Contract Completeness
+
+- [ ] **API-01**: The generated OpenAPI spec (`/v3/api-docs`) declares the `ProblemDetail` error envelope on every operation that can produce one — springdoc's default reflection-based generation only documents a controller method's declared return type, never a `@ControllerAdvice`/`GlobalExceptionHandler`'s intercepted exception paths, so today every `400/401/403/404/409/500` this API actually returns at runtime is undocumented in the spec, forcing consumers (the frontend repo) to hand-author error types instead of generating them. Close the gap with a global `OpenApiCustomizer`/`GlobalOpenApiCustomizer` bean (not per-endpoint `@ApiResponse` annotation, which has to be remembered on every future controller method) that injects the `ProblemDetail` schema into every operation's `responses` map, plus an automated regression guard — a test asserting the live-generated spec declares the standard error codes, and/or a CI lint step (e.g. Spectral against `/v3/api-docs`) — so this cannot silently regress the way it silently arrived. Discovered live by a frontend-side planning agent during v1.3 Phase 9 planning (2026-08-18); not caught by this repo's own e2e/integration tests because those assert runtime response bodies, never the separately-generated OpenAPI document itself.
+
 ### CI/Deploy Hardening (bundled todos, unblocked by v1.2 Phase 5's deploy.yml rewrite)
 
 - [ ] **HARDEN-01**: `.github/dependabot.yml` gains a `package-ecosystem: "github-actions"` entry, alongside the existing `gradle` entry (resolves pending todo 2026-08-13-add-github-actions-ecosystem-to-dependabot-after-deploy-rewrite.md)
@@ -68,6 +72,7 @@ Deferred until the frontend repo exists — tracked, not attempted this mileston
 | CI-03 | Phase 9 | Pending |
 | CI-04 | Phase 9 | Pending |
 | CI-05 | Phase 9 | Pending |
+| API-01 | Phase 9 | Pending |
 | HARDEN-01 | Phase 10 | Pending |
 | HARDEN-02 | Phase 10 | Pending |
 | HARDEN-03 | Phase 10 | Pending |
@@ -77,13 +82,13 @@ Deferred until the frontend repo exists — tracked, not attempted this mileston
 | HARDEN-07 | Phase 10 | Pending |
 | HARDEN-08 | Phase 10 | Pending |
 
-**Coverage: 20/20 v1 requirements mapped, each to exactly one phase. No orphans, no duplicates.**
+**Coverage: 21/21 v1 requirements mapped, each to exactly one phase. No orphans, no duplicates.**
 
 Phase mapping rationale:
 
 - **Phase 8 (Isolated Nonprod Environment, Live and Resettable)** — every NONPROD-* requirement plus RESET-01. NONPROD-03 (second Redpanda broker) cannot be separated from NONPROD-01/06: the broker *is* part of the Compose stack, and NONPROD-06's memory floor is that broker's. RESET-01 was folded in rather than left as a one-requirement phase; it needs the running stack to verify against and shares Phase 8's manual, curl-driven verification mode.
-- **Phase 9 (Nonprod Continuous Deploy & Scoped CI Credentials)** — all five CI-* requirements. CI-02 (GitHub Environments) is sequenced *within* this phase ahead of CI-01, so the nonprod job never runs with unscoped production secrets and then gets re-gated afterwards. CI-05 sits here rather than in Phase 8 because Phase 8 registers nonprod's schemas by hand as part of bring-up, and CI-05 replaces both that hand-run and production's with the automated step, so it depends on nonprod existing but belongs with the automation work; it also inherits CI-02's environment scoping, because the registry publishes no host port and the step therefore reaches the broker over the same SSH path the deploy job uses.
+- **Phase 9 (Nonprod Continuous Deploy & Scoped CI Credentials)** — all five CI-* requirements plus API-01. CI-02 (GitHub Environments) is sequenced *within* this phase ahead of CI-01, so the nonprod job never runs with unscoped production secrets and then gets re-gated afterwards. CI-05 sits here rather than in Phase 8 because Phase 8 registers nonprod's schemas by hand as part of bring-up, and CI-05 replaces both that hand-run and production's with the automated step, so it depends on nonprod existing but belongs with the automation work; it also inherits CI-02's environment scoping, because the registry publishes no host port and the step therefore reaches the broker over the same SSH path the deploy job uses. **API-01 is a deliberate, user-confirmed scope exception** (2026-08-18) rather than a natural fit — it is API-contract completeness, not CI/deploy work, and by this same document's own precedent (see Phase 10 below) would ordinarily be kept out. It was folded in anyway because it was discovered live during this phase's planning by a downstream frontend consumer and the user chose one reviewable PR over strict scope purity for this specific item.
 - **Phase 10 (CI & Deploy Hardening)** — all eight HARDEN-* requirements, kept as their own phase because they have no dependency on the nonprod build, two of them (HARDEN-07 cookie flag, HARDEN-08 README) are not CI work at all, and folding them into Phase 9 would blur that phase's goal. Ordered last so HARDEN-03's digest-pinning covers `deploy.yml`'s final job graph including the new nonprod jobs, and so HARDEN-07's `Secure` cookie flag lands only once every deployed environment is TLS-served.
 
 ---
-*Last updated: 2026-08-18 — traceability filled in by roadmapper (v1.3 Phases 8-10); CI-05 added by quick task 260818-ied*
+*Last updated: 2026-08-18 — traceability filled in by roadmapper (v1.3 Phases 8-10); CI-05 added by quick task 260818-ied; API-01 added and folded into Phase 9 by explicit user decision, 2026-08-18*

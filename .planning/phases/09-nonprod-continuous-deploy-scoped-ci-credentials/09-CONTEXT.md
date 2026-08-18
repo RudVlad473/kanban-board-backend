@@ -39,6 +39,12 @@ We clarified HOW to implement this. Phase 8 (isolated nonprod stack, already liv
 - Job/step ordering details for CI-05 (schema registration completing before an environment's app serves traffic) — already fully specified by the CI-05 requirement text itself; implementation detail, not a vision decision.
 - Whether the new GitHub Environments are created via `gh` CLI or the GitHub web UI — execution mechanism, not a scope decision.
 
+### OpenAPI Contract Completeness (API-01) — Scope Exception
+
+- **D-07:** API-01 (the `ProblemDetail` error envelope is undocumented in the generated OpenAPI spec — springdoc only reflects a controller method's declared return type, never a `@ControllerAdvice`-intercepted exception path) is folded into this phase despite not being CI/deploy work, by explicit user decision on 2026-08-18. It was discovered live by a downstream frontend-repo planning agent during this phase's own planning (hand-authoring `problem-detail.ts` instead of generating it from the spec) and was not caught by this repo's own e2e/integration tests, because those assert runtime response bodies, never the separately-generated `/v3/api-docs` document itself. The user was offered "capture as a future backlog item" and "handle as an independent `/gsd-quick` task" as the scope-preserving alternatives (matching this project's own established precedent of keeping Phase 10's HARDEN-* todos out of this phase despite touching the same file) and chose to fold it in anyway, trading one reviewable PR for the scope-purity this project otherwise defaults to.
+- **D-08:** Fix mechanism is a single global `OpenApiCustomizer`/`GlobalOpenApiCustomizer` bean injecting the `ProblemDetail` schema into every operation's `responses` map — not per-endpoint `@ApiResponse` annotations, which would require every future controller method to remember to add them. Paired with an automated regression guard (a test asserting the live-generated spec declares the standard error codes, and/or a CI lint step such as Spectral against `/v3/api-docs`) so the gap is structurally prevented from silently reopening, not just fixed once.
+- **Reversibility:** cheap — this is additive spec-generation config with no runtime/API behavior change and no persisted state; removing the customizer bean fully reverts it.
+
 </decisions>
 
 <canonical_refs>
