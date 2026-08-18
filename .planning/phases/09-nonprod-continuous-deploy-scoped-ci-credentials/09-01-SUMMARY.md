@@ -26,7 +26,8 @@ key-files:
   created: []
   modified: []
 
-key-decisions: []
+key-decisions:
+  - "Task 1 checkpoint resolved by human operator: option-a — deploy-nonprod VM identity confined by Unix filesystem permissions only (docker group membership root-equivalence accepted as residual risk), plus one Docker Hub token duplicated into both GitHub Environments (account-wide token scope accepted as residual risk). Mechanical names confirmed as proposed: Linux user deploy-nonprod, Docker Hub repository rudenkovladimir/kanban-board-backend-nonprod, GitHub Environments production/staging, identical secret NAMES in both environments with per-environment values."
 
 patterns-established: []
 
@@ -42,11 +43,11 @@ status: halted
 
 # Phase 09 Plan 01: Nonprod CI deploy identity and scoped secrets — Summary
 
-**Halted at Task 1's blocking decision checkpoint before any provisioning — no GitHub Environments, VM identity, Docker Hub repository, or workflow edits were made.**
+**Task 1's decision checkpoint resolved (option-a) by the human operator; now halted a second time at Task 2's unmet precondition — no GitHub Environments, VM identity, Docker Hub repository, or workflow edits have been made.**
 
 ## Performance
 
-- **Duration:** <5 min (plan read, checkpoint reached, halted)
+- **Duration:** <10 min total across two halts (plan read, Task 1 checkpoint reached and resolved, Task 2 precondition checked and found unmet)
 - **Started:** 2026-08-18T18:19:14Z (approx, per STATE.md)
 - **Completed:** 2026-08-18
 - **Tasks:** 0 of 3 completed
@@ -56,6 +57,8 @@ status: halted
 
 - Read and parsed 09-01-PLAN.md in full, confirming Task 1 is a `type="checkpoint:decision" gate="blocking"` requiring an explicit human answer before any provisioning proceeds.
 - Halted execution at Task 1 exactly as instructed — no GitHub API calls, no VM SSH session, no Docker Hub API calls, and no `.github/workflows/deploy.yml` edits were attempted.
+- Received the coordinator's resolution of Task 1's checkpoint: **option-a** selected, mechanical resource names confirmed as proposed (see Decisions Made below).
+- Evaluated Task 2's `<precondition>` and found it unmet: no live root SSH session to the Netcup VM has been authorized to this agent, and none of the nine secret values have been supplied. Per explicit coordinator instruction, halted again rather than attempting to open an SSH session or request secrets directly — this agent has no real-time channel to the operator.
 
 ## Task Commits
 
@@ -69,7 +72,9 @@ None.
 
 ## Decisions Made
 
-None — this plan halts before any decision is made. Task 1 requires the operator to select one of three options (`option-a`, `option-b`, `option-c`) and to confirm the mechanical resource names (Linux user `deploy-nonprod`, Docker Hub repository `rudenkovladimir/kanban-board-backend-nonprod`, GitHub Environments `production`/`staging`, identical secret names in both environments).
+**Task 1 checkpoint resolved by the human operator:**
+- **Selected: option-a** — confirm as planned: `deploy-nonprod` VM identity confined by standard Unix filesystem permissions only (`docker` group membership's root-equivalence explicitly accepted as a residual risk, per D-02's rejection of forced-command/restricted-shell hardening), plus one Docker Hub token duplicated into both GitHub Environments (account-wide token scope explicitly accepted as a residual risk, since per-repository Docker Hub token scoping is a paid-plan feature). Both residuals must be recorded in `docs/INFRA_RUNBOOK.md` exactly as Task 2's `<action>` part D specifies (T-09-03, T-09-09 in the plan's threat register).
+- **Mechanical resource names confirmed as proposed:** Linux user `deploy-nonprod`; Docker Hub repository `rudenkovladimir/kanban-board-backend-nonprod`; GitHub Environments `production` and `staging`; identical secret NAMES in both environments (`NETCUP_SSH_KEY`, `NETCUP_DEPLOY_USER`, `NETCUP_HOST`, `NETCUP_HOST_FINGERPRINT`, `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASS`, `DOCKERHUB_TOKEN`) with per-environment values.
 
 ## Deviations from Plan
 
@@ -77,7 +82,7 @@ None - plan execution halted at the designed checkpoint exactly as written. No d
 
 ## Issues Encountered
 
-None. This is the expected, designed stopping point for this plan: Task 1 is a blocking decision checkpoint, and Task 2 additionally requires the operator to personally authorize a root SSH session to the Netcup VM and hand over nine live secret values that no tool can recover (GitHub secrets are write-only). Per this plan's `<important_note_on_this_plan>`, execution must not proceed past Task 1 without an explicit human answer, and must not touch GitHub API, VM SSH, or Docker Hub API until the checkpoint is resolved.
+None arising from implementation error. This is a second, expected, designed stopping point for this plan: Task 1's decision checkpoint is now resolved, but Task 2's own `<precondition>` requires the operator to have personally authorized a root SSH session to the Netcup VM (`159.195.114.230`) and to have the nine live secret values on hand — none of which can be recovered by any tool (GitHub secrets are write-only). This agent is a background agent with no real-time channel to the operator; per explicit coordinator instruction, it must not attempt to open an SSH session or request secret values itself, and must halt again with a checkpoint report if the precondition is not genuinely met. It is not met: no live root SSH session has been authorized to this agent, and no secret values have been supplied. No GitHub API, VM SSH, or Docker Hub API call was attempted.
 
 ## User Setup Required
 
@@ -86,9 +91,11 @@ None. This is the expected, designed stopping point for this plan: Task 1 is a b
 - `netcup-vm-root`: operator must authorize a root SSH session to `159.195.114.230` (or run Task 2's VM commands by hand and paste the outputs back).
 - `dockerhub`: operator must create (or authorize the agent to create) the public repository `rudenkovladimir/kanban-board-backend-nonprod`.
 
+**Status: still outstanding.** Task 1's decision is resolved but Task 2 cannot begin until the operator actively supplies these.
+
 ## Next Phase Readiness
 
-**Blocked.** This plan cannot advance to Task 2 or Task 3 until a human resolves Task 1's decision checkpoint (select option-a, option-b, or option-c, and confirm the mechanical resource names). No provisioning, no workflow edits, and no live deploy run have happened. Re-invoke this plan's executor once the checkpoint answer is available; the continuation agent should resume at Task 2 using the decision recorded in this checkpoint's resolution.
+**Blocked.** Task 1's decision checkpoint is resolved (option-a, names confirmed — see Decisions Made). Task 2 cannot start until the operator personally authorizes a root SSH session to `159.195.114.230` and supplies the nine live secret values listed in `09-01-PLAN.md`'s `user_setup` frontmatter (or explicitly authorizes the agent to recover the recoverable subset from the VM, per that block's per-secret `source` notes). No provisioning, no workflow edits, and no live deploy run have happened. Re-invoke this plan's executor once the operator confirms the SSH session is open and has supplied (or made available) the secret values; the continuation agent should resume directly at Task 2's provisioning actions using the option-a decision already recorded here.
 
 ---
 *Phase: 09-nonprod-continuous-deploy-scoped-ci-credentials*
