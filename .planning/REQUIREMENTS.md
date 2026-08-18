@@ -20,6 +20,7 @@
 - [ ] **CI-02**: `production` and `staging` GitHub Environments are introduced as a prerequisite before the nonprod deploy job is added, so the nonprod job does not inherit full, unscoped access to all 10 existing repository secrets by default
 - [ ] **CI-03**: Nonprod images are pushed to a Docker Hub repository separate from production's, so the existing `cleanup-old-images` job's per-run tag-deletion sweep cannot delete nonprod's currently-running tag on the next production push
 - [ ] **CI-04**: A readiness/health check polls the nonprod deploy's health endpoint until it returns 200 before the deploy is considered complete, mirroring the HTTPS health check already used to verify production in v1.2 Phase 5
+- [ ] **CI-05**: A CI job registers the application's Avro schemas against both the production and the nonprod schema registries on every deploy, reusing the existing `AvroSchemaRegistrar`/`PropertiesLauncher` one-off-container mechanism — replacing the hand-run registration in `docs/INFRA_RUNBOOK.md`'s "Manual deploy — Plan 05-04 Task 2" and Phase 8 plan 08-01's manual nonprod invocation — rather than introducing a new tool; it extends `deploy.yml`'s existing job graph with the nonprod registration running parallel to, never gating and never gated by, the production deploy path, so one CI run keeps both registries in step with each other, while within each single environment registration completes before that environment's app serves traffic, because `spring.kafka.producer.properties.auto.register.schemas=false` makes an unregistered subject a runtime publish failure rather than a lazy self-heal
 
 ### Data Reset Mechanism
 
@@ -66,6 +67,7 @@ Deferred until the frontend repo exists — tracked, not attempted this mileston
 | CI-02 | Phase 9 | Pending |
 | CI-03 | Phase 9 | Pending |
 | CI-04 | Phase 9 | Pending |
+| CI-05 | Phase 9 | Pending |
 | HARDEN-01 | Phase 10 | Pending |
 | HARDEN-02 | Phase 10 | Pending |
 | HARDEN-03 | Phase 10 | Pending |
@@ -75,13 +77,13 @@ Deferred until the frontend repo exists — tracked, not attempted this mileston
 | HARDEN-07 | Phase 10 | Pending |
 | HARDEN-08 | Phase 10 | Pending |
 
-**Coverage: 19/19 v1 requirements mapped, each to exactly one phase. No orphans, no duplicates.**
+**Coverage: 20/20 v1 requirements mapped, each to exactly one phase. No orphans, no duplicates.**
 
 Phase mapping rationale:
 
 - **Phase 8 (Isolated Nonprod Environment, Live and Resettable)** — every NONPROD-* requirement plus RESET-01. NONPROD-03 (second Redpanda broker) cannot be separated from NONPROD-01/06: the broker *is* part of the Compose stack, and NONPROD-06's memory floor is that broker's. RESET-01 was folded in rather than left as a one-requirement phase; it needs the running stack to verify against and shares Phase 8's manual, curl-driven verification mode.
-- **Phase 9 (Nonprod Continuous Deploy & Scoped CI Credentials)** — all four CI-* requirements. CI-02 (GitHub Environments) is sequenced *within* this phase ahead of CI-01, so the nonprod job never runs with unscoped production secrets and then gets re-gated afterwards.
+- **Phase 9 (Nonprod Continuous Deploy & Scoped CI Credentials)** — all five CI-* requirements. CI-02 (GitHub Environments) is sequenced *within* this phase ahead of CI-01, so the nonprod job never runs with unscoped production secrets and then gets re-gated afterwards. CI-05 sits here rather than in Phase 8 because Phase 8 registers nonprod's schemas by hand as part of bring-up, and CI-05 replaces both that hand-run and production's with the automated step, so it depends on nonprod existing but belongs with the automation work; it also inherits CI-02's environment scoping, because the registry publishes no host port and the step therefore reaches the broker over the same SSH path the deploy job uses.
 - **Phase 10 (CI & Deploy Hardening)** — all eight HARDEN-* requirements, kept as their own phase because they have no dependency on the nonprod build, two of them (HARDEN-07 cookie flag, HARDEN-08 README) are not CI work at all, and folding them into Phase 9 would blur that phase's goal. Ordered last so HARDEN-03's digest-pinning covers `deploy.yml`'s final job graph including the new nonprod jobs, and so HARDEN-07's `Secure` cookie flag lands only once every deployed environment is TLS-served.
 
 ---
-*Last updated: 2026-08-18 — traceability filled in by roadmapper (v1.3 Phases 8-10)*
+*Last updated: 2026-08-18 — traceability filled in by roadmapper (v1.3 Phases 8-10); CI-05 added by quick task 260818-ied*
