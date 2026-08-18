@@ -5,16 +5,16 @@ milestone_name: Nonprod Environment & CI Hardening
 current_phase: 09
 current_phase_name: Nonprod Continuous Deploy & Scoped CI Credentials
 status: executing
-stopped_at: Phase 9 plan 01 Task 3 attempted -- deploy.yml live on master but blocked on NETCUP_HOST_FINGERPRINT defect
-last_updated: "2026-08-18T20:15:21.663Z"
+stopped_at: Phase 9 plan 01 complete -- Wave 1 fully merged, Wave 2 (09-02) up next
+last_updated: "2026-08-18T20:50:00.000Z"
 last_activity: 2026-08-18
-last_activity_desc: v1.3 roadmap created (3 phases, 19/19 requirements mapped)
+last_activity_desc: Plan 09-01 complete after coordinator-diagnosed live-run fixes (NETCUP_HOST_FINGERPRINT key-algorithm mismatch; docker-compose.nonprod.yml repository-name defect) -- live deploy run 32184033760 green, genuine nonprod/production repository separation confirmed on the VM
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 7
-  completed_plans: 5
-  percent: 33
+  completed_plans: 6
+  percent: 43
 ---
 
 # Project State
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 ## Current Position
 
 Phase: 09 (Nonprod Continuous Deploy & Scoped CI Credentials) — EXECUTING
-Plan: 1 of 4
+Plan: 1 of 4 complete (09-01), 09-04 also complete (Wave 1 done); 09-02 up next (Wave 2)
 Status: Executing Phase 09
-Last activity: 2026-08-18 — Phase 09 execution started
+Last activity: 2026-08-18 — Plan 09-01 complete after live-run remediation
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 

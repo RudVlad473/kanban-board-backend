@@ -14,7 +14,7 @@ provides:
   - "Linux user deploy-nonprod on the Netcup VM, docker-group member, confined by Unix filesystem permissions to /opt/deploy/kanban-board-nonprod/, proven locked out of /opt/deploy/kanban-board-backend/ by measured Permission denied output"
   - "Public Docker Hub repository rudenkovladimir/kanban-board-backend-nonprod"
   - "Task 1's decision checkpoint resolved (option-a) and recorded, with both residual risks (T-09-03 docker-group root-equivalence, T-09-09 account-wide Docker Hub token) written into docs/INFRA_RUNBOOK.md"
-  - "deploy.yml wired with flyway-verify-nonprod and deploy-to-nonprod, dual-tag single build, environment: retrofit on every production job (commit 58bdee9, live on master) — edit is structurally correct but its live run has not yet gone green; NOT yet a usable green-run precedent for plans 09-02/09-03 until the NETCUP_HOST_FINGERPRINT defect below is fixed and re-run"
+  - "deploy.yml wired with flyway-verify-nonprod and deploy-to-nonprod, dual-tag single build, environment: retrofit on every production job (commit 58bdee9, live on master) — live end-to-end run confirmed green (run 32184033760) after two coordinator-diagnosed and coordinator-fixed defects (NETCUP_HOST_FINGERPRINT wrong key algorithm; docker-compose.nonprod.yml pointed at production's repository); this IS now a usable green-run precedent for plans 09-02/09-03"
 affects: [09-02-nonprod-continuous-deploy-scoped-ci-credentials, 09-03-nonprod-continuous-deploy-scoped-ci-credentials]
 
 # Actuals (#2632)
@@ -43,7 +43,7 @@ key-decisions:
 
 patterns-established: []
 
-requirements-completed: []
+requirements-completed: [CI-02, CI-01, CI-03]
 
 coverage:
   - id: D1
@@ -71,23 +71,32 @@ coverage:
         status: pass
     human_judgment: false
   - id: D4
-    description: "Task 3 (.github/workflows/deploy.yml edit and live end-to-end deploy proof) executed on the sequential working tree; the workflow edit itself is structurally correct (all static acceptance criteria pass) and is live on master (commit 58bdee9), but the live run failed both deploy jobs on an SSH host-key fingerprint mismatch traced to a Task 2 provisioning defect, not to this task's own code. Task 3's live-verification acceptance criteria (green run, docker inspect, both health endpoints reflecting the new commit) are NOT met."
+    description: "Task 3 (.github/workflows/deploy.yml edit and live end-to-end deploy proof) executed on the sequential working tree; the workflow edit is structurally correct and live on master (commit 58bdee9). Two live-verification defects were found and fixed by the coordinator after the executor's own turn ended: (1) NETCUP_HOST_FINGERPRINT was set to the VM's ED25519 host key fingerprint, independently verified correct three ways (local ssh-keyscan, live ssh -vv negotiation, the VM's own /etc/ssh key file) — but appleboy/ssh-action's underlying easyssh-proxy/golang.org/x/crypto/ssh client ranks ECDSA above ED25519 in its default HostKeyAlgorithms preference (golang/go#51168), so it actually negotiates the VM's ECDSA key; reset to the ECDSA fingerprint after confirming via a live whoami connection test. (2) docker-compose.nonprod.yml (a Phase 8 artifact, outside this plan's files_modified scope) hardcoded the production Docker Hub repository name in its image: line, so nonprod silently pulled from production's repository despite the correct tag existing in its own repository — fixed with a one-line image-name correction. After both fixes, live run 32184033760 went fully green: all 9 jobs succeeded, both health endpoints return 200, and docker inspect confirms kanban-nonprod-app runs rudenkovladimir/kanban-board-backend-nonprod:28a438d while kanban-board-backend-app-1 runs rudenkovladimir/kanban-board-backend:28a438d — genuine repository separation, not just an unused second repository."
     verification:
       - kind: other
-        ref: "python yaml.safe_load parses clean; job-id/environment-scoping/concurrency-group/dual-tag/needs-graph/identity-axis static checks all pass (see Issues Encountered for the corrected extraction command); gh run view 32179763451 --json conclusion == failure (deploy-to-netcup, deploy-to-nonprod both failed on ssh handshake); production and nonprod health endpoints both still return 200, both still running their PRE-this-run images (production 8d8f046, nonprod 777cb27) — the SCP step failed before touching either VM directory, so no partial/inconsistent state was left on the VM"
-        status: fail
+        ref: "gh run view 32184033760 --json conclusion == success, all jobs succeeded; curl health checks both 200; ssh netcup-prod docker ps confirms kanban-nonprod-app: rudenkovladimir/kanban-board-backend-nonprod:28a438d and kanban-board-backend-app-1: rudenkovladimir/kanban-board-backend:28a438d; curl hub.docker.com/v2/repositories/rudenkovladimir/kanban-board-backend-nonprod/tags includes 28a438d"
+        status: pass
     human_judgment: true
-    rationale: "The failure requires resetting a GitHub Environment secret value (NETCUP_HOST_FINGERPRINT in both production and staging), which this session's explicit instructions prohibit attempting autonomously ('do NOT attempt undocumented recovery — halt with a clear report ... so the human operator can assess'). A human must confirm the correct fingerprint and reset the secret before Task 3 can be re-run and marked complete."
+    rationale: "Both defects were diagnosed and fixed by the coordinator directly (not re-dispatched to an executor) because each required a live production-adjacent action (resetting a GitHub Environment secret; pushing a workflow-triggering commit) that this session's own established pattern requires checking with the human operator before taking. The human operator confirmed proceeding at each step (fingerprint reset, and again for the docker-compose.nonprod.yml fix) before any live-affecting action was taken."
 
 # Metrics
-duration: ~1h50min (across four halts/resumes/attempts; see Performance below)
+duration: ~2h40min (across four halts/resumes/attempts plus coordinator-led live-run diagnosis and remediation; see Performance below)
 completed: 2026-08-18
-status: halted
+status: complete
 ---
 
 # Phase 09 Plan 01: Nonprod CI deploy identity and scoped secrets — Summary
 
-**Two GitHub Environments (production/staging, zero protection rules) populated with nine scoped deploy secrets each, a filesystem-confined deploy-nonprod VM identity proven locked out of production's directory, a public Docker Hub repository for nonprod, and both nonprod CI jobs wired into deploy.yml and pushed live — but the first live run failed on an SSH host-key fingerprint mismatch traced to a Task 2 provisioning defect, leaving Task 3 unverified and this plan still halted.**
+**Two GitHub Environments (production/staging, zero protection rules) populated with nine scoped deploy secrets each, a filesystem-confined deploy-nonprod VM identity proven locked out of production's directory, a public Docker Hub repository for nonprod, and both nonprod CI jobs wired into deploy.yml — the first live run failed on an SSH host-key fingerprint mismatch, and the fix for that then surfaced a second, unrelated defect (nonprod silently pulling production's Docker Hub image). Both were diagnosed and fixed by the coordinator with the human operator's confirmation at each live-affecting step; the live run is now fully green with genuine cross-repository separation confirmed on the VM. Plan complete, 3/3 tasks.**
+
+## Coordinator Remediation (post-executor)
+
+After this plan's executor turn ended (halted per its own instructions rather than self-healing a live-run failure), the coordinator diagnosed and fixed two defects directly, with the human operator's explicit go-ahead before each live-affecting action:
+
+1. **NETCUP_HOST_FINGERPRINT wrong key algorithm.** The value set in Task 2 was the VM's ED25519 host key fingerprint — independently verified correct three separate ways (a remote `ssh-keyscan`, a live `ssh -vv` negotiation, and reading the VM's own `/etc/ssh/ssh_host_ed25519_key.pub` directly). A hash-comparison probe (a temporary, since-deleted `workflow_dispatch` diagnostic workflow printing `sha256sum` of the secret rather than the secret itself) further confirmed GitHub's stored value byte-matched the intended one exactly. Yet the live connection still failed — because `appleboy/ssh-action`'s underlying Go SSH client (`easyssh-proxy` → `golang.org/x/crypto/ssh`) ranks ECDSA above ED25519 in its default `HostKeyAlgorithms` preference order (a documented Go quirk, [golang/go#51168](https://github.com/golang/go/issues/51168)), so it negotiates and checks against the VM's ECDSA key regardless of which key a normal SSH client would prefer. Reset to the ECDSA fingerprint in both environments, confirmed via a live `whoami` connection test in the same diagnostic workflow before touching the real deploy secret.
+2. **docker-compose.nonprod.yml pointed at production's Docker Hub repository.** A Phase 8 artifact, outside this plan's `files_modified` scope — Task 3 correctly built and pushed a second image tag to the new `kanban-board-backend-nonprod` repository, but the nonprod Compose file's `image:` line had never been updated to pull from it, so `deploy-to-nonprod` silently deployed production's repository content instead (byte-identical either way, since both tags came from one build, but architecturally wrong and a direct violation of Task 3's own acceptance criteria and CI-03's repository-separation intent). Fixed with a one-line image-name correction.
+
+Both fixes required a live GitHub Actions run to verify; the human operator confirmed proceeding before each push. Final state: run `32184033760` green across all 9 jobs, both health endpoints `200`, and `docker inspect` on the VM confirms `kanban-nonprod-app` runs `rudenkovladimir/kanban-board-backend-nonprod:28a438d` while `kanban-board-backend-app-1` runs `rudenkovladimir/kanban-board-backend:28a438d` — genuine separation, not merely a provisioned-but-unused second repository.
 
 ## Performance
 
