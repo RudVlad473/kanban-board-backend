@@ -7,12 +7,12 @@
 
 ### Nonprod Infrastructure
 
-- [ ] **NONPROD-01**: A nonprod Compose stack (app + Redpanda) is colocated on the existing Netcup VPS Lite 2, name-pinned (directory, Compose project name, container names, network name, volume names all distinct from production) and gated via Docker Compose `profiles:`
-- [ ] **NONPROD-02**: Nonprod's database is an isolated Neon branch, wired via its own env file/secrets structurally separate from `.env.prod`
-- [ ] **NONPROD-03**: Nonprod's Kafka/Schema Registry isolation is a second, separate Redpanda broker instance — not topic-name-prefixing on the shared production broker — because the Avro Schema Registry's `RecordNameStrategy` keys compatibility history by class name, not topic, so a shared broker would leave the registry itself shared even with prefixed topics
-- [ ] **NONPROD-04**: Nonprod is reachable over real HTTPS at its own stable hostname, via a second Caddy site block and a second DuckDNS subdomain (enumerated exactly, never wildcard-matched against the shared `*.duckdns.org` suffix), matching production's automatic-TLS pattern
-- [ ] **NONPROD-05**: CORS is configured for the expected nonprod frontend origin (a placeholder domain is acceptable ahead of the frontend repo existing), reusing the existing externalized `app.cors.allowed-origins` config with zero code change
-- [ ] **NONPROD-06**: Nonprod's actual Redpanda memory floor (`mem_limit` / `--memory`) is measured live via iterative restart cycles — not assumed from arithmetic (e.g., "half of prod's cap") — with a documented, exercised fallback to a second small VPS (~€4/month) if no safe value is found on the colocated host
+- [x] **NONPROD-01**: A nonprod Compose stack (app + Redpanda) is colocated on the existing Netcup VPS Lite 2, name-pinned (directory, Compose project name, container names, network name, volume names all distinct from production) and gated via Docker Compose `profiles:`
+- [x] **NONPROD-02**: Nonprod's database is an isolated Neon branch, wired via its own env file/secrets structurally separate from `.env.prod`
+- [x] **NONPROD-03**: Nonprod's Kafka/Schema Registry isolation is a second, separate Redpanda broker instance — not topic-name-prefixing on the shared production broker — because the Avro Schema Registry's `RecordNameStrategy` keys compatibility history by class name, not topic, so a shared broker would leave the registry itself shared even with prefixed topics
+- [x] **NONPROD-04**: Nonprod is reachable over real HTTPS at its own stable hostname, via a second Caddy site block and a second DuckDNS subdomain (enumerated exactly, never wildcard-matched against the shared `*.duckdns.org` suffix), matching production's automatic-TLS pattern
+- [x] **NONPROD-05**: CORS is configured for the expected nonprod frontend origin (a placeholder domain is acceptable ahead of the frontend repo existing), reusing the existing externalized `app.cors.allowed-origins` config with zero code change
+- [x] **NONPROD-06**: Nonprod's actual Redpanda memory floor (`mem_limit` / `--memory`) is measured live via iterative restart cycles — not assumed from arithmetic (e.g., "half of prod's cap") — with a documented, exercised fallback to a second small VPS (~€4/month) if no safe value is found on the colocated host
 
 ### CI Deploy Automation
 
@@ -24,7 +24,7 @@
 
 ### Data Reset Mechanism
 
-- [ ] **RESET-01**: A test-data reset/seed mechanism exists for nonprod, reachable and manually verifiable via curl (no Playwright consumer required to exist yet), covering both Postgres state and Kafka/activity-log state — not Postgres alone
+- [x] **RESET-01**: A test-data reset/seed mechanism exists for nonprod, reachable and manually verifiable via curl (no Playwright consumer required to exist yet), covering both Postgres state and Kafka/activity-log state — not Postgres alone
 
 ### CI/Deploy Hardening (bundled todos, unblocked by v1.2 Phase 5's deploy.yml rewrite)
 
@@ -56,13 +56,13 @@ Deferred until the frontend repo exists — tracked, not attempted this mileston
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| NONPROD-01 | Phase 8 | Pending |
-| NONPROD-02 | Phase 8 | Pending |
-| NONPROD-03 | Phase 8 | Pending |
-| NONPROD-04 | Phase 8 | Pending |
-| NONPROD-05 | Phase 8 | Pending |
-| NONPROD-06 | Phase 8 | Pending |
-| RESET-01 | Phase 8 | Pending |
+| NONPROD-01 | Phase 8 | Complete |
+| NONPROD-02 | Phase 8 | Complete |
+| NONPROD-03 | Phase 8 | Complete |
+| NONPROD-04 | Phase 8 | Complete |
+| NONPROD-05 | Phase 8 | Complete |
+| NONPROD-06 | Phase 8 | Complete |
+| RESET-01 | Phase 8 | Complete |
 | CI-01 | Phase 9 | Pending |
 | CI-02 | Phase 9 | Pending |
 | CI-03 | Phase 9 | Pending |
