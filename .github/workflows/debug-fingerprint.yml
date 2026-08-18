@@ -29,3 +29,24 @@ jobs:
     steps:
       - name: Hash NETCUP_HOST_FINGERPRINT (staging)
         run: echo -n "${{ secrets.NETCUP_HOST_FINGERPRINT }}" | sha256sum
+
+  # Hypothesis test: golang.org/x/crypto/ssh's default HostKeyAlgorithms preference list
+  # (golang/go#51168) ranks ECDSA above ED25519, unlike a normal OpenSSH client. easyssh-proxy
+  # (what appleboy/ssh-action uses internally) does not override that default, so the key it
+  # actually negotiates during the real handshake may be the VM's ECDSA key, not its ED25519 key
+  # -- even though ED25519 is correct and independently verified as the VM's own key. Testing with
+  # a harmless read-only `whoami` against the connection this action actually opens, rather than
+  # guessing again against the real deploy jobs. The fingerprint here is a host key fingerprint,
+  # not a private credential -- safe to inline directly rather than round-trip through a secret.
+  try-ecdsa-fingerprint:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Attempt connection using the VM's ECDSA host key fingerprint
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.NETCUP_HOST }}
+          username: ${{ secrets.NETCUP_DEPLOY_USER }}
+          key: ${{ secrets.NETCUP_SSH_KEY }}
+          fingerprint: "SHA256:gwhi3vhsQHP5yKmROGHMDPoWP1fENBUbo2e4s3WHVQc"
+          script: whoami
