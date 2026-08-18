@@ -5,8 +5,8 @@ milestone_name: Nonprod Environment & CI Hardening
 current_phase: 9
 current_phase_name: Nonprod Continuous Deploy & Scoped CI Credentials
 status: planning
-stopped_at: Phase 8 context gathered
-last_updated: "2026-08-18T15:01:56.050Z"
+stopped_at: Phase 9 context gathered
+last_updated: "2026-08-18T15:50:45.820Z"
 last_activity: 2026-08-18
 last_activity_desc: v1.3 roadmap created (3 phases, 19/19 requirements mapped)
 progress:
@@ -97,9 +97,9 @@ Items acknowledged and carried forward (full v1.2-close table in `.planning/mile
 
 ## Session Continuity
 
-Last session: 2026-08-18T09:52:38.300Z
-Stopped at: Phase 8 context gathered
-Resume file: .planning/phases/08-isolated-nonprod-environment-live-and-resettable/08-CONTEXT.md
+Last session: 2026-08-18T15:50:45.804Z
+Stopped at: Phase 9 context gathered
+Resume file: C:/Dev/Repos/kanban-board-backend/.planning/phases/09-nonprod-continuous-deploy-scoped-ci-credentials/09-CONTEXT.md
 
 ## Operator Next Steps
 
