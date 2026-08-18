@@ -76,8 +76,16 @@ Full details: [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
 **Plans**: 3 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 08-01-PLAN.md — Nonprod stack live over HTTPS: own Compose project, own Neon branch, own Redpanda broker, second Caddy site block, CORS origin, isolation audit (NONPROD-01..05)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 08-02-PLAN.md — Profile-gated, shared-secret reset endpoint truncating both Postgres and Kafka state, verified live by curl (RESET-01)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 08-03-PLAN.md — Live iterative Redpanda memory-floor measurement with a proven failing step below the floor, and the blocking D-07 colocate-vs-fallback-VPS decision (NONPROD-06)
 
 ### Phase 9: Nonprod Continuous Deploy & Scoped CI Credentials
