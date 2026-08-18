@@ -1,0 +1,137 @@
+# Nonprod Compose manifest for the Netcup VPS Lite 2 G12s VM (v1.3, Phase 8, plan 08-01).
+#
+# STANDALONE file, own Compose project (`name:` below) -- deliberately NOT an extension of
+# docker-compose.prod.yml. NONPROD-01 requires a distinct Compose project name; Compose supports
+# exactly one project name per file, so a shared file could not provide that identity axis, and a
+# shared-project invocation risked re-enving production's own `app` service against nonprod's
+# DB_* values (see 08-01-PLAN.md's design_alternatives table). Every identity axis --
+# directory, project name, container names, network name, volume names -- is independently
+# distinct from docker-compose.prod.yml's.
+#
+# Deploy usage: `docker compose -f docker-compose.nonprod.yml --env-file .env.nonprod --profile
+# nonprod up -d` from /opt/deploy/kanban-board-nonprod/ on the VM, after copying this file and a
+# real .env.nonprod (never committed -- see .env.nonprod.example) there.
+#
+# Both services are gated behind the `nonprod` Compose profile so a bare `docker compose up`
+# (no --profile flag) in this file's directory creates zero containers -- this is the literal
+# NONPROD-01 "empty" edge-probe requirement, not merely a convention.
+
+x-logging: &nonprod-logging
+  # Identical rotation discipline to docker-compose.prod.yml's own x-logging anchor -- this file
+  # keeps its own copy rather than sharing the anchor across files, since Compose anchors do not
+  # span files. Worst case per container: 10m * "3" = 30MB.
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# Pinned so `docker compose` commands converge on the same project regardless of which directory
+# the file happens to live in on the host -- mirrors docker-compose.prod.yml's own `name:` pin and
+# the exact collision it was added to prevent (docs/INFRA_RUNBOOK.md's "Deploy user setup" section).
+name: kanban-board-nonprod
+
+networks:
+  default:
+    # Project-scoped internal network -- reaches app-nonprod <-> redpanda-nonprod only, same as
+    # production's implicit default network reaches app <-> redpanda.
+  kanban-edge:
+    # Externally-created network shared with production's Caddy container (created once via
+    # `docker network create kanban-edge`). This is the ONLY thing the two stacks share -- neither
+    # redpanda-nonprod nor production's own app/redpanda services join it.
+    external: true
+    name: kanban-edge
+
+volumes:
+  redpanda-nonprod-data:
+
+services:
+  redpanda-nonprod:
+    profiles: ["nonprod"]
+    container_name: kanban-nonprod-redpanda
+    hostname: redpanda-nonprod
+    # Same pinned version as production and local dev -- one broker version tested across every
+    # environment, not a separately-drifting nonprod version.
+    image: docker.redpanda.com/redpandadata/redpanda:v26.2.1
+    restart: unless-stopped
+    networks:
+      - default
+      # Deliberately NOT on kanban-edge -- only app-nonprod may reach the shared edge network;
+      # the broker and its schema registry stay reachable only from app-nonprod (T-08-08).
+    volumes:
+      - redpanda-nonprod-data:/var/lib/redpanda/data
+    # No `ports:` key at all -- neither the Kafka listener nor the Schema Registry is published to
+    # the host, matching production's own redpanda service exactly.
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp
+      - "1"
+      - --memory
+      - 1G
+      - --schema-registry-addr
+      - 0.0.0.0:8081
+      - --kafka-addr
+      - internal://0.0.0.0:19092
+      - --advertise-kafka-addr
+      - internal://redpanda-nonprod:19092
+      - --rpc-addr
+      - redpanda-nonprod:33145
+      - --advertise-rpc-addr
+      - redpanda-nonprod:33145
+      - --default-log-level=info
+    # mem_limit and --memory are PROVISIONAL starting points for plan 08-03's live memory-floor
+    # measurement (NONPROD-06), not measured floors -- mirrors production's own Task 3 discipline
+    # (docker-compose.prod.yml's redpanda comment). Deliberately NOT numerically equal to --memory:
+    # production hit `insufficient physical memory` when its cgroup cap exactly matched Seastar's
+    # own requested usable memory, leaving no room for cgroup accounting overhead -- 1200m gives
+    # ~150MiB of headroom above the 1G internal request, the same margin production's own
+    # 2200m/2G pair uses.
+    mem_limit: 1200m
+    healthcheck:
+      test: [ "CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1" ]
+      interval: 5s
+      timeout: 5s
+      retries: 8
+      start_period: 15s
+    logging: *nonprod-logging
+
+  app-nonprod:
+    profiles: ["nonprod"]
+    container_name: kanban-nonprod-app
+    image: rudenkovladimir/kanban-board-backend:${IMAGE_TAG}
+    restart: unless-stopped
+    mem_limit: 1g
+    depends_on:
+      redpanda-nonprod:
+        condition: service_healthy
+    networks:
+      default:
+      kanban-edge:
+        # Explicit alias so production's Caddy (a different Compose project) resolves this
+        # container by the name its site block expects, regardless of container_name.
+        aliases:
+          - app-nonprod
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+      DB_JDBC_PARAMS: ${DB_JDBC_PARAMS}
+      KAFKA_BOOTSTRAP_SERVERS: redpanda-nonprod:19092
+      SCHEMA_REGISTRY_URL: http://redpanda-nonprod:8081
+      # planner-discipline-allow: SPRING_PROFILES_ACTIVE
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
+      APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS}
+      # Declared here so the stack shape is complete; its consumer (the reset endpoint) lands in
+      # plan 08-02.
+      APP_RESET_TOKEN: ${APP_RESET_TOKEN}
+    # No `ports:` key -- Caddy is the only path in, over the shared kanban-edge network.
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -q -O - http://localhost:8080/api/actuator/health | grep -q '\"status\":\"UP\"' || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging: *nonprod-logging

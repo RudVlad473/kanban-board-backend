@@ -43,6 +43,7 @@ out/
 .env*
 !.env.example
 !.env.prod.example
+!.env.nonprod.example
 
 ### Secret scanning (quick task 260816-hn1) ###
 # gitleaks report output. A gitleaks report contains matched secret *values* in plaintext

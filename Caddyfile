@@ -22,3 +22,13 @@
 # docker-compose.prod.yml precisely so that recreating this container reuses the existing
 # certificate instead of requesting a new one. Repeated certificate re-requests trigger a
 # week-long Let's Encrypt rate limit -- see docker-compose.prod.yml's caddy service comment.
+
+# Second site block, added plan 08-01 (v1.3, Phase 8, NONPROD-04). {$APP_DOMAIN_NONPROD} is
+# supplied by docker-compose.prod.yml's caddy.environment.APP_DOMAIN_NONPROD -- the exact
+# enumerated nonprod hostname (D-05), never a DNS wildcard pattern: DuckDNS is a shared public
+# suffix, and a wildcard address here would scope this block to every other DuckDNS tenant, not
+# just this project's own two subdomains. Both blocks share the one `caddy-data` volume above, so
+# recreating this container reuses both certificates rather than re-requesting either.
+{$APP_DOMAIN_NONPROD} {
+	reverse_proxy app-nonprod:8080
+}

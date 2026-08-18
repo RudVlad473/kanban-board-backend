@@ -41,6 +41,20 @@ x-logging: &default-logging
 # starts a second, unrelated project instead of recognizing the already-running containers.
 name: kanban-board-backend
 
+# Added plan 08-01 (v1.3, Phase 8): a single Caddy process is the only thing that may bind host
+# 80/443, and it must additionally reach app-nonprod -- a service that lives in a DIFFERENT
+# Compose project by design (NONPROD-01's identity-isolation requirement forbids sharing this
+# project). Compose's implicit per-project default network cannot cross that boundary, so an
+# externally-created network, created once via `docker network create kanban-edge` and joined by
+# both this file's `caddy` service and docker-compose.nonprod.yml's `app-nonprod` service, bridges
+# the two projects. This is the ONLY thing the two stacks share -- production's own `app` and
+# `redpanda` do not join it.
+networks:
+  default:
+  kanban-edge:
+    external: true
+    name: kanban-edge
+
 services:
   caddy:
     image: caddy:2
@@ -48,11 +62,19 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    networks:
+      # `default` must be listed explicitly -- once a service declares any `networks:` key it no
+      # longer implicitly joins the default network, and dropping it here would sever caddy -> app.
+      - default
+      - kanban-edge
     environment:
       # Consumed by Caddyfile's {$APP_DOMAIN} placeholder (D-01: free subdomain, chosen at
       # execution time in plan 05-03). Swapping to a paid domain later only requires changing this
       # value and the DNS record -- no application change.
       APP_DOMAIN: ${APP_DOMAIN}
+      # Consumed by Caddyfile's second site block ({$APP_DOMAIN_NONPROD}, added plan 08-01) --
+      # the nonprod hostname, D-05.
+      APP_DOMAIN_NONPROD: ${APP_DOMAIN_NONPROD}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       # Named volumes (not bind mounts, not ephemeral) so container recreation reuses the existing
