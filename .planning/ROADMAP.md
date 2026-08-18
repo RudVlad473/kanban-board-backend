@@ -5,6 +5,7 @@
 - ✅ **v1.0 Optimistic Locking** — Phase 1 (shipped 2026-08-01)
 - ✅ **v1.1 Kafka Activity Feed** — Phases 2-3 (shipped 2026-08-03)
 - ✅ **v1.2 Infra Migration & Schema Registry** — Phases 4, 04.1, 04.2, 5, 6, 7, 07.1 (shipped 2026-08-17)
+- 🚧 **v1.3 Nonprod Environment & CI Hardening** — Phases 8-10 (in progress)
 
 ## Phases
 
@@ -49,10 +50,79 @@ Full details: [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
 
 </details>
 
+### 🚧 v1.3 Nonprod Environment & CI Hardening (In Progress)
+
+**Milestone Goal:** Stand up a resource-shrunk, production-isolated nonprod environment on the existing Netcup VPS — its own Neon branch, its own Redpanda broker/registry, its own HTTPS hostname — deployed continuously by CI and resettable to a known state, so a future frontend repo's Playwright E2E suite has a real, non-mocked target; bundled with the CI/deploy hardening todos that v1.2's deploy.yml rewrite unblocked.
+
+- [ ] **Phase 8: Isolated Nonprod Environment, Live and Resettable** - A second, production-isolated stack (Neon branch + own Redpanda + own HTTPS hostname) running on the existing VPS with measured resource caps and a curl-driven data reset
+- [ ] **Phase 9: Nonprod Continuous Deploy & Scoped CI Credentials** - Every push to master redeploys and health-checks nonprod through GitHub Environments-scoped secrets, with zero ability to disturb production
+- [ ] **Phase 10: CI & Deploy Hardening** - The eight accumulated hardening todos: dependabot actions ecosystem, TruffleHog verification, digest-pinned actions, gradle cache, gitleaks worktree fix, security-scan cleanup, `Secure` session cookie, README architecture showcase
+
+## Phase Details
+
+### Phase 8: Isolated Nonprod Environment, Live and Resettable
+
+**Goal**: A second deployment of this app is live over real HTTPS at its own stable hostname, provably isolated from production at every layer that matters (database, Kafka broker, schema-registry compatibility history, container/network/volume identity, secrets), sized by live measurement rather than arithmetic, and returnable to a known-clean baseline on demand.
+**Depends on**: Nothing new — builds on the production stack already live from v1.2 Phase 5 (Netcup VPS, Neon, Redpanda, Caddy)
+**Requirements**: NONPROD-01, NONPROD-02, NONPROD-03, NONPROD-04, NONPROD-05, NONPROD-06, RESET-01
+**Success Criteria** (what must be TRUE):
+
+  1. An operator can reach the nonprod app over real HTTPS at its own stable hostname and get a healthy response, on a certificate issued for that exact enumerated hostname — never a wildcard match against the shared `*.duckdns.org` public suffix
+  2. Data written through nonprod lands only in nonprod's Neon branch and nonprod's own Redpanda broker and schema registry; production's rows, topics, and registered compatibility history are demonstrably untouched, and nonprod's credentials live in a file/secret set structurally separate from `.env.prod`
+  3. Nonprod and production coexist on the host without production degrading — nonprod's Redpanda memory floor established by iterative live restart cycles, not by halving production's cap; if no safe floor is found, nonprod instead runs on the fallback second VPS, actually provisioned and verified rather than left as a documented option
+  4. An operator can return nonprod to a known-clean baseline with a single curl that clears both its Postgres state and its activity-log/Kafka state, and the same mechanism is unavailable against production
+  5. A browser at the expected nonprod frontend origin completes a credentialed cross-origin request against nonprod without a CORS failure, with no application code changed to allow it
+
+**Plans**: TBD
+
+### Phase 9: Nonprod Continuous Deploy & Scoped CI Credentials
+
+**Goal**: Nonprod stays current with master automatically — deployed, migrated, and health-verified by CI on every push — through credentials scoped so the nonprod path cannot reach, overwrite, or degrade production.
+**Depends on**: Phase 8 (a manually-proven-healthy nonprod stack to automate against, matching this project's own tracer-then-automate precedent from v1.2 Phase 5)
+**Requirements**: CI-01, CI-02, CI-03, CI-04
+**Success Criteria** (what must be TRUE):
+
+  1. A push to master leaves nonprod running that commit's image, deployed within the same workflow run as production's deploy — neither job waits on, gates, nor fails because of the other
+  2. The nonprod deploy is reported successful only after nonprod's health endpoint actually answers 200; a nonprod stack that fails to come up fails the workflow visibly instead of passing silently
+  3. The nonprod deploy job can read only staging-scoped credentials — production's secrets are unreachable from it, because both environments' secrets are scoped through GitHub Environments rather than shared unscoped repository secrets
+  4. Running a production deploy and a nonprod deploy back to back leaves both stacks running their own correct image: neither deploy converges onto the other's directory, containers, network, or volumes, and neither run's image-cleanup sweep deletes the tag the other environment is currently running
+
+**Plans**: TBD
+
+### Phase 10: CI & Deploy Hardening
+
+**Goal**: The repository's CI, secret-scanning, and session-cookie configuration close the eight hardening gaps accumulated across v1.2, and the README stands on its own as a full architecture showcase.
+**Depends on**: Phase 9 (deploy.yml's nonprod jobs should exist before every `uses:` reference in it is digest-pinned, so the pinning covers the final job graph rather than being redone) and Phase 8 (every deployed environment reachable over TLS before the session cookie is forced `Secure`)
+**Requirements**: HARDEN-01, HARDEN-02, HARDEN-03, HARDEN-04, HARDEN-05, HARDEN-06, HARDEN-07, HARDEN-08
+**Success Criteria** (what must be TRUE):
+
+  1. Dependabot raises update PRs for outdated GitHub Actions, not only Gradle dependencies
+  2. CI's secret scanning distinguishes a live, currently-exploitable credential from a merely pattern-matched string, and the pre-commit gitleaks hook scans a staged diff correctly when invoked from a worktree created outside the main repo tree
+  3. Every `uses:` reference in `deploy.yml` and `security-scan.yml` resolves to an immutable commit digest rather than a mutable tag, `security-scan.yml` no longer carries its stale comment or outdated `checkout`/`setup-java` versions, and `deploy.yml`'s `run-tests` job reuses a Gradle cache between runs
+  4. Session cookies carry the `Secure` flag in both `application.properties` and `application-test.properties`, and authenticated flows still pass end-to-end against a TLS-served environment
+  5. A newcomer reading only the README can see the system's architecture, stack, and deployment shape without opening `docs/`
+
+**Plans**: TBD
+
 ## Progress
+
+**Execution Order:**
+Phases execute in numeric order: 8 → 9 → 10
+
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|----------------|--------|-----------|
+| 8. Isolated Nonprod Environment, Live and Resettable | v1.3 | 0/TBD | Not started | - |
+| 9. Nonprod Continuous Deploy & Scoped CI Credentials | v1.3 | 0/TBD | Not started | - |
+| 10. CI & Deploy Hardening | v1.3 | 0/TBD | Not started | - |
 
 | Milestone | Phases | Plans | Status | Shipped |
 |-----------|--------|-------|--------|---------|
 | v1.0 Optimistic Locking | 1 | 3/3 | Complete | 2026-08-01 |
 | v1.1 Kafka Activity Feed | 2 | 6/6 | Complete | 2026-08-03 |
 | v1.2 Infra Migration & Schema Registry | 7 | 39/39 | Complete | 2026-08-17 |
+| v1.3 Nonprod Environment & CI Hardening | 3 | 0/TBD | In progress | - |
+
+## Deferred (not this milestone)
+
+- **FRONTEND-DISPATCH-V2** — `repository_dispatch` from this repo's nonprod-deploy job into the frontend repo's Playwright workflow. Hard-blocked: that repo has no workflow file to dispatch into, so there is no code to write on this side. Nonprod deploying continuously on every master push already gives the eventual frontend CI a stable, always-current target to point Playwright at directly.
+- **FRONTEND-COUPLING-V2** — whether any backend-side waiting/gating on the frontend's E2E result is warranted. Default decision this milestone: no (inverted ownership — see REQUIREMENTS.md Out of Scope).

@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Nonprod Environment & CI Hardening
 status: planning
-last_updated: "2026-08-17T11:56:17.001Z"
-last_activity: 2026-08-17
+last_updated: "2026-08-18T00:00:00.000Z"
+last_activity: 2026-08-18
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -19,15 +19,17 @@ progress:
 
 See: .planning/PROJECT.md (updated 2026-08-17)
 
-**Core value:** v1.0 through v1.2 shipped the backend-depth showcase and made the project reachable and cheaply/reliably deployable again on Netcup + Neon + self-hosted Redpanda after the AWS EC2/RDS deletion. The backend is now feature-complete against its own mock-ups and live in production.
-**Current focus:** v1.3 (Nonprod Environment & CI Hardening) — defining requirements, research in progress
+**Core value:** The backend is feature-complete against its own mock-ups and live in production; the differentiator now is proving the whole system — including a real frontend against a real deploy — is reliable.
+**Current focus:** v1.3 Phase 8 (Isolated Nonprod Environment, Live and Resettable) — roadmap created, ready to plan
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-08-17 - Completed quick task 260817-tvd: Create authentication sequence diagrams (sign up and sign in flows) for frontend E2E test planning
+Phase: 8 of 10 (Isolated Nonprod Environment, Live and Resettable)
+Plan: — (not yet planned)
+Status: Ready to plan
+Last activity: 2026-08-18 — v1.3 roadmap created (3 phases, 19/19 requirements mapped)
+
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
@@ -39,82 +41,56 @@ v1.0–v1.2 velocity/per-plan detail archived at milestone close — see `.plann
 
 ### Decisions
 
-Decisions are logged in PROJECT.md's Key Decisions table (current milestone's headline decisions) and `.planning/RETROSPECTIVE.md` (per-milestone what-worked/what-was-inefficient analysis). The full per-plan decision log for v1.0–v1.2 (roughly 130 entries) was cleared from this file at v1.2's milestone close — it's fully preserved in `git log` and the archived phase artifacts under `.planning/milestones/v1.2-phases/`. Nothing was lost; this file just stopped being the right place to keep re-reading it.
+Decisions are logged in PROJECT.md's Key Decisions table and `.planning/RETROSPECTIVE.md`. The full per-plan decision log for v1.0–v1.2 was cleared at v1.2's close — preserved in `git log` and `.planning/milestones/v1.2-phases/`.
 
-No decisions recorded yet for the next milestone.
+v1.3 decisions so far (from requirements/research, before any phase plan):
+
+- Nonprod colocates on the existing Netcup VPS; a second ~€4/month VPS is the fallback only if live memory measurement (NONPROD-06) says colocation doesn't hold.
+- Kafka isolation is a **second Redpanda broker**, not topic-prefixing — the Avro registry's `RecordNameStrategy` keys compatibility history by class name, so prefixed topics would still share the registry.
+- The backend does **not** gate its own production promotion on the frontend repo's E2E results; the frontend gates itself on nonprod reachability.
+- Phase numbering continues across milestones — v1.3 starts at Phase 8 (v1.2 ended at Phase 7 + inserted 07.1).
+- Roadmap compressed research's 4 buildable phases to 3 (granularity `coarse`): RESET-01 folded into Phase 8 rather than standing alone, and the 8 HARDEN-* todos given their own phase (Phase 10) since they are independent of the nonprod build and two of them are not CI at all.
 
 ### Pending Todos
 
-- [minor] Create a sequence diagram documenting the full system flow — deferred until all functional epics of the backend modernization plan are complete and the project is ready for frontend hand-off. See `.planning/todos/pending/2026-08-01-create-sequence-diagram-documenting-full-system-flow-for-fro.md`.
-- [minor] Bump Java version from 21 to 25 (current LTS) — build.gradle toolchain, Dockerfile (both stages), and CI `java-version` all pinned to 21; not urgent (21 LTS supported until ~2028), but worth doing proactively. See `.planning/todos/pending/2026-08-01-bump-java-version-from-21-to-25-current-lts.md`.
-- [minor] Decide E2ETest-suffix vs. `fastTest`-filter coupling — Phase 7 downgraded 12 classes to the in-process tier but kept the `E2ETest` suffix, since `build.gradle`'s `fastTest` task (run by the pre-commit hook) excludes tests by that literal name pattern; renaming would silently change what runs pre-commit. Three framed options recorded. See `.planning/todos/pending/2026-08-09-decide-e2etest-suffix-vs-fasttest-filter-coupling.md`.
-- [minor] Enable virtual threads in Spring Boot config (`spring.threads.virtual.enabled=true`) — evaluate JDBC/Hibernate and Spring Session JDBC blocking-call pinning risk first. See `.planning/todos/pending/2026-08-02-enable-virtual-threads-in-spring-boot-config.md`.
-- [minor] Add a dependency vulnerability scan (OWASP dependency-check or similar) — no scan exists today despite several manually-pinned third-party libs. See `.planning/todos/pending/2026-08-03-add-dependency-vulnerability-scan.md`. *(Note: this may already be closed by 260813-q1i — check before re-triaging.)*
-- [minor] Evaluate PMD/Checkstyle/SpotBugs — likely redundant given Error Prone + ArchUnit + `docs/CODE_STYLE.md`; only revisit if a concrete gap surfaces. See `.planning/todos/pending/2026-08-03-evaluate-pmd-checkstyle-spotbugs.md`.
-- [minor] Explore an alert-service integration as a separate microservice — speculative/theoretical, not scoped; a genuine second consumer of `kanban.activity` if pursued. See `.planning/todos/pending/2026-08-04-explore-alert-service-as-a-separate-microservice-for-tech-ex.md`.
-- [minor] Revisit Java code comment and JavaDoc verbosity policy. See `.planning/todos/pending/2026-08-11-revisit-java-code-comment-and-javadoc-verbosity-policy.md`.
-- [minor] `UpdateBoardRequestDTO.name`'s optionality rests on the same unexamined assumption D-02 (260811-ufu) declined to accept for `UpdateColumnRequestDTO`. See `.planning/todos/pending/2026-08-11-updateboardrequestdto-name-optionality-rests-on-same-unex.md`.
-- [minor] `TaskMovedEvent` carries no position, unlike `ColumnReorderedEvent`. See `.planning/todos/pending/2026-08-11-taskmovedevent-position-asymmetry-not-fixed-in-s5e-fork-d-e.md`.
-- [minor] `activity_log` has no retention policy, and subtask-completion events materially accelerate its growth rate. See `.planning/todos/pending/2026-08-11-unbounded-activity-log-growth-rate-materially-accelerated-by-s.md`.
-- [minor] `ActivityAction` enum lives in `entity/` but is used across 3 layers — misplaced relative to CLAUDE.md's package convention. See `.planning/todos/pending/2026-08-11-activityaction-enum-misplaced-in-entity-package.md`.
-- [minor] Add OpenAPI breaking-change detection to CI (`oasdiff` against a checked-in baseline). See `.planning/todos/pending/2026-08-11-add-openapi-breaking-change-detection-to-ci.md`.
-- [minor] `POST /signup`'s `Location` header names a resource URI with no `GET` handler yet. See `.planning/todos/pending/2026-08-12-signup-location-header-points-at-a-uri-with-no-get-handler.md`.
-- [minor] 4 remaining `ResponseEntity.created(request.getRequestURI())` sites diverge from signup's fixed `Location` pattern. See `.planning/todos/pending/2026-08-12-four-remaining-created-location-sites-now-diverge-from-signup.md`.
-- [minor] **Add a nonprod/staging environment and wire Playwright E2E tests against a real (non-mocked) deploy** — candidate direction for the next milestone (raised 2026-08-17). See `.planning/todos/pending/2026-08-12-add-nonprod-staging-environment-and-playwright-e2e-ci-gate.md`.
-- [minor] `docs/CODE_STYLE.md` rule 4's MockMvc-shortcut refusal-envelope claim is falsified by 260813-m9x's measurement. See `.planning/todos/pending/2026-08-13-code-style-rule-4-refusal-envelope-claim-falsified-by-m9x.md`.
-- [minor] Two independent session-concurrency enforcers coexist. See `.planning/todos/pending/2026-08-13-two-independent-session-ceiling-enforcers-coexist.md`.
-- [security] Audit penetration-testing and security coverage end-to-end against a checklist like OWASP API Security Top 10 (CSRF posture, signin brute-force/rate-limiting, full-depth IDOR, security response headers, DTO mass-assignment). See `.planning/todos/pending/2026-08-13-audit-penetration-testing-and-security-coverage-identify-gap.md`.
-- [minor] Ratchet `dependencyCheckAnalyze`'s `failBuildOnCVSS` after a real, CPE-matched baseline exists. See `.planning/todos/pending/2026-08-13-ratchet-failbuildoncvss-after-a-real-dependency-check-baseline.md`.
-- [minor] Add `package-ecosystem: "github-actions"` to `.github/dependabot.yml` — was deliberately deferred until Phase 5's deploy.yml rewrite settled; **that condition is now met (Phase 5 shipped 2026-08-17)**, this is actionable. See `.planning/todos/pending/2026-08-13-add-github-actions-ecosystem-to-dependabot-after-deploy-rewrite.md`.
-- [minor] Expand README into a full project architecture showcase. See `.planning/todos/pending/2026-08-16-expand-readme-into-a-full-project-architecture-showcase.md`.
+Six pending todos are now in-scope v1.3 requirements and should be closed by Phase 10, not re-triaged: dependabot `github-actions` ecosystem (HARDEN-01), TruffleHog live-credential pass (HARDEN-02), digest-pinning (HARDEN-03), gradle cache in `run-tests` (HARDEN-04), gitleaks-in-worktree (HARDEN-05), `security-scan.yml` stale comment/actions (HARDEN-06), cookie `Secure` flag (HARDEN-07), README expansion (HARDEN-08).
 
-*(Full list is 20 items as of v1.2 close — see `.planning/todos/pending/` directly for the complete, current set; this is a representative summary, not necessarily exhaustive going forward.)*
+Still open and out of v1.3 scope (representative, see `.planning/todos/pending/` for the complete set — ~20 items):
+
+- [security] Audit penetration-testing/security coverage against OWASP API Security Top 10 (CSRF posture, signin rate-limiting, full-depth IDOR, security headers, DTO mass-assignment).
+- [minor] Full-system sequence diagram for frontend hand-off; bump Java 21 → 25; enable virtual threads (JDBC/Hibernate pinning risk first).
+- [minor] `E2ETest`-suffix vs. `fastTest`-filter coupling decision; two coexisting session-ceiling enforcers; `ActivityAction` enum misplaced in `entity/`.
+- [minor] `activity_log` has no retention policy; `TaskMovedEvent` carries no position; `UpdateBoardRequestDTO.name` optionality assumption.
+- [minor] OpenAPI breaking-change detection in CI; `POST /signup` `Location` points at a URI with no GET handler; 4 `Location` sites diverge from signup's pattern.
+- [minor] Ratchet `dependencyCheckAnalyze`'s `failBuildOnCVSS` after a CPE-matched baseline; evaluate PMD/Checkstyle/SpotBugs; alert-service microservice exploration; JavaDoc verbosity policy; `docs/CODE_STYLE.md` rule 4 claim falsified by 260813-m9x.
 
 ### Blockers/Concerns
 
-None currently open. All blockers recorded during v1.2 (Oracle A1 Flex tenancy sizing, Avro/sealed-interface mapping design, BACKWARD-vs-FULL compatibility mode, production Kafka/Redpanda config) were resolved during the milestone — see `.planning/milestones/v1.2-ROADMAP.md` and `.planning/RETROSPECTIVE.md` for how each was settled.
-
-### Quick Tasks Completed
-
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
-| 260817-tvd | Create authentication sequence diagrams (sign up and sign in flows) for frontend E2E test planning | 2026-08-17 | ce46464 | [260817-tvd-create-authentication-sequence-diagrams-](./quick/260817-tvd-create-authentication-sequence-diagrams-/) |
-
-### Roadmap Evolution (v1.0–v1.2, for reference)
-
-- Phase 04.1 inserted after Phase 4: Flyway database migration implementation (URGENT)
-- Phase 04.2 inserted after Phase 4: Testcontainers Postgres, drop H2 — pulled forward ahead of Phase 5 so the Flyway migrations were CI-exercised before the Neon cutover (URGENT)
-- Phase 6 added: Mock-up Feature Gap Closure — un-defers `GET /boards/{boardId}/full`
-- Phase 7 added: Restructure test folder
-- Phase 07.1 inserted after Phase 7: Address hard blockers and inconsistencies from the frontend-integration-readiness audit (URGENT)
-- Full detail: `.planning/milestones/v1.2-ROADMAP.md`
+- **[Phase 8, open unknown]** Nonprod Redpanda's memory floor is genuinely unmeasured. Production's reserved caps leave ~2.65GB unreserved on the 7.8GB host, and `mem_limit` is a per-container cap, not a host reservation — this project already hit a cgroup-accounting surprise at exactly this boundary. Requires iterative live restart cycles; if no safe value fits, the second-VPS fallback must actually be exercised.
+- **[Phase 9, known trap]** The existing `deploy-to-netcup` job hardcodes its target directory and the Compose project name is pinned, and `cleanup-old-images` deletes every Docker Hub tag except its own run's. A copy-pasted nonprod job that does not change *every* identity axis will mutate live production, and a shared image repo will let production's next push delete nonprod's running tag.
 
 ## Deferred Items
 
-Items acknowledged and carried forward:
+Items acknowledged and carried forward (full v1.2-close table in `.planning/milestones/v1.2-ROADMAP.md`):
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| Endpoint | `GET /boards/{boardId}/full` nested read (FULL-01..03) | Shipped — Phase 6 (GAP-04), 2026-08-09 | 2026-07-31 |
-| Epics | Modernization Epics 3–7 (Flyway/OpenAPI, Redis, Testcontainers project-wide, Observability, K8s) | Partially delivered as v1.2 Phase 04.1/04.2; remainder deferred to future milestones | 2026-07-31 |
-| Kafka | Production (EC2) Kafka deployment (KAFKA-V2-01) | Superseded — shipped as self-hosted Redpanda on Netcup, Phase 5 | 2026-08-01 |
+| Epics | Modernization Epics 3 (OpenAPI half), 4, 6, 7 (Redis, Observability, K8s) | Deferred to future milestones | 2026-07-31 |
 | Kafka | Cursor/keyset pagination on activity feed (PAGE-V2-01) | Deferred to v2 | 2026-08-01 |
-| UAT | Phase 3 human-verification item (production DDL bridge script) | Superseded — deploy target deleted, addressed by v1.2 Phase 5 (INFRA-06) | 2026-08-03 |
-| Seed | SEED-001 Confluent Schema Registry (Avro/Protobuf) | Shipped — Phase 4, corrected from stale `dormant` status at v1.2 close | 2026-08-04 |
-| Infra Polish | INFRA-V2-01..03 (full observability stack, blue-green deploys, multi-broker Redpanda HA) | Deferred to v2 | 2026-08-03 |
-| Schema Registry Polish | SCHEMA-V2-01..02 (pre-merge schema-compatibility CI check, documented compatibility-mode rationale) | Deferred to v2 | 2026-08-03 |
-| Quick task | 260801-p03, 260802-rq5, 260802-ryf (all missing/research-only summaries) | Acknowledged at v1.1 close, re-acknowledged at v1.2 close, still open | 2026-08-17 |
-| Quick task | 260816-hn1 (audit flagged status "unknown") | False positive — SUMMARY.md exists, work is complete (#48, gitleaks scanning, commit 393d0d9); audit tool's status classifier doesn't recognize this SUMMARY's frontmatter shape | 2026-08-17 |
-| Todo | 20 pending todos (see Pending Todos above) | Acknowledged at v1.2 close — none block v1.2's shipped scope; remain in `.planning/todos/pending/` for triage in a future milestone | 2026-08-17 |
+| Infra Polish | INFRA-V2-01..03 (observability stack, blue-green deploys, multi-broker Redpanda HA) | Deferred to v2 | 2026-08-03 |
+| Schema Registry Polish | SCHEMA-V2-01..02 (pre-merge schema-compatibility CI check, compatibility-mode rationale doc) | Deferred to v2 | 2026-08-03 |
+| Frontend coupling | FRONTEND-DISPATCH-V2, FRONTEND-COUPLING-V2 | Deferred — hard-blocked on the frontend repo existing | 2026-08-17 |
+| Nonprod | Per-PR ephemeral environments, ephemeral Neon branch per E2E run, second Neon project | Rejected for v1.3 with written rationale (REQUIREMENTS.md Out of Scope) | 2026-08-17 |
+| Quick task | 260801-p03, 260802-rq5, 260802-ryf (missing/research-only summaries) | Open since v1.1 close | 2026-08-17 |
 
-**Known verification overrides: 14 total (see above)**
+**Known verification overrides: 14 total (recorded at v1.2 close)**
 
 ## Session Continuity
 
-Last session: 2026-08-17 (resumed via /gsd-resume-work)
-Stopped at: v1.2 milestone fully archived. Reconciled Plan 05-06's stale checkpoint bookkeeping against already-live commits, independently re-verified Phase 5 and Phase 07.1 (the latter had no VERIFICATION.md despite being complete), fixed SEED-001's stale tracking status, acknowledged all open backlog items, archived ROADMAP.md/REQUIREMENTS.md to `.planning/milestones/v1.2-*`, gave PROJECT.md a full evolution review, updated RETROSPECTIVE.md, and trimmed this file's accumulated per-plan history now that it's preserved elsewhere.
+Last session: 2026-08-18
+Stopped at: v1.3 roadmap created — Phases 8, 9, 10 with all 19 v1.3 requirements mapped (NONPROD-01..06 + RESET-01 → Phase 8, CI-01..04 → Phase 9, HARDEN-01..08 → Phase 10) and REQUIREMENTS.md traceability filled in.
 Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with `/gsd-new-milestone`. Candidate direction already raised: a nonprod/staging environment + CI gate for a separate frontend repo's Playwright E2E suite (see the Pending Todos entry above) — feasibility not yet researched.
+- `/gsd-plan-phase 8` to plan the nonprod environment bootstrap. Research flagged Phase 8 as the one needing real iteration budget (Redpanda memory floor); Phases 9 and 10 are standard patterns with existing in-repo precedent.

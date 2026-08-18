@@ -53,7 +53,35 @@ Deferred until the frontend repo exists — tracked, not attempted this mileston
 
 ## Traceability
 
-*Filled in by the roadmapper when phases are created.*
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| NONPROD-01 | Phase 8 | Pending |
+| NONPROD-02 | Phase 8 | Pending |
+| NONPROD-03 | Phase 8 | Pending |
+| NONPROD-04 | Phase 8 | Pending |
+| NONPROD-05 | Phase 8 | Pending |
+| NONPROD-06 | Phase 8 | Pending |
+| RESET-01 | Phase 8 | Pending |
+| CI-01 | Phase 9 | Pending |
+| CI-02 | Phase 9 | Pending |
+| CI-03 | Phase 9 | Pending |
+| CI-04 | Phase 9 | Pending |
+| HARDEN-01 | Phase 10 | Pending |
+| HARDEN-02 | Phase 10 | Pending |
+| HARDEN-03 | Phase 10 | Pending |
+| HARDEN-04 | Phase 10 | Pending |
+| HARDEN-05 | Phase 10 | Pending |
+| HARDEN-06 | Phase 10 | Pending |
+| HARDEN-07 | Phase 10 | Pending |
+| HARDEN-08 | Phase 10 | Pending |
+
+**Coverage: 19/19 v1 requirements mapped, each to exactly one phase. No orphans, no duplicates.**
+
+Phase mapping rationale:
+
+- **Phase 8 (Isolated Nonprod Environment, Live and Resettable)** — every NONPROD-* requirement plus RESET-01. NONPROD-03 (second Redpanda broker) cannot be separated from NONPROD-01/06: the broker *is* part of the Compose stack, and NONPROD-06's memory floor is that broker's. RESET-01 was folded in rather than left as a one-requirement phase; it needs the running stack to verify against and shares Phase 8's manual, curl-driven verification mode.
+- **Phase 9 (Nonprod Continuous Deploy & Scoped CI Credentials)** — all four CI-* requirements. CI-02 (GitHub Environments) is sequenced *within* this phase ahead of CI-01, so the nonprod job never runs with unscoped production secrets and then gets re-gated afterwards.
+- **Phase 10 (CI & Deploy Hardening)** — all eight HARDEN-* requirements, kept as their own phase because they have no dependency on the nonprod build, two of them (HARDEN-07 cookie flag, HARDEN-08 README) are not CI work at all, and folding them into Phase 9 would blur that phase's goal. Ordered last so HARDEN-03's digest-pinning covers `deploy.yml`'s final job graph including the new nonprod jobs, and so HARDEN-07's `Secure` cookie flag lands only once every deployed environment is TLS-served.
 
 ---
-*Last updated: 2026-08-17 — v1 requirements defined, ready for roadmap*
+*Last updated: 2026-08-18 — traceability filled in by roadmapper (v1.3 Phases 8-10)*
