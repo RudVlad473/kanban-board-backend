@@ -3,6 +3,7 @@ created: 2026-08-16T19:15:00.000Z
 title: security-scan.yml's Set up Java comment is now stale, and it still carries checkout@v3/setup-java@v4
 area: tooling
 severity: minor
+resolves_phase: 10
 files:
   - .github/workflows/security-scan.yml
 ---

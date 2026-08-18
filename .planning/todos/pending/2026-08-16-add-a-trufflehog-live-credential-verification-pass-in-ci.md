@@ -3,6 +3,7 @@ created: 2026-08-16T12:13:00.000Z
 title: Add a TruffleHog live-credential verification pass in CI
 area: security
 severity: minor
+resolves_phase: 10
 files:
   - .github/workflows/secret-scan.yml
 ---

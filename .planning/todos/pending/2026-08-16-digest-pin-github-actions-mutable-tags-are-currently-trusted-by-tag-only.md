@@ -3,6 +3,7 @@ created: 2026-08-16T19:15:00.000Z
 title: Digest-pin GitHub Actions -- mutable tags are currently trusted by tag only, inconsistent with this repo's own scanner precedent
 area: tooling
 severity: minor
+resolves_phase: 10
 files:
   - .github/workflows/deploy.yml
   - .github/workflows/security-scan.yml

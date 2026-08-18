@@ -3,7 +3,7 @@ created: 2026-08-13T20:05:00.000Z
 title: Add package-ecosystem "github-actions" to dependabot.yml once deploy.yml settles
 area: tooling
 severity: minor
-resolves_phase: 5
+resolves_phase: 10
 files:
   - .github/dependabot.yml
 ---

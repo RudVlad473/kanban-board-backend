@@ -3,6 +3,7 @@ created: 2026-08-16T12:13:00.000Z
 title: gitleaks pre-commit hook cannot scan a git worktree created outside the main repo tree
 area: tooling
 severity: minor
+resolves_phase: 10
 files:
   - .githooks/pre-commit
 ---

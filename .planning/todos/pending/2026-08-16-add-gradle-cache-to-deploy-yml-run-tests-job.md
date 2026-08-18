@@ -3,6 +3,7 @@ created: 2026-08-16T19:15:00.000Z
 title: Add cache 'gradle' to deploy.yml's run-tests Set up Java step
 area: tooling
 severity: minor
+resolves_phase: 10
 files:
   - .github/workflows/deploy.yml
 ---

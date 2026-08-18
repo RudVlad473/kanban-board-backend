@@ -3,6 +3,7 @@ created: 2026-08-10T20:00:00.000Z
 title: Set the Secure flag on the session cookie once real TLS exists (Phase 5)
 area: backend
 severity: security
+resolves_phase: 10
 files:
   - src/main/resources/application.properties:56
   - src/main/resources/application-test.properties:36

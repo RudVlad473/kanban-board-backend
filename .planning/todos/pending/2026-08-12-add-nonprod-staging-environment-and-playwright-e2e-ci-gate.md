@@ -3,6 +3,7 @@ created: 2026-08-12T00:00:00.000Z
 title: Add a nonprod/staging environment and wire Playwright E2E tests against real (non-mocked) deploys
 area: infra
 severity: minor
+resolves_phase: 8
 files: []
 ---
 

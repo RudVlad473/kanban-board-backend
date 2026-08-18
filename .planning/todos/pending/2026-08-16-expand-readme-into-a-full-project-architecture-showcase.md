@@ -3,6 +3,7 @@ created: 2026-08-16T11:03:42.954Z
 title: Expand README into a full project architecture showcase
 area: docs
 severity: minor
+resolves_phase: 10
 files:
   - README.md
   - docs/ARCHITECTURE.md
