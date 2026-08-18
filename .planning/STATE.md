@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 Phase: 8 of 10 (Isolated Nonprod Environment, Live and Resettable)
 Plan: — (not yet planned)
 Status: Ready to execute
-Last activity: 2026-08-18 — v1.3 roadmap created (3 phases, 19/19 requirements mapped)
+Last activity: 2026-08-18 - Completed quick task 260818-ied: Add CI-05 requirement to Phase 9 (Avro schema-registry sync automation)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -72,6 +72,12 @@ Still open and out of v1.3 scope (representative, see `.planning/todos/pending/`
 
 - **[Phase 8, open unknown]** Nonprod Redpanda's memory floor is genuinely unmeasured. Production's reserved caps leave ~2.65GB unreserved on the 7.8GB host, and `mem_limit` is a per-container cap, not a host reservation — this project already hit a cgroup-accounting surprise at exactly this boundary. Requires iterative live restart cycles; if no safe value fits, the second-VPS fallback must actually be exercised.
 - **[Phase 9, known trap]** The existing `deploy-to-netcup` job hardcodes its target directory and the Compose project name is pinned, and `cleanup-old-images` deletes every Docker Hub tag except its own run's. A copy-pasted nonprod job that does not change *every* identity axis will mutate live production, and a shared image repo will let production's next push delete nonprod's running tag.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260818-ied | Add CI-05 requirement to Phase 9: automate Avro schema registry registration for nonprod as part of the CI deploy pipeline, extending deploy.yml with a schema-registration step (mirroring CI-01's flyway-verify-nonprod/deploy-to-nonprod pattern) so production and nonprod schema registries stay in sync on every deploy without a manual step | 2026-08-18 | b985989 | [260818-ied-add-ci-05-requirement-to-phase-9-automat](./quick/260818-ied-add-ci-05-requirement-to-phase-9-automat/) |
 
 ## Deferred Items
 
