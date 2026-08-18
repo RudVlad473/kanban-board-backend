@@ -104,8 +104,16 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 09-01-PLAN.md — GitHub Environments, the confined `deploy-nonprod` VM identity, the nonprod Docker Hub repository, and an end-to-end tracer deploy (CI-01, CI-02, CI-03)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 09-02-PLAN.md — repository-secret sweep, `health-check-nonprod` bounded poll, and the nonprod image-retention pair (CI-02, CI-03, CI-04)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 09-03-PLAN.md — automated Avro schema registration against both registries, ordered ahead of nonprod's app start (CI-05)
 
 ### Phase 10: CI & Deploy Hardening
