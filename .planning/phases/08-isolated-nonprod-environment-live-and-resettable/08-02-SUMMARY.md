@@ -12,13 +12,14 @@ provides:
   - ResetService/ResetTruncateService (@Profile("nonprod")) -- a real-broker, real-Postgres-proven two-store reset (Kafka activity topics + every domain/session table)
   - ResetController + NonprodResetSecurityConfiguration (@Profile("nonprod")) -- POST /admin/reset, shared-secret-authenticated, profile-gated, security-chain-isolated from production
   - Three new test classes proving the 204/403 contract, idempotency, listener-restart, migration-history preservation, and profile-absence in a non-nonprod context
-affects: [08-03-live-deploy-and-runbook-record (not yet planned/executed -- Task 3 of this plan is blocked, see below)]
+  - A live-verified rollout of the reset-capable image onto the deployed nonprod stack, with a real curl contract proof recorded in docs/INFRA_RUNBOOK.md
+affects: []
 
 # Actuals (#2632)
 actuals:
-  tokens: 58000
-  tasks: 2
-  commits: 2
+  tokens: 60000
+  tasks: 3
+  commits: 3
 
 # Tech tracking
 tech-stack:
@@ -39,13 +40,15 @@ key-files:
     - src/test/java/com/vrudenko/kanban_board/security/ResetEndpointProfileGatingTest.java
   modified:
     - src/main/java/com/vrudenko/kanban_board/constant/ApiPaths.java
+    - docs/INFRA_RUNBOOK.md
 
 key-decisions:
-  - "Task 3 (live deploy + curl proof against the real nonprod stack) was not attempted -- its own <precondition> was checked and found unmet: this plan's two commits exist only on this worktree's local branch, not pushed, not merged to master, and origin/master itself is still behind plan 08-01. gh run list confirmed the most recent CI/CD run corresponds to the commit already running in production (6755c84, per 08-01-SUMMARY.md), not this plan's work. Deploying without a real image built from these commits would either fail the pull outright or silently deploy a stale/wrong image -- the plan's own live_infrastructure_context explicitly forbids fabricating a tag or skipping the precondition."
+  - "Task 3 (live deploy + curl proof against the real nonprod stack) was originally not attempted in the session that produced Tasks 1-2 -- its own <precondition> was checked and found unmet at that time: those two commits existed only on a local worktree branch, unmerged. The orchestrator subsequently merged commits 65e3370/818c14a to master and pushed; CI run 32141273073 built and pushed image rudenkovladimir/kanban-board-backend:777cb27 to Docker Hub, satisfying Task 3's precondition. This dispatch re-ran Task 3 only, against that now-real image tag, in a fresh worktree based on 777cb27."
   - "ResetServiceE2ETest and ResetControllerE2ETest both extend AbstractKafkaContainerTest directly (not AbstractAppTest/AbstractAppE2ETest), matching the plan's read_first pointer to that harness's own Javadoc reasoning (no unrelated ~20-entity fixture noise racing the broker under test). Domain fixtures for ResetServiceE2ETest are created explicitly through the real services (UserService/BoardService/ColumnService/TaskService) rather than via a shared fixture base."
   - "TDD RED-then-GREEN was not reconstructed as two separate commits per task, despite this repo's own precedent of test(...)/feat(...) commit pairs for tdd=\"true\" tasks. This repo's pre-commit hook runs fastTest (which requires a full, successful compileTestJava) before allowing any commit -- a test file referencing not-yet-existing production symbols (ApiPaths.RESET, ResetService, ResetTruncateService for Task 1; ResetController, NonprodResetSecurityConfiguration for Task 2) cannot compile, so a true compile-failing RED commit cannot pass this repo's own hook. Reconstructing a deliberately-broken-but-compiling stub purely to manufacture an intermediate failing-test commit was judged not worth the added complexity once the full, real implementation was already written and independently verified end-to-end against a real Testcontainers Postgres + Redpanda broker. Both tasks were committed as a single feat(...) commit each instead. See TDD Gate Compliance below."
+  - "Task 3's reset token was regenerated on the VM via the plan's literal `openssl rand -base64 48` command rather than reusing the 64-hex-character APP_RESET_TOKEN value plan 08-01 had already placed in .env.nonprod as a stack-shape placeholder (that file's key existed before this task, but the endpoint consuming it had never been deployed) -- following the plan's <action> text exactly rather than treating the pre-existing placeholder as sufficient."
 
-requirements-completed: [RESET-01 (partial -- code delivered and proven in tests; live deployment/curl proof deferred, see Deviations)]
+requirements-completed: [RESET-01]
 
 coverage:
   - id: D-01
@@ -77,29 +80,30 @@ coverage:
     requirement: "RESET-01"
     verification:
       - kind: other
-        ref: "NOT PERFORMED -- Task 3's precondition (a Docker Hub image built from this plan's commits) is unmet; see Deviations and the checkpoint below"
-        status: fail
+        ref: "docs/INFRA_RUNBOOK.md 'Nonprod reset endpoint — Plan 08-02' section: correct-token call -> 204, all eight tables 0/0 and flyway_schema_history unchanged at 7, both Kafka topics' log-start offset equal to high-watermark; wrong-token and absent-header calls both 403 ACCESS_DENIED with byte-identical bodies; same call against production -> 401 (not 204), production health 200, production row counts unchanged (3 users/2 boards, matching plan 08-01's baseline); post-reset board create appears in the activity feed and a second/third reset call both return 204 (idempotent, including against an already-empty store)"
+        status: pass
     human_judgment: true
 
 # Metrics
-duration: ~75min
+duration: ~95min (Tasks 1-2 ~75min in the original session; Task 3 ~20min in this re-dispatch, after the merge/CI/image-build precondition was satisfied by the orchestrator)
 completed: 2026-08-18
-status: incomplete
+status: complete
 ---
 
 # Phase 8 Plan 2: Isolated Nonprod Environment, Live and Resettable Summary
 
 **A profile-gated, shared-secret-authenticated `POST /admin/reset` endpoint that truncates nonprod's
 Postgres tables and trims its Kafka activity topics to zero, proven by real-broker/real-Postgres
-tests and an HTTP-level contract test -- but not yet deployed or curl-proven against the live nonprod
-stack, because Task 3's own precondition (an image built from this plan's commits) is unmet.**
+tests, an HTTP-level contract test, and a live curl against the deployed nonprod hostname that
+genuinely emptied both stores while proving production has no such route.**
 
 ## Performance
 
-- **Duration:** ~75 min (Tasks 1-2; Task 3 not attempted)
-- **Completed:** 2026-08-18 (Tasks 1-2 only)
-- **Tasks:** 2 of 3 (Task 3 blocked -- see Deviations)
-- **Files modified:** 8 (7 created, 1 modified)
+- **Duration:** ~95 min total (Tasks 1-2: ~75 min in the original session; Task 3: ~20 min in a
+  re-dispatch after the orchestrator merged Tasks 1-2 to master and CI built/published the image)
+- **Completed:** 2026-08-18
+- **Tasks:** 3 of 3
+- **Files modified:** 9 (7 created, 2 modified: `ApiPaths.java`, `docs/INFRA_RUNBOOK.md`)
 
 ## Accomplishments
 
@@ -124,6 +128,22 @@ stack, because Task 3's own precondition (an image built from this plan's commit
   (2 cases, proves zero reset beans register outside `nonprod`). All 15 pass.
 - Full `./gradlew test` (466 tests across the whole suite, including the JaCoCo coverage ratchet and
   all four ArchUnit `LayeringArchTest`/`TestPlacementArchTest` rules) is green.
+- **Task 3, live against the deployed nonprod stack:** rolled `app-nonprod` to image tag `777cb27`
+  (CI run `32141273073`), confirmed the `nonprod` profile active from the boot log, created a full
+  user/board/column/task/subtask chain through the public API and confirmed all four resulting
+  events in the activity feed, then called `POST /api/admin/reset` with the correct token from
+  off-VM: `204`, empty body, no `Set-Cookie`. Independently re-queried all eight Postgres tables
+  (all `0`, `flyway_schema_history` unchanged at `7`) and both Kafka topics via `rpk topic
+  describe` (`kanban.activity` and `kanban.activity.dlt` both log-start-offset ==
+  high-watermark). Wrong-token and absent-header calls both returned `403` with byte-identical
+  `ACCESS_DENIED` ProblemDetail bodies. The same call against production's hostname returned
+  `401` (not `204`) -- production's own catch-all security chain, since no reset bean is
+  registered there -- with production's health endpoint staying `200` and its row counts
+  unchanged (`3` users / `2` boards, matching plan 08-01's own recorded baseline). Created one
+  more board post-reset and confirmed it landed in the activity feed (consumer survived), then
+  called reset twice more, both returning `204` -- once against real remaining state, once
+  against an already-empty store. Recorded in full in `docs/INFRA_RUNBOOK.md`'s new "Nonprod
+  reset endpoint -- Plan 08-02" section.
 
 ## Task Commits
 
@@ -133,9 +153,12 @@ Each task was committed atomically:
    `65e3370` (feat)
 2. **Task 2: The endpoint -- profile-gated controller, constant-time token check, and a
    profile-absence proof** - `818c14a` (feat)
+3. **Task 3: Deploy the reset-capable image to nonprod and prove the curl contract live** -
+   `c83d36e` (docs, `docs/INFRA_RUNBOOK.md`)
 
-_Note: both tasks carry `tdd="true"` in the plan; see "TDD Gate Compliance" below for why each
-landed as one `feat(...)` commit rather than a separate `test(...)`/`feat(...)` pair._
+_Note: both tasks 1-2 carry `tdd="true"` in the plan; see "TDD Gate Compliance" below for why each
+landed as one `feat(...)` commit rather than a separate `test(...)`/`feat(...)` pair. Task 3 carries
+no `tdd` attribute -- it is a live-infrastructure verification task, not a code-behavior task._
 
 ## TDD Gate Compliance
 
@@ -165,6 +188,9 @@ step itself. Both tasks' final states were independently verified: `./gradlew te
 - `src/test/java/com/vrudenko/kanban_board/e2e/reset/ResetServiceE2ETest.java` - new, real-broker/real-Postgres proof
 - `src/test/java/com/vrudenko/kanban_board/e2e/reset/ResetControllerE2ETest.java` - new, real-socket HTTP contract proof
 - `src/test/java/com/vrudenko/kanban_board/security/ResetEndpointProfileGatingTest.java` - new, profile-absence proof
+- `docs/INFRA_RUNBOOK.md` - new "Nonprod reset endpoint -- Plan 08-02" section: rollout sequence,
+  live curl contract (204/403), independent Postgres/Kafka verification, production negative
+  result, consumer-survival/idempotency proof, token-rotation operator note
 
 ## Decisions Made
 
@@ -199,36 +225,35 @@ step itself. Both tasks' final states were independently verified: `./gradlew te
   returns `0`; full `./gradlew test` re-run after the fix stayed green (466/466).
 - **Committed in:** `65e3370` (Task 1 commit)
 
-### Blocking Issues (not auto-fixed -- checkpoint below)
+### Blocking Issues (resolved by a later dispatch)
 
-**2. [Precondition unmet] Task 3's live-deploy precondition could not be satisfied**
-- **Found during:** Task 3, before any live-infrastructure action was taken
+**2. [Precondition unmet, then resolved] Task 3's live-deploy precondition was initially unmet**
+- **Found during:** Task 3, in the original session, before any live-infrastructure action was
+  taken
 - **Issue:** Task 3's `<precondition>` requires "the commit from Tasks 1-2 has been built and pushed
   to Docker Hub as `rudenkovladimir/kanban-board-backend:<tag>` ... and that tag is resolvable by
-  `docker pull` from the VM." This plan's two commits exist only on this worktree's local branch
-  (`worktree-agent-a6ea9cdf861ee2364`), never pushed to `origin`, never merged to `master`. `origin/master`
-  itself (`6755c84`) is still behind plan 08-01's own work. `gh run list --workflow=deploy.yml`
-  confirms the most recent CI/CD run built the commit already running in production
-  (`6755c84`, per `08-01-SUMMARY.md`), not anything from this plan.
-- **Action taken:** None on the live nonprod/production infrastructure. No VM SSH session was
-  opened, no reset token was generated, `docker-compose.nonprod.yml`/`.env.nonprod` were not
-  touched, and `docs/INFRA_RUNBOOK.md` was not edited. This matches the plan's own explicit
-  instruction: "do not fabricate a tag or skip the precondition -- halt with a clear checkpoint
-  report."
-- **Resolution required:** A human (or the orchestrator, once this worktree's commits are merged to
-  `master`) needs to either (a) merge this plan's two commits to `master` and let the existing
-  `deploy.yml` CI job build and push a real image tag, then re-dispatch Task 3 with that tag, or
-  (b) build and push the image manually from these exact commits. Task 3 cannot be completed inside
-  this worktree-isolated session.
+  `docker pull` from the VM." At that point this plan's two commits existed only on a worktree's
+  local branch, never pushed to `origin`, never merged to `master`; `origin/master` was still behind
+  plan 08-01's own work, and `gh run list --workflow=deploy.yml` confirmed the most recent CI/CD run
+  built the commit already running in production (`6755c84`), not anything from this plan.
+- **Action taken at that time:** None on the live nonprod/production infrastructure. Matched the
+  plan's own explicit instruction: "do not fabricate a tag or skip the precondition -- halt with a
+  clear checkpoint report."
+- **Resolution:** The orchestrator subsequently merged commits `65e3370`/`818c14a` to `master` and
+  pushed to `origin`. CI run `32141273073` (tests, build, Flyway verify, deploy-to-netcup) completed
+  successfully and published `rudenkovladimir/kanban-board-backend:777cb27` to Docker Hub; production
+  was confirmed healthy (`200`) after that redeploy. This dispatch re-ran Task 3 only, from a fresh
+  worktree based on `777cb27`, with the precondition now genuinely satisfied -- see the "Live
+  reset-endpoint rollout" accomplishment above and `docs/INFRA_RUNBOOK.md`'s new section for the
+  full live proof.
 
 ---
 
-**Total deviations:** 1 auto-fixed (bug), 1 blocking (Task 3 precondition, unresolved -- see
-checkpoint)
-**Impact on plan:** Tasks 1-2 are complete, fully tested, and merge-ready. Task 3 (live deploy +
-curl proof + runbook record) did not run at all. RESET-01 is therefore only partially delivered by
-this plan: the mechanism exists and is proven in tests, but has not yet been proven live against the
-deployed nonprod stack, and `docs/INFRA_RUNBOOK.md` carries no record of it yet.
+**Total deviations:** 1 auto-fixed (bug), 1 precondition-blocked-then-resolved (Task 3, closed by
+this dispatch)
+**Impact on plan:** All three tasks are now complete. RESET-01 is fully delivered: the mechanism
+exists, is proven in tests, and is proven live against the deployed nonprod stack, with the full
+record in `docs/INFRA_RUNBOOK.md`.
 
 ## Issues Encountered
 
@@ -242,27 +267,34 @@ deployed nonprod stack, and `docs/INFRA_RUNBOOK.md` carries no record of it yet.
 
 ## User Setup Required
 
-None for Tasks 1-2 (no new environment variables, no new external accounts). Task 3, once
-unblocked, will need the operator (or a re-dispatched executor with SSH access already established
-by Plan 08-01) to generate `APP_RESET_TOKEN` on the VM and roll `IMAGE_TAG` -- see that task's own
-`<action>` steps in `08-02-PLAN.md`, unchanged by this session.
+None. Task 3 generated its own `APP_RESET_TOKEN` on the VM (`openssl rand -base64 48`, written
+directly into `/opt/deploy/kanban-board-nonprod/.env.nonprod`, mode `600`, owned by `deploy`,
+never typed into this session's transcript or any committed file) and rolled `IMAGE_TAG` itself
+via SSH using the deploy key already established by Plan 08-01 -- no manual operator action
+needed for any of the three tasks in this plan.
 
 ## Next Phase Readiness
 
-- **Not ready to close this plan.** `RESET-01` is only partially satisfied: `ResetController`/
-  `ResetService`/`ResetTruncateService` exist, are profile-gated, and are proven correct against
-  real infrastructure in tests -- but the plan's own must-have truths that require a *live* curl
-  against the deployed nonprod hostname (empty-baseline proof, production-absence proof, the
-  `docs/INFRA_RUNBOOK.md` record) are not yet met.
-- Task 3 needs this plan's two commits (`65e3370`, `818c14a`) merged to `master`, a resulting CI
-  image tag, and then to be re-run (either by a fresh dispatch of this plan's Task 3, or a follow-up
-  quick task) against the already-live nonprod stack from Plan 08-01.
-- No changes were made to any shared/live infrastructure by this session -- production and the
-  already-live nonprod stack from Plan 08-01 are both untouched.
+- **Ready to close this plan.** `RESET-01` is fully satisfied: `ResetController`/`ResetService`/
+  `ResetTruncateService`/`NonprodResetSecurityConfiguration` exist, are profile-gated, are proven
+  correct against real infrastructure in tests, and are now proven live against the deployed
+  nonprod hostname -- empty-baseline proof, production-absence proof, idempotency, and consumer
+  survival are all recorded with real command output in `docs/INFRA_RUNBOOK.md`'s "Nonprod reset
+  endpoint -- Plan 08-02" section.
+- Nonprod now carries the reset-capable image (`777cb27`) and both nonprod stores are empty as a
+  direct result of this task's own live verification calls -- a genuinely clean baseline, not an
+  artifact requiring cleanup.
+- Production was not touched by any part of this plan: `SecurityConfiguration.java` is unmodified
+  (verified by `git diff --name-only`), and production's health/row-counts were independently
+  confirmed unchanged before and after Task 3's live calls.
+- No blockers remain for this plan. A future Playwright E2E suite (out of this plan's scope) can
+  now rely on `POST /api/admin/reset` as a real `beforeEach` baseline against the live nonprod
+  deploy, per this plan's original purpose statement.
 
 ---
 *Phase: 08-isolated-nonprod-environment-live-and-resettable*
-*Completed: 2026-08-18 (Tasks 1-2 only; Task 3 blocked)*
+*Completed: 2026-08-18 (all 3 tasks; Task 3 executed in a later re-dispatch after the merge/CI/image
+precondition was satisfied)*
 
 ## Self-Check: PASSED
 
@@ -273,5 +305,13 @@ by Plan 08-01) to generate `APP_RESET_TOKEN` on the VM and roll `IMAGE_TAG` -- s
 - FOUND: `src/test/java/com/vrudenko/kanban_board/e2e/reset/ResetServiceE2ETest.java`
 - FOUND: `src/test/java/com/vrudenko/kanban_board/e2e/reset/ResetControllerE2ETest.java`
 - FOUND: `src/test/java/com/vrudenko/kanban_board/security/ResetEndpointProfileGatingTest.java`
+- FOUND: `docs/INFRA_RUNBOOK.md` section "Nonprod reset endpoint — Plan 08-02"
 - FOUND commit: `65e3370`
 - FOUND commit: `818c14a`
+- FOUND commit: `c83d36e`
+- Live verification (not a repo artifact, recorded as command output in docs/INFRA_RUNBOOK.md):
+  correct-token call returned 204 and all eight nonprod tables independently re-queried at 0;
+  wrong-token and absent-header calls both returned 403 with identical ACCESS_DENIED bodies;
+  the same call against production returned 401 (not 204) with production health staying 200 and
+  row counts unchanged; a post-reset board create appeared in the activity feed and two further
+  reset calls both returned 204 (idempotent, including against an already-empty store).
