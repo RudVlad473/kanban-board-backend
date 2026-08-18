@@ -41,4 +41,9 @@ public final class ApiPaths {
     // SecurityConfiguration -- unlike SWAGGER_DOCS_PATH, which is sourced from a genuinely
     // configurable property (springdoc.api-docs.path) and has no fixed default to name here.
     public static final String ACTUATOR_HEALTH = "/actuator/health";
+
+    // Plan 08-02, RESET-01: the nonprod-only data-reset endpoint (@Profile("nonprod")-gated,
+    // ResetController). Like ACTUATOR_HEALTH above, the externally resolvable URL is
+    // /api/admin/reset because server.servlet.context-path is /api.
+    public static final String RESET = "/admin/reset";
 }
