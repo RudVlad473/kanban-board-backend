@@ -55,7 +55,7 @@ Full details: [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
 **Milestone Goal:** Stand up a resource-shrunk, production-isolated nonprod environment on the existing Netcup VPS — its own Neon branch, its own Redpanda broker/registry, its own HTTPS hostname — deployed continuously by CI and resettable to a known state, so a future frontend repo's Playwright E2E suite has a real, non-mocked target; bundled with the CI/deploy hardening todos that v1.2's deploy.yml rewrite unblocked.
 
 - [ ] **Phase 8: Isolated Nonprod Environment, Live and Resettable** - A second, production-isolated stack (Neon branch + own Redpanda + own HTTPS hostname) running on the existing VPS with measured resource caps and a curl-driven data reset
-- [ ] **Phase 9: Nonprod Continuous Deploy & Scoped CI Credentials** - Every push to master redeploys and health-checks nonprod through GitHub Environments-scoped secrets, with zero ability to disturb production
+- [ ] **Phase 9: Nonprod Continuous Deploy & Scoped CI Credentials** - Every push to master redeploys, re-registers Avro schemas for, and health-checks nonprod through GitHub Environments-scoped secrets, with zero ability to disturb production
 - [ ] **Phase 10: CI & Deploy Hardening** - The eight accumulated hardening todos: dependabot actions ecosystem, TruffleHog verification, digest-pinned actions, gradle cache, gitleaks worktree fix, security-scan cleanup, `Secure` session cookie, README architecture showcase
 
 ## Phase Details
@@ -90,15 +90,16 @@ Plans:
 
 ### Phase 9: Nonprod Continuous Deploy & Scoped CI Credentials
 
-**Goal**: Nonprod stays current with master automatically — deployed, migrated, and health-verified by CI on every push — through credentials scoped so the nonprod path cannot reach, overwrite, or degrade production.
+**Goal**: Nonprod stays current with master automatically — deployed, migrated, health-verified, and schema-registered by CI on every push, with the same automated step keeping production's and nonprod's Avro schema registries in step with the deployed code — through credentials scoped so the nonprod path cannot reach, overwrite, or degrade production.
 **Depends on**: Phase 8 (a manually-proven-healthy nonprod stack to automate against, matching this project's own tracer-then-automate precedent from v1.2 Phase 5)
-**Requirements**: CI-01, CI-02, CI-03, CI-04
+**Requirements**: CI-01, CI-02, CI-03, CI-04, CI-05
 **Success Criteria** (what must be TRUE):
 
   1. A push to master leaves nonprod running that commit's image, deployed within the same workflow run as production's deploy — neither job waits on, gates, nor fails because of the other
   2. The nonprod deploy is reported successful only after nonprod's health endpoint actually answers 200; a nonprod stack that fails to come up fails the workflow visibly instead of passing silently
   3. The nonprod deploy job can read only staging-scoped credentials — production's secrets are unreachable from it, because both environments' secrets are scoped through GitHub Environments rather than shared unscoped repository secrets
   4. Running a production deploy and a nonprod deploy back to back leaves both stacks running their own correct image: neither deploy converges onto the other's directory, containers, network, or volumes, and neither run's image-cleanup sweep deletes the tag the other environment is currently running
+  5. A push to master that introduces or changes an Avro schema leaves that schema present in both the production and the nonprod registry with no operator running the registrar by hand; a schema change the registry rejects as incompatible fails the deploy visibly rather than surfacing later as a runtime publish failure
 
 **Plans**: TBD
 
