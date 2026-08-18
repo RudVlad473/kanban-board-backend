@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Nonprod Environment & CI Hardening
-current_phase: 9
+current_phase: 09
 current_phase_name: Nonprod Continuous Deploy & Scoped CI Credentials
 status: executing
-stopped_at: Phase 9 context gathered
-last_updated: "2026-08-18T18:19:14.782Z"
+stopped_at: Phase 9 plan 01 Task 3 attempted -- deploy.yml live on master but blocked on NETCUP_HOST_FINGERPRINT defect
+last_updated: "2026-08-18T20:15:21.663Z"
 last_activity: 2026-08-18
 last_activity_desc: v1.3 roadmap created (3 phases, 19/19 requirements mapped)
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 7
-  completed_plans: 3
+  completed_plans: 5
   percent: 33
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-17)
 
 **Core value:** The backend is feature-complete against its own mock-ups and live in production; the differentiator now is proving the whole system — including a real frontend against a real deploy — is reliable.
-**Current focus:** Phase 08 — isolated-nonprod-environment-live-and-resettable
+**Current focus:** Phase 09 — Nonprod Continuous Deploy & Scoped CI Credentials
 
 ## Current Position
 
-Phase: 9 — Nonprod Continuous Deploy & Scoped CI Credentials
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-08-18 — Phase 08 complete, transitioned to Phase 9
+Phase: 09 (Nonprod Continuous Deploy & Scoped CI Credentials) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 09
+Last activity: 2026-08-18 — Phase 09 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -72,6 +72,7 @@ Still open and out of v1.3 scope (representative, see `.planning/todos/pending/`
 
 - **[Phase 8, open unknown]** Nonprod Redpanda's memory floor is genuinely unmeasured. Production's reserved caps leave ~2.65GB unreserved on the 7.8GB host, and `mem_limit` is a per-container cap, not a host reservation — this project already hit a cgroup-accounting surprise at exactly this boundary. Requires iterative live restart cycles; if no safe value fits, the second-VPS fallback must actually be exercised.
 - **[Phase 9, known trap]** The existing `deploy-to-netcup` job hardcodes its target directory and the Compose project name is pinned, and `cleanup-old-images` deletes every Docker Hub tag except its own run's. A copy-pasted nonprod job that does not change *every* identity axis will mutate live production, and a shared image repo will let production's next push delete nonprod's running tag.
+- Phase 09 plan 01 Task 3: deploy.yml wired and pushed to master (58bdee9, 8c6a9d5), but the live run (32179763451) failed both deploy-to-netcup and deploy-to-nonprod on an SSH host-key fingerprint mismatch -- NETCUP_HOST_FINGERPRINT was mis-populated in the production/staging GitHub Environments during Task 2. Production/nonprod confirmed unaffected (both healthy, both on pre-run images). Requires human reset of the secret (see 09-01-SUMMARY.md User Setup Required) before re-run and plan completion.
 
 ### Quick Tasks Completed
 
@@ -97,9 +98,9 @@ Items acknowledged and carried forward (full v1.2-close table in `.planning/mile
 
 ## Session Continuity
 
-Last session: 2026-08-18T15:50:45.804Z
-Stopped at: Phase 9 context gathered
-Resume file: C:/Dev/Repos/kanban-board-backend/.planning/phases/09-nonprod-continuous-deploy-scoped-ci-credentials/09-CONTEXT.md
+Last session: 2026-08-18T20:15:21.638Z
+Stopped at: Phase 9 plan 01 Task 3 attempted -- deploy.yml live on master but blocked on NETCUP_HOST_FINGERPRINT defect
+Resume file: C:/Dev/Repos/kanban-board-backend/.planning/phases/09-nonprod-continuous-deploy-scoped-ci-credentials/09-01-SUMMARY.md
 
 ## Operator Next Steps
 
