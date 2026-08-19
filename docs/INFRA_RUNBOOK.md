@@ -2039,14 +2039,27 @@ neither invocation re-derives the tag or substitutes a floating one (this projec
 
 ### The exit-code chain that makes an incompatible schema redden the run
 
-Four links, each necessary: `AvroSchemaRegistrar.registerThenSetCompatibility` throws
+Five links, each necessary: `AvroSchemaRegistrar.registerThenSetCompatibility` throws
 `IllegalStateException` on an unrecoverable registry error (an incompatible schema, or a
 genuinely unreachable registry) → the JVM exits non-zero → `docker compose run --rm` propagates
-the container's exit code → `appleboy/ssh-action`'s shell fails the step on that non-zero exit.
-Neither invocation is wrapped in `continue-on-error`, an error-suppressing shell flag, or any
-other construct that would swallow that exit code — verified mechanically: neither job block
-contains the literal string `continue-on-error`, and neither script suppresses its own exit
-status.
+the container's exit code → an explicit `set -e` as the first line of the script aborts the
+remaining commands → `appleboy/ssh-action`'s shell process exits non-zero, failing the step.
+
+**The fourth link was missing when this section was first written, and live verification is what
+caught it (2026-08-19).** `appleboy/ssh-action` has no fail-fast behavior of its own — it runs a
+multi-line `script:` under a plain shell, and a failing command mid-script does not stop later
+lines from running unless the script itself opts in. A live red-path test against
+`deploy-to-nonprod` (deliberately pointing the registrar at an unreachable host) showed the
+registrar correctly throwing `IllegalStateException` and `docker compose run` correctly exiting 1
+at the OS level (verified directly over SSH), yet the script continued past it and `up -d
+app-nonprod` still ran, with the job reporting `success`. A first fix attempt added
+`script_stop: true` to the action's `with:` block — that input does not exist on
+`appleboy/ssh-action@v1.2.5` at all, so GitHub Actions silently ignored it (unknown `with:` keys
+never error) and the bug reproduced identically on retest. The real fix is `set -e` as the
+literal first line of each script's shell text, applied to all three `appleboy/ssh-action` steps
+in this file. Neither invocation is wrapped in `continue-on-error`, `set +e`, or any other
+construct that would swallow that exit code — verified mechanically (neither job block contains
+those literal strings) and now also verified live (see "Live verification" below).
 
 ### Registry URL isolation
 
@@ -2058,7 +2071,7 @@ their `redpanda*` service), so the registrar is reachable only from inside each 
 Compose network — a mis-scoped job cannot reach the other environment's registry even with the
 wrong URL, because there is no routable path to it at all.
 
-### Idempotency and cross-broker independence — expected properties, not yet live-measured
+### Idempotency and cross-broker independence — measured live (2026-08-19)
 
 `AvroSchemaRegistrar` is idempotent by construction (`registerOne`'s Javadoc): registering an
 unchanged schema returns the existing schema id, and re-setting an unchanged compatibility level
@@ -2068,8 +2081,15 @@ history — `GET /subjects/<name>/versions` against each broker reads each one's
 version list. These are structural properties of the reused mechanism, already relied upon by both
 `registerSchemas`'s own repeated Gradle-task invocations and every test class sharing
 `AbstractKafkaContainerTest`'s harness — this plan does not change `AvroSchemaRegistrar` itself, so
-it does not change this behavior. **Not yet measured against the live CI-driven path** — see "Live
-verification" below for what remains.
+it does not change this behavior.
+
+**Confirmed against the live CI-driven path.** Both brokers' `rpk registry schema list` output
+stayed byte-identical (14 subjects, all version 1, same IDs) across a baseline capture, a real
+push, and a `gh run rerun` of the same commit — proving idempotency. `register-schemas-production`
+and `deploy-to-netcup` succeeded fully independently across three separate live runs that
+deliberately broke nonprod's registration only — proving cross-broker independence: production's
+path never failed, slowed, or was gated by nonprod's state. See "Live verification" below for the
+full run reference list.
 
 ### Consolidated job graph — every job in the final pipeline
 
@@ -2105,34 +2125,37 @@ setup ─┬─> run-tests ─> build-and-push-docker-image ─┬─> flyway-ve
 No `register-schemas-nonprod` job id exists — by design, per Task 1's rationale, nonprod's
 registration had to be a step inside `deploy-to-nonprod` itself to precede `up -d app-nonprod`.
 
-### Live verification — pending, deferred to after merge
+### Live verification (2026-08-19) — completed after merge to master, including a mid-verification bug fix
 
 This plan's file-level work (`.github/workflows/deploy.yml`, this section) was authored and
 statically verified inside an isolated git worktree, the same execution context Plans 09-01 and
-09-02 both documented above. For the identical reason recorded in both of those sections, the
-following live-verification steps could **not** run from that worktree and remain outstanding
-until the orchestrator merges this plan's commits to `master` and the human operator drives them
-directly, per this session's established precedent:
+09-02 both documented above. Once the orchestrator merged the worktree's commits to `master`, the
+human operator drove each remaining step directly:
 
-1. **Green path:** after a real push, confirm `rpk registry subject list` inside
-   `kanban-nonprod-redpanda` and inside production's `redpanda` each return 14 subjects, and that
-   both jobs' logs contain the registrar's own `Registered 14 Avro schemas against <url>` line
-   naming the correct registry. Confirm the nonprod log shows the registrar's output line before
-   the `up -d app-nonprod` output (ordering observed at runtime, not just in the file).
-2. **Red path (deliberately induced, then reverted):** temporarily point the nonprod invocation at
-   a registry URL that cannot answer, confirm `deploy-to-nonprod` goes red, and confirm on the VM
-   that `kanban-nonprod-app`'s container id and image are unchanged from before that run (the app
-   was never restarted, proving the abort really did precede the app start). Revert and re-verify
-   green.
-3. **Idempotency:** capture each broker's `rpk registry subject list` and a spot-check subject's
-   `GET /subjects/<name>/versions` before and after a run, then re-run the same commit and capture
-   again — subject counts and version lists must be identical across the re-run.
-4. **Cross-broker independence:** confirm a nonprod-only re-run leaves production's subject version
-   lists unchanged.
+1. **Green path:** confirmed on run `32241094339` (and its `gh run rerun`) — both jobs logged
+   `Registered 14 Avro schemas against <url>` against the correct registry, and `rpk registry
+   schema list` on both brokers confirmed 14 subjects, all version 1.
+2. **Red path — two failed attempts uncovered a real defect before the third succeeded.**
+   Pointing `deploy-to-nonprod`'s registrar invocation at an unreachable host (commit `449614e`,
+   run `32242756450`) showed the registrar correctly throwing `IllegalStateException`, but
+   `app-nonprod` was recreated and started anyway, and the job reported `success` — see "The
+   exit-code chain" above for the root cause (`appleboy/ssh-action` has no fail-fast behavior of
+   its own) and the two-attempt fix history (`script_stop: true` was a no-op; `set -e`, commit
+   `9eca655`, was the real fix). A third red-path attempt (run `32246183734`) then correctly
+   failed: `deploy-to-nonprod` conclusion `failure`, `##[error]Process completed with exit code 1`,
+   `health-check-nonprod`/`cleanup-old-images-nonprod` correctly stayed skipped,
+   `cleanup-unused-image-nonprod` correctly fired its D-06 cleanup, and `docker inspect
+   kanban-nonprod-app`'s `StartedAt` timestamp was confirmed byte-identical before and after the
+   run — the container was genuinely never touched. URL reverted (commit `89fde91`) and
+   re-verified green.
+3. **Idempotency:** confirmed — see "Idempotency and cross-broker independence" above.
+4. **Cross-broker independence:** confirmed — `register-schemas-production` succeeded
+   independently across all three nonprod-targeting red-path runs.
 
-Until these four are run and this section is updated with their observed results (matching the
-"Live verification" pattern in Plan 09-02's section above), this plan's SUMMARY carries
-`status: halted`.
+Every acceptance criterion in this plan's Tasks 1–3 is now live-verified, not just statically
+checked. See this plan's `09-03-SUMMARY.md` for the full commit/run reference list. A separate,
+unrelated flaky test (`ResetServiceE2ETest`) surfaced during the final green-restoration run,
+confirmed as flakiness (an identical-commit re-run passed clean) and filed as its own todo.
 
 ## Maintenance note
 

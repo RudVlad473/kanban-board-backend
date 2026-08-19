@@ -9,9 +9,9 @@ requires:
   - phase: 09-02
     provides: "health-check-nonprod, cleanup-old-images-nonprod/cleanup-unused-image-nonprod, and the repository-level deploy-secret sweep (CI-02) -- all live-verified complete, unblocking 09-03's own precondition"
 provides:
-  - "register-schemas-production job (deploy.yml): runs immediately after deploy-to-netcup, environment: production, no needs: edge to any nonprod job -- automates production's schema registration (CI-05) per Task 1's human-resolved checkpoint (option-a)"
-  - "Nonprod schema registration inserted as a step inside deploy-to-nonprod's existing SSH script, between up -d redpanda-nonprod and up -d app-nonprod -- app-nonprod does not exist as a process until registration has succeeded"
-  - "docs/INFRA_RUNBOOK.md section documenting both invocations, Task 1's decision/rationale, the exit-code chain, registry-URL isolation, and a consolidated 13-job graph/table for the whole deploy.yml pipeline"
+  - "register-schemas-production job (deploy.yml): runs immediately after deploy-to-netcup, environment: production, no needs: edge to any nonprod job -- automates production's schema registration (CI-05) per Task 1's human-resolved checkpoint (option-a) -- live green path proven twice"
+  - "Nonprod schema registration inserted as a step inside deploy-to-nonprod's existing SSH script, between up -d redpanda-nonprod and up -d app-nonprod -- app-nonprod does not exist as a process until registration has succeeded -- live green AND red path both proven, after fixing a real bug this verification uncovered (set -e, see Live Verification below)"
+  - "docs/INFRA_RUNBOOK.md section documenting both invocations, Task 1's decision/rationale, the exit-code chain, registry-URL isolation, and a consolidated 13-job graph/table for the whole deploy.yml pipeline -- updated post-verification with real observed results"
   - "Both prior manual registration procedures (Plan 05-04 Task 1 step 3, Plan 08-01 step 6) annotated superseded-by, commands retained per this file's historical-record convention"
 affects: []
 
@@ -19,7 +19,7 @@ affects: []
 actuals:
   tokens: 5650
   tasks: 3
-  commits: 4
+  commits: 10
 
 # Tech tracking
 tech-stack:
@@ -41,6 +41,8 @@ key-decisions:
   - "All three tasks' file-level (deploy.yml + docs) work was completed and statically verified inside an isolated worktree; the live-infrastructure actions each task's acceptance criteria also require (a live push to origin/master, observing a real GitHub Actions run, SSHing into the VM to confirm rpk registry subject counts and the induced-failure/idempotency proofs) were deliberately NOT executed from that worktree -- exactly the reasoning Plans 09-01 and 09-02 both recorded for the identical worktree/live-action conflict."
   - "The plan's own automated <verify> block for Task 2 hit the same awk range-extraction bug 09-01-SUMMARY.md already documented (a job-name line matches the range's own end pattern, so GNU awk closes the range immediately, extracting only the one-line job header). Worked around identically to 09-01's precedent: manual sed -n/grep -n extraction using real line numbers, all six acceptance-criteria checks confirmed passing against the real job bodies."
   - "One comment I initially wrote inside deploy-to-nonprod's SSH step literally contained the strings \"continue-on-error\", \"set +e\", and \"|| true\" in prose (describing what is NOT present), which inflated the plan's own mechanical suppression-check (grep -c \"continue-on-error\") from 0 to 1 -- the same class of false positive 09-02-SUMMARY.md documented and fixed. Caught and reworded before commit (see Deviations below), not left as a fragile pass."
+  - "Live red-path verification (post-merge) uncovered a genuine correctness bug the static verification could not catch: the plan text's own claim that 'appleboy/ssh-action's shell fails the step on the first non-zero command exit' was wrong. appleboy/ssh-action has no built-in fail-fast behavior -- a failing docker compose run mid-script did NOT stop up -d app-nonprod from still running (confirmed live). First fix attempt (script_stop: true) was also wrong -- that input does not exist on this action version and was silently ignored, reproducing the identical bug on re-test. Root-caused by testing the exact command's exit code directly over SSH (confirmed exit 1 at the OS level), then fixed correctly with an explicit set -e as the script's first line, applied to all three appleboy/ssh-action steps in the file for defense-in-depth. Re-verified live a third time before the fix was accepted as done."
+  - "A live-verification run (32247040963) hit an unrelated flaky test (ResetServiceE2ETest > should_emptyBothStores_when_resetAllCalledAfterRealTraffic, an AssertionFailedError amid dense Kafka consumer-rebalancing log noise) -- confirmed as flakiness, not a regression, by re-running only the failed job against the identical unchanged commit and observing a clean pass. Filed as its own todo rather than investigated further, since it is unrelated to this plan's file scope."
 
 patterns-established: []
 
@@ -55,10 +57,10 @@ coverage:
         ref: "Static extraction (sed -n 291,319p .github/workflows/deploy.yml): job present, environment: production, needs: names only deploy-to-netcup (plus build-and-push-docker-image for the tag output) -- no nonprod job referenced; script contains http://redpanda:8081; no continue-on-error/suppression in the block -- all checked and passed before commit 21b1b07"
         status: pass
       - kind: other
-        ref: "Live push, live GitHub Actions run, and live rpk registry subject list confirmation on both brokers -- NOT run from this worktree, deferred to the orchestrator/human operator after merge (see 'Live Verification' note below and docs/INFRA_RUNBOOK.md's 'Live verification -- pending' subsection)"
-        status: unknown
+        ref: "Live: runs 32241094339 and its gh run rerun both logged 'Registered 14 Avro schemas against http://redpanda:8081'; rpk registry schema list on production's broker confirmed 14 subjects, all version 1, byte-identical before/after both runs (idempotency). register-schemas-production succeeded in every run this session, including the two red-path test runs targeting nonprod only (32242756450, 32245164097, 32246183734) -- proving cross-broker independence: production's registration never failed or was gated by nonprod's failures."
+        status: pass
     human_judgment: true
-    rationale: "This deliverable's acceptance criteria require observing a real push, a real GitHub Actions run, an induced-and-reverted registry failure, and idempotency/independence measurements against the live production and nonprod registries -- none of which can run from an isolated, unmerged git worktree. Matches the identical human_judgment:true rationale Plans 09-01/09-02 recorded for their own live-infrastructure deliverables."
+    rationale: "This deliverable's acceptance criteria required observing a real push, a real GitHub Actions run, an induced-and-reverted registry failure (on nonprod), and idempotency/independence measurements against the live production and nonprod registries -- all now confirmed live by the human operator after merge. Matches the identical human_judgment:true rationale Plans 09-01/09-02 recorded for their own live-infrastructure deliverables."
   - id: D2
     description: "Nonprod's schema registration is inserted into deploy-to-nonprod's own SSH script, strictly between the broker start and the app start, so app-nonprod cannot exist as a process before registration succeeds"
     requirement: "CI-05"
@@ -67,10 +69,10 @@ coverage:
         ref: "Static extraction (sed -n 330,403p .github/workflows/deploy.yml): AvroSchemaRegistrar/PropertiesLauncher/http://redpanda-nonprod:8081 all present; line-number ordering confirmed strictly 'up -d redpanda-nonprod' (69) < 'AvroSchemaRegistrar' (72) < 'up -d app-nonprod' (74) within the extracted block; no continue-on-error/suppression -- all checked and passed before commit 21b1b07"
         status: pass
       - kind: other
-        ref: "Live push, live GitHub Actions run, the deliberately-induced-and-reverted red-path proof (unreachable registry URL -> deploy-to-nonprod failure -> confirmed-unchanged kanban-nonprod-app container id), and idempotency/independence measurements -- NOT run from this worktree, deferred to after merge"
-        status: unknown
+        ref: "Live green: runs 32241094339/32236428721-rerun both logged 'Registered 14 Avro schemas against http://redpanda-nonprod:8081'; nonprod's rpk registry schema list confirmed 14 subjects, all version 1, byte-identical across baseline and two runs (idempotency). Live red path, proven THREE times due to a real bug found mid-verification: attempt 1 (run 32242756450, no fix) and attempt 2 (run 32245164097, ineffective script_stop:true input -- not a real appleboy/ssh-action option, silently no-op'd) both showed app-nonprod recreated/started despite the registrar's confirmed exit code 1 -- the script continued past the failure. Root-caused live (docker compose run exits 1 at the OS level, verified directly via SSH) and fixed with an actual `set -e` as the script's first line (commit 9eca655). Attempt 3 (run 32246183734) then correctly failed: deploy-to-nonprod conclusion=failure, `##[error]Process completed with exit code 1`, health-check-nonprod/cleanup-old-images-nonprod correctly skipped, cleanup-unused-image-nonprod correctly fired, and `docker inspect kanban-nonprod-app`'s StartedAt timestamp was confirmed byte-identical before and after the run (container genuinely never touched)."
+        status: pass
     human_judgment: true
-    rationale: "Identical reasoning to D1 -- the red-path proof in particular requires deliberately breaking and then restoring a live registry connection against the real nonprod stack, which this session's established pattern (Plans 09-01/09-02) reserves for the human operator after merge, not an unattended worktree agent."
+    rationale: "Identical reasoning to D1 -- the red-path proof in particular requires deliberately breaking and then restoring a live registry connection against the real nonprod stack, which this session's established pattern (Plans 09-01/09-02) reserves for the human operator after merge, not an unattended worktree agent. This proof also uncovered and fixed a real defect the static verification could not have caught: appleboy/ssh-action has no fail-fast behavior of its own, so the plan's stated CI-05 guarantee was false as originally shipped, only becoming true after this live round added an explicit set -e."
   - id: D3
     description: "docs/INFRA_RUNBOOK.md documents both invocations, Task 1's decision, the exit-code chain, registry-URL isolation, and a consolidated 13-job graph; both manual procedures annotated superseded-by"
     requirement: "CI-05"
@@ -81,22 +83,22 @@ coverage:
     human_judgment: false
 
 # Metrics
-duration: ~50min (checkpoint resolution + Task 2 implementation/verification + Task 3 documentation, across a continuation after the coordinator relayed the human operator's Task 1 decision)
+duration: ~50min (worktree: checkpoint resolution + Task 2/3 implementation) + ~90min (live verification, extended by a real bug found and fixed mid-verification -- three red-path test rounds instead of one)
 completed: 2026-08-19
-status: halted
+status: complete
 ---
 
 # Phase 09 Plan 03: Automated Avro schema registration (CI-05) — Summary
 
-**`register-schemas-production` (its own job, running immediately after `deploy-to-netcup` per the human operator's option-a decision) and a registration step inserted inside `deploy-to-nonprod`'s own SSH script (strictly between the broker start and the app start) both reuse `AvroSchemaRegistrar`/`PropertiesLauncher` verbatim to automate the last hand-run step in this project's deploy — all file-level work statically verified inside this isolated worktree; the live push/run/registry proofs remain for the orchestrator/human operator after merge.**
+**`register-schemas-production` (its own job, running immediately after `deploy-to-netcup` per the human operator's option-a decision) and a registration step inserted inside `deploy-to-nonprod`'s own SSH script (strictly between the broker start and the app start) both reuse `AvroSchemaRegistrar`/`PropertiesLauncher` verbatim to automate the last hand-run step in this project's deploy — now live-verified end to end (green path, red path, idempotency, cross-broker independence), after live verification itself uncovered and fixed a real bug: `appleboy/ssh-action` has no fail-fast behavior of its own, so nonprod's "registration gates the app start" guarantee was false as originally shipped until an explicit `set -e` was added.**
 
 ## Performance
 
-- **Duration:** ~50 min total across this session — Task 1 checkpoint reached and halted (~15 min, including a recurring Windows Gradle/Testcontainers pre-commit-hook file-lock recovery), the coordinator relayed the human operator's option-a decision, then Task 2 (`deploy.yml` edits, static verification, commit) and Task 3 (`docs/INFRA_RUNBOOK.md` section, superseded-by annotations, commit) executed in the same continuation (~35 min)
+- **Duration:** ~50 min (worktree: Task 1 checkpoint halt, Task 2/3 implementation and static verification) + ~90 min (live verification by the human operator after merge — extended well past a normal round by a genuine defect discovered mid-verification, requiring three red-path test rounds instead of one)
 - **Started:** 2026-08-19T~09:40:00Z (approx, per orchestrator dispatch)
-- **Completed:** 2026-08-19T~10:05:00Z (approx) — file-level work only; live verification remains
-- **Tasks:** 3 of 3 attempted; all 3 file-level deliverables complete and statically verified; live-infrastructure proof deferred (same pattern as 09-02's initial halt)
-- **Files modified:** 2 (`.github/workflows/deploy.yml`, `docs/INFRA_RUNBOOK.md`) plus this SUMMARY.md
+- **Completed:** 2026-08-19T~11:35:00Z (approx) — file-level work, live verification, and the mid-verification bug fix are all complete
+- **Tasks:** 3 of 3 complete, all live-verified
+- **Files modified:** 2 (`.github/workflows/deploy.yml`, `docs/INFRA_RUNBOOK.md`) plus this SUMMARY.md and two new todos filed during live verification
 
 ## Accomplishments
 
@@ -164,24 +166,28 @@ _Note: no `test`/`refactor` commits — this plan is CI configuration and infra 
 
 ## User Setup Required
 
-**None outstanding for the file-level work** — both `deploy.yml` and `docs/INFRA_RUNBOOK.md` changes are complete and statically verified.
+None. All live-infrastructure steps below were completed by the human operator directly.
 
-**Outstanding for live verification — human/coordinator action required after this worktree merges to `master`,** per this phase's established live-infrastructure-deferral pattern (Plans 09-01/09-02):
+## Live Verification (2026-08-19, after merge to master)
 
-1. **Green path:** after a real push, confirm `rpk registry subject list` inside `kanban-nonprod-redpanda` and inside production's `redpanda` each return 14 subjects, and both jobs' logs contain the registrar's own `Registered 14 Avro schemas against <url>` line naming the correct registry. Confirm the nonprod log shows the registrar's output line before the `up -d app-nonprod` output at runtime.
-2. **Red path (deliberately induced, then reverted):** temporarily point the nonprod invocation at a registry URL that cannot answer, confirm `deploy-to-nonprod` goes red, and confirm on the VM that `kanban-nonprod-app`'s container id and image are unchanged from before that run. Revert and re-verify green.
-3. **Idempotency:** capture each broker's `rpk registry subject list` and a spot-check subject's `GET /subjects/<name>/versions` before and after a run, then re-run the same commit and capture again — subject counts and version lists must be byte-identical across the re-run.
-4. **Cross-broker independence:** confirm a nonprod-only re-run leaves production's subject version lists unchanged.
+All four steps this SUMMARY previously listed under "User Setup Required" are now complete, plus one unplanned round to fix a bug the verification itself found:
 
-Once these four are run, `docs/INFRA_RUNBOOK.md`'s "Live verification — pending, deferred to after merge" subsection (in the new "Automated Avro schema registration — Plan 09-03" section) should be rewritten with the observed results, matching Plan 09-02's own "Live Verification" pattern, and this SUMMARY's `status` updated to `complete`.
+1. **Green path:** confirmed on runs `32241094339` (and its `gh run rerun`) — both jobs logged `Registered 14 Avro schemas against <url>` against the correct registry, and `rpk registry schema list` on both brokers confirmed 14 subjects, all version 1.
+2. **Red path — first two attempts failed to reproduce a real failure, revealing a genuine bug:** pointing `deploy-to-nonprod`'s registrar invocation at an unreachable host (commit `449614e`, run `32242756450`) showed the registrar correctly throwing `IllegalStateException`, but `app-nonprod` was recreated and started anyway, and the job reported `success`. A first fix attempt (`script_stop: true`, commit `6956197`) reproduced the identical bug on retest (run `32245164097`) — that input does not exist on `appleboy/ssh-action@v1.2.5` and was silently ignored. Root-caused by testing the exact `docker compose run` command directly over SSH (confirmed exit code 1 at the OS level) and fixed correctly with an explicit `set -e` as the script's first line, applied to all three `appleboy/ssh-action` scripts in the file (commit `9eca655`). A third red-path attempt (run `32246183734`) then correctly failed: `deploy-to-nonprod` conclusion `failure`, `##[error]Process completed with exit code 1`, `health-check-nonprod`/`cleanup-old-images-nonprod` correctly skipped, `cleanup-unused-image-nonprod` correctly fired its D-06 cleanup, and `docker inspect kanban-nonprod-app`'s `StartedAt` timestamp confirmed byte-identical before and after — the container was genuinely never touched. URL reverted (commit `89fde91`) and re-verified green.
+3. **Idempotency:** both brokers' subject/version lists stayed byte-identical across baseline → first registration → re-run.
+4. **Cross-broker independence:** `register-schemas-production` and `deploy-to-netcup` succeeded fully independently in every red-path test run targeting nonprod only — production's registration was never gated by or affected by nonprod's failures.
+
+A separate, unrelated flaky-test failure (`ResetServiceE2ETest`) surfaced during the final green-restoration run — confirmed as flakiness (re-run of the identical unchanged commit passed clean), filed as its own todo, not investigated further as out of this plan's scope.
+
+`docs/INFRA_RUNBOOK.md`'s live-verification section rewritten with these observed results; this SUMMARY re-authored `status: complete` with every `coverage[].verification[]` entry updated to `pass`.
 
 ## Next Phase Readiness
 
-**File-level work for CI-05 is complete and statically verified; live-infrastructure proof is the only remaining gap**, matching the exact halt pattern Plan 09-02 itself went through before its own live-verification round. This is the last plan in Phase 9 (no further plans depend on 09-03 per `ROADMAP.md`) — once the four live-verification steps above are run and confirmed, Phase 9 itself should be ready to close out.
+CI-05 is fully live-verified. This is the last plan in Phase 9 (no further plans depend on `09-03` per `ROADMAP.md`) — Phase 9 is ready to close out.
 
 ---
 *Phase: 09-nonprod-continuous-deploy-scoped-ci-credentials*
-*Completed: 2026-08-19 — file-level deliverables for all 3 tasks committed and statically verified; live-infrastructure verification (green/red path, idempotency, cross-broker independence) remains for the human operator after merge*
+*Completed: 2026-08-19 — file-level deliverables for all 3 tasks committed, and all live-infrastructure verification (CI-05 green/red path, idempotency, cross-broker independence) completed by the human operator after merge to master, including discovering and fixing a real appleboy/ssh-action fail-fast defect mid-verification*
 
 ## Self-Check: PASSED
 
@@ -191,3 +197,4 @@ Once these four are run, `docs/INFRA_RUNBOOK.md`'s "Live verification — pendin
 - FOUND commit `5e7bcc6` (Task 1: checkpoint halt)
 - FOUND commit `21b1b07` (Task 2: register-schemas-production + nonprod registration step)
 - FOUND commit `5296218` (Task 3: runbook section + superseded-by annotations)
+- FOUND commit `9eca655` (live-verification fix: set -e, correcting the ineffective script_stop attempt)
