@@ -10,10 +10,12 @@
 # repos/:owner/:repo/vulnerability-alerts` check (204 response) during Task 3/5 of quick task
 # 260813-q1i.
 #
-# `package-ecosystem: "github-actions"` is deliberately NOT added yet: Phase 5 (Infra Migration)
-# is actively rewriting .github/workflows/deploy.yml, and unprompted Dependabot PRs against a
-# file mid-rewrite would fight that work rather than help it. Revisit once Phase 5's deploy.yml
-# rewrite settles.
+# The github-actions ecosystem entry below (Phase 10, HARDEN-01) exists specifically to keep
+# deploy.yml's digest-pinned appleboy/scp-action and appleboy/ssh-action references (HARDEN-03,
+# D-05) maintained rather than frozen at their pinned commit forever (D-07's composition
+# requirement) -- Dependabot natively updates both a SHA pin and its adjacent version comment
+# together when it opens a bump PR, so this ecosystem entry and deploy.yml's pins are meant to
+# compose, not stand alone.
 version: 2
 updates:
   - package-ecosystem: "gradle"
@@ -23,4 +25,11 @@ updates:
     # Bounds PR noise from an automated actor. Every Dependabot PR still runs deploy.yml's
     # run-tests job (spotlessCheck + the full test suite) like any other PR, so nothing merges
     # untested or unreviewed -- this limit only caps how many can be open at once.
+    open-pull-requests-limit: 5
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # Same noise bound as the gradle entry above -- every Dependabot PR still runs deploy.yml's
+    # run-tests job like any other PR, so nothing merges untested or unreviewed.
     open-pull-requests-limit: 5
