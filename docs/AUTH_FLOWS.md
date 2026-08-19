@@ -98,6 +98,13 @@ comes from, and the consequence for a test suite -- not just the fact alone.
   would ever expire the session -- a long-running suite that logs in once and keeps working past 10
   minutes will start getting `401 UNAUTHENTICATED` responses (no session cookie presented at all)
   while the server-side session backing that login is still perfectly alive.
+- **The session cookie carries the `Secure` attribute** (`server.servlet.session.cookie.secure=true`).
+  A browser will not transmit the session cookie over a non-TLS connection. `http://localhost` and
+  `http://127.0.0.1` remain trustworthy origins in modern browsers, so local development against
+  the compose stack is unaffected. **Consequence:** a test harness pointed at a plain-HTTP
+  deployment at any other hostname will silently get no cookie back on the follow-up request and
+  will see the same `401 UNAUTHENTICATED` the `max-age` and `SameSite` bullets above already
+  describe -- not a distinguishable error, just a login that appears not to have happened.
 - **The session cookie's `SameSite` policy is `strict`** (`server.servlet.session.cookie.same-site`).
   **Consequence:** a test harness that drives this API's cookie from a different site than the one
   the browser considers "current" (e.g. a test runner opening the API directly in one tab while the
