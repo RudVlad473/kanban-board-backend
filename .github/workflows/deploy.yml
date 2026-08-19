@@ -339,6 +339,46 @@ jobs:
             docker compose --env-file ./.env.nonprod -f docker-compose.nonprod.yml --profile nonprod up -d redpanda-nonprod
             docker compose --env-file ./.env.nonprod -f docker-compose.nonprod.yml --profile nonprod up -d app-nonprod
 
+  # Bounded health poll (Phase 9, plan 09-02, Task 2) -- a nonprod deploy that starts containers
+  # but never comes up must fail the workflow visibly, not report green over a dead stack (CI-04).
+  # Deliberately a separate job, not a final step inside deploy-to-nonprod: sitting inside that
+  # job would hold the deploy-to-nonprod-vm concurrency lock for the whole poll (up to 300s),
+  # queueing a following push behind pure waiting for no reason (see 09-02-PLAN.md's
+  # design_alternatives, Approach A, rejected on exactly this cost). No checkout -- this job reads
+  # nothing from the repository, only a public, non-secret hostname held as a plain env literal.
+  health-check-nonprod:
+    needs: [ deploy-to-nonprod ]
+    runs-on: ubuntu-latest
+    if: success()
+    environment: staging
+    env:
+      NONPROD_HEALTH_URL: https://kanban-board-rud-vlad-473-nonprod.duckdns.org/api/actuator/health
+      ATTEMPTS: 30
+      SLEEP_SECONDS: 10
+    steps:
+      - name: Poll nonprod health endpoint until 200
+        run: |
+          # Bound sized against docker-compose.nonprod.yml's real healthcheck numbers, not
+          # 09-RESEARCH.md's illustrative 60s (its own Assumption A3 flags that figure as unsized
+          # against real CI conditions). app-nonprod cannot be marked healthy by Compose before
+          # start_period 30s, and can take up to start_period 30s + (interval 10s x retries 5) =
+          # 80s -- and its clock only starts once redpanda-nonprod itself reports healthy
+          # (depends_on: service_healthy). Add image-pull time on the VM, Flyway's migration pass,
+          # and DNS/TLS latency from a GitHub-hosted runner, and 30 x 10s = 300s comfortably covers
+          # that with margin. Per-attempt status lines are printed deliberately: the first few real
+          # runs will produce a timing profile that can tighten this bound later.
+          for i in $(seq 1 "$ATTEMPTS"); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$NONPROD_HEALTH_URL" || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "Nonprod healthy after $i/$ATTEMPTS attempts."
+              exit 0
+            fi
+            echo "Attempt $i/$ATTEMPTS: status $STATUS, retrying in ${SLEEP_SECONDS}s..."
+            sleep "$SLEEP_SECONDS"
+          done
+          echo "::error::Nonprod did not answer 200 within $ATTEMPTS attempts (bound: $((ATTEMPTS * SLEEP_SECONDS))s elapsed). Health poll exhausted -- failing the run."
+          exit 1
+
   cleanup-old-images:
     runs-on: ubuntu-latest
     needs: [ deploy-to-netcup, build-and-push-docker-image, setup ]
@@ -436,3 +476,100 @@ jobs:
           curl -s -X DELETE \
             -H "Authorization: Bearer $TOKEN" \
             "https://registry-1.docker.io/v2/${{ needs.setup.outputs.base_image_name }}/manifests/$DIGEST"
+
+  # Nonprod twin of cleanup-old-images (Phase 9, plan 09-02, Task 3, D-05). Nonprod deploys at the
+  # same per-push rate as production and would otherwise accumulate tags identically. Gated on
+  # health-check-nonprod, not on deploy-to-nonprod: "the nonprod deploy is complete" now materially
+  # depends on the endpoint having actually answered (CI-04), not merely on the SSH script exiting
+  # 0. Never deploy-to-netcup -- referencing production's deploy job here would fire nonprod's
+  # sweep on production's success state, defeating CI-01's parallel-independence requirement.
+  cleanup-old-images-nonprod:
+    runs-on: ubuntu-latest
+    needs: [ health-check-nonprod, build-and-push-docker-image, setup ]
+    if: success()
+    # Phase 9, plan 09-02, Task 3: this job resolves secrets.DOCKERHUB_TOKEN through the `staging`
+    # environment -- nonprod's copy of the account-wide token (see Plan 09-01's T-09-09).
+    environment: staging
+    steps:
+      - name: Delete old Docker Hub images (nonprod repository)
+        run: |
+          # A copy of cleanup-old-images with exactly one axis changed: every repository-name
+          # interpolation below reads setup's nonprod-repository job output, never hand-typed --
+          # the production delete-URL bug fixed 2026-08-17 was exactly a hand-typed, missing
+          # repository path segment (docs/INFRA_RUNBOOK.md). Both already-fixed Docker Hub bugs
+          # are inherited in their fixed form: the JWT login-token exchange (2026-08-16 fix) and
+          # the follow-`next`-until-null pagination loop (2026-08-17 fix).
+          HUB_TOKEN=$(curl -s -H "Content-Type: application/json" -X POST \
+            -d "{\"username\": \"$DOCKERHUB_USER\", \"password\": \"${{ secrets.DOCKERHUB_TOKEN }}\"}" \
+            "https://hub.docker.com/v2/users/login/" | jq -r .token)
+          if [ -z "$HUB_TOKEN" ] || [ "$HUB_TOKEN" = "null" ]; then
+            echo "::error::Docker Hub login-token exchange failed -- no token in response. Cannot prune nonprod tags."
+            exit 1
+          fi
+
+          TAGS=""
+          NEXT_URL="https://hub.docker.com/v2/repositories/${{ needs.setup.outputs.base_image_name_nonprod }}/tags/?page_size=100"
+          while [ -n "$NEXT_URL" ] && [ "$NEXT_URL" != "null" ]; do
+            TAGS_HTTP_STATUS=$(curl -s -o /tmp/tags-nonprod.json -w "%{http_code}" \
+              -H "Authorization: JWT ${HUB_TOKEN}" \
+              "$NEXT_URL")
+            if [ "$TAGS_HTTP_STATUS" != "200" ]; then
+              echo "::error::Listing nonprod tags failed with HTTP $TAGS_HTTP_STATUS: $(cat /tmp/tags-nonprod.json)"
+              exit 1
+            fi
+            TAGS="$TAGS $(jq -r '.results[].name' /tmp/tags-nonprod.json)"
+            NEXT_URL=$(jq -r '.next' /tmp/tags-nonprod.json)
+          done
+
+          # Delete all tags except the current one
+          FAILED=0
+          for TAG in $TAGS; do
+            if [ "$TAG" != "${{ needs.build-and-push-docker-image.outputs.image_tag }}" ]; then
+              echo "Deleting tag: $TAG"
+              DELETE_HTTP_STATUS=$(curl -s -o /tmp/delete-response-nonprod.json -w "%{http_code}" -X DELETE \
+                -H "Authorization: JWT ${HUB_TOKEN}" \
+                "https://hub.docker.com/v2/repositories/${{ needs.setup.outputs.base_image_name_nonprod }}/tags/$TAG/")
+              if [ "$DELETE_HTTP_STATUS" != "204" ]; then
+                echo "::warning::Delete of nonprod tag $TAG failed with HTTP $DELETE_HTTP_STATUS: $(cat /tmp/delete-response-nonprod.json)"
+                FAILED=$((FAILED + 1))
+              fi
+            fi
+          done
+          if [ "$FAILED" -gt 0 ]; then
+            echo "::error::$FAILED nonprod tag deletion(s) failed -- see warnings above."
+            exit 1
+          fi
+
+  # Nonprod twin of cleanup-unused-image (Phase 9, plan 09-02, Task 3, D-06). Mirrors production's
+  # needs: shape literally, for parity: fires when the nonprod deploy job itself fails (not when
+  # health-check-nonprod fails), deleting the tag that will never be used.
+  cleanup-unused-image-nonprod:
+    runs-on: ubuntu-latest
+    needs: [ deploy-to-nonprod, build-and-push-docker-image, setup ]
+    if: failure()
+    # Phase 9, plan 09-02, Task 3: nonprod's environment declaration, matching its sibling jobs.
+    environment: staging
+    steps:
+      - name: Remove just-pushed image (nonprod repository)
+        run: |
+          echo "Deleting failed nonprod tag: ${{ needs.build-and-push-docker-image.outputs.image_tag }}"
+          TOKEN=$(curl -s "https://auth.docker.io/token?service=registry.docker.io&scope=repository:${{ needs.setup.outputs.base_image_name_nonprod }}:pull,push" \
+            | jq -r .token)
+          DIGEST=$(curl -sI \
+            -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
+            -H "Authorization: Bearer $TOKEN" \
+            "https://registry-1.docker.io/v2/${{ needs.setup.outputs.base_image_name_nonprod }}/manifests/${{ needs.build-and-push-docker-image.outputs.image_tag }}" \
+            | awk '/Docker-Content-Digest/ {print $2}' | tr -d $'\r')
+          # Deliberate addition over production's original (Phase 9, plan 09-02, Task 3, part B):
+          # production's copy issues this DELETE with no status check at all, so whether it has
+          # ever actually deleted anything is unproven in this repository's history. This job adds
+          # a status check but only ever warns, never fails, on a non-2xx -- this job already runs
+          # on an already-failing workflow (if: failure()), and turning it red here would mask the
+          # original deploy failure. Fixing both copies for real is Phase 10 CI-hardening scope.
+          DELETE_HTTP_STATUS=$(curl -s -o /tmp/delete-response-nonprod-unused.json -w "%{http_code}" -X DELETE \
+            -H "Authorization: Bearer $TOKEN" \
+            "https://registry-1.docker.io/v2/${{ needs.setup.outputs.base_image_name_nonprod }}/manifests/$DIGEST")
+          case "$DELETE_HTTP_STATUS" in
+            2??) echo "Nonprod manifest delete returned HTTP $DELETE_HTTP_STATUS." ;;
+            *) echo "::warning::Nonprod manifest delete returned non-2xx HTTP $DELETE_HTTP_STATUS: $(cat /tmp/delete-response-nonprod-unused.json)" ;;
+          esac
