@@ -41,7 +41,7 @@ jobs:
     if: success()
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       # HARDEN (Phase 10, folded todo): validates the wrapper's shell/batch scripts and its jar
       # against Gradle's own published known-good checksums BEFORE any of them execute. Placed
@@ -92,7 +92,7 @@ jobs:
       image_tag: ${{ steps.set_image_tag_from_commit.outputs.image_tag }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       # The Phase 5 deploy target was Oracle A1 Flex (ARM64/Ampere) when this pipeline was first
       # cross-compiled for linux/arm64 via QEMU + Buildx. Oracle's eu-zurich-1 capacity shortage
@@ -156,7 +156,7 @@ jobs:
     environment: production
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Guard against Neon's pooled (transaction-mode) endpoint
         env:
@@ -203,7 +203,7 @@ jobs:
     environment: staging
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Guard against Neon's pooled (transaction-mode) endpoint
         env:
@@ -256,7 +256,7 @@ jobs:
       cancel-in-progress: false
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Copy Compose manifest and Caddyfile to the VM
         # `rm` is deliberately NOT set: the target directory also holds .env.prod
@@ -384,7 +384,7 @@ jobs:
       cancel-in-progress: false
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Copy Compose manifest to the VM
         # `rm` is deliberately NOT set: the target directory also holds .env.nonprod, which
