@@ -5,10 +5,10 @@ milestone_name: Nonprod Environment & CI Hardening
 current_phase: 09
 current_phase_name: Nonprod Continuous Deploy & Scoped CI Credentials
 status: executing
-stopped_at: Phase 9 plan 01 complete -- Wave 1 fully merged, Wave 2 (09-02) up next
-last_updated: "2026-08-18T20:50:00.000Z"
-last_activity: 2026-08-18
-last_activity_desc: Plan 09-01 complete after coordinator-diagnosed live-run fixes (NETCUP_HOST_FINGERPRINT key-algorithm mismatch; docker-compose.nonprod.yml repository-name defect) -- live deploy run 32184033760 green, genuine nonprod/production repository separation confirmed on the VM
+stopped_at: Phase 9 plan 02 complete (live-verified) -- Waves 1-2 fully merged, Wave 3 (09-03) up next, expected to hit its own blocking checkpoint
+last_updated: "2026-08-19T09:36:00.000Z"
+last_activity: 2026-08-19
+last_activity_desc: Plan 09-02 executor halted mid-plan (autonomous:true but its own acceptance criteria required live/irreversible actions); operator walked through all three live steps directly -- repository secret sweep (CI-02, incl. one unreferenced orphan secret found and removed), health-check-nonprod green+red paths (CI-04), retention idempotency/cross-repo isolation (CI-03) -- all confirmed live, SUMMARY re-authored status:complete
 progress:
   total_phases: 3
   completed_phases: 1
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 ## Current Position
 
 Phase: 09 (Nonprod Continuous Deploy & Scoped CI Credentials) — EXECUTING
-Plan: 1 of 4 complete (09-01), 09-04 also complete (Wave 1 done); 09-02 up next (Wave 2)
+Plan: 3 of 4 complete (09-01, 09-04, 09-02 -- Waves 1-2 done); 09-03 up next (Wave 3, autonomous:false, expects its own checkpoint)
 Status: Executing Phase 09
-Last activity: 2026-08-18 — Plan 09-01 complete after live-run remediation
+Last activity: 2026-08-19 — Plan 09-02 live-verified complete (repo secret sweep, health-check green/red, retention idempotency/isolation)
 
-Progress: [█████░░░░░] 50%
+Progress: [███████░░░] 75%
 
 ## Performance Metrics
 
@@ -73,8 +73,8 @@ Still open and out of v1.3 scope (representative, see `.planning/todos/pending/`
 ### Blockers/Concerns
 
 - **[Phase 8, open unknown]** Nonprod Redpanda's memory floor is genuinely unmeasured. Production's reserved caps leave ~2.65GB unreserved on the 7.8GB host, and `mem_limit` is a per-container cap, not a host reservation — this project already hit a cgroup-accounting surprise at exactly this boundary. Requires iterative live restart cycles; if no safe value fits, the second-VPS fallback must actually be exercised.
-- **[Phase 9, known trap]** The existing `deploy-to-netcup` job hardcodes its target directory and the Compose project name is pinned, and `cleanup-old-images` deletes every Docker Hub tag except its own run's. A copy-pasted nonprod job that does not change *every* identity axis will mutate live production, and a shared image repo will let production's next push delete nonprod's running tag.
-- Phase 09 plan 01 Task 3: deploy.yml wired and pushed to master (58bdee9, 8c6a9d5), but the live run (32179763451) failed both deploy-to-netcup and deploy-to-nonprod on an SSH host-key fingerprint mismatch -- NETCUP_HOST_FINGERPRINT was mis-populated in the production/staging GitHub Environments during Task 2. Production/nonprod confirmed unaffected (both healthy, both on pre-run images). Requires human reset of the secret (see 09-01-SUMMARY.md User Setup Required) before re-run and plan completion.
+- **[Phase 9, known trap, resolved by 09-01]** The existing `deploy-to-netcup` job hardcodes its target directory and the Compose project name is pinned, and `cleanup-old-images` deletes every Docker Hub tag except its own run's. A copy-pasted nonprod job that does not change *every* identity axis will mutate live production, and a shared image repo will let production's next push delete nonprod's running tag. Both risks were closed by 09-01's live-verified repository separation and re-confirmed live again during 09-02's verification (both Docker Hub repositories list only their own current tag).
+- **[Phase 9, new todo, 2026-08-19]** `security-scan.yml`'s `dependency-check` job has been failing on `NVD_API_KEY repository secret is not set` since at least the 2026-08-17 scheduled run, confirmed unrelated to 09-02's secret sweep (identical failure predates it). See `.planning/todos/pending/2026-08-19-security-scan-yml-nvd-api-key-not-resolving.md`.
 
 ### Quick Tasks Completed
 
@@ -100,10 +100,10 @@ Items acknowledged and carried forward (full v1.2-close table in `.planning/mile
 
 ## Session Continuity
 
-Last session: 2026-08-18T20:15:21.638Z
-Stopped at: Phase 9 plan 01 Task 3 attempted -- deploy.yml live on master but blocked on NETCUP_HOST_FINGERPRINT defect
-Resume file: C:/Dev/Repos/kanban-board-backend/.planning/phases/09-nonprod-continuous-deploy-scoped-ci-credentials/09-01-SUMMARY.md
+Last session: 2026-08-19T09:36:00.000Z
+Stopped at: Phase 9 plan 02 complete (live-verified) -- Waves 1-2 fully merged; Wave 3 (09-03) up next, expected to hit its own blocking checkpoint (Avro schema registration automation, CI-05)
+Resume file: C:/Dev/Repos/kanban-board-backend/.planning/phases/09-nonprod-continuous-deploy-scoped-ci-credentials/09-02-SUMMARY.md
 
 ## Operator Next Steps
 
-- `/gsd-plan-phase 8` to plan the nonprod environment bootstrap. Research flagged Phase 8 as the one needing real iteration budget (Redpanda memory floor); Phases 9 and 10 are standard patterns with existing in-repo precedent.
+- `/gsd-execute-phase 09` to dispatch Wave 3 (plan 09-03). It is `autonomous: false` and expected to pause for a human checkpoint, same pattern as 09-01.

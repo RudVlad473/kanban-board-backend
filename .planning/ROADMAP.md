@@ -102,16 +102,16 @@ Plans:
   5. A push to master that introduces or changes an Avro schema leaves that schema present in both the production and the nonprod registry with no operator running the registrar by hand; a schema change the registry rejects as incompatible fails the deploy visibly rather than surfacing later as a runtime publish failure
   6. The generated OpenAPI spec (`/v3/api-docs`) declares the `ProblemDetail` error envelope on every operation that can produce one, enforced centrally (not per-endpoint annotation) and guarded by an automated check so the gap cannot silently reopen — *(API-01, folded in as an explicit scope exception, 2026-08-18: not CI/deploy work, added anyway by user decision after being discovered live by a downstream frontend consumer during this phase's planning)*
 
-**Plans**: 4 plans
+**Plans**: 3/4 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 09-01-PLAN.md — GitHub Environments, the confined `deploy-nonprod` VM identity, the nonprod Docker Hub repository, and an end-to-end tracer deploy (CI-01, CI-02, CI-03)
+- [x] 09-01-PLAN.md — GitHub Environments, the confined `deploy-nonprod` VM identity, the nonprod Docker Hub repository, and an end-to-end tracer deploy (CI-01, CI-02, CI-03)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 09-02-PLAN.md — repository-secret sweep, `health-check-nonprod` bounded poll, and the nonprod image-retention pair (CI-02, CI-03, CI-04)
+- [x] 09-02-PLAN.md — repository-secret sweep, `health-check-nonprod` bounded poll, and the nonprod image-retention pair (CI-02, CI-03, CI-04)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -119,7 +119,7 @@ Plans:
 
 **Wave 4** *(independent — no file overlap with Waves 1-3; touches OpenAPI/springdoc config, not deploy.yml)*
 
-- [ ] 09-04-PLAN.md — global OpenAPI customizer for the `ProblemDetail` error envelope, plus a spec-completeness regression guard (API-01)
+- [x] 09-04-PLAN.md — global OpenAPI customizer for the `ProblemDetail` error envelope, plus a spec-completeness regression guard (API-01)
 
 ### Phase 10: CI & Deploy Hardening
 
@@ -144,7 +144,7 @@ Phases execute in numeric order: 8 → 9 → 10
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 8. Isolated Nonprod Environment, Live and Resettable | v1.3 | 3/3 | Complete    | 2026-08-18 |
-| 9. Nonprod Continuous Deploy & Scoped CI Credentials | v1.3 | 0/TBD | Not started | - |
+| 9. Nonprod Continuous Deploy & Scoped CI Credentials | v1.3 | 3/4 | In Progress|  |
 | 10. CI & Deploy Hardening | v1.3 | 0/TBD | Not started | - |
 
 | Milestone | Phases | Plans | Status | Shipped |
