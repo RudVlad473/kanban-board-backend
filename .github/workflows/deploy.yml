@@ -255,6 +255,13 @@ jobs:
           username: ${{ secrets.NETCUP_DEPLOY_USER }}
           key: ${{ secrets.NETCUP_SSH_KEY }}
           fingerprint: ${{ secrets.NETCUP_HOST_FINGERPRINT }}
+          # script_stop (Phase 9, plan 09-03, live-verification fix): appleboy/ssh-action
+          # runs a multi-line `script:` under a plain shell with no `set -e` by default --
+          # a failing command mid-script does NOT stop later lines from running. Discovered
+          # live via deploy-to-nonprod's registration step (see that job's comment); applied
+          # here too for defense-in-depth even though `pull`/`up -d` currently has no
+          # order-dependent failure to hide.
+          script_stop: true
           script: |
             cd /opt/deploy/kanban-board-backend
             # Exported (not written into .env.prod) so this commit's freshly-built tag
@@ -308,6 +315,10 @@ jobs:
           username: ${{ secrets.NETCUP_DEPLOY_USER }}
           key: ${{ secrets.NETCUP_SSH_KEY }}
           fingerprint: ${{ secrets.NETCUP_HOST_FINGERPRINT }}
+          # script_stop: see deploy-to-netcup's identical comment. This script's only risky
+          # command is already last, so its exit code already propagated correctly -- added
+          # for defense-in-depth against a future edit appending a line after it.
+          script_stop: true
           script: |
             cd /opt/deploy/kanban-board-backend
             # Exported, matching deploy-to-netcup's own precedence convention -- this commit's
@@ -378,6 +389,15 @@ jobs:
           username: ${{ secrets.NETCUP_DEPLOY_USER }}
           key: ${{ secrets.NETCUP_SSH_KEY }}
           fingerprint: ${{ secrets.NETCUP_HOST_FINGERPRINT }}
+          # script_stop (Phase 9, plan 09-03, live-verification fix): without this,
+          # appleboy/ssh-action runs the multi-line script below under a plain shell with no
+          # `set -e` -- a failing `docker compose run` (the registrar, mid-script) does NOT
+          # stop `up -d app-nonprod` on the next line from still running. Confirmed live: a
+          # deliberately unreachable registry URL threw the expected IllegalStateException,
+          # yet app-nonprod was recreated and started anyway, and the job reported success.
+          # This is the mechanism that makes CI-05's "registration completes before the app
+          # process exists" guarantee for nonprod actually true, not just documented.
+          script_stop: true
           script: |
             cd /opt/deploy/kanban-board-nonprod
             # Exported, never a hardcoded or floating tag -- this project publishes no
@@ -399,7 +419,7 @@ jobs:
             echo "Registering Avro schemas against the nonprod registry..."
             docker compose --env-file ./.env.nonprod -f docker-compose.nonprod.yml --profile nonprod run --rm --entrypoint java app-nonprod \
               -Dloader.main=com.vrudenko.kanban_board.config.AvroSchemaRegistrar \
-              -cp app.jar org.springframework.boot.loader.launch.PropertiesLauncher http://redpanda-nonprod-unreachable-test:8081
+              -cp app.jar org.springframework.boot.loader.launch.PropertiesLauncher http://redpanda-nonprod:8081
             docker compose --env-file ./.env.nonprod -f docker-compose.nonprod.yml --profile nonprod up -d app-nonprod
 
   # Bounded health poll (Phase 9, plan 09-02, Task 2) -- a nonprod deploy that starts containers
