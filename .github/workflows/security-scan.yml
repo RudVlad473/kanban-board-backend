@@ -43,9 +43,16 @@ jobs:
       # turning an initial full database population from minutes into hours -- long enough to
       # exceed this job's own timeout, which would otherwise look identical to "ran and found
       # nothing" from the Actions UI.
+      # env:-indirected (not textual ${{ }} interpolation) so a stored value containing a quote,
+      # backslash, or newline reaches the shell as a variable, never as substituted script text --
+      # GitHub Actions renders ${{ }} into the run: script's source before any shell parses it, so
+      # textual interpolation is both a script-injection surface and makes this exact [ -z ] test
+      # test whether the substituted text happened to parse as shell, not genuine emptiness.
       - name: Verify NVD_API_KEY is configured
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: |
-          if [ -z "${{ secrets.NVD_API_KEY }}" ]; then
+          if [ -z "$NVD_API_KEY" ]; then
             echo "::error::NVD_API_KEY repository secret is not set. Request a free key at" \
               "https://nvd.nist.gov/developers/request-an-api-key and add it via" \
               "'gh secret set NVD_API_KEY' or GitHub -> Settings -> Secrets and variables ->" \
@@ -53,6 +60,43 @@ jobs:
               "database population from minutes into hours, exceeding this job's timeout."
             exit 1
           fi
+
+      # TEMPORARY (10-03-PLAN.md Task 2) -- diagnoses why secrets.NVD_API_KEY resolves empty in
+      # this job without ever disclosing the value itself. Removed in Task 3 once the root cause is
+      # applied and confirmed by a green dependencyCheckAnalyze run: the fix ships, the probe does
+      # not. Bound to a differently-named env var (SECRET_VALUE, not NVD_API_KEY) so this probe is
+      # unambiguously distinct from the two load-bearing NVD_API_KEY env bindings elsewhere in
+      # this file (the preflight above and the analyze step below). Emits only non-reversible
+      # facts -- byte length,
+      # non-printable character count, and two truncated (16-hex-char) SHA-256 digests (raw and
+      # whitespace-stripped) -- which is sufficient to distinguish "genuinely unset", "set but
+      # empty", "surrounding whitespace or an embedded control character", and "value is intact"
+      # without the log ever carrying anything the value could be recovered from. GitHub masks the
+      # exact secret string but not anything derived from it, so this output ceiling is enforced
+      # here, not by the platform. Non-fatal by design: the script itself exits 0 at the end (not
+      # `continue-on-error`, which this file's posture explicitly rejects -- see the analyze step's
+      # own comment) so dependencyCheckAnalyze's own behaviour is also observed in this same run.
+      - name: TEMPORARY -- Diagnose NVD_API_KEY resolution
+        env:
+          SECRET_VALUE: ${{ secrets.NVD_API_KEY }}
+        run: |
+          if [ -z "${SECRET_VALUE+x}" ]; then
+            echo "NVD_API_KEY: variable is UNSET (not merely empty)."
+          elif [ -z "$SECRET_VALUE" ]; then
+            echo "NVD_API_KEY: variable is SET but resolves to an empty string."
+          else
+            echo "NVD_API_KEY: variable is set and non-empty."
+          fi
+          LENGTH=$(printf '%s' "$SECRET_VALUE" | wc -c)
+          echo "NVD_API_KEY byte length: $LENGTH"
+          NONPRINTABLE=$(printf '%s' "$SECRET_VALUE" | tr -d '[:print:]' | wc -c)
+          echo "NVD_API_KEY non-printable character count: $NONPRINTABLE"
+          RAW_DIGEST=$(printf '%s' "$SECRET_VALUE" | sha256sum | cut -c1-16)
+          echo "NVD_API_KEY truncated digest (raw value): $RAW_DIGEST"
+          STRIPPED=$(printf '%s' "$SECRET_VALUE" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+          STRIPPED_DIGEST=$(printf '%s' "$STRIPPED" | sha256sum | cut -c1-16)
+          echo "NVD_API_KEY truncated digest (whitespace-stripped): $STRIPPED_DIGEST"
+          exit 0
 
       - name: Checkout code
         uses: actions/checkout@v5
