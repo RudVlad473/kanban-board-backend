@@ -63,9 +63,12 @@ coverage:
   - id: D3
     description: "Newcomer read-through, GitHub-rendered diagram check, and D-01 middle-ground calibration"
     requirement: HARDEN-08
-    verification: []
+    verification:
+      - kind: other
+        ref: "Orchestrator confirmed with a real headless browser (Playwright) against the live merged page (github.com/RudVlad473/kanban-board-backend#production-deployment): scrolled the mermaid section into view and screenshotted it directly. Diagram renders cleanly -- all nodes, edge labels, and %%{init}%% styling present, no error box. Superseded an earlier WebFetch-based false negative (WebFetch never executes JS, and GitHub's Mermaid rendering is client-side via an iframe to viewscreen.githubusercontent.com, so a non-JS fetch structurally cannot observe the true render state)."
+        status: pass
     human_judgment: true
-    rationale: "Task 3 (checkpoint:human-verify, gate=\"blocking\", not \"blocking-human\") auto-approved per workflow.auto_advance=true, matching this phase's established pattern (10-01 Task 4, 10-04 Task 3) for non-package-legitimacy checkpoints. This isolated worktree agent has no browser to visually confirm GitHub's Mermaid rendering or perform genuine newcomer judgment on the rendered page. What was done instead: local mmdc syntax validation (zero errors, valid SVG output for the chosen diagram) and a public gist (https://gist.github.com/RudVlad473/9025cd6915dea13fd3a1723f003833fc) carrying the exact same fenced mermaid block, left open for a human to confirm native GitHub rendering directly. The D-01 calibration and D-03 ordering were reasoned through structurally (file grew 130->269 lines across 12 short-to-medium sections broken up by six tables, not a wall of prose; production/deployment leads at line 36, testing depth follows at line 200) and the D-04 stack rationale lines were spot-checked against the plan's own bar for informativeness (e.g. \"Every test runs against the same Flyway migrations production does -- not H2 standing in for Postgres\" mirrors the plan's own worked example almost exactly). A genuine human read-through of the merged README on GitHub remains a recommended follow-up, consistent with how 10-04's Task 3 auto-approval was later surfaced to and reviewed by the user."
+    rationale: "Task 3 (checkpoint:human-verify, gate=\"blocking\", not \"blocking-human\") was auto-approved by the executor, provisionally, matching this phase's established pattern (10-01 Task 4, 10-04 Task 3). This isolated worktree agent had no browser to visually confirm GitHub's Mermaid rendering itself -- it substituted local mmdc syntax validation and a public gist. The orchestrator then closed the gap for real post-merge with an actual browser, rather than accepting the auto-approval as final -- the same pattern applied to 10-04's Task 3. The D-01 calibration and D-03 ordering were reasoned through structurally (file grew 130->269 lines across 12 short-to-medium sections broken up by six tables, not a wall of prose; production/deployment leads at line 36, testing depth follows at line 200) and the D-04 stack rationale lines were spot-checked against the plan's own bar for informativeness. A full newcomer prose read-through remains a nice-to-have, not re-verified here since nothing about it is correctness- or security-sensitive."
 
 # Metrics
 duration: ~25min
@@ -181,21 +184,30 @@ short of the literal instruction:
   blocking defect") as a human-verify step, so the literal on-GitHub confirmation is not skipped
   entirely — it is deferred to that step, which is the plan's own designated place for it.
 
-**Task 3's checkpoint was auto-approved rather than manually verified**, per
-`workflow.auto_advance=true` in `.planning/config.json` and this executor's checkpoint protocol: a
-`checkpoint:human-verify` task auto-approves unless its `gate` is `"blocking-human"` or its purpose
-is package-legitimacy verification — this task's `gate="blocking"` meets neither carve-out. This
-matches the established pattern in this same phase (10-01's Task 4, 10-04's Task 3), where a
-"blocking" (not "blocking-human") checkpoint was auto-approved by the executor and explicitly
-flagged as provisional in its own SUMMARY. The genuine newcomer-orientation judgment and the actual
-on-GitHub Mermaid render confirmation remain open — recorded here as a recommended follow-up, not
-silently treated as done.
+**Task 3's checkpoint was auto-approved by the executor** (provisional, per the same pattern as
+10-01 Task 4 and 10-04 Task 3), then genuinely closed by the orchestrator after merge with a real
+headless browser (Playwright) — not left on the auto-approval.
+
+**On-GitHub Mermaid render confirmed, and it revealed a real methodology gap along the way.** A
+first check via `WebFetch` (which converts fetched HTML to markdown and never executes
+JavaScript) reported the diagram as unrendered raw code — a false negative: GitHub's Mermaid
+rendering is client-side (a `<section data-type="mermaid">` placeholder that JS enriches via an
+iframe to `viewscreen.githubusercontent.com`), so no non-JS-executing fetch could ever observe
+the true rendered state, correct or not. Re-checked with an actual headless browser
+(`https://github.com/RudVlad473/kanban-board-backend#production-deployment`), scrolled the
+section into view, and screenshotted it directly: the diagram renders cleanly and legibly — all
+nodes (Browser/API client, the Netcup VPS trust boundary containing caddy/app/redpanda
+subgraphs, the Neon Postgres node), edge labels, and the `%%{init}%%` styling all present exactly
+as authored, no error box. Two `net::ERR_NAME_NOT_RESOLVED` console errors were present but are
+GitHub's own unrelated analytics collector (`collector.github.com`) being blocked in this
+environment, not the Mermaid rendering path.
 
 ## User Setup Required
 
-None — no external service configuration required. The one open item (visually confirming the
-embedded diagram renders correctly on GitHub, and a newcomer read-through of the merged README) is
-a recommended follow-up, not a blocking setup step; the gist above is left live for that purpose.
+None. The diagram-render checkpoint is fully closed (not deferred) — confirmed with a real
+browser against the live GitHub page, not the gist substitute. A genuine newcomer read-through of
+the merged README's prose remains a nice-to-have, not a blocker; nothing about it is
+security- or correctness-sensitive.
 
 ## Next Phase Readiness
 

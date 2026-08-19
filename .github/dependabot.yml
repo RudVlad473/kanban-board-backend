@@ -22,15 +22,24 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # gradle/verification-metadata.xml (Phase 10, 10-04) makes every gradle-ecosystem PR fail CI
+    # until someone regenerates and commits that file alongside the bump -- a real, per-bump
+    # chore. Ungrouped, each outdated dependency gets its own PR, so that chore (and its own CI
+    # run) repeats once per dependency. Grouped instead: every gradle-ecosystem update found on
+    # a given schedule run lands in ONE PR, so one regeneration + one CI run covers the batch,
+    # not N of each. The `patterns: ["*"]` wildcard is deliberate -- there is no major/minor
+    # split here, because the verification-metadata regeneration cost is identical either way
+    # (it is per-PR, not per-version-jump), so splitting them would only reintroduce the
+    # one-PR-per-bump chore this grouping exists to remove.
+    groups:
+      gradle-updates:
+        patterns:
+          - "*"
     # Bounds PR noise from an automated actor. Every Dependabot PR still runs deploy.yml's
     # run-tests job (spotlessCheck + the full test suite) like any other PR, so nothing merges
-    # untested or unreviewed -- this limit only caps how many can be open at once.
-    #
-    # Lowered from 5 (Phase 10, 10-04 Task 3): gradle/verification-metadata.xml
-    # (HARDEN, build-tooling supply-chain plan) makes every gradle-ecosystem PR fail CI until
-    # someone regenerates and commits that file alongside the bump -- a real, indefinite
-    # per-bump chore. Fewer concurrently-open PRs means fewer red PRs piling up waiting on that
-    # chore at once; it does not remove the chore itself.
+    # untested or unreviewed -- this limit only caps how many can be open at once. Grouping above
+    # already collapses same-run updates into one PR; this remains a backstop for updates
+    # Dependabot finds on different schedule runs before an earlier group PR is merged.
     open-pull-requests-limit: 2
   - package-ecosystem: "github-actions"
     directory: "/"
