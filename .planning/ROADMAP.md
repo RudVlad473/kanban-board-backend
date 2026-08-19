@@ -55,7 +55,7 @@ Full details: [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
 **Milestone Goal:** Stand up a resource-shrunk, production-isolated nonprod environment on the existing Netcup VPS — its own Neon branch, its own Redpanda broker/registry, its own HTTPS hostname — deployed continuously by CI and resettable to a known state, so a future frontend repo's Playwright E2E suite has a real, non-mocked target; bundled with the CI/deploy hardening todos that v1.2's deploy.yml rewrite unblocked.
 
 - [x] **Phase 8: Isolated Nonprod Environment, Live and Resettable** - A second, production-isolated stack (Neon branch + own Redpanda + own HTTPS hostname) running on the existing VPS with measured resource caps and a curl-driven data reset (completed 2026-08-18)
-- [ ] **Phase 9: Nonprod Continuous Deploy & Scoped CI Credentials** - Every push to master redeploys, re-registers Avro schemas for, and health-checks nonprod through GitHub Environments-scoped secrets, with zero ability to disturb production
+- [x] **Phase 9: Nonprod Continuous Deploy & Scoped CI Credentials** - Every push to master redeploys, re-registers Avro schemas for, and health-checks nonprod through GitHub Environments-scoped secrets, with zero ability to disturb production (completed 2026-08-19)
 - [ ] **Phase 10: CI & Deploy Hardening** - The eight accumulated hardening todos: dependabot actions ecosystem, TruffleHog verification, digest-pinned actions, gradle cache, gitleaks worktree fix, security-scan cleanup, `Secure` session cookie, README architecture showcase
 
 ## Phase Details
@@ -102,7 +102,7 @@ Plans:
   5. A push to master that introduces or changes an Avro schema leaves that schema present in both the production and the nonprod registry with no operator running the registrar by hand; a schema change the registry rejects as incompatible fails the deploy visibly rather than surfacing later as a runtime publish failure
   6. The generated OpenAPI spec (`/v3/api-docs`) declares the `ProblemDetail` error envelope on every operation that can produce one, enforced centrally (not per-endpoint annotation) and guarded by an automated check so the gap cannot silently reopen — *(API-01, folded in as an explicit scope exception, 2026-08-18: not CI/deploy work, added anyway by user decision after being discovered live by a downstream frontend consumer during this phase's planning)*
 
-**Plans**: 3/4 plans executed
+**Plans**: 4/4 plans executed
 
 Plans:
 **Wave 1**
@@ -115,7 +115,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 09-03-PLAN.md — automated Avro schema registration against both registries, ordered ahead of nonprod's app start (CI-05)
+- [x] 09-03-PLAN.md — automated Avro schema registration against both registries, ordered ahead of nonprod's app start (CI-05)
 
 **Wave 4** *(independent — no file overlap with Waves 1-3; touches OpenAPI/springdoc config, not deploy.yml)*
 
@@ -144,7 +144,7 @@ Phases execute in numeric order: 8 → 9 → 10
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 8. Isolated Nonprod Environment, Live and Resettable | v1.3 | 3/3 | Complete    | 2026-08-18 |
-| 9. Nonprod Continuous Deploy & Scoped CI Credentials | v1.3 | 3/4 | In Progress|  |
+| 9. Nonprod Continuous Deploy & Scoped CI Credentials | v1.3 | 4/4 | Complete    | 2026-08-19 |
 | 10. CI & Deploy Hardening | v1.3 | 0/TBD | Not started | - |
 
 | Milestone | Phases | Plans | Status | Shipped |

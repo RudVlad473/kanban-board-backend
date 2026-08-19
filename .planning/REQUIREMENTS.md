@@ -16,11 +16,11 @@
 
 ### CI Deploy Automation
 
-- [ ] **CI-01**: A CI job deploys to nonprod on every push to master, extending `deploy.yml`'s existing build → Flyway-verify → deploy job graph (`flyway-verify-nonprod`, `deploy-to-nonprod`), parameterized by target, running parallel to — never gating, never gated by — the existing `deploy-to-netcup` production job
-- [ ] **CI-02**: `production` and `staging` GitHub Environments are introduced as a prerequisite before the nonprod deploy job is added, so the nonprod job does not inherit full, unscoped access to all 10 existing repository secrets by default
-- [ ] **CI-03**: Nonprod images are pushed to a Docker Hub repository separate from production's, so the existing `cleanup-old-images` job's per-run tag-deletion sweep cannot delete nonprod's currently-running tag on the next production push
-- [ ] **CI-04**: A readiness/health check polls the nonprod deploy's health endpoint until it returns 200 before the deploy is considered complete, mirroring the HTTPS health check already used to verify production in v1.2 Phase 5
-- [ ] **CI-05**: A CI job registers the application's Avro schemas against both the production and the nonprod schema registries on every deploy, reusing the existing `AvroSchemaRegistrar`/`PropertiesLauncher` one-off-container mechanism — replacing the hand-run registration in `docs/INFRA_RUNBOOK.md`'s "Manual deploy — Plan 05-04 Task 2" and Phase 8 plan 08-01's manual nonprod invocation — rather than introducing a new tool; it extends `deploy.yml`'s existing job graph with the nonprod registration running parallel to, never gating and never gated by, the production deploy path, so one CI run keeps both registries in step with each other, while within each single environment registration completes before that environment's app serves traffic, because `spring.kafka.producer.properties.auto.register.schemas=false` makes an unregistered subject a runtime publish failure rather than a lazy self-heal
+- [x] **CI-01**: A CI job deploys to nonprod on every push to master, extending `deploy.yml`'s existing build → Flyway-verify → deploy job graph (`flyway-verify-nonprod`, `deploy-to-nonprod`), parameterized by target, running parallel to — never gating, never gated by — the existing `deploy-to-netcup` production job
+- [x] **CI-02**: `production` and `staging` GitHub Environments are introduced as a prerequisite before the nonprod deploy job is added, so the nonprod job does not inherit full, unscoped access to all 10 existing repository secrets by default
+- [x] **CI-03**: Nonprod images are pushed to a Docker Hub repository separate from production's, so the existing `cleanup-old-images` job's per-run tag-deletion sweep cannot delete nonprod's currently-running tag on the next production push
+- [x] **CI-04**: A readiness/health check polls the nonprod deploy's health endpoint until it returns 200 before the deploy is considered complete, mirroring the HTTPS health check already used to verify production in v1.2 Phase 5
+- [x] **CI-05**: A CI job registers the application's Avro schemas against both the production and the nonprod schema registries on every deploy, reusing the existing `AvroSchemaRegistrar`/`PropertiesLauncher` one-off-container mechanism — replacing the hand-run registration in `docs/INFRA_RUNBOOK.md`'s "Manual deploy — Plan 05-04 Task 2" and Phase 8 plan 08-01's manual nonprod invocation — rather than introducing a new tool; it extends `deploy.yml`'s existing job graph with the nonprod registration running parallel to, never gating and never gated by, the production deploy path, so one CI run keeps both registries in step with each other, while within each single environment registration completes before that environment's app serves traffic, because `spring.kafka.producer.properties.auto.register.schemas=false` makes an unregistered subject a runtime publish failure rather than a lazy self-heal
 
 ### Data Reset Mechanism
 
@@ -28,7 +28,7 @@
 
 ### API Contract Completeness
 
-- [ ] **API-01**: The generated OpenAPI spec (`/v3/api-docs`) declares the `ProblemDetail` error envelope on every operation that can produce one — springdoc's default reflection-based generation only documents a controller method's declared return type, never a `@ControllerAdvice`/`GlobalExceptionHandler`'s intercepted exception paths, so today every `400/401/403/404/409/500` this API actually returns at runtime is undocumented in the spec, forcing consumers (the frontend repo) to hand-author error types instead of generating them. Close the gap with a global `OpenApiCustomizer`/`GlobalOpenApiCustomizer` bean (not per-endpoint `@ApiResponse` annotation, which has to be remembered on every future controller method) that injects the `ProblemDetail` schema into every operation's `responses` map, plus an automated regression guard — a test asserting the live-generated spec declares the standard error codes, and/or a CI lint step (e.g. Spectral against `/v3/api-docs`) — so this cannot silently regress the way it silently arrived. Discovered live by a frontend-side planning agent during v1.3 Phase 9 planning (2026-08-18); not caught by this repo's own e2e/integration tests because those assert runtime response bodies, never the separately-generated OpenAPI document itself.
+- [x] **API-01**: The generated OpenAPI spec (`/v3/api-docs`) declares the `ProblemDetail` error envelope on every operation that can produce one — springdoc's default reflection-based generation only documents a controller method's declared return type, never a `@ControllerAdvice`/`GlobalExceptionHandler`'s intercepted exception paths, so today every `400/401/403/404/409/500` this API actually returns at runtime is undocumented in the spec, forcing consumers (the frontend repo) to hand-author error types instead of generating them. Close the gap with a global `OpenApiCustomizer`/`GlobalOpenApiCustomizer` bean (not per-endpoint `@ApiResponse` annotation, which has to be remembered on every future controller method) that injects the `ProblemDetail` schema into every operation's `responses` map, plus an automated regression guard — a test asserting the live-generated spec declares the standard error codes, and/or a CI lint step (e.g. Spectral against `/v3/api-docs`) — so this cannot silently regress the way it silently arrived. Discovered live by a frontend-side planning agent during v1.3 Phase 9 planning (2026-08-18); not caught by this repo's own e2e/integration tests because those assert runtime response bodies, never the separately-generated OpenAPI document itself.
 
 ### CI/Deploy Hardening (bundled todos, unblocked by v1.2 Phase 5's deploy.yml rewrite)
 
@@ -67,12 +67,12 @@ Deferred until the frontend repo exists — tracked, not attempted this mileston
 | NONPROD-05 | Phase 8 | Complete |
 | NONPROD-06 | Phase 8 | Complete |
 | RESET-01 | Phase 8 | Complete |
-| CI-01 | Phase 9 | Pending |
-| CI-02 | Phase 9 | Pending |
-| CI-03 | Phase 9 | Pending |
-| CI-04 | Phase 9 | Pending |
-| CI-05 | Phase 9 | Pending |
-| API-01 | Phase 9 | Pending |
+| CI-01 | Phase 9 | Complete |
+| CI-02 | Phase 9 | Complete |
+| CI-03 | Phase 9 | Complete |
+| CI-04 | Phase 9 | Complete |
+| CI-05 | Phase 9 | Complete |
+| API-01 | Phase 9 | Complete |
 | HARDEN-01 | Phase 10 | Pending |
 | HARDEN-02 | Phase 10 | Pending |
 | HARDEN-03 | Phase 10 | Pending |
