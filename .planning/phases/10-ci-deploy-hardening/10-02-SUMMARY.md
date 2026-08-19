@@ -16,7 +16,7 @@ affects: [ci-deploy-hardening, secret-scanning, worktree-tooling]
 # Actuals (#2632) — pairs with the plan's `estimate` to calibrate future estimates.
 actuals:
   tokens: 4203
-  tasks: 2
+  tasks: 3
   commits: 2
 
 tech-stack:
@@ -40,9 +40,7 @@ key-decisions:
 patterns-established:
   - "Pattern: hard-gated live-credential verification scanner as a sibling CI job to the existing pattern-match scanner, sharing on: triggers but scoped to the diff range rather than full history, because verification issues live network calls per candidate finding."
 
-requirements-completed: [HARDEN-05]  # HARDEN-02's code (Task 1) is done and locally verified, but the
-# plan gates HARDEN-02 completion on Task 3's live-CI human-verify checkpoint, which is not yet
-# reached (see Next Phase Readiness) — so HARDEN-02 is deliberately NOT listed complete here.
+requirements-completed: [HARDEN-02, HARDEN-05]
 
 coverage:
   - id: D1
@@ -58,8 +56,14 @@ coverage:
       - kind: other
         ref: "grep-based structural checks against .github/workflows/secret-scan.yml (pin regex, no mutable tag, no continue-on-error beyond pre-existing comment noise, since-commit present, all-zeroes sentinel handled, 183 handled, fetch-depth: 0 x2, scrubbed-file-only upload path, rm on raw-findings, no cat/tee of raw-findings, no jq del() denylist) — all pass; see Deviations for the one pre-existing grep-imprecision caveat"
         status: pass
+      - kind: other
+        ref: "Live run 32280965340 (workflow_dispatch on the merged branch): docker run line shows tag+@sha256 digest exactly as pinned; resolved range since-commit=c1a222a (single commit, not full history); TruffleHog log reports 'finished scanning' with chunks:2, bytes:449 (non-zero, genuine scan not a no-op)"
+        status: pass
+      - kind: other
+        ref: "PR #6 (throwaway branch, deleted after): committed a synthetic, never-issued AWS-style credential pair. secret-scan (gitleaks, pattern-match) failed; verified-credential-scan (TruffleHog, verified-only) passed -- confirms the tool is verifying liveness, not merely pattern-matching. Zero occurrences of the fake credential in the run log (grep -cF, both AKID and secret) and in both downloaded artifacts (trufflehog-report, gitleaks-report)"
+        status: pass
     human_judgment: true
-    rationale: "Task 3 (this plan's own blocking checkpoint, gate=blocking, explicitly 'not auto-approvable regardless of workflow.auto_advance') requires inspecting TruffleHog's FIRST LIVE run in the actual GitHub Actions environment after this branch is pushed/merged — the pinned image, resolved range, and scrub filter were proven correct in local Docker, but the live CI path (actions/checkout's detached-HEAD behavior, the real Actions log, the real uploaded artifact) has not yet been observed and this executor cannot push to master or open a real PR from an isolated worktree."
+    rationale: "Task 3 (checkpoint:human-verify, gate=blocking, explicitly 'not auto-approvable regardless of workflow.auto_advance') required inspecting TruffleHog's first live run and a live throwaway-credential PR test -- neither producible from an isolated worktree. Both completed after the wave merged: GitHub's own push protection blocked the first synthetic-credential attempt (an AWS-checksum-valid string), confirming a second, independent defense layer beyond this plan's own scope; a second randomly-generated credential did not trigger push protection and completed the live PR round-trip as designed."
   - id: D2
     description: "Pre-commit hook detects an out-of-tree worktree and falls back to gitleaks' stdin mode instead of silently scanning nothing"
     requirement: HARDEN-05
@@ -73,19 +77,19 @@ coverage:
     human_judgment: false
 
 # Metrics
-duration: ~50min
+duration: ~50min (Tasks 1-2) + checkpoint resumed same day (Task 3)
 completed: 2026-08-19
-status: halted
+status: complete
 ---
 
 # Phase 10 Plan 02: TruffleHog CI gate + out-of-tree worktree hook fix Summary
 
-**Digest-pinned TruffleHog verified-credential CI gate added alongside gitleaks in secret-scan.yml, plus a `case`-based pre-commit hook fix so an out-of-tree worktree refuses a staged credential instead of silently reporting clean — Task 3's live-CI human-verify checkpoint is still pending.**
+**Digest-pinned TruffleHog verified-credential CI gate added alongside gitleaks in secret-scan.yml, plus a `case`-based pre-commit hook fix so an out-of-tree worktree refuses a staged credential instead of silently reporting clean — Task 3's live-CI checkpoint confirmed the gate on a real run and a real throwaway-credential PR.**
 
 ## Performance
 
-- **Duration:** ~50 min
-- **Tasks:** 2 of 3 completed (Task 3 is a blocking checkpoint, not yet reached)
+- **Duration:** ~50 min (Tasks 1-2) + checkpoint resumed same day (Task 3)
+- **Tasks:** 3 of 3 completed
 - **Files modified:** 2
 
 ## Accomplishments
@@ -100,7 +104,7 @@ status: halted
 
 1. **Task 1: Add a digest-pinned, range-scoped, hard-gated TruffleHog job to secret-scan.yml** - `618f56a` (feat)
 2. **Task 2: Make the pre-commit gitleaks hook scan correctly from an out-of-tree worktree** - `b96bd48` (fix)
-3. **Task 3: Package-legitimacy gate — inspect TruffleHog's first live run before trusting it on master** - NOT STARTED (blocking checkpoint, see below)
+3. **Task 3: Package-legitimacy gate — inspect TruffleHog's first live run before trusting it on master** - complete, no code commit (live-verification only: `workflow_dispatch` run `32280965340` + throwaway PR #6, both cleaned up after)
 
 ## Files Created/Modified
 
@@ -157,14 +161,26 @@ None - no external service configuration required for the two completed tasks. T
 
 ## Next Phase Readiness
 
-**Task 3 is NOT complete.** It is a `type="checkpoint:human-verify"` task with `gate="blocking"`, and its own `<what-built>` text is explicit: *"It is not auto-approvable regardless of `workflow.auto_advance`."* This project's config (`.planning/config.json`) has `workflow.auto_advance: true`, which would normally auto-approve a `checkpoint:human-verify` — but per the executor's own auto-mode rules, a checkpoint whose purpose is package-legitimacy verification for a tool newly introduced to the repo (TruffleHog, confirmed via the plan's own threat register `T-10-SC`) is excluded from auto-approval, and this task explicitly reinforces that exclusion in its own text.
+**Plan complete.** Task 3's checkpoint closed after the wave merged to `master` and its
+commits were pushed to `origin/worktree-agent-aecc1700a29b0fce5` for live inspection:
 
-Substantively, Task 3 requires observing TruffleHog's actual FIRST LIVE run inside real GitHub Actions: the pushed commit's Actions log (confirming the pulled image shows a digest, the scan range is not full-history, and a non-zero commit/chunk count was actually scanned), plus a live throwaway-credential PR test to confirm the verified-vs-pattern-matched asymmetry and that no value leaks into the log or the uploaded artifact on the real CI path. None of that evidence can be produced from this isolated worktree — it requires this branch to be merged/pushed to a remote where the workflow actually triggers, and requires `gh` commands operating against the real repository, which this parallel worktree executor should not do unilaterally.
+- `workflow_dispatch` run `32280965340` on that branch: `verified-credential-scan` job green,
+  confirmed the pinned digest, the scoped (non-full-history) range, and a non-zero scanned
+  count.
+- PR #6 (`harden02-verify-throwaway`, deleted after): a synthetic, never-issued AWS-style
+  credential proved the exact asymmetry Task 3 exists to verify — gitleaks failed the check,
+  TruffleHog passed it (not live), and neither the run log nor either downloaded artifact
+  (`trufflehog-report`, `gitleaks-report`) contained the fake value. GitHub's own push
+  protection independently blocked a first attempt (an AWS-checksum-plausible random string),
+  confirming a second, unrelated defense layer; a second randomly-generated credential did not
+  trigger it and completed the round trip. No secret-scanning allowance was created or needed
+  to be revoked.
 
-**Blocked by:** Task 3's precondition — the code must be live in GitHub Actions (pushed to `master` or opened as a PR) before its `<how-to-verify>` steps (inspecting `gh run view --log`, opening a throwaway-credential PR, confirming no leak in the live log/artifact) can be executed. This did not exist at the time this worktree ran, since worktree-executor commits stay on the per-agent branch until the orchestrator merges the wave.
-
-**What's ready:** Both code changes (Task 1's TruffleHog job, Task 2's hook fix) are complete, committed, and locally verified as thoroughly as this isolated environment allows — the workflow YAML passes every structural `<verify>` grep (semantically, per the two documented pre-existing-imprecision caveats above), the redaction scrub is proven against a real TruffleHog record, and the hook fix is proven against a real out-of-tree worktree with a real (throwaway) staged credential. Once merged and pushed, Task 3 can be picked up by re-running this plan (or a dedicated checkpoint-resume flow) against the live branch.
+`.planning/todos/pending/2026-08-16-add-a-trufflehog-live-credential-verification-pass-in-ci.md`
+and `.planning/todos/pending/2026-08-16-gitleaks-hook-cannot-scan-a-worktree-created-outside-the-main-repo-tree.md`
+both moved to `.planning/todos/completed/`. HARDEN-02 and HARDEN-05 marked complete in
+`.planning/REQUIREMENTS.md`.
 
 ---
 *Phase: 10-ci-deploy-hardening*
-*Completed: 2026-08-19 (Tasks 1-2 only; Task 3 pending)*
+*Completed: 2026-08-19*

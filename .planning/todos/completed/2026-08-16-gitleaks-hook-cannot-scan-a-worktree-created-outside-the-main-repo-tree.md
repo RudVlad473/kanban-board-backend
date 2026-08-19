@@ -1,9 +1,10 @@
 ---
 created: 2026-08-16T12:13:00.000Z
+resolved: 2026-08-19
+resolves_phase: 10
 title: gitleaks pre-commit hook cannot scan a git worktree created outside the main repo tree
 area: tooling
 severity: minor
-resolves_phase: 10
 files:
   - .githooks/pre-commit
 ---
@@ -34,3 +35,18 @@ hitting it. If fixed, the fix likely needs either (a) detecting the outside-main
 falling back to a `stdin`-mode scan (loses path-based allowlist context, per
 260816-hn1-MEASUREMENTS.md's own documented trade-off) or (b) mounting two separate volumes
 (work tree + git-dir) and reconstructing the relative `commondir` link inside the container.
+
+## Resolution
+
+Closed by **Phase 10, Plan 02**, approach (a): `.githooks/pre-commit` now branches on
+`case "$GIT_TOPLEVEL" in "$MOUNT_ROOT"|"$MOUNT_ROOT"/* ... *) ... esac`. The existing bind-mount
+path is unchanged for plain checkouts and this repo's nested `.claude/worktrees/<name>`
+convention; a genuinely out-of-tree worktree now falls back to gitleaks' own documented `stdin`
+mode (`git diff --cached | gitleaks stdin`), accepting the documented path-based-allowlist-context
+trade-off — which costs nothing today since `.gitleaks.toml` carries only rule-scoped allowlists,
+no path-scoped ones.
+
+Verified against a real out-of-tree worktree (`git worktree add` to a path genuinely outside this
+repo's directory tree, confirmed via `git-common-dir`) with a real staged synthetic credential:
+the hook correctly refused (exit 1, redacted values in the message). The nested-worktree/plain-
+checkout regression path was re-run on a clean diff and still passes.

@@ -1,9 +1,10 @@
 ---
 created: 2026-08-16T12:13:00.000Z
+resolved: 2026-08-19
+resolves_phase: 10
 title: Add a TruffleHog live-credential verification pass in CI
 area: security
 severity: minor
-resolves_phase: 10
 files:
   - .github/workflows/secret-scan.yml
 ---
@@ -33,3 +34,20 @@ way regex alone cannot, and giving a clear rotation-priority signal if a real le
 Not scoped as part of 260816-hn1 — that task's blast radius was "make the two existing gates
 real," not "add a second scanner." This is worth doing as a follow-up, not urgent, since the
 primary gate (gitleaks, hard-gated at both hook and CI) already closes the main gap.
+
+## Resolution
+
+Closed by **Phase 10, Plan 02**. A hard-gated `verified-credential-scan` job added to
+`secret-scan.yml`, running a digest-pinned TruffleHog pass
+(`ghcr.io/trufflesecurity/trufflehog:3.97.0@sha256:ff4c95e9df7d645daf2140e3ca1039031c63106268d5fbb25feb43ceca1bcc33`)
+scoped to the pushed/PR'd commit range, never full history. Findings are scrubbed through a jq
+field-allowlist before upload (TruffleHog ships no `--redact` equivalent, so the raw stream —
+which by construction carries the matched value of any live finding — is never printed or
+uploaded).
+
+Verified live, not merely locally: PR #6 (throwaway branch, deleted after) committed a
+synthetic, never-issued AWS-style credential pair. Result confirmed the exact asymmetry this
+todo exists to deliver — `secret-scan` (gitleaks, pattern-match) failed the check, while
+`verified-credential-scan` (TruffleHog, verified-only) passed, because the key was never live.
+Confirmed zero leakage of the fake credential in both the job log and both uploaded artifacts
+(`trufflehog-report`, `gitleaks-report`).
