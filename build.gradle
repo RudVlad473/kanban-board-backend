@@ -101,6 +101,38 @@ repositories {
     maven { url 'https://packages.confluent.io/maven/' }
 }
 
+// --- Dependency-verification metadata (Phase 10, folded todo) -------------------------------
+// gradle/verification-metadata.xml (generated, git-tracked, NOT gitignored) records a SHA-256
+// checksum for every artifact Gradle resolves from this dependencies block, the plugins block
+// above, and every custom task's own resolved configuration (fastTest, registerSchemas,
+// rehearseHistoricalSchemas, verifyRuntimeDependencyFloor). It closes a trust boundary an exact
+// version pin alone does not: an artifact republished under the SAME group:name:version on Maven
+// Central or the Confluent repository is refused at resolution time if its content no longer
+// matches the committed checksum -- version pins only catch a *different* version, not a
+// same-version substitution.
+//
+// Regeneration command (run this after ANY dependency/plugin change to this file):
+//   ./gradlew --write-verification-metadata sha256 --refresh-dependencies spotlessCheck test
+// Driven through spotlessCheck+test deliberately, not a minimal `help` task -- `help` under-
+// resolves and produces a file that passes locally but fails the first time CI resolves a
+// configuration `help` never touched. --refresh-dependencies is NOT optional here (discovered
+// live, this task): a first generation run without it silently under-captured the buildscript
+// `classpath` configuration's dynamic-version-range candidates (guava-parent, jackson-bom,
+// junit-bom POMs/modules evaluated while resolving version ranges for this file's plugins) --
+// those were served from a pre-existing warm local cache instead of being freshly resolved and
+// hashed, so the very next `--refresh-dependencies` run (a real cold/CI-like resolution) failed
+// verification on artifacts nothing in this file's own dependency graph names directly. Confirmed
+// by reproducing the failure with NO code change (bisected against a scratch dependency to rule
+// it out), then confirmed fixed by regenerating with --refresh-dependencies included.
+//
+// Dependabot consequence (read this if a gradle-ecosystem Dependabot PR is red): every such PR
+// bumps a dependency whose new artifact is not yet in gradle/verification-metadata.xml, so its
+// build WILL fail with a Gradle dependency-verification error until a human regenerates and
+// commits the metadata file alongside the bump. This is expected behaviour, not a break --
+// confirmed empirically (Task 2, Phase 10 plan 10-04): a same-version-bumped dependency added on
+// a scratch branch failed `./gradlew spotlessCheck test --refresh-dependencies` with Gradle's own
+// verification error naming the missing checksum, so no separate CI staleness-check step exists;
+// Gradle's resolution-time enforcement already covers it.
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
