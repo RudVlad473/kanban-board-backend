@@ -16,8 +16,8 @@ affects: [ci-deploy-hardening, security-scan]
 
 actuals:
   tokens: 1350
-  tasks: 2
-  commits: 3
+  tasks: 3
+  commits: 4
 
 tech-stack:
   added: []
@@ -34,25 +34,37 @@ key-decisions:
   - "Diagnosed before attempting a blind fix (Approach B from the plan's trade-off matrix), per RESEARCH.md Pitfall 7 -- confirmed correct: a blind re-set would have worked, but only by accident, and would have destroyed the evidence of what was actually wrong."
   - "Diagnostic step bound to a differently-named env var (SECRET_VALUE, not NVD_API_KEY) so its own env: binding is textually distinct from the two load-bearing NVD_API_KEY bindings -- keeps the plan's own verify grep (`NVD_API_KEY: \${{ secrets.NVD_API_KEY }}` must print exactly 2) meaningful."
 
-requirements-completed: []  # HARDEN-06's version/comment half is done (Task 1); the plan is not yet complete -- see status below.
+requirements-completed: [HARDEN-06]
 
-coverage: []
+coverage:
+  - id: D1
+    description: "NVD_API_KEY root cause named on live diagnostic evidence (genuinely empty stored value, not scope/whitespace/policy), remedied by the repository owner, and confirmed by an actually-green dependencyCheckAnalyze run with the diagnostic probe removed"
+    requirement: HARDEN-06
+    verification:
+      - kind: other
+        ref: "workflow_dispatch run 32278248354 (probe still present): 'NVD_API_KEY: variable is set and non-empty', byte length 36 -- dependencyCheckAnalyze completed, dependency-check-report artifact uploaded"
+        status: pass
+      - kind: other
+        ref: "workflow_dispatch run 32280511632 (probe removed, commit 076b729): dependencyCheckAnalyze completed in 29s, dependency-check-report artifact uploaded (41777 bytes), no diagnostic step in the job list"
+        status: pass
+    human_judgment: true
+    rationale: "Task 3 (checkpoint:human-verify, gate=blocking) required the repository owner to supply a real, confirmed-correct NVD API key -- a credential the executor cannot fabricate or obtain -- then re-verify live. The owner re-set the secret via gh secret set on 2026-08-19; both live confirmation runs above followed."
 
-duration: ~35min (2 tasks, blocked at checkpoint)
+duration: ~35min (2 tasks initially, checkpoint resumed same day)
 completed: 2026-08-19
-status: halted
+status: complete
 ---
 
 # Phase 10 Plan 03: security-scan.yml Version Bump + NVD_API_KEY Diagnosis Summary
 
-**HARDEN-06's pin bump shipped and verified; the folded NVD_API_KEY bug is diagnosed live (byte length 0, digest matches SHA-256("") exactly, no whitespace, not in either environment scope, no restrictive Actions policy) but not yet fixed -- the remedy needs a real secret value only the repository owner has.**
+**HARDEN-06 fully shipped: pin bump verified, and the folded NVD_API_KEY bug is diagnosed live (byte length 0, digest matched SHA-256("") exactly), remedied by the repository owner re-setting the secret, and confirmed by a second live run with the diagnostic probe removed.**
 
 ## Performance
 
-- **Duration:** ~35 min (2 of 3 tasks; Task 3 is a blocking human checkpoint)
+- **Duration:** ~35 min (Tasks 1-2) + checkpoint resumed same day (Task 3)
 - **Started:** 2026-08-19T15:06:00Z (approx, first commit attempt)
-- **Completed:** N/A -- halted at checkpoint
-- **Tasks:** 2 of 3 completed
+- **Completed:** 2026-08-19
+- **Tasks:** 3 of 3 completed
 - **Files modified:** 1 (`.github/workflows/security-scan.yml`)
 
 ## Accomplishments
@@ -76,13 +88,16 @@ Each task was committed atomically:
 
 1. **Task 1: Bring security-scan.yml's action pins and comments up to date (HARDEN-06)** - `9a7c2d5` (fix)
 2. **Task 2: Diagnose why NVD_API_KEY resolves empty, without disclosing it** - `48020fd` (fix), plus a same-task auto-fix `ea2a321` (fix) -- see Deviations below
+3. **Task 3: Read the diagnosis, apply the remedy, remove the probe, and prove a green run** - `076b729` (fix)
 
-**Plan metadata:** this commit (`docs(10-03): checkpoint -- Task 3 blocked on human action`)
+**Plan metadata:** `docs(10-03): checkpoint -- Task 3 blocked on human action` (superseded by Task 3's completion)
 
-Task 3 (`type="checkpoint:human-verify" gate="blocking"`) has NOT been executed. It requires a
-human to read the diagnostic evidence, apply the remedy (re-setting `NVD_API_KEY` with a value
-only the repository owner has), remove the temporary diagnostic step, and confirm a green
-`dependencyCheckAnalyze` run. See "Next Phase Readiness" below for the exact resume steps.
+Task 3 (`type="checkpoint:human-verify" gate="blocking"`) is now complete. The repository owner
+re-set `NVD_API_KEY` via `gh secret set` on 2026-08-19, confirmed live via `workflow_dispatch` run
+`32278248354` (byte length 36, non-empty), then the temporary diagnostic step was removed
+(`076b729`) and a second confirming run (`32280511632`) completed green -- `dependencyCheckAnalyze`
+finished in 29s and `dependency-check-report` (41777 bytes) was uploaded, with no diagnostic step
+present in the job list.
 
 ## Files Created/Modified
 
@@ -262,16 +277,14 @@ The repository owner must:
 
 ## Next Phase Readiness
 
-**Not ready to close this plan.** Tasks 1 and 2 are complete, committed, and pushed
-(`worktree-agent-aecc1700a29b0fce5`, commits `9a7c2d5`, `48020fd`, `ea2a321`). Task 3 is a
-`checkpoint:human-verify gate="blocking"` task that requires the repository owner's action (a
-secret value this executor does not have and must not fabricate) plus a final live-verified green
-run before this plan's own `<verification>` and `<success_criteria>` can be honestly marked met.
+**Plan complete.** All three tasks are committed to `master` (`9a7c2d5`, `48020fd`, `ea2a321`,
+`076b729`) and pushed to `origin/worktree-agent-aecc1700a29b0fce5` for live verification.
+`.planning/todos/pending/2026-08-19-security-scan-yml-nvd-api-key-not-resolving.md` moved to
+`.planning/todos/completed/` with the named root cause and remedy recorded. HARDEN-06 marked
+complete in `.planning/REQUIREMENTS.md`.
 
-A continuation agent (or the repository owner directly) should resume at Task 3 using the
-diagnostic evidence recorded above -- no further diagnosis is needed, only the remedy, the probe's
-removal, and a confirming green dispatch.
+10-04 (blocked on this plan via `depends_on: [10-01, 10-03]`) is now unblocked.
 
 ---
 *Phase: 10-ci-deploy-hardening*
-*Halted at checkpoint: 2026-08-19*
+*Completed: 2026-08-19*

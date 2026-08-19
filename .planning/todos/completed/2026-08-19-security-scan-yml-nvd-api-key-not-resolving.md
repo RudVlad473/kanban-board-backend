@@ -1,9 +1,10 @@
 ---
 created: 2026-08-19T08:53:30.000Z
+resolved: 2026-08-19
+resolves_phase: 10
 title: security-scan.yml's dependency-check job fails "NVD_API_KEY repository secret is not set" despite the secret existing
 area: ci
 severity: moderate
-resolves_phase: 10
 files:
   - .github/workflows/security-scan.yml
 ---
@@ -46,3 +47,30 @@ value.
 3. If the stored value is correct but still resolves empty: investigate whether `dependency-check`'s job-level `permissions: contents: read` (no `secrets: read` equivalent needed under GH's model, but worth double-checking) or an org-level secret policy is the actual blocker.
 4. Re-run `security-scan.yml` via `workflow_dispatch` after the fix and confirm a full green
    `dependencyCheckAnalyze` execution, not just the presence check passing.
+
+## Resolution
+
+Closed by **Phase 10, Plan 03**. A non-disclosing diagnostic step (byte length, non-printable
+character count, and two truncated SHA-256 digests — raw and whitespace-stripped — never the
+value itself) was added ahead of the analyze step and exercised live via `workflow_dispatch`
+(runs `32269729257`, `32269993494`).
+
+**Root cause confirmed, not guessed:** the stored `NVD_API_KEY` value resolved to a genuine
+zero-byte string inside the job — both truncated digests matched `sha256("")` exactly
+(`e3b0c44298fc1c14`), and the non-printable-character count was `0`, ruling out a whitespace or
+encoding artifact. Environment-scope migration was independently ruled out (`gh secret list
+--env production`/`--env staging` both show the secret absent at either scope — nothing for the
+job to have missed by declaring no `environment:`), as was an org/repo Actions policy
+(`allowed_actions: all`, no `sha_pinning_required`). `gh secret list` showed `NVD_API_KEY`
+unchanged since 2026-08-13T17:47:43Z across the entire failure window, consistent with either a
+GitHub-side storage defect for that specific write or an already-empty value having been piped
+into the original `gh secret set` — the diagnostic cannot distinguish those two, and no attempt
+is made to guess between them here.
+
+**Remedy:** repository owner re-set `NVD_API_KEY` with a freshly confirmed-non-empty value via
+`gh secret set` on 2026-08-19. Verified live, twice: run `32278248354` (diagnostic step still
+present) showed `NVD_API_KEY: variable is set and non-empty` / byte length 36, and
+`dependencyCheckAnalyze` completed with the `dependency-check-report` artifact uploaded. The
+diagnostic step was then removed (commit `076b729`) and a second, final confirmation run
+(`32280511632`) completed green in 29s with the same artifact uploaded and no diagnostic step in
+the job list — the fix ships, the probe does not.

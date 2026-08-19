@@ -134,7 +134,7 @@ Plans:
   4. Session cookies carry the `Secure` flag in both `application.properties` and `application-test.properties`, and authenticated flows still pass end-to-end against a TLS-served environment
   5. A newcomer reading only the README can see the system's architecture, stack, and deployment shape without opening `docs/`
 
-**Plans**: 3/6 plans executed
+**Plans**: 4/6 plans executed
 
 Plans:
 **Wave 1** *(no file overlap — parallelisable)*
@@ -146,7 +146,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1 — file overlap on `deploy.yml`/`security-scan.yml`, and a settled CI baseline for the live cookie verification)*
 
 - [ ] 10-04-PLAN.md — Gradle build-tooling integrity: `distributionSha256Sum` pin, `gradle/actions/wrapper-validation` ahead of every `./gradlew`, and dependency-verification metadata (folded todos only — a trust boundary CONTEXT.md defines as distinct from HARDEN-03, which plan 10-01 owns in full; no formal HARDEN-* ID)
-- [ ] 10-05-PLAN.md — `Secure` session cookie in both profiles, guarded by a new real-socket assertion over the actual `Set-Cookie`, verified live against TLS-served nonprod (HARDEN-07)
+- [x] 10-05-PLAN.md — `Secure` session cookie in both profiles, guarded by a new real-socket assertion over the actual `Set-Cookie`, verified live against TLS-served nonprod (HARDEN-07)
 
 **Wave 3** *(blocked on Waves 1-2 — the README must describe the gates that actually shipped, after every checkpoint resolves)*
 
@@ -161,7 +161,7 @@ Phases execute in numeric order: 8 → 9 → 10
 |-------|-----------|----------------|--------|-----------|
 | 8. Isolated Nonprod Environment, Live and Resettable | v1.3 | 3/3 | Complete    | 2026-08-18 |
 | 9. Nonprod Continuous Deploy & Scoped CI Credentials | v1.3 | 4/4 | Complete    | 2026-08-19 |
-| 10. CI & Deploy Hardening | v1.3 | 3/6 | In Progress|  |
+| 10. CI & Deploy Hardening | v1.3 | 4/6 | In Progress|  |
 
 | Milestone | Phases | Plans | Status | Shipped |
 |-----------|--------|-------|--------|---------|
