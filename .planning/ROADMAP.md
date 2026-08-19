@@ -56,7 +56,7 @@ Full details: [milestones/v1.2-ROADMAP.md](milestones/v1.2-ROADMAP.md)
 
 - [x] **Phase 8: Isolated Nonprod Environment, Live and Resettable** - A second, production-isolated stack (Neon branch + own Redpanda + own HTTPS hostname) running on the existing VPS with measured resource caps and a curl-driven data reset (completed 2026-08-18)
 - [x] **Phase 9: Nonprod Continuous Deploy & Scoped CI Credentials** - Every push to master redeploys, re-registers Avro schemas for, and health-checks nonprod through GitHub Environments-scoped secrets, with zero ability to disturb production (completed 2026-08-19)
-- [ ] **Phase 10: CI & Deploy Hardening** - The eight accumulated hardening todos: dependabot actions ecosystem, TruffleHog verification, digest-pinned actions, gradle cache, gitleaks worktree fix, security-scan cleanup, `Secure` session cookie, README architecture showcase
+- [x] **Phase 10: CI & Deploy Hardening** - The eight accumulated hardening todos: dependabot actions ecosystem, TruffleHog verification, digest-pinned actions, gradle cache, gitleaks worktree fix, security-scan cleanup, `Secure` session cookie, README architecture showcase (completed 2026-08-19)
 
 ## Phase Details
 
@@ -134,7 +134,7 @@ Plans:
   4. Session cookies carry the `Secure` flag in both `application.properties` and `application-test.properties`, and authenticated flows still pass end-to-end against a TLS-served environment
   5. A newcomer reading only the README can see the system's architecture, stack, and deployment shape without opening `docs/`
 
-**Plans**: 5/6 plans executed
+**Plans**: 6/6 plans executed
 
 Plans:
 **Wave 1** *(no file overlap — parallelisable)*
@@ -150,7 +150,7 @@ Plans:
 
 **Wave 3** *(blocked on Waves 1-2 — the README must describe the gates that actually shipped, after every checkpoint resolves)*
 
-- [ ] 10-06-PLAN.md — README restructured into a production-reality-first architecture showcase with one embedded Mermaid diagram and inline stack rationale (HARDEN-08)
+- [x] 10-06-PLAN.md — README restructured into a production-reality-first architecture showcase with one embedded Mermaid diagram and inline stack rationale (HARDEN-08)
 
 ## Progress
 
@@ -161,7 +161,7 @@ Phases execute in numeric order: 8 → 9 → 10
 |-------|-----------|----------------|--------|-----------|
 | 8. Isolated Nonprod Environment, Live and Resettable | v1.3 | 3/3 | Complete    | 2026-08-18 |
 | 9. Nonprod Continuous Deploy & Scoped CI Credentials | v1.3 | 4/4 | Complete    | 2026-08-19 |
-| 10. CI & Deploy Hardening | v1.3 | 5/6 | In Progress|  |
+| 10. CI & Deploy Hardening | v1.3 | 6/6 | Complete    | 2026-08-19 |
 
 | Milestone | Phases | Plans | Status | Shipped |
 |-----------|--------|-------|--------|---------|
