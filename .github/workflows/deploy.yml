@@ -352,7 +352,7 @@ jobs:
     if: success()
     environment: staging
     env:
-      NONPROD_HEALTH_URL: https://kanban-board-rud-vlad-473-nonprod.duckdns.org/api/actuator/health
+      NONPROD_HEALTH_URL: https://this-host-does-not-exist.invalid/api/actuator/health
       ATTEMPTS: 30
       SLEEP_SECONDS: 10
     steps:
