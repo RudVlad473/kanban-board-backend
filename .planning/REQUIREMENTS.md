@@ -32,10 +32,10 @@
 
 ### CI/Deploy Hardening (bundled todos, unblocked by v1.2 Phase 5's deploy.yml rewrite)
 
-- [ ] **HARDEN-01**: `.github/dependabot.yml` gains a `package-ecosystem: "github-actions"` entry, alongside the existing `gradle` entry (resolves pending todo 2026-08-13-add-github-actions-ecosystem-to-dependabot-after-deploy-rewrite.md)
+- [x] **HARDEN-01**: `.github/dependabot.yml` gains a `package-ecosystem: "github-actions"` entry, alongside the existing `gradle` entry (resolves pending todo 2026-08-13-add-github-actions-ecosystem-to-dependabot-after-deploy-rewrite.md)
 - [ ] **HARDEN-02**: CI runs a TruffleHog live-credential verification pass in `secret-scan.yml`, complementing gitleaks' regex/entropy-only detection with a check for whether a matched credential is currently live and exploitable (resolves pending todo 2026-08-16-add-a-trufflehog-live-credential-verification-pass-in-ci.md)
-- [ ] **HARDEN-03**: `uses:` references in `deploy.yml` and `security-scan.yml` are pinned to commit digests rather than mutable tags, consistent with this repo's own existing scanner precedent (resolves pending todo 2026-08-16-digest-pin-github-actions-mutable-tags-are-currently-trusted-by-tag-only.md)
-- [ ] **HARDEN-04**: `deploy.yml`'s `run-tests` job's `Set up Java` step sets `cache: 'gradle'`, matching the existing precedent in `security-scan.yml` (resolves pending todo 2026-08-16-add-gradle-cache-to-deploy-yml-run-tests-job.md)
+- [x] **HARDEN-03**: `uses:` references in `deploy.yml` and `security-scan.yml` are pinned to commit digests rather than mutable tags, consistent with this repo's own existing scanner precedent (resolves pending todo 2026-08-16-digest-pin-github-actions-mutable-tags-are-currently-trusted-by-tag-only.md)
+- [x] **HARDEN-04**: `deploy.yml`'s `run-tests` job's `Set up Java` step sets `cache: 'gradle'`, matching the existing precedent in `security-scan.yml` (resolves pending todo 2026-08-16-add-gradle-cache-to-deploy-yml-run-tests-job.md)
 - [ ] **HARDEN-05**: The pre-commit gitleaks hook works correctly when invoked from a worktree created outside the main repo tree (resolves pending todo 2026-08-16-gitleaks-hook-cannot-scan-a-worktree-created-outside-the-main-repo-tree.md)
 - [ ] **HARDEN-06**: `security-scan.yml`'s stale `Set up Java` comment and its still-outdated `checkout@v3`/`setup-java@v4` references are corrected (resolves pending todo 2026-08-16-security-scan-yml-stale-comment-and-stale-actions-after-260816-sv1.md)
 - [ ] **HARDEN-07**: The session cookie has the `Secure` flag set in both `application.properties` and `application-test.properties`, now that real TLS exists in production (resolves pending todo 2026-08-10-set-secure-flag-on-session-cookie-once-real-tls-exists.md)
@@ -73,10 +73,10 @@ Deferred until the frontend repo exists — tracked, not attempted this mileston
 | CI-04 | Phase 9 | Complete |
 | CI-05 | Phase 9 | Complete |
 | API-01 | Phase 9 | Complete |
-| HARDEN-01 | Phase 10 | Pending |
+| HARDEN-01 | Phase 10 | Complete |
 | HARDEN-02 | Phase 10 | Pending |
-| HARDEN-03 | Phase 10 | Pending |
-| HARDEN-04 | Phase 10 | Pending |
+| HARDEN-03 | Phase 10 | Complete |
+| HARDEN-04 | Phase 10 | Complete |
 | HARDEN-05 | Phase 10 | Pending |
 | HARDEN-06 | Phase 10 | Pending |
 | HARDEN-07 | Phase 10 | Pending |
