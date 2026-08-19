@@ -399,7 +399,7 @@ jobs:
             echo "Registering Avro schemas against the nonprod registry..."
             docker compose --env-file ./.env.nonprod -f docker-compose.nonprod.yml --profile nonprod run --rm --entrypoint java app-nonprod \
               -Dloader.main=com.vrudenko.kanban_board.config.AvroSchemaRegistrar \
-              -cp app.jar org.springframework.boot.loader.launch.PropertiesLauncher http://redpanda-nonprod:8081
+              -cp app.jar org.springframework.boot.loader.launch.PropertiesLauncher http://redpanda-nonprod-unreachable-test:8081
             docker compose --env-file ./.env.nonprod -f docker-compose.nonprod.yml --profile nonprod up -d app-nonprod
 
   # Bounded health poll (Phase 9, plan 09-02, Task 2) -- a nonprod deploy that starts containers
