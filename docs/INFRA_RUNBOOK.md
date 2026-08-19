@@ -504,6 +504,27 @@ plan/research assumed one was needed for the app's runtime config, but that conf
 `.env.prod` on the VM (plan 05-04) and nothing in this workflow writes or reads it — the pooled
 secret would have had zero consumers. Dropped as unnecessary rather than registered for its own sake.
 
+**Update (2026-08-18, Plan 09-02 Task 1) — this table is now historically inaccurate and
+deliberately left in place, not rewritten.** As of Plan 09-01, every one of the nine deploy secrets
+named above (`NETCUP_SSH_KEY`, `NETCUP_DEPLOY_USER`, `NETCUP_HOST`, `NETCUP_HOST_FINGERPRINT`,
+`DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASS`) plus `DOCKERHUB_TOKEN` also exists as an
+**environment-scoped** secret in both `production` and `staging` (see "Nonprod CI deploy identity
+and environment-scoped secrets — Plan 09-01" below for the full inventory and provenance). Plan
+09-02's Task 1 is the sweep that removes the repository-level copies recorded in this table,
+leaving `NVD_API_KEY` (consumed only by `security-scan.yml`, a workflow whose jobs declare no
+`environment:`) as the sole remaining repository-scoped secret. **That sweep — the actual
+`gh secret delete` calls and the live push-to-`master` proof required by Task 1 parts B/C — was not
+executed inside this worktree**, for the same reason Plan 09-01's own Task 3 gives below ("Task 3
+deliberately deferred"): the deletion is rated `costly` reversibility (GitHub secrets are
+write-only; a repository secret, once deleted, cannot be recovered) and its proof requires a live
+push to `origin/master` and observation of the resulting GitHub Actions run — both of which must
+happen from the merged tree under the operator's/coordinator's direct observation, not from an
+unmerged per-agent worktree branch. This worktree's part of Task 1 is limited to: (a) the mechanical
+precondition re-check below, confirming every job in `deploy.yml` that interpolates a `secrets.`
+value already declares an `environment:` (true both before and after this plan's Task 2/3 additions,
+since the three new jobs also declare `environment: staging`), and (b) this annotation itself. See
+this plan's own SUMMARY.md for the exact remaining steps.
+
 ## Automated deploy — Plan 05-05 Task 2 and Task 3 (2026-08-16)
 
 CI/CD now builds, verifies the schema, and deploys automatically on every push to
