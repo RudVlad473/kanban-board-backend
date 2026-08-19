@@ -25,7 +25,13 @@ updates:
     # Bounds PR noise from an automated actor. Every Dependabot PR still runs deploy.yml's
     # run-tests job (spotlessCheck + the full test suite) like any other PR, so nothing merges
     # untested or unreviewed -- this limit only caps how many can be open at once.
-    open-pull-requests-limit: 5
+    #
+    # Lowered from 5 (Phase 10, 10-04 Task 3): gradle/verification-metadata.xml
+    # (HARDEN, build-tooling supply-chain plan) makes every gradle-ecosystem PR fail CI until
+    # someone regenerates and commits that file alongside the bump -- a real, indefinite
+    # per-bump chore. Fewer concurrently-open PRs means fewer red PRs piling up waiting on that
+    # chore at once; it does not remove the chore itself.
+    open-pull-requests-limit: 2
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

@@ -79,9 +79,12 @@ coverage:
     human_judgment: false
   - id: D5
     description: "Task 3 checkpoint decision on the Dependabot-cost trade-off (accept/soften/revert)"
-    verification: []
+    verification:
+      - kind: other
+        ref: "User explicitly confirmed 'accept with softening': .github/dependabot.yml's gradle-ecosystem open-pull-requests-limit lowered from 5 to 2, so fewer red PRs can pile up waiting on a verification-metadata regeneration at once. The regeneration chore itself is unchanged and unavoidable by design (T-10-22's point: an unverified new artifact should fail)."
+        status: pass
     human_judgment: true
-    rationale: "Policy decision with long-term repo-workflow consequences (every future Dependabot gradle PR requires a metadata-regeneration commit); auto-approved per the auto-mode checkpoint protocol (gate=\"blocking\", not \"blocking-human\") on reasoning alone, but the orchestrator/user should confirm this choice explicitly since no live red Dependabot PR could be observed pre-merge."
+    rationale: "Policy decision with long-term repo-workflow consequences (every future Dependabot gradle PR requires a metadata-regeneration commit); the executor's auto-approval (gate=\"blocking\", not \"blocking-human\") was surfaced to the user as provisional per its own SUMMARY note, and the user confirmed a different choice (softening, not the auto-approved accept-as-is) once actually asked."
 
 duration: 1h11m
 completed: 2026-08-19
@@ -90,13 +93,13 @@ status: complete
 
 # Phase 10 Plan 04: Gradle Wrapper Integrity + Dependency Verification Metadata Summary
 
-**Gradle distribution SHA-256 pin plus `gradle/actions/wrapper-validation@v6` in both CI workflows, and a fully-covering `gradle/verification-metadata.xml` (SHA-256, no PGP) generated only after discovering that `--write-verification-metadata` alone silently under-captures the buildscript classpath and Spotless's own detached formatter configuration.**
+**Gradle distribution SHA-256 pin plus `gradle/actions/wrapper-validation@v6` in both CI workflows, and a fully-covering `gradle/verification-metadata.xml` (SHA-256, no PGP) generated only after discovering that `--write-verification-metadata` alone silently under-captures the buildscript classpath and Spotless's own detached formatter configuration. Task 3's Dependabot-cost decision was surfaced to the user (not left on the executor's provisional auto-approval) — they chose softening over accept-as-is.**
 
 ## Performance
 
-- **Duration:** 1h 11m (base commit 19:18:39 -> Task 2 commit 20:29:39, 2026-08-19)
-- **Tasks:** 2 of 3 completed (Task 3 is a `checkpoint:human-verify` gate, auto-approved -- see Deviations)
-- **Files modified:** 5 (4 modified, 1 created)
+- **Duration:** 1h 11m (base commit 19:18:39 -> Task 2 commit 20:29:39, 2026-08-19) + user decision on Task 3 same day
+- **Tasks:** 3 of 3 completed
+- **Files modified:** 6 (5 modified, 1 created)
 
 ## Accomplishments
 
@@ -127,7 +130,7 @@ status: complete
 - Implemented both wrapper-integrity halves (CI action + distribution checksum) together, matching the plan's own trade-off analysis that neither covers the other's blind spot alone.
 - Regeneration of `gradle/verification-metadata.xml` requires `--write-verification-metadata sha256 --refresh-dependencies --rerun-tasks` together, documented as such in `build.gradle` -- discovered empirically across three failed attempts (see Deviations), not assumed from Gradle's documentation.
 - RESEARCH Open Question 2 resolved: no extra CI staleness-check step was added; Gradle's own resolution-time enforcement already covers it, proven by a real scratch-branch experiment.
-- Task 3's checkpoint (accept/soften/revert the Dependabot cost) was auto-approved as **"accept as-is"** under `workflow.auto_advance: true`. Its `gate="blocking"` (not `"blocking-human"`), so the executor's auto-mode checkpoint protocol applied auto-approval rather than halting. The decision was made on reasoning alone: 5 open gradle-ecosystem Dependabot PRs were found live (`gh pr list --author "app/dependabot"` -- PRs #1-#5, matching the `open-pull-requests-limit: 5` context), but none could be observed red/green against this control because it does not exist on `master` yet (the control has to merge before Dependabot's own CI runs reflect it) -- a chicken-and-egg the checkpoint's own text anticipated ("choose on the reasoning alone... say that is what you did"). "Accept as-is" matches the plan's own stated preference (Approach A "Picked" in the trade-off matrix) and the cost is well-documented and mechanically bounded (one regeneration command). **This choice should be treated as provisional and confirmed explicitly by the user/orchestrator** rather than a fully human-verified outcome -- see Known Gaps below.
+- Task 3's checkpoint (accept/soften/revert the Dependabot cost) was auto-approved by the executor as **"accept as-is"** under `workflow.auto_advance: true`, since its `gate="blocking"` (not `"blocking-human"`) meant the auto-mode checkpoint protocol applied rather than a hard halt. The decision was made on reasoning alone: 5 open gradle-ecosystem Dependabot PRs were found live, but none could be observed red/green against this control because it did not exist on `master` yet. Per its own SUMMARY note ("this choice should be treated as provisional and confirmed explicitly"), the orchestrator surfaced it to the user rather than accepting the auto-approval as final. **The user chose "accept with softening" instead** -- `open-pull-requests-limit` lowered from 5 to 2 for the gradle ecosystem in `.github/dependabot.yml`, with a comment recording why. This is a genuine override of the executor's provisional choice, not a rubber-stamp.
 
 ## Deviations from Plan
 
@@ -159,7 +162,7 @@ status: complete
 
 ## Known Gaps
 
-- **Task 3's checkpoint decision ("accept as-is") was made without observing a live red Dependabot PR against this control**, since the control does not exist on `master` yet. Five open gradle-ecosystem Dependabot PRs exist (`#1`-`#5`) and will need to be re-triggered or rebased after this plan merges to actually exercise the red-then-regenerate flow the checkpoint describes. Flagging this explicitly per the checkpoint's own resume-signal instructions, so the user/orchestrator can override the auto-approved choice if they disagree.
+- **Neither Task 3 outcome (executor's provisional "accept as-is", nor the user's actual "accept with softening") has been observed against a live red Dependabot PR yet.** Five open gradle-ecosystem Dependabot PRs exist (`#1`-`#5`, predating this control) and will need to be re-triggered or rebased after this plan merges to actually exercise the red-then-regenerate flow. The `open-pull-requests-limit: 2` change only bounds future PR pile-up; it does not retroactively affect the 5 already-open PRs above the new limit.
 - **CI-green verification (the wrapper-validation step appearing green in a live `deploy.yml`/`security-scan.yml` Actions run) was not performed** -- this requires the branch to be pushed and merged, which this isolated worktree agent does not do. Deferred to post-merge observation, consistent with `gh workflow run`/`gh run watch` being listed in the plan's `<verify>` block as a live-CI check rather than a local one.
 
 ## Next Phase Readiness
