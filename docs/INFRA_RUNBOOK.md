@@ -171,6 +171,14 @@ connection strings, or credentials were read or requested at any point.
    via `docker compose exec redpanda rpk registry subject list` — returned exactly 14 subjects,
    one per `ActivityEvent` type. **Deviation from plan text:** `05-04-PLAN.md` and `STATE.md` both
    say "5 subjects" — stale, predates quick task `260811-s5e`'s expansion from 6 to 14 event types.
+
+   **Superseded by Plan 09-03 (2026-08-19):** this step now runs automatically on every push to
+   `master`, via the `register-schemas-production` job in `.github/workflows/deploy.yml` — the
+   identical invocation shown above, run by CI instead of by hand. See "## Automated Avro schema
+   registration — Plan 09-03" below for the full detail. The command above remains documented
+   (not deleted) because it is still the correct procedure for a manual bring-up or a recovery
+   from a wiped registry volume — this is a historical record of what was actually executed, per
+   this file's own convention.
 4. **Re-confirmed iptables 80/443** (`sudo iptables -L INPUT -n -v --line-numbers`) before starting
    Caddy — asked for earlier in the session but never actually pasted back at the time; confirmed
    present this time (rules 3–5: `tcp dpt:22`, `tcp dpt:80`, `tcp dpt:443`, all `ACCEPT`, ahead of
@@ -1043,6 +1051,14 @@ command output captured during this bring-up, not an inference from the checked-
    Log: `Registered 14 Avro schemas against http://redpanda-nonprod:8081`. Verified independently via
    `rpk registry subject list` — 14 subjects, matching production's set of Avro class names exactly
    (an independent registration, not a copy).
+
+   **Superseded by Plan 09-03 (2026-08-19):** this step now runs automatically on every push to
+   `master`, as a step inside the `deploy-to-nonprod` job in `.github/workflows/deploy.yml` —
+   positioned between this step and the next (broker up, then register, then `app-nonprod` up),
+   the identical invocation shown above, run by CI instead of by hand. See "## Automated Avro
+   schema registration — Plan 09-03" below for the full detail. The command above remains
+   documented (not deleted) because it is still the correct procedure for a manual bring-up or a
+   recovery from a wiped registry volume.
 7. **`app-nonprod` brought up:**
    `docker compose -f docker-compose.nonprod.yml --env-file ./.env.nonprod --profile nonprod up -d app-nonprod`.
    Reached `(healthy)`. Container log confirmed Flyway migrated the empty branch fresh:
@@ -1181,6 +1197,14 @@ Both `--env-file ./.env.nonprod` and `--profile nonprod` must be passed explicit
 invocation — Compose only auto-loads a file literally named `.env` (the same gotcha
 "Manual deploy — Plan 05-04 Task 1" already documents for `.env.prod`), and the profile flag is
 what keeps a bare `up -d` from creating anything at all (see the profile-gate proof above).
+
+**Updated again by "Automated Avro schema registration — Plan 09-03" below:** schema registration
+against the nonprod registry is no longer a manual follow-up step for this deploy sequence — CI
+(the `deploy-to-nonprod` job) registers all 14 schemas automatically on every push to `master`,
+between bringing up `redpanda-nonprod` and bringing up `app-nonprod`. An operator only needs to
+run the registrar command by hand (see the superseded step 6 above) for a manual bring-up of this
+kind, or to recover a registry that was wiped (e.g. by a volume deletion) outside of CI's own
+push-triggered run.
 
 ### Bring-up date
 
@@ -1948,6 +1972,167 @@ step directly:
 
 Every acceptance criterion in this plan's Task 1 Part C, Task 2, and Task 3 is now live-verified, not
 just statically checked. See this plan's `09-02-SUMMARY.md` for the full commit/run reference list.
+
+## Automated Avro schema registration — Plan 09-03 (2026-08-19)
+
+Automates the last hand-run step in this project's deploy (CI-05): registering the application's
+14 Avro schemas against both the production and nonprod Confluent-compatible Schema Registries on
+every push to `master`, reusing the existing `AvroSchemaRegistrar`/`PropertiesLauncher`
+one-off-container mechanism verbatim (`src/main/java/com/vrudenko/kanban_board/config/AvroSchemaRegistrar.java`
+is unmodified by this plan — no source file under `src/` was touched, confirmed by
+`git diff --name-only -- src/` returning empty across this plan's commits). `AvroSchemaRegistrar`
+remains the only code in this repository that writes schemas to a registry (SCHEMA-01); the deployed
+application itself is configured `spring.kafka.producer.properties.auto.register.schemas=false`, so
+it can only look a schema up, never register one.
+
+### Task 1 checkpoint — decision and rationale
+
+The human operator selected **option-a**: `register-schemas-production` runs as its own job
+immediately *after* `deploy-to-netcup`, rather than restructuring `deploy-to-netcup` itself to gate
+`up -d` on registration succeeding first (option-b) or deferring the choice to Phase 10 (option-c).
+Rationale, as given: option-a is strictly better than the status quo (the unregistered window
+shrinks from "until an operator remembers the runbook" to "this job's own startup latency"), makes
+zero behaviour changes to a live, proven production deploy script, and avoids introducing a new
+production failure mode (a schema-registry outage blocking an otherwise-successful deploy) — all
+while an incompatible schema still reddens the run via the same exit-code chain nonprod's own
+registration relies on. This matches `09-RESEARCH.md`'s own recommendation and the non-regressing
+reading of CI-05.
+
+This creates a deliberate, *recorded* asymmetry between the two environments, not an oversight:
+
+- **Nonprod** gets CI-05's "registration completes before that environment's app serves traffic"
+  clause literally. Nonprod was being automated from scratch with no existing traffic to protect,
+  so there was no reason to accept a window here — registration is a step *inside*
+  `deploy-to-nonprod`'s own SSH script, positioned between `up -d redpanda-nonprod` and
+  `up -d app-nonprod`. `app-nonprod` does not exist as a process until registration has already
+  succeeded, and a registration failure aborts the script before that line is ever reached.
+- **Production** keeps its existing brief window between `up -d` and registration — this is not a
+  gap this plan introduces, it is the status quo (a hand-run post-deploy step since v1.2 Phase 5,
+  see "Manual deploy — Plan 05-04 Task 1" above) now automated rather than left to an operator's
+  memory. `register-schemas-production` is its own job, `needs: [ deploy-to-netcup,
+  build-and-push-docker-image ]`, `environment: production`, with no `needs:` edge to any nonprod
+  job — it neither gates nor is gated by the nonprod deploy path.
+
+### The two invocations, verbatim as they appear in CI
+
+**Nonprod** — a step inside `deploy-to-nonprod`'s existing `appleboy/ssh-action` script
+(`.github/workflows/deploy.yml`), between the broker-up and app-up lines:
+```
+docker compose --env-file ./.env.nonprod -f docker-compose.nonprod.yml --profile nonprod run --rm --entrypoint java app-nonprod \
+  -Dloader.main=com.vrudenko.kanban_board.config.AvroSchemaRegistrar \
+  -cp app.jar org.springframework.boot.loader.launch.PropertiesLauncher http://redpanda-nonprod:8081
+```
+
+**Production** — the sole step of the new `register-schemas-production` job:
+```
+docker compose --env-file ./.env.prod -f docker-compose.prod.yml run --rm --entrypoint java app \
+  -Dloader.main=com.vrudenko.kanban_board.config.AvroSchemaRegistrar \
+  -cp app.jar org.springframework.boot.loader.launch.PropertiesLauncher http://redpanda:8081
+```
+
+Both are the identical `PropertiesLauncher` technique already proven by hand (see the superseded
+manual steps above) — CI now runs them instead of an operator. `IMAGE_TAG` is exported from
+`needs.build-and-push-docker-image.outputs.image_tag` in both jobs before either invocation runs,
+so the one-off container always resolves the same image tag the surrounding deploy just pulled;
+neither invocation re-derives the tag or substitutes a floating one (this project publishes no
+`latest` tag on Docker Hub).
+
+### The exit-code chain that makes an incompatible schema redden the run
+
+Four links, each necessary: `AvroSchemaRegistrar.registerThenSetCompatibility` throws
+`IllegalStateException` on an unrecoverable registry error (an incompatible schema, or a
+genuinely unreachable registry) → the JVM exits non-zero → `docker compose run --rm` propagates
+the container's exit code → `appleboy/ssh-action`'s shell fails the step on that non-zero exit.
+Neither invocation is wrapped in `continue-on-error`, an error-suppressing shell flag, or any
+other construct that would swallow that exit code — verified mechanically: neither job block
+contains the literal string `continue-on-error`, and neither script suppresses its own exit
+status.
+
+### Registry URL isolation
+
+Exactly two distinct registry URLs exist in `deploy.yml`: `http://redpanda-nonprod:8081` (appears
+once, only inside `deploy-to-nonprod`'s script) and `http://redpanda:8081` (appears once, only
+inside `register-schemas-production`'s script). Neither broker publishes a host port on either
+stack (`docker-compose.nonprod.yml` and `docker-compose.prod.yml` both have no `ports:` key for
+their `redpanda*` service), so the registrar is reachable only from inside each stack's own
+Compose network — a mis-scoped job cannot reach the other environment's registry even with the
+wrong URL, because there is no routable path to it at all.
+
+### Idempotency and cross-broker independence — expected properties, not yet live-measured
+
+`AvroSchemaRegistrar` is idempotent by construction (`registerOne`'s Javadoc): registering an
+unchanged schema returns the existing schema id, and re-setting an unchanged compatibility level
+is itself a no-op write. Because subjects are keyed by Avro record full name under
+`RecordNameStrategy`, per broker, a nonprod registration cannot mutate production's compatibility
+history — `GET /subjects/<name>/versions` against each broker reads each one's own independent
+version list. These are structural properties of the reused mechanism, already relied upon by both
+`registerSchemas`'s own repeated Gradle-task invocations and every test class sharing
+`AbstractKafkaContainerTest`'s harness — this plan does not change `AvroSchemaRegistrar` itself, so
+it does not change this behavior. **Not yet measured against the live CI-driven path** — see "Live
+verification" below for what remains.
+
+### Consolidated job graph — every job in the final pipeline
+
+Both vertical paths share exactly one node, consumed read-only: `build-and-push-docker-image`
+(one build, two Docker Hub tags, unchanged since Plan 09-01). No `needs:` edge crosses between the
+two paths anywhere else.
+
+| Job | Environment | Path |
+|---|---|---|
+| `setup` | none (no secrets) | shared |
+| `run-tests` | none (no secrets) | shared |
+| `build-and-push-docker-image` | `production` | shared (the one node both paths consume) |
+| `flyway-verify` | `production` | production |
+| `deploy-to-netcup` | `production` | production |
+| `register-schemas-production` | `production` | production |
+| `cleanup-old-images` | `production` | production |
+| `cleanup-unused-image` | `production` | production |
+| `flyway-verify-nonprod` | `staging` | nonprod |
+| `deploy-to-nonprod` | `staging` | nonprod (registration is a step inside this job, not a separate job — see Task 1 rationale above) |
+| `health-check-nonprod` | `staging` | nonprod |
+| `cleanup-old-images-nonprod` | `staging` | nonprod |
+| `cleanup-unused-image-nonprod` | `staging` | nonprod |
+
+```
+setup ─┬─> run-tests ─> build-and-push-docker-image ─┬─> flyway-verify ─> deploy-to-netcup ─┬─> register-schemas-production
+       │                                             │                                      ├─> cleanup-old-images
+       │                                             │                                      └─> cleanup-unused-image
+       │                                             └─> flyway-verify-nonprod ─> deploy-to-nonprod (registers schemas internally) ─> health-check-nonprod ─┬─> cleanup-old-images-nonprod
+       │                                                                                                                                                    └─> cleanup-unused-image-nonprod
+       └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+```
+
+No `register-schemas-nonprod` job id exists — by design, per Task 1's rationale, nonprod's
+registration had to be a step inside `deploy-to-nonprod` itself to precede `up -d app-nonprod`.
+
+### Live verification — pending, deferred to after merge
+
+This plan's file-level work (`.github/workflows/deploy.yml`, this section) was authored and
+statically verified inside an isolated git worktree, the same execution context Plans 09-01 and
+09-02 both documented above. For the identical reason recorded in both of those sections, the
+following live-verification steps could **not** run from that worktree and remain outstanding
+until the orchestrator merges this plan's commits to `master` and the human operator drives them
+directly, per this session's established precedent:
+
+1. **Green path:** after a real push, confirm `rpk registry subject list` inside
+   `kanban-nonprod-redpanda` and inside production's `redpanda` each return 14 subjects, and that
+   both jobs' logs contain the registrar's own `Registered 14 Avro schemas against <url>` line
+   naming the correct registry. Confirm the nonprod log shows the registrar's output line before
+   the `up -d app-nonprod` output (ordering observed at runtime, not just in the file).
+2. **Red path (deliberately induced, then reverted):** temporarily point the nonprod invocation at
+   a registry URL that cannot answer, confirm `deploy-to-nonprod` goes red, and confirm on the VM
+   that `kanban-nonprod-app`'s container id and image are unchanged from before that run (the app
+   was never restarted, proving the abort really did precede the app start). Revert and re-verify
+   green.
+3. **Idempotency:** capture each broker's `rpk registry subject list` and a spot-check subject's
+   `GET /subjects/<name>/versions` before and after a run, then re-run the same commit and capture
+   again — subject counts and version lists must be identical across the re-run.
+4. **Cross-broker independence:** confirm a nonprod-only re-run leaves production's subject version
+   lists unchanged.
+
+Until these four are run and this section is updated with their observed results (matching the
+"Live verification" pattern in Plan 09-02's section above), this plan's SUMMARY carries
+`status: halted`.
 
 ## Maintenance note
 
