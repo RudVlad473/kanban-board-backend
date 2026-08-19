@@ -13,6 +13,15 @@ env:
   # byte-identical image content pulled from two independent repositories.
   DOCKERHUB_REPOSITORY_NONPROD: kanban-board-backend-nonprod
 
+# Risk-acceptance (Phase 10, HARDEN-03, D-05): actions/checkout, actions/setup-java,
+# docker/setup-buildx-action, docker/build-push-action, actions/cache and actions/upload-artifact
+# remain trusted by tag, not digest. Digest-pinning was scoped deliberately to only the two
+# appleboy/* actions below (deploy-to-netcup, register-schemas-production, deploy-to-nonprod),
+# which run with real SSH keys against production/staging VMs -- a materially higher
+# publisher-compromise risk tier than these first-party GitHub/Docker actions. A digest pin needs
+# a two-step lookup-then-edit on every future version bump instead of a one-line tag edit; that
+# recurring maintenance cost is deliberately not paid for the first-party actions listed above.
+
 jobs:
   setup:
     runs-on: ubuntu-latest
@@ -239,7 +248,7 @@ jobs:
         # (plan 05-04's manual deploy, populated once, off-limits to this job's own
         # explicit prohibition), which must never be recreated or deleted here -- only
         # the two named files below are transferred.
-        uses: appleboy/scp-action@v1.0.0
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345  # v1.0.0
         with:
           host: ${{ secrets.NETCUP_HOST }}
           username: ${{ secrets.NETCUP_DEPLOY_USER }}
@@ -249,7 +258,7 @@ jobs:
           target: "/opt/deploy/kanban-board-backend/"
 
       - name: Deploy via Docker Compose
-        uses: appleboy/ssh-action@v1.2.5
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2  # v1.2.5
         with:
           host: ${{ secrets.NETCUP_HOST }}
           username: ${{ secrets.NETCUP_DEPLOY_USER }}
@@ -314,7 +323,7 @@ jobs:
     # container, so there is nothing here for a second concurrent run to race against.
     steps:
       - name: Register Avro schemas (production registry)
-        uses: appleboy/ssh-action@v1.2.5
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2  # v1.2.5
         with:
           host: ${{ secrets.NETCUP_HOST }}
           username: ${{ secrets.NETCUP_DEPLOY_USER }}
@@ -367,7 +376,7 @@ jobs:
         # must never be recreated or deleted here -- the same prohibition production's own
         # SCP step carries above. No Caddyfile to transfer -- nonprod has none of its own;
         # production's Caddy already fronts it over the shared kanban-edge network.
-        uses: appleboy/scp-action@v1.0.0
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345  # v1.0.0
         with:
           host: ${{ secrets.NETCUP_HOST }}
           username: ${{ secrets.NETCUP_DEPLOY_USER }}
@@ -389,7 +398,7 @@ jobs:
       # honours `depends_on`, so the registrar cannot run against a broker that is not already
       # healthy.
       - name: Deploy via Docker Compose
-        uses: appleboy/ssh-action@v1.2.5
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2  # v1.2.5
         with:
           host: ${{ secrets.NETCUP_HOST }}
           username: ${{ secrets.NETCUP_DEPLOY_USER }}
