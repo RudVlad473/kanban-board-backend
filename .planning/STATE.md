@@ -5,10 +5,10 @@ milestone_name: Nonprod Environment & CI Hardening
 current_phase: 10
 current_phase_name: CI & Deploy Hardening
 status: planning
-stopped_at: Phase 9 plan 02 complete (live-verified) -- Waves 1-2 fully merged; Wave 3 (09-03) up next, expected to hit its own blocking checkpoint (Avro schema registration automation, CI-05)
-last_updated: "2026-08-19T12:13:16.248Z"
+stopped_at: Phase 9 fully complete and verified (6/6 must-haves, code review clean, no regressions) -- stopped before auto-advancing into Phase 10 planning, per operator choice
+last_updated: "2026-08-19T12:20:00.000Z"
 last_activity: 2026-08-19
-last_activity_desc: "Plan 09-02 executor halted mid-plan (autonomous:true but its own acceptance criteria required live/irreversible actions); operator walked through all three live steps directly -- repository secret sweep (CI-02, incl. one unreferenced orphan secret found and removed), health-check-nonprod green+red paths (CI-04), retention idempotency/cross-repo isolation (CI-03) -- all confirmed live, SUMMARY re-authored status:complete"
+last_activity_desc: "Phase 9 closed out: plan 09-03 (Avro schema registration, CI-05) live-verified after finding and fixing a real appleboy/ssh-action fail-fast defect (missing set -e) mid-verification; code review (0 critical/4 warnings/3 info) and gsd-verifier goal check (6/6, no gaps) both passed; ROADMAP/STATE/REQUIREMENTS/PROJECT.md all updated and pushed"
 progress:
   total_phases: 3
   completed_phases: 2
@@ -100,10 +100,10 @@ Items acknowledged and carried forward (full v1.2-close table in `.planning/mile
 
 ## Session Continuity
 
-Last session: 2026-08-19T09:36:00.000Z
-Stopped at: Phase 9 plan 02 complete (live-verified) -- Waves 1-2 fully merged; Wave 3 (09-03) up next, expected to hit its own blocking checkpoint (Avro schema registration automation, CI-05)
-Resume file: C:/Dev/Repos/kanban-board-backend/.planning/phases/09-nonprod-continuous-deploy-scoped-ci-credentials/09-02-SUMMARY.md
+Last session: 2026-08-19T12:20:00.000Z
+Stopped at: Phase 9 complete and verified; operator chose to stop rather than auto-advance into Phase 10 planning
+Resume file: C:/Dev/Repos/kanban-board-backend/.planning/phases/09-nonprod-continuous-deploy-scoped-ci-credentials/09-VERIFICATION.md
 
 ## Operator Next Steps
 
-- `/gsd-execute-phase 09` to dispatch Wave 3 (plan 09-03). It is `autonomous: false` and expected to pause for a human checkpoint, same pattern as 09-01.
+- `/gsd-discuss-phase 10` to start Phase 10 (CI & Deploy Hardening) — no CONTEXT.md exists yet for it.
