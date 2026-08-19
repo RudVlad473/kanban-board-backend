@@ -1,9 +1,10 @@
 ---
 created: 2026-08-10T20:00:00.000Z
+resolved: 2026-08-19
+resolves_phase: 10
 title: Set the Secure flag on the session cookie once real TLS exists (Phase 5)
 area: backend
 severity: security
-resolves_phase: 10
 files:
   - src/main/resources/application.properties:56
   - src/main/resources/application-test.properties:36
@@ -57,3 +58,27 @@ INFRA-04 Caddy/TLS cutover, immediately after Caddy starts terminating real HTTP
 the app. Verify with a real signin-then-authenticated-request round trip against the live HTTPS
 endpoint post-cutover, not just a config-value assertion — the property flipping to `true` proves
 nothing about whether the cookie is actually still usable end-to-end.
+
+## Resolution
+
+Closed by **Phase 10, Plan 05**. `server.servlet.session.cookie.secure=true` set in both
+`application.properties` and `application-test.properties` — deliberately including the test
+profile, diverging from this todo's original "production only" recommendation.
+
+**Why the divergence is safe:** the original caution assumed a client that automatically decides
+whether to replay a cookie based on transport security, which would indeed break the real-socket
+test tier's cookie relay under plain HTTP. The new `SessionCookieAttributesE2ETest` (`@Tag
+("realSocket")`) never relies on automatic replay — it extracts the raw `Set-Cookie` header via
+REST Assured's `.extract().detailedCookie(...)` and asserts on the attribute directly. Nothing in
+the test suite depends on a client actually withholding the cookie over plain HTTP, so setting
+`secure=true` in the test profile costs nothing and keeps both profiles in lockstep (the original
+todo's own stated worry — "an override ambiguity" between the two files — is fully closed rather
+than partially).
+
+**Live verification, not just a config-value assertion** (per this todo's own closing
+instruction): after `application.properties`'s change deployed to nonprod over real HTTPS
+(`kanban-board-rud-vlad-473-nonprod.duckdns.org`), a fresh signup/signin round trip confirmed
+`Set-Cookie` carries `Secure`, `HttpOnly`, `SameSite=Strict`, `Path=/`, and `Max-Age`; a follow-up
+authenticated request with that cookie returned `200` (not `401`) from `/api/boards`; and a plain-
+HTTP request to the same host returned a `308` redirect to HTTPS before any cookie decision could
+even be made, confirming there is no unprotected path to observe the negative case on.

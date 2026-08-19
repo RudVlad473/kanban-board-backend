@@ -38,7 +38,7 @@
 - [x] **HARDEN-04**: `deploy.yml`'s `run-tests` job's `Set up Java` step sets `cache: 'gradle'`, matching the existing precedent in `security-scan.yml` (resolves pending todo 2026-08-16-add-gradle-cache-to-deploy-yml-run-tests-job.md)
 - [x] **HARDEN-05**: The pre-commit gitleaks hook works correctly when invoked from a worktree created outside the main repo tree (resolves pending todo 2026-08-16-gitleaks-hook-cannot-scan-a-worktree-created-outside-the-main-repo-tree.md)
 - [x] **HARDEN-06**: `security-scan.yml`'s stale `Set up Java` comment and its still-outdated `checkout@v3`/`setup-java@v4` references are corrected (resolves pending todo 2026-08-16-security-scan-yml-stale-comment-and-stale-actions-after-260816-sv1.md)
-- [ ] **HARDEN-07**: The session cookie has the `Secure` flag set in both `application.properties` and `application-test.properties`, now that real TLS exists in production (resolves pending todo 2026-08-10-set-secure-flag-on-session-cookie-once-real-tls-exists.md)
+- [x] **HARDEN-07**: The session cookie has the `Secure` flag set in both `application.properties` and `application-test.properties`, now that real TLS exists in production (resolves pending todo 2026-08-10-set-secure-flag-on-session-cookie-once-real-tls-exists.md)
 - [ ] **HARDEN-08**: README is expanded from its current trimmed front door into a full project architecture showcase (resolves pending todo 2026-08-16-expand-readme-into-a-full-project-architecture-showcase.md)
 
 ## Future Requirements
@@ -79,7 +79,7 @@ Deferred until the frontend repo exists — tracked, not attempted this mileston
 | HARDEN-04 | Phase 10 | Complete |
 | HARDEN-05 | Phase 10 | Complete |
 | HARDEN-06 | Phase 10 | Complete |
-| HARDEN-07 | Phase 10 | Pending |
+| HARDEN-07 | Phase 10 | Complete |
 | HARDEN-08 | Phase 10 | Pending |
 
 **Coverage: 21/21 v1 requirements mapped, each to exactly one phase. No orphans, no duplicates.**

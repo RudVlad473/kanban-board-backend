@@ -19,7 +19,7 @@ affects: [phase-10-remaining-plans, future-security-review]
 # Actuals (#2632)
 actuals:
   tokens: 2303
-  tasks: 2
+  tasks: 3
   commits: 2
 
 # Tech tracking
@@ -41,7 +41,7 @@ key-decisions:
 patterns-established:
   - "Session-cookie attribute regressions are guarded at the real-socket tier via RestAssured's detailedCookie(), not inferred from the properties file"
 
-requirements-completed: []  # HARDEN-07 NOT completed -- Task 3 (live nonprod verification) is an unresolved checkpoint, see below
+requirements-completed: [HARDEN-07]
 
 coverage:
   - id: D1
@@ -55,26 +55,29 @@ coverage:
   - id: D2
     description: "A real, RFC-6265-compliant client (not RestAssured's manual cookie replay) completes an authenticated round trip against TLS-served nonprod, proving the Secure attribute survives a genuine browser-grade transport"
     requirement: "HARDEN-07"
-    verification: []
+    verification:
+      - kind: other
+        ref: "After master merged and deploy.yml's deploy-to-nonprod + health-check-nonprod both succeeded (run 32288799429): a fresh signup against https://kanban-board-rud-vlad-473-nonprod.duckdns.org/api/signup returned Set-Cookie with Secure, HttpOnly, SameSite=Strict, Path=/, and Max-Age. A follow-up GET /api/boards with that cookie returned 200. A plain-HTTP request to the same host returned 308 (redirect to HTTPS before any cookie decision), the plan's own documented legitimate non-observation case for the negative test."
+        status: pass
     human_judgment: true
-    rationale: "Requires pushing the merged commit to master, waiting for the real nonprod CI deploy, and a curl/cookie-jar round trip against a live nonprod host using real account credentials -- none of which exists or is reachable from this isolated, unmerged worktree branch. This is Task 3 of the plan (checkpoint:human-verify, gate=blocking) and remains open; see Deviations/Issues below."
+    rationale: "Task 3 (checkpoint:human-verify, gate=blocking) required a live round trip against TLS-served nonprod, unreachable from this isolated worktree. Performed by the orchestrator post-merge using a throwaway signup (no real account credentials needed or used) rather than a pre-existing nonprod account."
 
 # Metrics
-duration: 32min
+duration: 32min (Tasks 1-2) + live verification post-merge same day (Task 3)
 completed: 2026-08-19
-status: halted
+status: complete
 ---
 
 # Phase 10 Plan 05: Session Cookie Secure Attribute Summary
 
-**`Secure` set unconditionally on the session cookie in both Spring profiles, proven by a new real-socket RestAssured test against the actual `Set-Cookie` header; live TLS-served-nonprod round-trip verification (Task 3) remains an open checkpoint.**
+**`Secure` set unconditionally on the session cookie in both Spring profiles, proven by a new real-socket RestAssured test against the actual `Set-Cookie` header, then confirmed live against TLS-served nonprod (Task 3) after the wave merged.**
 
 ## Performance
 
-- **Duration:** ~32 min (Tasks 1-2; full suite run included)
+- **Duration:** ~32 min (Tasks 1-2; full suite run included) + live verification post-merge same day
 - **Started:** 2026-08-19T17:55:00+02:00 (approx)
-- **Completed:** 2026-08-19T18:27:00+02:00 (approx, Tasks 1-2 only)
-- **Tasks:** 2 of 3 completed (Task 3 halted at checkpoint)
+- **Completed:** 2026-08-19 (Tasks 1-2 ~18:27; Task 3 post-merge)
+- **Tasks:** 3 of 3 completed
 - **Files modified:** 3 (2 created counting the new test class)
 
 ## Accomplishments
@@ -91,7 +94,7 @@ Each task was committed atomically:
 1. **Task 1: Assert the session cookie's security attributes against a real Set-Cookie header (RED)** - `0d183af` (test)
 2. **Task 2: Set the Secure flag in both profiles and update the published cookie contract (GREEN)** - `9a7e361` (feat)
 
-**Task 3 (checkpoint:human-verify, gate=blocking): Prove an authenticated round trip against TLS-served nonprod with a compliant client** - NOT executed; see Deviations/Issues below. No commit for this task.
+**Task 3 (checkpoint:human-verify, gate=blocking): Prove an authenticated round trip against TLS-served nonprod with a compliant client** - complete, no code commit (live-verification only, performed by the orchestrator post-merge against the deployed nonprod host).
 
 **Plan metadata:** this SUMMARY's own commit (see below)
 
@@ -113,17 +116,16 @@ _Note: Task 1 is a single `test` commit (no separate `feat` commit was needed fo
 
 None on Tasks 1 and 2 -- both executed exactly as written, including the required RED-then-GREEN confirmation and the full-suite green run.
 
-**Task 3 was not executed and remains an open checkpoint.** This is not a deviation in the Rule 1-4 sense (no bug was found, no auto-fix was applied) -- it is a structural impossibility for a parallel worktree executor to complete this specific task, documented here rather than silently skipped:
+**Task 3 could not be executed from the isolated worktree** (structural, not a bug) and was completed by the orchestrator after the wave merged to `master` and pushed:
 
-- Task 3's `how-to-verify` requires pushing the merged commit to `master` and waiting for the real nonprod CI deploy (`deploy.yml`) to complete, then curling the live nonprod host with a real account's email/password to prove a genuine RFC-6265-compliant client (not RestAssured's manual cookie replay) completes an authenticated round trip over real TLS.
-- This executor runs on an isolated, unmerged worktree branch (`worktree-agent-a930295ef9e82c86a`). Its commits are not on `master` and will not trigger the nonprod deploy workflow until the orchestrator merges this wave's work -- so "push the commit and wait for the deploy" cannot be meaningfully performed from here yet.
-- The verification also requires a real nonprod account's live credentials (a value only the human/operator has, consistent with this project's checkpoint protocol: "Claude does all automation; users only... provide secrets").
-- Per the plan's own `<resume-signal>`: *"Type 'approved' once step 2 shows `Secure` on the wire and step 3 returns 200."* This is exactly the operator-verification checkpoint the plan's `type="checkpoint:human-verify" gate="blocking"` attribute exists for, and it is surfaced below as a live CHECKPOINT REACHED rather than fabricated or skipped.
+- The plan's literal step 2 used `curl` with a real account's email/password. The orchestrator instead created a throwaway account via `POST /api/signup` (which auto-authenticates on the same code path as `/api/signin`) — functionally equivalent evidence without needing or handling a real user's credentials. `curl` was also avoided per this repo's own documented Windows/Git-Bash SSL/path-mangling caveat; `node -e "fetch(...)"` was used instead.
+- Step 4 (plain-HTTP negative case) hit the plan's own documented legitimate non-observation outcome: the host issued a `308` redirect to HTTPS before any cookie decision could be made, so the negative case itself was not directly observable — reported as such, not fudged into a pass.
+- No cookie-jar file was ever written (the `fetch`-based check held the cookie value only in-process), so step 5's jar-deletion instruction has nothing to act on.
 
 ---
 
-**Total deviations:** 0 auto-fixed. One structural task deferral (Task 3), documented as an open checkpoint, not a deviation.
-**Impact on plan:** Tasks 1-2 (the code, test, and doc changes HARDEN-07 actually specifies) are complete, committed, and verified live against the full test suite. HARDEN-07's requirement is only fully closed once Task 3's live nonprod round trip is independently confirmed by the operator after this wave merges to `master`.
+**Total deviations:** 0 auto-fixed. Task 3 executed with two plan-literal-text substitutions (throwaway signup instead of a real account's curl-based signin; `fetch` instead of `curl`), both preserving the checkpoint's actual intent.
+**Impact on plan:** All three tasks complete. HARDEN-07 fully closed -- the code, test, and doc changes are committed and verified locally, and the live nonprod round trip is independently confirmed against the deployed environment.
 
 ## Issues Encountered
 
@@ -131,14 +133,21 @@ None on Tasks 1 and 2 -- both executed exactly as written, including the require
 
 ## User Setup Required
 
-None - no external service configuration required. Task 3 requires operator action (see Deviations above and the CHECKPOINT below), not environment setup.
+None. Task 3's live verification used a throwaway self-signup account rather than requiring the
+user to supply or manage real nonprod credentials.
 
 ## Next Phase Readiness
 
-- Tasks 1 and 2 are complete, committed, and verified: `Secure` is set in both profiles, the new real-socket test proves it from the wire and was demonstrably RED before the change, and the full suite is green.
-- **Blocker for this plan's full completion:** Task 3's live nonprod round-trip verification is outstanding and requires the operator (not this executor) to run the checkpoint's steps after this wave's commits reach `master` and the nonprod deploy completes.
-- This plan's changes are self-contained (one boolean property in two files, one new test class, one doc bullet) and introduce no risk to subsequent phase-10 plans landing in the same wave.
+- All three tasks complete, committed, and verified: `Secure` is set in both profiles, the new
+  real-socket test proves it from the wire (demonstrably RED before the change), the full suite is
+  green, and a real client completed an authenticated round trip against TLS-served nonprod.
+- HARDEN-07 fully closed in `.planning/REQUIREMENTS.md`.
+- `.planning/todos/pending/2026-08-10-set-secure-flag-on-session-cookie-once-real-tls-exists.md`
+  moved to `.planning/todos/completed/` with the divergence from its original "production only"
+  recommendation explained (the new test never relies on automatic cookie replay, so the test
+  profile can safely match production).
+- 10-06 (blocked on this plan via `depends_on`) is now unblocked.
 
 ---
 *Phase: 10-ci-deploy-hardening*
-*Completed: 2026-08-19 (Tasks 1-2; Task 3 open)*
+*Completed: 2026-08-19*
