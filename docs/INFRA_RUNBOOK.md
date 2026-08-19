@@ -1816,9 +1816,17 @@ $ gh api repos/RudVlad473/kanban-board-backend/environments --jq '[.environments
 Both environments hold the same nine secret NAMES with per-environment values —
 `gh secret list --env production` and `gh secret list --env staging` both return exactly
 `DB_HOST,DB_NAME,DB_PASS,DB_USER,DOCKERHUB_TOKEN,NETCUP_DEPLOY_USER,NETCUP_HOST,NETCUP_HOST_FINGERPRINT,NETCUP_SSH_KEY`.
-The ten repository-level secrets were left untouched (`gh secret list` still returns `10`) — they
-remain the safety net for the first environment-scoped production run; plan 09-02 sweeps them only
-after that run is proven green.
+
+**Repository-level sweep completed (Plan 09-02, Task 1, 2026-08-19).** The nine repository-level
+secrets above were retained as a safety net through plan 09-01's first live-verified run, then
+deleted (`gh secret delete`, no `--env`) once that run was proven green. A tenth, orphaned
+repository secret (`NONPROD_RESET_TOKEN`) was found alongside them at sweep time — unreferenced by
+any workflow or doc, apparent leftover from earlier manual testing — and deleted in the same pass
+after explicit confirmation. `gh secret list --json name --jq '[.[].name]|join(",")'` now returns
+exactly `NVD_API_KEY`, matching this plan's acceptance criterion. A push immediately after the sweep
+(`08b253b`, run `32233904310`) confirmed both deploy paths still resolve every secret correctly
+through their `environment:` declaration alone — full green run, `run-tests` through both
+`cleanup-old-images*` jobs.
 
 ### Task 3 deliberately deferred — not run in this session
 
@@ -1870,10 +1878,17 @@ can take up to `30s + (10s x 5) = 80s`. Add image-pull time on the VM, Flyway's 
 DNS/TLS latency from a GitHub-hosted runner, and `30 attempts x 10s = 300s` comfortably covers that
 with margin — deliberately overriding 09-RESEARCH.md's illustrative `12 x 5s = 60s`, whose own
 Assumption A3 flags that figure as never sized against real CI conditions. Every attempt prints its
-observed HTTP status (or the `000` sentinel on outright connection failure), so the first real runs
-against this job will produce a genuine timing profile to tighten the bound against later — that
-profile is not yet available (see "What remains" below); this section records the sizing rationale
-only, not a measured attempt count.
+observed HTTP status (or the `000` sentinel on outright connection failure).
+
+**Measured live (2026-08-19):** two real green runs (`32233904310`, `32236428721`) both reported
+`Nonprod healthy after 2/30 attempts` — roughly 10-20s real elapsed, comfortably inside the 300s
+bound with wide margin. The red path was also proven live in the same session (run `32235116988`,
+`NONPROD_HEALTH_URL` temporarily pointed at an unreachable `.invalid` host per this plan's own
+documented alternative rather than racing a live container stop/start): the poll correctly exhausted
+all 30 attempts, emitted `##[error]Nonprod did not answer 200 within 30 attempts (bound: 300s
+elapsed). Health poll exhausted -- failing the run.`, and the job's conclusion was `failure`. The
+same run also live-proved `cleanup-old-images-nonprod`'s `if: success()` gate on `health-check-nonprod`:
+it stayed `skipped` rather than running against a stack that never came up.
 
 ### Nonprod image retention — semantics and the deliberate asymmetry
 
@@ -1900,24 +1915,39 @@ health-check failure, and adds one further deliberate addition over production's
 check on at all (T-09-14, accepted low severity — fixing both copies for real is Phase 10
 CI-hardening scope, not this plan's).
 
-### What remains — live verification deferred to the merged tree
+### Live verification (2026-08-19) — completed after merge to master
 
 This plan's file-level deliverables (`health-check-nonprod`, `cleanup-old-images-nonprod`,
 `cleanup-unused-image-nonprod`, and this section) were authored and statically verified inside an
 isolated git worktree, the same execution context Plan 09-01 documented above under "Task 3
-deliberately deferred." For the identical reason: every acceptance criterion in this plan's Task 1
-Part C, Task 2, and Task 3 that requires a live push to `origin/master` and observation of the
-resulting GitHub Actions run — including deliberately inducing and then reverting a nonprod outage
-to prove `health-check-nonprod`'s red path, re-running an already-deployed commit to prove
-`cleanup-old-images-nonprod`'s idempotency, and confirming cross-repository isolation on two live
-Docker Hub repositories — could not be executed from this worktree. Nothing in this plan's own file
-scope requires network access to Docker Hub or the VM to author correctly, and every acceptance
-criterion checkable by static extraction against the committed YAML (job presence, `needs:` chains,
-`if:` conditions, `environment:` declarations, repository-name interpolation, inherited bug fixes)
-was checked and passed before commit (see this plan's SUMMARY.md). The remaining live-verification
-steps, together with Task 1's `gh secret delete` sweep and its live proof, are left for the
-orchestrator/human operator to run once this worktree's commits have landed on `master` — see this
-plan's SUMMARY.md "Next Steps Required" for the exact remaining checklist.
+deliberately deferred." For the identical reason, the live-verification steps requiring a push to
+`origin/master` and observation of a real GitHub Actions run could not run from that worktree. Once
+the orchestrator merged the worktree's commits to `master`, the human operator drove each remaining
+step directly:
+
+1. **Task 1 (CI-02) — repository secret sweep:** nine repository-level deploy secrets deleted, plus
+   one unreferenced orphan (`NONPROD_RESET_TOKEN`) found and deleted alongside them after explicit
+   confirmation. `gh secret list` now returns exactly `NVD_API_KEY`. A push immediately after
+   (`08b253b`, run `32233904310`) confirmed both deploy paths still resolve every secret through
+   `environment:` alone — full green run. `security-scan.yml` was checked separately: its
+   `dependency-check` job was already failing on `NVD_API_KEY repository secret is not set` two days
+   *before* this sweep (run `32001604789`, 2026-08-17) — confirmed pre-existing and unaffected by the
+   sweep, filed as its own todo
+   (`2026-08-19-security-scan-yml-nvd-api-key-not-resolving.md`) rather than folded into this plan's
+   scope.
+2. **Task 2 (CI-04) — health-check-nonprod green and red paths:** both proven live — see the
+   "Measured live" note in the previous section for the full detail (green: 2/30 attempts twice;
+   red: full 300s bound exhausted via a temporarily unreachable poll target, `::error::` annotation,
+   job and run conclusion `failure`, restored and re-verified green).
+3. **Task 3 (CI-03) — retention idempotency and cross-repository isolation:** the same completed run
+   (`32236428721`) was re-run via `gh run rerun` against the identical already-deployed commit/tag —
+   `cleanup-old-images-nonprod` produced zero `Deleting tag:` lines, `FAILED=0`, exit 0. Both Docker
+   Hub repositories (`kanban-board-backend`, `kanban-board-backend-nonprod`) were confirmed via the
+   public tags API to list exactly one tag each — the current short SHA (`406893c`) — proving neither
+   repository's sweep can see or touch the other's tags.
+
+Every acceptance criterion in this plan's Task 1 Part C, Task 2, and Task 3 is now live-verified, not
+just statically checked. See this plan's `09-02-SUMMARY.md` for the full commit/run reference list.
 
 ## Maintenance note
 

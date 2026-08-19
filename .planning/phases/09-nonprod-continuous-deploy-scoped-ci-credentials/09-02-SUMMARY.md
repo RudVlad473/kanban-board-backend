@@ -9,18 +9,18 @@ requires:
   - phase: 09-01
     provides: "Two GitHub Environments (production/staging) with nine scoped deploy secrets each, deploy-to-nonprod/flyway-verify-nonprod wired into deploy.yml, a live-verified green run (32184033760) proving every secret-reading job already resolves through a declared environment:"
 provides:
-  - "health-check-nonprod job (deploy.yml): bounded 30x10s poll of nonprod's actuator/health endpoint, gates the run red with ::error:: when nonprod never comes up (CI-04) -- code complete, live green/red path NOT yet observed"
-  - "cleanup-old-images-nonprod and cleanup-unused-image-nonprod jobs (deploy.yml): nonprod's own image-retention pair, isolated to base_image_name_nonprod exclusively, both already-fixed Docker Hub bugs (JWT login, next-link pagination) inherited (CI-03) -- code complete, live idempotency/cross-repository proof NOT yet observed"
-  - "docs/INFRA_RUNBOOK.md section documenting the plan's final job graph, the health-poll bound arithmetic, and the retention semantics/asymmetry"
+  - "health-check-nonprod job (deploy.yml): bounded 30x10s poll of nonprod's actuator/health endpoint, gates the run red with ::error:: when nonprod never comes up (CI-04) -- code complete, live green (2/30 attempts) and live red (full 300s bound exhausted) paths both observed"
+  - "cleanup-old-images-nonprod and cleanup-unused-image-nonprod jobs (deploy.yml): nonprod's own image-retention pair, isolated to base_image_name_nonprod exclusively, both already-fixed Docker Hub bugs (JWT login, next-link pagination) inherited (CI-03) -- code complete, live idempotency (zero deletes on re-run) and cross-repository isolation (both repos list exactly their own current tag) both observed"
+  - "docs/INFRA_RUNBOOK.md section documenting the plan's final job graph, the health-poll bound arithmetic (with real measured timing), and the retention semantics/asymmetry"
   - "Mechanical re-verification that every deploy.yml job interpolating secrets. declares an environment:, including this plan's three new jobs -- holds"
-  - "Repository secret inventory table annotated (not deleted) recording that the nine deploy secrets also exist as environment secrets, pending the actual repository-level sweep"
+  - "Repository-level deploy secret sweep complete: nine plan-scoped secrets plus one unreferenced orphan (NONPROD_RESET_TOKEN) deleted; gh secret list returns exactly NVD_API_KEY"
 affects: [09-03-nonprod-continuous-deploy-scoped-ci-credentials]
 
 # Actuals (#2632)
 actuals:
   tokens: 5000
   tasks: 3
-  commits: 3
+  commits: 6
 
 # Tech tracking
 tech-stack:
@@ -37,12 +37,15 @@ key-files:
     - "docs/INFRA_RUNBOOK.md -- new section 'Nonprod CI health gate and image retention -- Plan 09-02'; annotated the original 'Repository secret inventory' table"
 
 key-decisions:
-  - "All three tasks' file-level (YAML + docs) work was completed and statically verified inside this worktree; the live-infrastructure actions each task's acceptance criteria also require (gh secret delete, a live push to origin/master, observing/inducing live GitHub Actions runs) were deliberately NOT executed from this isolated worktree -- deletion is rated costly reversibility and a live push must happen from the merged tree under direct human/coordinator observation, exactly the reasoning Plan 09-01's own runbook section already recorded for its Task 3 when it hit the identical worktree/live-action conflict."
-  - "SUMMARY status set to halted (not complete, #2830 semantics) so 09-03, which depends on 09-02, is correctly reported as blocked until this plan's remaining live steps are run and the plan is re-summarized as complete."
+  - "All three tasks' file-level (YAML + docs) work was completed and statically verified inside an isolated worktree; the live-infrastructure actions each task's acceptance criteria also required (gh secret delete, a live push to origin/master, observing/inducing live GitHub Actions runs) were deliberately NOT executed from that worktree -- deletion is rated costly reversibility and a live push must happen from the merged tree under direct human/coordinator observation, exactly the reasoning Plan 09-01's own runbook section already recorded for its Task 3 when it hit the identical worktree/live-action conflict. All were subsequently completed live by the human operator after the orchestrator merged the worktree to master (see 'Live Verification' below)."
+  - "A tenth, orphaned repository secret (NONPROD_RESET_TOKEN) was found during the sweep, unreferenced by any workflow or doc. Deleted alongside the plan's nine after explicit operator confirmation, since leaving it would have both violated the plan's own acceptance criterion (gh secret list returns exactly NVD_API_KEY) and left unnecessary attack surface."
+  - "The red path for health-check-nonprod was proven by temporarily pointing NONPROD_HEALTH_URL at an unreachable .invalid host (the plan's own documented alternative) rather than racing a live container stop/start against the poll window -- deterministic, and never touched the actually-running nonprod stack."
+  - "security-scan.yml's dependency-check job was found already failing on 'NVD_API_KEY repository secret is not set' two days before this sweep (2026-08-17) -- confirmed pre-existing and unaffected by the sweep via identical failure signature before/after, filed as its own todo rather than folded into this plan's scope."
+  - "SUMMARY status set to complete: all three tasks' live-infrastructure verification steps are now run and confirmed, per the checklist this SUMMARY previously recorded under 'Next Phase Readiness'."
 
 patterns-established: []
 
-requirements-completed: []
+requirements-completed: [CI-02, CI-03, CI-04]
 
 coverage:
   - id: D1
@@ -53,10 +56,10 @@ coverage:
         ref: "Static extraction against committed deploy.yml: job present, needs:/environment:/env: literals correct, 000 curl-failure sentinel present, exit 1 after loop, no concurrency:/continue-on-error:, nonprod hostname only -- all checked and passed pre-commit (see Task Commits below)"
         status: pass
       - kind: other
-        ref: "Live green path (job succeeds, log records real attempt count) and live red path (deliberately induced nonprod outage, ::error:: annotation, run conclusion failure, then reverted) -- NOT YET RUN"
-        status: unknown
+        ref: "Live green path: runs 32233904310 and 32236428721 both report 'Nonprod healthy after 2/30 attempts'. Live red path: NONPROD_HEALTH_URL temporarily pointed at an unreachable .invalid host (run 32235116988) -- poll exhausted all 30 attempts, emitted ##[error]Nonprod did not answer 200 within 30 attempts (bound: 300s elapsed)..., job conclusion failure, run conclusion failure. URL reverted (commit 406893c) and re-verified green."
+        status: pass
     human_judgment: true
-    rationale: "The plan's own acceptance criteria require observing both a real green run and a deliberately-induced red run against the live nonprod stack -- this cannot be produced or verified from an isolated worktree that has not been merged to master."
+    rationale: "The plan's own acceptance criteria required observing both a real green run and a deliberately-induced red run against the live nonprod stack -- both now confirmed live by the human operator after merge to master."
   - id: D2
     description: "cleanup-old-images-nonprod / cleanup-unused-image-nonprod: nonprod's own image-retention pair, isolated to its own Docker Hub repository (CI-03)"
     requirement: "CI-03"
@@ -65,10 +68,10 @@ coverage:
         ref: "Static extraction: both jobs present, needs:/if: conditions correct, repository-name isolation proven positively (base_image_name_nonprod is the only interpolation in both blocks; base_image_name is the only interpolation in production's two blocks), URL-vs-interpolation-count formula holds (hub+registry URL occurrences == base_image_name_nonprod occurrences minus one), both already-fixed Docker Hub bugs (JWT login-token exchange, next-link pagination) present -- all checked and passed pre-commit"
         status: pass
       - kind: other
-        ref: "Live idempotency re-run (zero deletes on an already-deployed commit) and live cross-repository isolation proof (both Docker Hub repositories list the current SHA after a run where both sweeps executed) -- NOT YET RUN"
-        status: unknown
+        ref: "Live idempotency: run 32236428721 re-run via 'gh run rerun' against the identical commit/tag -- cleanup-old-images-nonprod produced zero 'Deleting tag:' lines, FAILED=0, exit 0. Live cross-repository isolation: public Docker Hub tags API confirmed both kanban-board-backend and kanban-board-backend-nonprod list exactly one tag each, the current short SHA (406893c)."
+        status: pass
     human_judgment: true
-    rationale: "The plan's own acceptance criteria require a live re-run against real Docker Hub repositories to prove idempotency and cross-repository isolation -- this cannot be produced from an isolated worktree with no merged, live-triggering commit."
+    rationale: "The plan's own acceptance criteria required a live re-run against real Docker Hub repositories to prove idempotency and cross-repository isolation -- both now confirmed live by the human operator after merge to master."
   - id: D3
     description: "Task 1: repository-level deploy secret sweep, leaving NVD_API_KEY as the sole repository-scoped secret (CI-02)"
     requirement: "CI-02"
@@ -77,20 +80,20 @@ coverage:
         ref: "Mechanical precondition re-check: the set of deploy.yml jobs interpolating secrets. is a subset of the set declaring environment: (verified against the file including this plan's own Task 2/3 additions); docs/INFRA_RUNBOOK.md's original secret inventory table annotated recording the pending sweep"
         status: pass
       - kind: other
-        ref: "gh secret delete on the nine repository-level deploy secrets, and the live push-to-master proof that every job still resolves credentials correctly afterward -- NOT executed from this worktree"
-        status: unknown
+        ref: "gh secret delete run on the nine repository-level deploy secrets plus one unreferenced orphan (NONPROD_RESET_TOKEN, deleted after explicit operator confirmation). gh secret list now returns exactly NVD_API_KEY. Live push-to-master proof: run 32233904310 green end to end across both deploy paths immediately after the sweep. security-scan.yml checked separately -- confirmed pre-existing failure (predates the sweep by two days), not a regression; filed as its own todo."
+        status: pass
     human_judgment: true
-    rationale: "Deleting live repository secrets is rated costly reversibility (GitHub secrets are write-only; a deleted repository secret cannot be recovered) and its required proof is a live push to origin/master observed in real time -- both require direct human/coordinator action outside an isolated, unmerged worktree, per this session's own established pattern (see Plan 09-01's identical 'Task 3 deliberately deferred' precedent)."
+    rationale: "Deleting live repository secrets is rated costly reversibility (GitHub secrets are write-only; a deleted repository secret cannot be recovered) and its required proof is a live push to origin/master observed in real time -- both now completed by the human operator after merge to master, per this session's own established pattern (see Plan 09-01's identical 'Task 3 deliberately deferred' precedent)."
 
 # Metrics
-duration: ~55min
+duration: ~55min (worktree) + ~50min (live verification)
 completed: 2026-08-19
-status: halted
+status: complete
 ---
 
-# Phase 09 Plan 02: Nonprod CI health gate and image-retention pair (CI-03/CI-04), CI-02 sweep annotated — Summary
+# Phase 09 Plan 02: Nonprod CI health gate and image-retention pair (CI-03/CI-04), CI-02 sweep complete — Summary
 
-**`health-check-nonprod` (bounded 30x10s poll, fails the run on a dead nonprod stack) and the nonprod image-retention pair (`cleanup-old-images-nonprod`/`cleanup-unused-image-nonprod`, isolated to their own Docker Hub repository) are written, wired into `deploy.yml`, and statically verified against every mechanical acceptance criterion this plan specifies — but this plan's live-infrastructure steps (the repository-secret sweep, a live push to `master`, and observing/inducing live GitHub Actions runs) were deliberately not executed from this isolated worktree, matching the exact precedent Plan 09-01 already recorded for its own Task 3.**
+**`health-check-nonprod` (bounded 30x10s poll, fails the run on a dead nonprod stack), the nonprod image-retention pair (`cleanup-old-images-nonprod`/`cleanup-unused-image-nonprod`, isolated to their own Docker Hub repository), and the repository-level deploy-secret sweep (CI-02) are all written, wired into `deploy.yml`, and now live-verified end to end — green path, red path, idempotency, and cross-repository isolation all confirmed against real infrastructure by the human operator after the orchestrator merged this plan's worktree to `master`.**
 
 ## Performance
 
@@ -156,21 +159,22 @@ _Note: no `test`/`refactor` commits — this plan is CI configuration and infra 
 
 ## User Setup Required
 
-**None outstanding that can be resolved by a human alone** — the remaining work requires a coordinator/operator with `master`-push authority and real-time observation of live GitHub Actions runs, not a configuration value or dashboard step. See "Next Phase Readiness" below for the exact checklist.
+None. All live-infrastructure steps below were completed by the human operator directly.
 
-## Next Phase Readiness
+## Live Verification (2026-08-19, after merge to master)
 
-**Blocked on live-infrastructure execution outside this worktree, not on new file-level work.** All three tasks' code and documentation deliverables are complete, committed, and pass every statically-checkable acceptance criterion in the plan. The following steps must run from the merged tree (i.e., after the orchestrator merges this worktree's three commits into `master`), under direct human/coordinator observation, before this plan can be marked `complete` and before 09-03 (which `depends_on: [09-02]`) can proceed:
+All four steps this SUMMARY previously listed under "Next Phase Readiness" are now complete:
 
-1. **Task 1 Part B/C:** Re-verify the mechanical precondition one more time against `master`'s actual merged state (should be unchanged from this worktree's verification, but re-check after merge). Delete the nine repository-level deploy secrets (`gh secret delete NETCUP_SSH_KEY`, `NETCUP_DEPLOY_USER`, `NETCUP_HOST`, `NETCUP_HOST_FINGERPRINT`, `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASS`, `DOCKERHUB_TOKEN` — repository scope, no `--env`). Do **not** touch `NVD_API_KEY`. Push a trivial commit (or trigger a re-run) and confirm the resulting run is green end to end across both deploy paths, and that `security-scan.yml`'s most recent run is unaffected.
-2. **Task 2 live proof:** Observe `health-check-nonprod` succeed on a real green run (record the actual attempt count in the runbook's now-placeholder timing note). Then deliberately induce a nonprod outage (e.g., temporarily stop `kanban-nonprod-app` on the VM, or point the poll at an unreachable hostname) and confirm the job goes red with the `::error::` annotation and the run's conclusion becomes `failure`. Restore immediately and re-run green.
-3. **Task 3 live proof:** After a green run, re-run the workflow against the same already-deployed commit and confirm `cleanup-old-images-nonprod` deletes nothing (zero `Deleting tag:` lines) and exits 0. Confirm both Docker Hub repositories (`kanban-board-backend`, `kanban-board-backend-nonprod`) list the current short SHA after a run where both sweeps executed.
-4. Update `docs/INFRA_RUNBOOK.md`'s "What remains" subsection with the observed results, update `gh secret list` output (`NVD_API_KEY` only) into Task 1's annotation, and re-author this SUMMARY.md with `status: complete` and each `coverage[].verification[]` entry with `status: pass`.
-5. Only then dispatch 09-03 (Wave 3) — it is `autonomous: false` and, per `.continue-here.md`, expected to hit its own blocking checkpoint independent of this one.
+1. **Task 1 (CI-02) — repository secret sweep:** Nine plan-scoped repository secrets deleted (`gh secret delete`, no `--env`), plus one unreferenced orphan (`NONPROD_RESET_TOKEN`) found and deleted after explicit operator confirmation. `gh secret list --json name --jq '[.[].name]|join(",")'` now returns exactly `NVD_API_KEY`. Push immediately after (`08b253b`, run `32233904310`) confirmed both deploy paths green end to end. `security-scan.yml` checked separately: its `dependency-check` job was already failing on `NVD_API_KEY repository secret is not set` two days before this sweep (run `32001604789`, 2026-08-17) — confirmed pre-existing, unaffected by the sweep, filed as todo `2026-08-19-security-scan-yml-nvd-api-key-not-resolving.md` rather than folded into this plan.
+2. **Task 2 (CI-04) — health-check-nonprod live proof:** Green path confirmed twice (`Nonprod healthy after 2/30 attempts`, runs `32233904310` and `32236428721`). Red path proven by temporarily pointing `NONPROD_HEALTH_URL` at an unreachable `.invalid` host (commit `5dc792a`, run `32235116988`, per the plan's own documented alternative rather than racing a live container stop/start) — full 300s bound exhausted, `##[error]Nonprod did not answer 200 within 30 attempts...`, job and run conclusion `failure`. Reverted (`406893c`) and re-verified green. Bonus: the same red-path run live-proved `cleanup-old-images-nonprod`'s `if: success()` gate on `health-check-nonprod` — it correctly stayed `skipped`.
+3. **Task 3 (CI-03) — retention idempotency and isolation:** Run `32236428721` re-run via `gh run rerun` against the identical already-deployed commit/tag — `cleanup-old-images-nonprod` produced zero `Deleting tag:` lines, `FAILED=0`, exit 0. Both Docker Hub repositories confirmed via the public tags API to list exactly one tag each — the current short SHA (`406893c`) — proving cross-repository isolation.
+4. `docs/INFRA_RUNBOOK.md`'s "What remains" section rewritten as "Live verification" with the observed results above; the health-poll timing note updated with real measured attempt counts; the secret-inventory section updated with the sweep's actual `gh secret list` result. This SUMMARY re-authored with `status: complete` and every `coverage[].verification[]` entry updated to `status: pass`.
+
+09-03 (Wave 3) is now unblocked — it is `autonomous: false` and, per `.continue-here.md`, expected to hit its own blocking checkpoint independent of this one.
 
 ---
 *Phase: 09-nonprod-continuous-deploy-scoped-ci-credentials*
-*Completed: 2026-08-19 (halted — file-level deliverables for all 3 tasks committed and statically verified; live-infrastructure proof for CI-02/CI-03/CI-04 deferred to the merged tree per Plan 09-01's established precedent)*
+*Completed: 2026-08-19 — file-level deliverables for all 3 tasks committed, and all live-infrastructure verification (CI-02 sweep, CI-03 idempotency/isolation, CI-04 green/red paths) completed by the human operator after merge to master*
 
 ## Self-Check: PASSED
 
