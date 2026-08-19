@@ -55,13 +55,13 @@ jobs:
           fi
 
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
 
-      # temurin, not deploy.yml's adopt: adopt is a deprecated distribution alias
-      # (pending todo 260802-rq5, Unit B already tracks fixing deploy.yml's own use of it).
-      # Diverging here rather than repeating the deprecated value in a brand-new file.
+      # temurin, matching deploy.yml's run-tests job: both workflows deliberately pin the same
+      # JDK distribution and the same action majors (HARDEN-06), so this file's Java setup is
+      # intended to stay in step with deploy.yml rather than drift, as it did until this fix.
       - name: Set up Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '21'
           distribution: 'temurin'
