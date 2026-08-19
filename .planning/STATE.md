@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Nonprod Environment & CI Hardening
 current_phase: 10
-current_phase_name: CI & Deploy Hardening
+current_phase_name: ci-deploy-hardening
 status: executing
 stopped_at: Phase 10 context gathered
-last_updated: "2026-08-19T14:33:23.962Z"
+last_updated: "2026-08-19T15:02:43.251Z"
 last_activity: 2026-08-19
 last_activity_desc: "Phase 9 closed out: plan 09-03 (Avro schema registration, CI-05) live-verified after finding and fixing a real appleboy/ssh-action fail-fast defect (missing set -e) mid-verification; code review (0 critical/4 warnings/3 info) and gsd-verifier goal check (6/6, no gaps) both passed; ROADMAP/STATE/REQUIREMENTS/PROJECT.md all updated and pushed"
 progress:
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-17)
 
 **Core value:** The backend is feature-complete against its own mock-ups and live in production; the differentiator now is proving the whole system — including a real frontend against a real deploy — is reliable.
-**Current focus:** Phase 09 — Nonprod Continuous Deploy & Scoped CI Credentials
+**Current focus:** Phase 10 — ci-deploy-hardening
 
 ## Current Position
 
-Phase: 10 — CI & Deploy Hardening
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-08-19 — Phase 09 complete, transitioned to Phase 10
+Phase: 10 (ci-deploy-hardening) — EXECUTING
+Plan: 1 of 6
+Status: Executing Phase 10
+Last activity: 2026-08-19 — Phase 10 execution started
 
 Progress: [███████░░░] 75%
 

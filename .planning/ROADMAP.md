@@ -134,14 +134,14 @@ Plans:
   4. Session cookies carry the `Secure` flag in both `application.properties` and `application-test.properties`, and authenticated flows still pass end-to-end against a TLS-served environment
   5. A newcomer reading only the README can see the system's architecture, stack, and deployment shape without opening `docs/`
 
-**Plans**: 6 plans
+**Plans**: 3/6 plans executed
 
 Plans:
 **Wave 1** *(no file overlap — parallelisable)*
 
-- [ ] 10-01-PLAN.md — Action supply-chain: digest-pin both `appleboy/*` actions end-to-end (tracer), Dependabot `github-actions` ecosystem, Gradle cache on `run-tests`, production image-cleanup DELETE status check (HARDEN-01, HARDEN-03, HARDEN-04)
-- [ ] 10-02-PLAN.md — Secret-scanning gates: digest-pinned, range-scoped, hard-gated TruffleHog job in `secret-scan.yml`, and the pre-commit hook's out-of-tree-worktree stdin fallback (HARDEN-02, HARDEN-05)
-- [ ] 10-03-PLAN.md — `security-scan.yml` hygiene: bring action pins level with `deploy.yml`, retire the stale divergence comment, and diagnose/fix the NVD_API_KEY resolution failure (HARDEN-06 + folded todo)
+- [x] 10-01-PLAN.md — Action supply-chain: digest-pin both `appleboy/*` actions end-to-end (tracer), Dependabot `github-actions` ecosystem, Gradle cache on `run-tests`, production image-cleanup DELETE status check (HARDEN-01, HARDEN-03, HARDEN-04)
+- [x] 10-02-PLAN.md — Secret-scanning gates: digest-pinned, range-scoped, hard-gated TruffleHog job in `secret-scan.yml`, and the pre-commit hook's out-of-tree-worktree stdin fallback (HARDEN-02, HARDEN-05)
+- [x] 10-03-PLAN.md — `security-scan.yml` hygiene: bring action pins level with `deploy.yml`, retire the stale divergence comment, and diagnose/fix the NVD_API_KEY resolution failure (HARDEN-06 + folded todo)
 
 **Wave 2** *(blocked on Wave 1 — file overlap on `deploy.yml`/`security-scan.yml`, and a settled CI baseline for the live cookie verification)*
 
@@ -161,7 +161,7 @@ Phases execute in numeric order: 8 → 9 → 10
 |-------|-----------|----------------|--------|-----------|
 | 8. Isolated Nonprod Environment, Live and Resettable | v1.3 | 3/3 | Complete    | 2026-08-18 |
 | 9. Nonprod Continuous Deploy & Scoped CI Credentials | v1.3 | 4/4 | Complete    | 2026-08-19 |
-| 10. CI & Deploy Hardening | v1.3 | 0/TBD | Not started | - |
+| 10. CI & Deploy Hardening | v1.3 | 3/6 | In Progress|  |
 
 | Milestone | Phases | Plans | Status | Shipped |
 |-----------|--------|-------|--------|---------|
