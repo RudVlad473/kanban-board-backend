@@ -272,6 +272,52 @@ jobs:
             docker compose --env-file ./.env.prod -f docker-compose.prod.yml pull app
             docker compose --env-file ./.env.prod -f docker-compose.prod.yml up -d
 
+  # CI-05 (Phase 9, plan 09-03): automates the last hand-run step in this project's deploy --
+  # registering the application's 14 Avro schemas against production's registry -- reusing the
+  # identical PropertiesLauncher one-off-container invocation already proven by hand
+  # (docs/INFRA_RUNBOOK.md "Manual deploy -- Plan 05-04 Task 1" step 3). Runs as its OWN job,
+  # immediately after deploy-to-netcup, rather than as a gate inside it (Task 1's checkpoint,
+  # option-a, human-decided): production already serves traffic before registration today --
+  # registration has been a hand-run post-deploy step since v1.2 Phase 5 -- and making the
+  # registry a precondition for `up -d` would introduce a NEW production failure mode (a
+  # registry outage blocking a deploy that would otherwise have succeeded), a change this
+  # phase deliberately does not make. This is still strictly better than the status quo: the
+  # unregistered window shrinks from "until an operator remembers the runbook" to "this job's
+  # own startup latency," and an incompatible schema still reddens the run via the same
+  # exit-code chain nonprod's own registration relies on
+  # (AvroSchemaRegistrar.registerThenSetCompatibility's IllegalStateException -> non-zero JVM
+  # exit -> `docker compose run` exit propagation -> appleboy/ssh-action step failure). No
+  # `|| true`, `set +e`, or `continue-on-error` anywhere near the invocation below.
+  register-schemas-production:
+    needs: [ deploy-to-netcup, build-and-push-docker-image ]
+    runs-on: ubuntu-latest
+    if: success()
+    # Resolves secrets.NETCUP_* through production's OWN identity -- this job's `needs:` names
+    # only deploy-to-netcup (plus build-and-push-docker-image for the image tag output), never
+    # a nonprod node, so this job neither gates nor is gated by the nonprod deploy path.
+    environment: production
+    # Deliberately no concurrency: block. deploy-to-netcup-vm's lock is already released by the
+    # time this job starts (it runs after that job succeeds), and this job neither copies files
+    # to the VM nor mutates the Compose project -- only runs one already-proven one-off
+    # container, so there is nothing here for a second concurrent run to race against.
+    steps:
+      - name: Register Avro schemas (production registry)
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.NETCUP_HOST }}
+          username: ${{ secrets.NETCUP_DEPLOY_USER }}
+          key: ${{ secrets.NETCUP_SSH_KEY }}
+          fingerprint: ${{ secrets.NETCUP_HOST_FINGERPRINT }}
+          script: |
+            cd /opt/deploy/kanban-board-backend
+            # Exported, matching deploy-to-netcup's own precedence convention -- this commit's
+            # freshly-built tag always wins over Compose's --env-file precedence.
+            export IMAGE_TAG=${{ needs.build-and-push-docker-image.outputs.image_tag }}
+            echo "Registering Avro schemas against the production registry..."
+            docker compose --env-file ./.env.prod -f docker-compose.prod.yml run --rm --entrypoint java app \
+              -Dloader.main=com.vrudenko.kanban_board.config.AvroSchemaRegistrar \
+              -cp app.jar org.springframework.boot.loader.launch.PropertiesLauncher http://redpanda:8081
+
   # Nonprod twin of deploy-to-netcup (Phase 9, plan 09-01, part E). Every identity axis
   # differs: target directory (/opt/deploy/kanban-board-nonprod/ vs
   # /opt/deploy/kanban-board-backend/), Compose project/manifest (docker-compose.nonprod.yml,
@@ -313,6 +359,18 @@ jobs:
           source: "docker-compose.nonprod.yml"
           target: "/opt/deploy/kanban-board-nonprod/"
 
+      # CI-05 (Phase 9, plan 09-03): registration is a step inside THIS job's own SSH script,
+      # not a separate job, deliberately -- this is the only position that makes CI-05's
+      # "registration completes before that environment's app serves traffic" literally true
+      # for nonprod. app-nonprod does not exist as a process until the final line below runs,
+      # and a failed registration aborts this script (appleboy/ssh-action's shell fails the
+      # step on the first non-zero command exit; no error-suppressing flag of any kind is
+      # applied to that shell or to the registrar invocation) before that line is ever
+      # reached. Reusing this job's existing SSH step also means registration reaches the
+      # broker over the SAME nonprod-scoped deploy identity (deploy-nonprod, via the staging
+      # environment) the deploy already uses (D-03) -- no second credential surface.
+      # `docker compose run` honours `depends_on`, so the registrar cannot run against a
+      # broker that is not already healthy.
       - name: Deploy via Docker Compose
         uses: appleboy/ssh-action@v1.2.5
         with:
@@ -325,7 +383,8 @@ jobs:
             # Exported, never a hardcoded or floating tag -- this project publishes no
             # `latest` tag on Docker Hub (Phase 8's first schema-registration attempt already
             # failed on exactly that assumption; docs/INFRA_RUNBOOK.md "Deviations from the
-            # plan text").
+            # plan text"). The registrar invocation below reuses this same export -- do not
+            # re-derive it and do not substitute a floating tag.
             export IMAGE_TAG=${{ needs.build-and-push-docker-image.outputs.image_tag }}
             # rudenkovladimir/kanban-board-backend-nonprod is a public Docker Hub repository
             # (confirmed live during plan 09-01 Task 2, is_private: false) -- no docker
@@ -337,6 +396,10 @@ jobs:
             # Phase 8's manual bring-up proved.
             docker compose --env-file ./.env.nonprod -f docker-compose.nonprod.yml --profile nonprod pull app-nonprod
             docker compose --env-file ./.env.nonprod -f docker-compose.nonprod.yml --profile nonprod up -d redpanda-nonprod
+            echo "Registering Avro schemas against the nonprod registry..."
+            docker compose --env-file ./.env.nonprod -f docker-compose.nonprod.yml --profile nonprod run --rm --entrypoint java app-nonprod \
+              -Dloader.main=com.vrudenko.kanban_board.config.AvroSchemaRegistrar \
+              -cp app.jar org.springframework.boot.loader.launch.PropertiesLauncher http://redpanda-nonprod:8081
             docker compose --env-file ./.env.nonprod -f docker-compose.nonprod.yml --profile nonprod up -d app-nonprod
 
   # Bounded health poll (Phase 9, plan 09-02, Task 2) -- a nonprod deploy that starts containers
