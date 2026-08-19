@@ -130,11 +130,27 @@ Plans:
 
   1. Dependabot raises update PRs for outdated GitHub Actions, not only Gradle dependencies
   2. CI's secret scanning distinguishes a live, currently-exploitable credential from a merely pattern-matched string, and the pre-commit gitleaks hook scans a staged diff correctly when invoked from a worktree created outside the main repo tree
-  3. Every `uses:` reference in `deploy.yml` and `security-scan.yml` resolves to an immutable commit digest rather than a mutable tag, `security-scan.yml` no longer carries its stale comment or outdated `checkout`/`setup-java` versions, and `deploy.yml`'s `run-tests` job reuses a Gradle cache between runs
+  3. Every third-party `uses:` reference in `deploy.yml` resolves to an immutable commit digest rather than a mutable tag, `security-scan.yml` no longer carries its stale comment or outdated `checkout`/`setup-java` versions, and `deploy.yml`'s `run-tests` job reuses a Gradle cache between runs — *(narrowed 2026-08-19 by CONTEXT.md D-05: digest-pinning is scoped to the two `appleboy/*` actions that hold real production/staging SSH keys; first-party GitHub/Docker actions keep tag-only trust behind an explicit, in-file risk-acceptance comment. The original "every `uses:` reference" wording predates that discussion and is superseded by it.)*
   4. Session cookies carry the `Secure` flag in both `application.properties` and `application-test.properties`, and authenticated flows still pass end-to-end against a TLS-served environment
   5. A newcomer reading only the README can see the system's architecture, stack, and deployment shape without opening `docs/`
 
-**Plans**: TBD
+**Plans**: 6 plans
+
+Plans:
+**Wave 1** *(no file overlap — parallelisable)*
+
+- [ ] 10-01-PLAN.md — Action supply-chain: digest-pin both `appleboy/*` actions end-to-end (tracer), Dependabot `github-actions` ecosystem, Gradle cache on `run-tests`, production image-cleanup DELETE status check (HARDEN-01, HARDEN-03, HARDEN-04)
+- [ ] 10-02-PLAN.md — Secret-scanning gates: digest-pinned, range-scoped, hard-gated TruffleHog job in `secret-scan.yml`, and the pre-commit hook's out-of-tree-worktree stdin fallback (HARDEN-02, HARDEN-05)
+- [ ] 10-03-PLAN.md — `security-scan.yml` hygiene: bring action pins level with `deploy.yml`, retire the stale divergence comment, and diagnose/fix the NVD_API_KEY resolution failure (HARDEN-06 + folded todo)
+
+**Wave 2** *(blocked on Wave 1 — file overlap on `deploy.yml`/`security-scan.yml`, and a settled CI baseline for the live cookie verification)*
+
+- [ ] 10-04-PLAN.md — Gradle build-tooling integrity: `distributionSha256Sum` pin, `gradle/actions/wrapper-validation` ahead of every `./gradlew`, and dependency-verification metadata (folded todos; HARDEN-03 trust-boundary family)
+- [ ] 10-05-PLAN.md — `Secure` session cookie in both profiles, guarded by a new real-socket assertion over the actual `Set-Cookie`, verified live against TLS-served nonprod (HARDEN-07)
+
+**Wave 3** *(blocked on Waves 1-2 — the README must describe the gates that actually shipped, after every checkpoint resolves)*
+
+- [ ] 10-06-PLAN.md — README restructured into a production-reality-first architecture showcase with one embedded Mermaid diagram and inline stack rationale (HARDEN-08)
 
 ## Progress
 
@@ -152,7 +168,7 @@ Phases execute in numeric order: 8 → 9 → 10
 | v1.0 Optimistic Locking | 1 | 3/3 | Complete | 2026-08-01 |
 | v1.1 Kafka Activity Feed | 2 | 6/6 | Complete | 2026-08-03 |
 | v1.2 Infra Migration & Schema Registry | 7 | 39/39 | Complete | 2026-08-17 |
-| v1.3 Nonprod Environment & CI Hardening | 3 | 0/TBD | In progress | - |
+| v1.3 Nonprod Environment & CI Hardening | 3 | 7/13 | In progress | - |
 
 ## Deferred (not this milestone)
 
