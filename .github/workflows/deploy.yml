@@ -476,3 +476,100 @@ jobs:
           curl -s -X DELETE \
             -H "Authorization: Bearer $TOKEN" \
             "https://registry-1.docker.io/v2/${{ needs.setup.outputs.base_image_name }}/manifests/$DIGEST"
+
+  # Nonprod twin of cleanup-old-images (Phase 9, plan 09-02, Task 3, D-05). Nonprod deploys at the
+  # same per-push rate as production and would otherwise accumulate tags identically. Gated on
+  # health-check-nonprod, not on deploy-to-nonprod: "the nonprod deploy is complete" now materially
+  # depends on the endpoint having actually answered (CI-04), not merely on the SSH script exiting
+  # 0. Never deploy-to-netcup -- referencing production's deploy job here would fire nonprod's
+  # sweep on production's success state, defeating CI-01's parallel-independence requirement.
+  cleanup-old-images-nonprod:
+    runs-on: ubuntu-latest
+    needs: [ health-check-nonprod, build-and-push-docker-image, setup ]
+    if: success()
+    # Phase 9, plan 09-02, Task 3: this job resolves secrets.DOCKERHUB_TOKEN through the `staging`
+    # environment -- nonprod's copy of the account-wide token (see Plan 09-01's T-09-09).
+    environment: staging
+    steps:
+      - name: Delete old Docker Hub images (nonprod repository)
+        run: |
+          # A copy of cleanup-old-images with exactly one axis changed: every repository-name
+          # interpolation below reads setup's nonprod-repository job output, never hand-typed --
+          # the production delete-URL bug fixed 2026-08-17 was exactly a hand-typed, missing
+          # repository path segment (docs/INFRA_RUNBOOK.md). Both already-fixed Docker Hub bugs
+          # are inherited in their fixed form: the JWT login-token exchange (2026-08-16 fix) and
+          # the follow-`next`-until-null pagination loop (2026-08-17 fix).
+          HUB_TOKEN=$(curl -s -H "Content-Type: application/json" -X POST \
+            -d "{\"username\": \"$DOCKERHUB_USER\", \"password\": \"${{ secrets.DOCKERHUB_TOKEN }}\"}" \
+            "https://hub.docker.com/v2/users/login/" | jq -r .token)
+          if [ -z "$HUB_TOKEN" ] || [ "$HUB_TOKEN" = "null" ]; then
+            echo "::error::Docker Hub login-token exchange failed -- no token in response. Cannot prune nonprod tags."
+            exit 1
+          fi
+
+          TAGS=""
+          NEXT_URL="https://hub.docker.com/v2/repositories/${{ needs.setup.outputs.base_image_name_nonprod }}/tags/?page_size=100"
+          while [ -n "$NEXT_URL" ] && [ "$NEXT_URL" != "null" ]; do
+            TAGS_HTTP_STATUS=$(curl -s -o /tmp/tags-nonprod.json -w "%{http_code}" \
+              -H "Authorization: JWT ${HUB_TOKEN}" \
+              "$NEXT_URL")
+            if [ "$TAGS_HTTP_STATUS" != "200" ]; then
+              echo "::error::Listing nonprod tags failed with HTTP $TAGS_HTTP_STATUS: $(cat /tmp/tags-nonprod.json)"
+              exit 1
+            fi
+            TAGS="$TAGS $(jq -r '.results[].name' /tmp/tags-nonprod.json)"
+            NEXT_URL=$(jq -r '.next' /tmp/tags-nonprod.json)
+          done
+
+          # Delete all tags except the current one
+          FAILED=0
+          for TAG in $TAGS; do
+            if [ "$TAG" != "${{ needs.build-and-push-docker-image.outputs.image_tag }}" ]; then
+              echo "Deleting tag: $TAG"
+              DELETE_HTTP_STATUS=$(curl -s -o /tmp/delete-response-nonprod.json -w "%{http_code}" -X DELETE \
+                -H "Authorization: JWT ${HUB_TOKEN}" \
+                "https://hub.docker.com/v2/repositories/${{ needs.setup.outputs.base_image_name_nonprod }}/tags/$TAG/")
+              if [ "$DELETE_HTTP_STATUS" != "204" ]; then
+                echo "::warning::Delete of nonprod tag $TAG failed with HTTP $DELETE_HTTP_STATUS: $(cat /tmp/delete-response-nonprod.json)"
+                FAILED=$((FAILED + 1))
+              fi
+            fi
+          done
+          if [ "$FAILED" -gt 0 ]; then
+            echo "::error::$FAILED nonprod tag deletion(s) failed -- see warnings above."
+            exit 1
+          fi
+
+  # Nonprod twin of cleanup-unused-image (Phase 9, plan 09-02, Task 3, D-06). Mirrors production's
+  # needs: shape literally, for parity: fires when the nonprod deploy job itself fails (not when
+  # health-check-nonprod fails), deleting the tag that will never be used.
+  cleanup-unused-image-nonprod:
+    runs-on: ubuntu-latest
+    needs: [ deploy-to-nonprod, build-and-push-docker-image, setup ]
+    if: failure()
+    # Phase 9, plan 09-02, Task 3: nonprod's environment declaration, matching its sibling jobs.
+    environment: staging
+    steps:
+      - name: Remove just-pushed image (nonprod repository)
+        run: |
+          echo "Deleting failed nonprod tag: ${{ needs.build-and-push-docker-image.outputs.image_tag }}"
+          TOKEN=$(curl -s "https://auth.docker.io/token?service=registry.docker.io&scope=repository:${{ needs.setup.outputs.base_image_name_nonprod }}:pull,push" \
+            | jq -r .token)
+          DIGEST=$(curl -sI \
+            -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
+            -H "Authorization: Bearer $TOKEN" \
+            "https://registry-1.docker.io/v2/${{ needs.setup.outputs.base_image_name_nonprod }}/manifests/${{ needs.build-and-push-docker-image.outputs.image_tag }}" \
+            | awk '/Docker-Content-Digest/ {print $2}' | tr -d $'\r')
+          # Deliberate addition over production's original (Phase 9, plan 09-02, Task 3, part B):
+          # production's copy issues this DELETE with no status check at all, so whether it has
+          # ever actually deleted anything is unproven in this repository's history. This job adds
+          # a status check but only ever warns, never fails, on a non-2xx -- this job already runs
+          # on an already-failing workflow (if: failure()), and turning it red here would mask the
+          # original deploy failure. Fixing both copies for real is Phase 10 CI-hardening scope.
+          DELETE_HTTP_STATUS=$(curl -s -o /tmp/delete-response-nonprod-unused.json -w "%{http_code}" -X DELETE \
+            -H "Authorization: Bearer $TOKEN" \
+            "https://registry-1.docker.io/v2/${{ needs.setup.outputs.base_image_name_nonprod }}/manifests/$DIGEST")
+          case "$DELETE_HTTP_STATUS" in
+            2??) echo "Nonprod manifest delete returned HTTP $DELETE_HTTP_STATUS." ;;
+            *) echo "::warning::Nonprod manifest delete returned non-2xx HTTP $DELETE_HTTP_STATUS: $(cat /tmp/delete-response-nonprod-unused.json)" ;;
+          esac

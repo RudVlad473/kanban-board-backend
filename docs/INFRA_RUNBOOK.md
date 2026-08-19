@@ -1812,6 +1812,92 @@ operator's direct observation, not fire unattended from a background agent insid
 complete and independently verified; Task 3 is left for the orchestrator to run (or hand to a
 follow-up session) once this worktree's commits have landed on `master`.
 
+## Nonprod CI health gate and image retention — Plan 09-02 (2026-08-18)
+
+Expands the tracer path Plan 09-01 built with the two behaviours that make a nonprod deploy
+trustworthy rather than merely wired: a bounded health gate that fails the workflow when nonprod
+does not come up (CI-04), and a per-repository image-retention pair that cannot reach production's
+tags (CI-03). Task 1 (removing the last unscoped repository-level deploy secrets, CI-02) is
+recorded separately above, beside the original "Repository secret inventory" table it supersedes.
+
+### Final `deploy.yml` job graph after this plan
+
+```
+setup ─┬─> run-tests ─> build-and-push-docker-image ─┬─> flyway-verify ────────> deploy-to-netcup ─┬─> cleanup-old-images
+       │                                             │                                             └─> cleanup-unused-image
+       │                                             └─> flyway-verify-nonprod ─> deploy-to-nonprod ─> health-check-nonprod ─┬─> cleanup-old-images-nonprod
+       │                                                                                      └──────────────────────────────┴─> cleanup-unused-image-nonprod
+       └───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+```
+
+Both vertical paths (production, nonprod) share only `setup` and the single
+`build-and-push-docker-image` node (one build, two Docker Hub tags — Plan 09-01, part B). From
+there they are fully independent: `flyway-verify`/`deploy-to-netcup`/`cleanup-old-images`/
+`cleanup-unused-image` read only production's `environment: production` secrets and only
+`base_image_name`; `flyway-verify-nonprod`/`deploy-to-nonprod`/`health-check-nonprod`/
+`cleanup-old-images-nonprod`/`cleanup-unused-image-nonprod` read only `environment: staging`
+secrets and only `base_image_name_nonprod`. Neither path's `needs:` chain names a job from the
+other (CI-01's parallel-independence requirement, unchanged by this plan).
+
+### `health-check-nonprod` — the poll bound and its arithmetic
+
+`docker-compose.nonprod.yml`'s two healthchecks size the bound: `redpanda-nonprod` (`interval 5s`,
+`retries 8`, `start_period 15s`) must report healthy before `app-nonprod`'s own clock starts
+(`depends_on: redpanda-nonprod: service_healthy`); `app-nonprod` itself (`interval 10s`,
+`retries 5`, `start_period 30s`) cannot be marked healthy by Compose before `start_period 30s`, and
+can take up to `30s + (10s x 5) = 80s`. Add image-pull time on the VM, Flyway's migration pass, and
+DNS/TLS latency from a GitHub-hosted runner, and `30 attempts x 10s = 300s` comfortably covers that
+with margin — deliberately overriding 09-RESEARCH.md's illustrative `12 x 5s = 60s`, whose own
+Assumption A3 flags that figure as never sized against real CI conditions. Every attempt prints its
+observed HTTP status (or the `000` sentinel on outright connection failure), so the first real runs
+against this job will produce a genuine timing profile to tighten the bound against later — that
+profile is not yet available (see "What remains" below); this section records the sizing rationale
+only, not a measured attempt count.
+
+### Nonprod image retention — semantics and the deliberate asymmetry
+
+`cleanup-old-images-nonprod` and `cleanup-unused-image-nonprod` are line-for-line copies of
+production's `cleanup-old-images`/`cleanup-unused-image`, with exactly one axis changed throughout:
+every Docker Hub URL and Registry API scope parameter interpolates
+`needs.setup.outputs.base_image_name_nonprod` instead of `base_image_name`, never hand-typed — the
+production delete-URL bug fixed 2026-08-17 (missing repository path segment) is exactly what
+hand-typing a "similar" nonprod URL would reintroduce. Both already-fixed Docker Hub bugs are
+inherited in their fixed form: the JWT login-token exchange against `hub.docker.com/v2/users/login/`
+(2026-08-16 fix) and the `while` loop following `next` until null (2026-08-17 fix). Both sweeps
+preserve the same short SHA, since both consume the one
+`build-and-push-docker-image.outputs.image_tag`.
+
+One deliberate asymmetry with production: `cleanup-old-images-nonprod`'s `needs:` names
+`health-check-nonprod`, not `deploy-to-nonprod` — "the nonprod deploy is complete" now materially
+depends on the endpoint having actually answered, a strictly stronger retention gate than
+production has (production has no health job to gate on). This buys a one-run retention overshoot
+in exchange: a deploy that starts containers but never becomes healthy leaves its tag in place,
+swept only by the next healthy run. `cleanup-unused-image-nonprod` mirrors production's `needs:`
+shape literally instead (parity, D-06) — it fires on `deploy-to-nonprod` failure itself, not on a
+health-check failure, and adds one further deliberate addition over production's original: a
+`::warning::`-only HTTP status check on the DELETE call, which production's own copy performs no
+check on at all (T-09-14, accepted low severity — fixing both copies for real is Phase 10
+CI-hardening scope, not this plan's).
+
+### What remains — live verification deferred to the merged tree
+
+This plan's file-level deliverables (`health-check-nonprod`, `cleanup-old-images-nonprod`,
+`cleanup-unused-image-nonprod`, and this section) were authored and statically verified inside an
+isolated git worktree, the same execution context Plan 09-01 documented above under "Task 3
+deliberately deferred." For the identical reason: every acceptance criterion in this plan's Task 1
+Part C, Task 2, and Task 3 that requires a live push to `origin/master` and observation of the
+resulting GitHub Actions run — including deliberately inducing and then reverting a nonprod outage
+to prove `health-check-nonprod`'s red path, re-running an already-deployed commit to prove
+`cleanup-old-images-nonprod`'s idempotency, and confirming cross-repository isolation on two live
+Docker Hub repositories — could not be executed from this worktree. Nothing in this plan's own file
+scope requires network access to Docker Hub or the VM to author correctly, and every acceptance
+criterion checkable by static extraction against the committed YAML (job presence, `needs:` chains,
+`if:` conditions, `environment:` declarations, repository-name interpolation, inherited bug fixes)
+was checked and passed before commit (see this plan's SUMMARY.md). The remaining live-verification
+steps, together with Task 1's `gh secret delete` sweep and its live proof, are left for the
+orchestrator/human operator to run once this worktree's commits have landed on `master` — see this
+plan's SUMMARY.md "Next Steps Required" for the exact remaining checklist.
+
 ## Maintenance note
 
 If the provider, IP, OS, spec, or firewall policy changes, update this document in the same
