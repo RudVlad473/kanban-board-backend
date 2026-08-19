@@ -44,6 +44,22 @@
 # `.git`-file indirection entirely rather than relying on the container's own git to
 # resolve it (which cannot, in a worktree, since the indirection file holds a literal
 # host-OS absolute path meaningless inside the container).
+#
+# Out-of-tree worktree case (HARDEN-05, D-11/D-12): the bind-mount strategy above
+# structurally requires the worktree's private git-dir and its work tree to share one
+# mountable common ancestor. A worktree created OUTSIDE the main repo tree (i.e. NOT
+# nested under this repo's own `.claude/worktrees/<name>` convention) has no such
+# ancestor -- there is no single host directory that contains both. Mounting only the
+# work tree in that case leaves `REL_WORKTREE`/`CONTAINER_GITDIR` pointing at a
+# host-absolute path the container cannot resolve, which is exactly the original
+# false-clean bug this file exists to prevent, reproduced in a new shape. The fix
+# below is NOT a novel workaround: it falls back to `git diff --cached | gitleaks
+# stdin`, gitleaks' own first-class documented pre-commit pattern. Accepted trade-off
+# (D-12): the stdin path loses path-based allowlist context, because the piped diff
+# carries filenames only as diff headers, not as scannable paths gitleaks can match a
+# path-scoped allowlist entry against. This costs nothing today -- `.gitleaks.toml`'s
+# allowlists are all rule-scoped (`regexTarget = "match"`), none are path-based -- and
+# would only matter if a path-scoped entry were ever added later.
 GITLEAKS_IMAGE='ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f'
 
 echo "Scanning staged diff for secrets..."
@@ -82,13 +98,49 @@ CONTAINER_GITDIR="/repo/$REL_GITDIR"
 # developer at "the Finding/RuleID/File lines above") would be referencing output
 # that was never printed. --redact already covers the secret VALUE regardless of
 # verbosity, so turning this on adds file:line detail without adding exposure.
-MSYS_NO_PATHCONV=1 docker run --rm \
-  -v "${MOUNT_ROOT}:/repo" \
-  -e GIT_DIR="${CONTAINER_GITDIR}" \
-  -e GIT_WORK_TREE="${CONTAINER_WORKTREE}" \
-  "${GITLEAKS_IMAGE}" \
-  git --staged --redact --no-banner --verbose --exit-code 2 "${CONTAINER_WORKTREE}"
-GITLEAKS_STATUS=$?
+#
+# Branch selection: the "$MOUNT_ROOT"|"$MOUNT_ROOT"/* pattern covers both cases that
+# already work correctly today -- a plain checkout (work tree IS the mount root) and
+# this repo's own nested .claude/worktrees/<name> convention (work tree is beneath
+# it) -- byte-for-byte unchanged from before this branch existed. The `*` fallback
+# covers everything else: a worktree whose work tree is NOT reachable under the same
+# mount root as its private git-dir.
+case "$GIT_TOPLEVEL" in
+  "$MOUNT_ROOT"|"$MOUNT_ROOT"/*)
+    MSYS_NO_PATHCONV=1 docker run --rm \
+      -v "${MOUNT_ROOT}:/repo" \
+      -e GIT_DIR="${CONTAINER_GITDIR}" \
+      -e GIT_WORK_TREE="${CONTAINER_WORKTREE}" \
+      "${GITLEAKS_IMAGE}" \
+      git --staged --redact --no-banner --verbose --exit-code 2 "${CONTAINER_WORKTREE}"
+    GITLEAKS_STATUS=$?
+    ;;
+  *)
+    # Out-of-tree worktree fallback (see the comment above GITLEAKS_IMAGE). Pipes the
+    # staged diff straight into gitleaks' own `stdin` scanning mode -- no bind mount,
+    # no GIT_DIR/GIT_WORK_TREE indirection, so it is immune by construction to the
+    # path-translation bug the mount strategy above exists to work around.
+    #
+    # MSYS_NO_PATHCONV is deliberately NOT set here. That variable exists to stop Git
+    # Bash on Windows from rewriting Docker's Windows-style path ARGUMENTS before they
+    # reach docker.exe; this invocation passes no path argument and mounts no volume
+    # at all (stdin only), so there is nothing for it to rewrite and nothing for the
+    # variable to protect either the `git diff` or `docker run` side of the pipe. The
+    # shell idiom `VAR=x cmd1 | cmd2` would scope it to `git diff` only in any case,
+    # which is not where the (non-existent, here) risk would even be -- do not copy
+    # that placement forward into a future edit believing it is load-bearing.
+    #
+    # `-i` is required, not optional: without it the container receives no stdin and
+    # silently scans an empty stream, which is the same false-clean failure mode in a
+    # new costume. `--redact --no-banner --verbose --exit-code 2` match the bind-mount
+    # branch's flags exactly, so the GITLEAKS_STATUS contract below is identical
+    # regardless of which branch ran.
+    git diff --cached | docker run --rm -i \
+      "${GITLEAKS_IMAGE}" \
+      stdin --redact --no-banner --verbose --exit-code 2
+    GITLEAKS_STATUS=$?
+    ;;
+esac
 
 if [ "$GITLEAKS_STATUS" -eq 0 ]; then
   echo "No secrets found in staged diff."
