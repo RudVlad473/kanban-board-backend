@@ -145,7 +145,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 — file overlap on `deploy.yml`/`security-scan.yml`, and a settled CI baseline for the live cookie verification)*
 
-- [ ] 10-04-PLAN.md — Gradle build-tooling integrity: `distributionSha256Sum` pin, `gradle/actions/wrapper-validation` ahead of every `./gradlew`, and dependency-verification metadata (folded todos; HARDEN-03 trust-boundary family)
+- [ ] 10-04-PLAN.md — Gradle build-tooling integrity: `distributionSha256Sum` pin, `gradle/actions/wrapper-validation` ahead of every `./gradlew`, and dependency-verification metadata (folded todos only — a trust boundary CONTEXT.md defines as distinct from HARDEN-03, which plan 10-01 owns in full; no formal HARDEN-* ID)
 - [ ] 10-05-PLAN.md — `Secure` session cookie in both profiles, guarded by a new real-socket assertion over the actual `Set-Cookie`, verified live against TLS-served nonprod (HARDEN-07)
 
 **Wave 3** *(blocked on Waves 1-2 — the README must describe the gates that actually shipped, after every checkpoint resolves)*
