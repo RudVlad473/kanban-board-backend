@@ -255,14 +255,19 @@ jobs:
           username: ${{ secrets.NETCUP_DEPLOY_USER }}
           key: ${{ secrets.NETCUP_SSH_KEY }}
           fingerprint: ${{ secrets.NETCUP_HOST_FINGERPRINT }}
-          # script_stop (Phase 9, plan 09-03, live-verification fix): appleboy/ssh-action
-          # runs a multi-line `script:` under a plain shell with no `set -e` by default --
-          # a failing command mid-script does NOT stop later lines from running. Discovered
-          # live via deploy-to-nonprod's registration step (see that job's comment); applied
-          # here too for defense-in-depth even though `pull`/`up -d` currently has no
-          # order-dependent failure to hide.
-          script_stop: true
           script: |
+            set -e
+            # set -e (Phase 9, plan 09-03, live-verification fix, corrected): appleboy/ssh-action
+            # v1.2.5 has NO `script_stop` input -- an earlier fix attempt added that key and it was
+            # silently ignored (unknown `with:` keys don't error in GitHub Actions), which is why the
+            # bug it was meant to fix reproduced identically on first re-test. The real mechanism is
+            # the script's own shell: appleboy/ssh-action runs `script:` as plain multi-line shell
+            # text with no `set -e` by default, so a failing command mid-script does NOT stop later
+            # lines from running. Confirmed live twice: deploy-to-nonprod's registration step threw
+            # the expected IllegalStateException and `docker compose run` exited 1 at the OS level
+            # (verified directly on the VM), yet `up -d app-nonprod` on the next line still ran both
+            # times -- once with no fix, once with the ineffective `script_stop: true`. `set -e` here
+            # is the actual fix, applied to every ssh-action script in this file for defense-in-depth.
             cd /opt/deploy/kanban-board-backend
             # Exported (not written into .env.prod) so this commit's freshly-built tag
             # always wins over Compose's --env-file precedence -- shell environment
@@ -315,11 +320,12 @@ jobs:
           username: ${{ secrets.NETCUP_DEPLOY_USER }}
           key: ${{ secrets.NETCUP_SSH_KEY }}
           fingerprint: ${{ secrets.NETCUP_HOST_FINGERPRINT }}
-          # script_stop: see deploy-to-netcup's identical comment. This script's only risky
-          # command is already last, so its exit code already propagated correctly -- added
-          # for defense-in-depth against a future edit appending a line after it.
-          script_stop: true
           script: |
+            set -e
+            # set -e: see deploy-to-netcup's identical comment (script_stop is not a real
+            # appleboy/ssh-action input). This script's only risky command is already last, so its
+            # exit code already propagated correctly -- set -e added for defense-in-depth against a
+            # future edit appending a line after it.
             cd /opt/deploy/kanban-board-backend
             # Exported, matching deploy-to-netcup's own precedence convention -- this commit's
             # freshly-built tag always wins over Compose's --env-file precedence.
@@ -374,14 +380,14 @@ jobs:
       # not a separate job, deliberately -- this is the only position that makes CI-05's
       # "registration completes before that environment's app serves traffic" literally true
       # for nonprod. app-nonprod does not exist as a process until the final line below runs,
-      # and a failed registration aborts this script (appleboy/ssh-action's shell fails the
-      # step on the first non-zero command exit; no error-suppressing flag of any kind is
-      # applied to that shell or to the registrar invocation) before that line is ever
-      # reached. Reusing this job's existing SSH step also means registration reaches the
-      # broker over the SAME nonprod-scoped deploy identity (deploy-nonprod, via the staging
-      # environment) the deploy already uses (D-03) -- no second credential surface.
-      # `docker compose run` honours `depends_on`, so the registrar cannot run against a
-      # broker that is not already healthy.
+      # and a failed registration aborts this script -- via the explicit `set -e` at the top
+      # of the script body (appleboy/ssh-action does NOT fail-fast by default; see that line's
+      # own comment for the live-verification history) -- before that line is ever reached.
+      # Reusing this job's existing SSH step also means registration reaches the broker over
+      # the SAME nonprod-scoped deploy identity (deploy-nonprod, via the staging environment)
+      # the deploy already uses (D-03) -- no second credential surface. `docker compose run`
+      # honours `depends_on`, so the registrar cannot run against a broker that is not already
+      # healthy.
       - name: Deploy via Docker Compose
         uses: appleboy/ssh-action@v1.2.5
         with:
@@ -389,16 +395,19 @@ jobs:
           username: ${{ secrets.NETCUP_DEPLOY_USER }}
           key: ${{ secrets.NETCUP_SSH_KEY }}
           fingerprint: ${{ secrets.NETCUP_HOST_FINGERPRINT }}
-          # script_stop (Phase 9, plan 09-03, live-verification fix): without this,
-          # appleboy/ssh-action runs the multi-line script below under a plain shell with no
-          # `set -e` -- a failing `docker compose run` (the registrar, mid-script) does NOT
-          # stop `up -d app-nonprod` on the next line from still running. Confirmed live: a
-          # deliberately unreachable registry URL threw the expected IllegalStateException,
-          # yet app-nonprod was recreated and started anyway, and the job reported success.
-          # This is the mechanism that makes CI-05's "registration completes before the app
-          # process exists" guarantee for nonprod actually true, not just documented.
-          script_stop: true
           script: |
+            set -e
+            # set -e (Phase 9, plan 09-03, live-verification fix, corrected twice -- see
+            # deploy-to-netcup's full comment for the script_stop dead-end): without this,
+            # appleboy/ssh-action runs the multi-line script below under a plain shell with no
+            # `set -e` -- a failing `docker compose run` (the registrar, mid-script) does NOT
+            # stop `up -d app-nonprod` on the next line from still running. Confirmed live twice:
+            # a deliberately unreachable registry URL threw the expected IllegalStateException and
+            # `docker compose run` exited 1 at the OS level (verified directly on the VM), yet
+            # app-nonprod was recreated and started anyway both times -- once with no fix at all,
+            # once with the silently-ignored `script_stop: true`. This is the mechanism that
+            # actually makes CI-05's "registration completes before the app process exists"
+            # guarantee for nonprod true, not just documented.
             cd /opt/deploy/kanban-board-nonprod
             # Exported, never a hardcoded or floating tag -- this project publishes no
             # `latest` tag on Docker Hub (Phase 8's first schema-registration attempt already
