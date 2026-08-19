@@ -13,6 +13,15 @@ env:
   # byte-identical image content pulled from two independent repositories.
   DOCKERHUB_REPOSITORY_NONPROD: kanban-board-backend-nonprod
 
+# Risk-acceptance (Phase 10, HARDEN-03, D-05): actions/checkout, actions/setup-java,
+# docker/setup-buildx-action, docker/build-push-action, actions/cache and actions/upload-artifact
+# remain trusted by tag, not digest. Digest-pinning was scoped deliberately to only the two
+# appleboy/* actions below (deploy-to-netcup, register-schemas-production, deploy-to-nonprod),
+# which run with real SSH keys against production/staging VMs -- a materially higher
+# publisher-compromise risk tier than these first-party GitHub/Docker actions. A digest pin needs
+# a two-step lookup-then-edit on every future version bump instead of a one-line tag edit; that
+# recurring maintenance cost is deliberately not paid for the first-party actions listed above.
+
 jobs:
   setup:
     runs-on: ubuntu-latest
@@ -43,6 +52,12 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
+          # HARDEN-04 (Phase 10): setup-java's built-in Gradle cache keys on **/*.gradle* and
+          # **/gradle-wrapper.properties. This repo's plugin declarations and its
+          # Confluent Maven repository declaration both live in build.gradle only, so the
+          # default key inputs already cover the full dependency graph -- no extra
+          # cache-path/key configuration needed.
+          cache: 'gradle'
 
       - name: Grant permission to gradlew
         run: chmod +x gradlew
@@ -239,7 +254,7 @@ jobs:
         # (plan 05-04's manual deploy, populated once, off-limits to this job's own
         # explicit prohibition), which must never be recreated or deleted here -- only
         # the two named files below are transferred.
-        uses: appleboy/scp-action@v1.0.0
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345  # v1.0.0
         with:
           host: ${{ secrets.NETCUP_HOST }}
           username: ${{ secrets.NETCUP_DEPLOY_USER }}
@@ -249,7 +264,7 @@ jobs:
           target: "/opt/deploy/kanban-board-backend/"
 
       - name: Deploy via Docker Compose
-        uses: appleboy/ssh-action@v1.2.5
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2  # v1.2.5
         with:
           host: ${{ secrets.NETCUP_HOST }}
           username: ${{ secrets.NETCUP_DEPLOY_USER }}
@@ -314,7 +329,7 @@ jobs:
     # container, so there is nothing here for a second concurrent run to race against.
     steps:
       - name: Register Avro schemas (production registry)
-        uses: appleboy/ssh-action@v1.2.5
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2  # v1.2.5
         with:
           host: ${{ secrets.NETCUP_HOST }}
           username: ${{ secrets.NETCUP_DEPLOY_USER }}
@@ -367,7 +382,7 @@ jobs:
         # must never be recreated or deleted here -- the same prohibition production's own
         # SCP step carries above. No Caddyfile to transfer -- nonprod has none of its own;
         # production's Caddy already fronts it over the shared kanban-edge network.
-        uses: appleboy/scp-action@v1.0.0
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345  # v1.0.0
         with:
           host: ${{ secrets.NETCUP_HOST }}
           username: ${{ secrets.NETCUP_DEPLOY_USER }}
@@ -389,7 +404,7 @@ jobs:
       # honours `depends_on`, so the registrar cannot run against a broker that is not already
       # healthy.
       - name: Deploy via Docker Compose
-        uses: appleboy/ssh-action@v1.2.5
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2  # v1.2.5
         with:
           host: ${{ secrets.NETCUP_HOST }}
           username: ${{ secrets.NETCUP_DEPLOY_USER }}
@@ -565,9 +580,22 @@ jobs:
           # manifest HEAD request), not by tag+basic-auth like cleanup-old-images --
           # the Docker Registry v2 API's DELETE-manifest endpoint at this host requires
           # the digest reference, which is exactly what TOKEN/DIGEST were computed for.
-          curl -s -X DELETE \
+          #
+          # Status check added (Phase 10, HARDEN item, this job's own comment previously flagged
+          # this as Phase 10 scope -- see cleanup-unused-image-nonprod's identical, already-fixed
+          # copy below). Before this, production issued this DELETE with no status inspection at
+          # all, so whether it ever actually deleted anything was unproven in this repo's history.
+          # Warn-only, mirroring the nonprod twin exactly: this job already runs on an
+          # already-failing workflow (if: failure()), and turning it red here would mask the
+          # original deploy failure it exists to clean up after -- never ::error::, never a
+          # non-zero exit.
+          DELETE_HTTP_STATUS=$(curl -s -o /tmp/delete-response-unused.json -w "%{http_code}" -X DELETE \
             -H "Authorization: Bearer $TOKEN" \
-            "https://registry-1.docker.io/v2/${{ needs.setup.outputs.base_image_name }}/manifests/$DIGEST"
+            "https://registry-1.docker.io/v2/${{ needs.setup.outputs.base_image_name }}/manifests/$DIGEST")
+          case "$DELETE_HTTP_STATUS" in
+            2??) echo "Manifest delete returned HTTP $DELETE_HTTP_STATUS." ;;
+            *) echo "::warning::Manifest delete returned non-2xx HTTP $DELETE_HTTP_STATUS: $(cat /tmp/delete-response-unused.json)" ;;
+          esac
 
   # Nonprod twin of cleanup-old-images (Phase 9, plan 09-02, Task 3, D-05). Nonprod deploys at the
   # same per-push rate as production and would otherwise accumulate tags identically. Gated on
