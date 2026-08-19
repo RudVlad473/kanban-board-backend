@@ -43,9 +43,16 @@ jobs:
       # turning an initial full database population from minutes into hours -- long enough to
       # exceed this job's own timeout, which would otherwise look identical to "ran and found
       # nothing" from the Actions UI.
+      # env:-indirected (not textual ${{ }} interpolation) so a stored value containing a quote,
+      # backslash, or newline reaches the shell as a variable, never as substituted script text --
+      # GitHub Actions renders ${{ }} into the run: script's source before any shell parses it, so
+      # textual interpolation is both a script-injection surface and makes this exact [ -z ] test
+      # test whether the substituted text happened to parse as shell, not genuine emptiness.
       - name: Verify NVD_API_KEY is configured
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: |
-          if [ -z "${{ secrets.NVD_API_KEY }}" ]; then
+          if [ -z "$NVD_API_KEY" ]; then
             echo "::error::NVD_API_KEY repository secret is not set. Request a free key at" \
               "https://nvd.nist.gov/developers/request-an-api-key and add it via" \
               "'gh secret set NVD_API_KEY' or GitHub -> Settings -> Secrets and variables ->" \
@@ -54,14 +61,57 @@ jobs:
             exit 1
           fi
 
-      - name: Checkout code
-        uses: actions/checkout@v3
+      # TEMPORARY (10-03-PLAN.md Task 2) -- diagnoses why secrets.NVD_API_KEY resolves empty in
+      # this job without ever disclosing the value itself. Removed in Task 3 once the root cause is
+      # applied and confirmed by a green dependencyCheckAnalyze run: the fix ships, the probe does
+      # not. Bound to a differently-named env var (SECRET_VALUE, not NVD_API_KEY) so this probe is
+      # unambiguously distinct from the two load-bearing NVD_API_KEY env bindings elsewhere in
+      # this file (the preflight above and the analyze step below). Emits only non-reversible
+      # facts -- byte length,
+      # non-printable character count, and two truncated (16-hex-char) SHA-256 digests (raw and
+      # whitespace-stripped) -- which is sufficient to distinguish "genuinely unset", "set but
+      # empty", "surrounding whitespace or an embedded control character", and "value is intact"
+      # without the log ever carrying anything the value could be recovered from. GitHub masks the
+      # exact secret string but not anything derived from it, so this output ceiling is enforced
+      # here, not by the platform. Non-fatal by design: the script itself exits 0 at the end (not
+      # `continue-on-error`, which this file's posture explicitly rejects -- see the analyze step's
+      # own comment). `if: always()` is a distinct, unrelated mechanism from `continue-on-error`:
+      # the preflight above deliberately fails hard (exit 1) when the secret is empty, and GitHub
+      # skips every later step by default once one fails -- without `if: always()` this diagnostic
+      # would never run in exactly the failure case it exists to diagnose. `if: always()` does not
+      # mask the preflight's failure or change the job's red/green verdict; it only makes this one
+      # step exempt from being skipped.
+      - name: TEMPORARY -- Diagnose NVD_API_KEY resolution
+        if: always()
+        env:
+          SECRET_VALUE: ${{ secrets.NVD_API_KEY }}
+        run: |
+          if [ -z "${SECRET_VALUE+x}" ]; then
+            echo "NVD_API_KEY: variable is UNSET (not merely empty)."
+          elif [ -z "$SECRET_VALUE" ]; then
+            echo "NVD_API_KEY: variable is SET but resolves to an empty string."
+          else
+            echo "NVD_API_KEY: variable is set and non-empty."
+          fi
+          LENGTH=$(printf '%s' "$SECRET_VALUE" | wc -c)
+          echo "NVD_API_KEY byte length: $LENGTH"
+          NONPRINTABLE=$(printf '%s' "$SECRET_VALUE" | tr -d '[:print:]' | wc -c)
+          echo "NVD_API_KEY non-printable character count: $NONPRINTABLE"
+          RAW_DIGEST=$(printf '%s' "$SECRET_VALUE" | sha256sum | cut -c1-16)
+          echo "NVD_API_KEY truncated digest (raw value): $RAW_DIGEST"
+          STRIPPED=$(printf '%s' "$SECRET_VALUE" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+          STRIPPED_DIGEST=$(printf '%s' "$STRIPPED" | sha256sum | cut -c1-16)
+          echo "NVD_API_KEY truncated digest (whitespace-stripped): $STRIPPED_DIGEST"
+          exit 0
 
-      # temurin, not deploy.yml's adopt: adopt is a deprecated distribution alias
-      # (pending todo 260802-rq5, Unit B already tracks fixing deploy.yml's own use of it).
-      # Diverging here rather than repeating the deprecated value in a brand-new file.
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      # temurin, matching deploy.yml's run-tests job: both workflows deliberately pin the same
+      # JDK distribution and the same action majors (HARDEN-06), so this file's Java setup is
+      # intended to stay in step with deploy.yml rather than drift, as it did until this fix.
       - name: Set up Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '21'
           distribution: 'temurin'
