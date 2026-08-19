@@ -75,8 +75,14 @@ jobs:
       # exact secret string but not anything derived from it, so this output ceiling is enforced
       # here, not by the platform. Non-fatal by design: the script itself exits 0 at the end (not
       # `continue-on-error`, which this file's posture explicitly rejects -- see the analyze step's
-      # own comment) so dependencyCheckAnalyze's own behaviour is also observed in this same run.
+      # own comment). `if: always()` is a distinct, unrelated mechanism from `continue-on-error`:
+      # the preflight above deliberately fails hard (exit 1) when the secret is empty, and GitHub
+      # skips every later step by default once one fails -- without `if: always()` this diagnostic
+      # would never run in exactly the failure case it exists to diagnose. `if: always()` does not
+      # mask the preflight's failure or change the job's red/green verdict; it only makes this one
+      # step exempt from being skipped.
       - name: TEMPORARY -- Diagnose NVD_API_KEY resolution
+        if: always()
         env:
           SECRET_VALUE: ${{ secrets.NVD_API_KEY }}
         run: |
