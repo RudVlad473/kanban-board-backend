@@ -43,6 +43,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
+      # HARDEN (Phase 10, folded todo): validates the wrapper's shell/batch scripts and its jar
+      # against Gradle's own published known-good checksums BEFORE any of them execute. Placed
+      # here -- immediately after checkout, strictly before the wrapper permission grant and
+      # every wrapper invocation below -- because validating a wrapper that has already run
+      # defeats the entire point of the control. First-party (published by Gradle's own GitHub
+      # org), so tag-pinned rather than digest-pinned per D-05's third-party-only digest scope.
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v6
+
       # Legacy AdoptOpenJDK distribution alias removed -- that vendor stopped shipping
       # releases years ago and the alias only survived as a deprecated fallback in
       # setup-java. Node runtime bumped to clear the runner's own deprecation warning

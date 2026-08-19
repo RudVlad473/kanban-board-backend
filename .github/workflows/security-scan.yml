@@ -64,6 +64,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
+      # HARDEN (Phase 10, folded todo): validates the wrapper's shell/batch scripts and its jar
+      # against Gradle's own published known-good checksums BEFORE any of them execute -- same
+      # control and same placement rule as deploy.yml's run-tests job (see that step's comment
+      # for the full reasoning). Strictly before the wrapper permission grant below.
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v6
+
       # temurin, matching deploy.yml's run-tests job: both workflows deliberately pin the same
       # JDK distribution and the same action majors (HARDEN-06), so this file's Java setup is
       # intended to stay in step with deploy.yml rather than drift, as it did until this fix.
