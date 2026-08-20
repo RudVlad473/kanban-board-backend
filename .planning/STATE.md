@@ -68,7 +68,7 @@ integrity validation). A separate, previously-untracked issue found the same day
 had no `paths-ignore` filter, so a docs-only push triggered a full redeploy) was fixed and closed
 in the same pass (quick task `260820-euc`).
 
-Still open and out of v1.3 scope (representative, see `.planning/todos/pending/` for the complete set — ~26 items):
+Still open and out of v1.3 scope (representative, see `.planning/todos/pending/` for the complete set — ~45 items):
 
 - [security] IDOR chain consistency: nested path segments (`boardId`, `columnId`) are never cross-checked against the leaf resource's actual parent — a same-user chain-confusion variant `AuthorizationGatingTest` doesn't exercise (`2026-08-20-idor-same-user-chain-consistency-boardid-columnid-not-c.md`).
 - [security] No rate limiting / volumetric brute-force guard on `POST /signin` (`2026-08-20-add-rate-limiting-to-signin-to-bound-brute-force-volume.md`).
@@ -79,6 +79,19 @@ Still open and out of v1.3 scope (representative, see `.planning/todos/pending/`
 - [minor] `activity_log` has no retention policy; `TaskMovedEvent` carries no position; `UpdateBoardRequestDTO.name` optionality assumption.
 - [minor] OpenAPI breaking-change detection in CI; `POST /signup` `Location` points at a URI with no GET handler; 4 `Location` sites diverge from signup's pattern.
 - [minor] Ratchet `dependencyCheckAnalyze`'s `failBuildOnCVSS` after a CPE-matched baseline; evaluate PMD/Checkstyle/SpotBugs; alert-service microservice exploration; JavaDoc verbosity policy.
+- [security] Password composition regex requires ASCII-only character classes, blocking valid Unicode-only passwords and contradicting ASVS's own no-composition-rules guidance (`2026-08-20-password-composition-regex-blocks-unicode-only-pass.md`).
+- [security] No password-change endpoint exists anywhere in the API — a password can never be changed once set (`2026-08-20-no-password-change-capability-exists-anywhere-in-api.md`).
+- [security] No MFA/second-factor enrollment path; BCrypt password comparison is the sole authentication factor (`2026-08-20-no-mfa-second-factor-enrollment-path.md`).
+- [security] Zero security-event logging on the authentication/access-control paths — a real credential-stuffing attempt leaves no forensic trail (`2026-08-20-no-security-event-logging-on-auth-and-access-control.md`).
+- [infra] No remote log shipping, structured/UTC logging standard, or alerting on unusual activity — overlaps the existing unimplemented Prometheus+Grafana backlog item (`2026-08-20-no-remote-log-shipping-structured-logging-or-alerting.md`).
+- [security] No self-service session revocation and no re-authentication gate before destructive actions like a board's cascading delete (`2026-08-20-no-session-revocation-or-reauth-before-destructive-act.md`).
+- [security] Container runs as root — Dockerfile has no USER directive in either build or runtime stage (`2026-08-20-dockerfile-runs-as-root-no-user-directive.md`).
+- [ci] No branch protection on master — confirmed live via `gh api`, no required reviews or status checks (`2026-08-20-no-branch-protection-on-master.md`).
+- [ci] Production deploys get no automated post-deploy health check, unlike nonprod (`2026-08-20-no-prod-post-deploy-health-verification.md`).
+- [security] Internal Kafka/schema-registry hop has neither SASL auth nor TLS (Docker-internal-only networking is a compensating control, not a fix) (`2026-08-20-internal-kafka-hop-has-no-sasl-auth-or-tls.md`).
+- [security] No secrets vault for runtime production secrets (plaintext `.env.prod` on VM disk) and no stated rotation cadence (`2026-08-20-no-secrets-vault-for-runtime-prod-secrets-no-rotation.md`).
+- [security] Swagger/OpenAPI docs are reachable in production with no profile gate (`2026-08-20-swagger-openapi-docs-reachable-in-prod-no-profile-gate.md`).
+- [minor] Password length bounds undersized vs. ASVS; no breached-password check; no secret pepper on BCrypt; no auth-detail-change notifications (blocked on missing email infra); no Content-Type validation on REST endpoints; no formal data classification or self-service export/delete; no documented DB backup/restore runbook — see `.planning/todos/pending/` for the 7 minor-severity todos filed 2026-08-20.
 
 **Update (2026-08-20, later same day):** 4 more small pending todos closed (quick task
 `260820-g3u`) — the `docs/CODE_STYLE.md` rule 4 correction and the bare-static-import lint
@@ -97,6 +110,15 @@ management came back adequate; dependency CVEs stayed cross-referenced to the ex
 todo's candidate list didn't name explicitly: `OwnershipVerifierService` validates ownership by
 walking up from the leaf path id only, never cross-checking a nested route's other nominal
 ownership-chain segments against that same id's real parent.
+
+**Update (2026-08-20, later still — ASVS 4.0.3 Level 2 audit):** a 33-agent ASVS 4.0.3 Level 2
+audit cross-referenced the 6 most recent security-area pending todos against the ASVS chapter set
+(all 6 corroborated; one — the security-response-headers todo — also gained a new confirmed
+finding on Referrer-Policy and a correction narrowing the X-Frame-Options gap; the rate-limiting
+todo's scope broadened from `/signin`-only to general request-volume abuse per 3 independently
+converging ASVS chapters). 19 new pending todos filed (12 moderate, 7 minor) spanning password
+policy, MFA, session revocation, logging/observability, container/infra hardening, and CI
+governance.
 
 ### Blockers/Concerns
 
