@@ -5,9 +5,10 @@ milestone_name: Nonprod Environment & CI Hardening
 current_phase: 10
 status: completed
 stopped_at: Phase 10 context gathered
-last_updated: "2026-08-19T19:46:12.272Z"
+last_updated: "2026-08-20T08:20:35.710Z"
 last_activity: 2026-08-19
 last_activity_desc: "Phase 9 closed out: plan 09-03 (Avro schema registration, CI-05) live-verified after finding and fixing a real appleboy/ssh-action fail-fast defect (missing set -e) mid-verification; code review (0 critical/4 warnings/3 info) and gsd-verifier goal check (6/6, no gaps) both passed; ROADMAP/STATE/REQUIREMENTS/PROJECT.md all updated and pushed"
+state_head: 586bed2ac1d51147e5ef226d23677645b909c04a
 progress:
   total_phases: 3
   completed_phases: 3
@@ -31,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 Phase: 10
 Plan: Not started
 Status: All phases complete
-Last activity: 2026-08-19 — Phase 10 complete
+Last activity: 2026-08-20 - Completed quick task 260820-ecm: Resolve WINDOWS.md ledger items 3 and 7
 
 Progress: [███████░░░] 75%
 
@@ -81,6 +82,7 @@ Still open and out of v1.3 scope (representative, see `.planning/todos/pending/`
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260818-ied | Add CI-05 requirement to Phase 9: automate Avro schema registry registration for nonprod as part of the CI deploy pipeline, extending deploy.yml with a schema-registration step (mirroring CI-01's flyway-verify-nonprod/deploy-to-nonprod pattern) so production and nonprod schema registries stay in sync on every deploy without a manual step | 2026-08-18 | b985989 | [260818-ied-add-ci-05-requirement-to-phase-9-automat](./quick/260818-ied-add-ci-05-requirement-to-phase-9-automat/) |
+| 260820-ecm | Resolve WINDOWS.md ledger items 3 and 7: record already-completed live verification proof in INFRA_RUNBOOK.md and mark both fixed | 2026-08-20 | (pending) | [260820-ecm-resolve-windows-md-ledger-items-3-and-7-](./quick/260820-ecm-resolve-windows-md-ledger-items-3-and-7-/) |
 
 ## Deferred Items
 
