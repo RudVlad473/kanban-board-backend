@@ -1,3 +1,4 @@
+completed: 2026-08-20
 ---
 created: 2026-08-18T20:57:50.115Z
 title: Add Gradle dependency verification metadata (checksum/signature pinning)
@@ -5,8 +6,10 @@ area: tooling
 severity: minor
 resolves_phase: 10
 files:
+
   - build.gradle
   - gradle/verification-metadata.xml
+
 ---
 
 ## Problem
@@ -35,3 +38,11 @@ that fails when the metadata is stale relative to `build.gradle`'s declared
 dependencies — so a future dependency bump can't silently drop verification
 coverage. Consider gating this in `run-tests` (fast, deterministic) rather than
 the network-bound `security-scan.yml`.
+
+## Resolution (2026-08-20)
+
+Delivered by Phase 10: `gradle/verification-metadata.xml` exists, committed. Found already
+satisfied while triaging pending todos after Phase 10 closed; moved straight to completed
+without further action. (Not independently re-verified here whether the CI staleness-check half
+of the todo's Solution was wired — the file's existence is the load-bearing fact this resolution
+confirms.)

@@ -1,3 +1,4 @@
+completed: 2026-08-20
 ---
 created: 2026-08-16T19:15:00.000Z
 title: security-scan.yml's Set up Java comment is now stale, and it still carries checkout@v3/setup-java@v4
@@ -5,7 +6,9 @@ area: tooling
 severity: minor
 resolves_phase: 10
 files:
+
   - .github/workflows/security-scan.yml
+
 ---
 
 ## Problem
@@ -14,9 +17,13 @@ files:
 `Set up Java` step:
 
 ```yaml
+
 # temurin, not deploy.yml's adopt: adopt is a deprecated distribution alias
+
 # (pending todo 260802-rq5, Unit B already tracks fixing deploy.yml's own use of it).
+
 # Diverging here rather than repeating the deprecated value in a brand-new file.
+
 ```
 
 Quick task 260816-sv1 (2026-08-16) closed the CI half of Unit B: `deploy.yml`'s
@@ -37,12 +44,22 @@ want entangled with the deprecation-warning fix).
 
 1. Correct or remove the stale comment at lines 60-62 (the divergence it
    describes no longer exists).
+
 2. Bump `actions/checkout@v3` -> `@v5` and `actions/setup-java@v4` -> `@v5` in
    this file, matching the versions `deploy.yml` now uses (verify live via a
    `workflow_dispatch` run rather than waiting for the weekly schedule, since
    this workflow only fires on `workflow_dispatch` or a Monday cron).
+
 3. Re-verify `NVD_API_KEY`-gated `dependencyCheckAnalyze` still runs clean
    after the bump (should be unaffected -- the bump touches only `checkout`/
    `setup-java`, not the dependency-check plugin or its cache step).
 
 **Trigger:** any time after this todo is picked up; not gating any current phase.
+
+## Resolution (2026-08-20)
+
+Delivered by Phase 10: `security-scan.yml`'s `Set up Java` step now carries an accurate comment
+("temurin, matching deploy.yml's run-tests job... intended to stay in step with deploy.yml
+rather than drift, as it did until this fix") and both `actions/checkout@v5` and
+`actions/setup-java@v5`, matching `deploy.yml`. Found already satisfied while triaging pending
+todos after Phase 10 closed; moved straight to completed without further action.

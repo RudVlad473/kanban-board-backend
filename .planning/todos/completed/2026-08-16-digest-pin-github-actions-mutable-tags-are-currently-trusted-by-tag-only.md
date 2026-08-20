@@ -1,3 +1,4 @@
+completed: 2026-08-20
 ---
 created: 2026-08-16T19:15:00.000Z
 title: Digest-pin GitHub Actions -- mutable tags are currently trusted by tag only, inconsistent with this repo's own scanner precedent
@@ -5,8 +6,10 @@ area: tooling
 severity: minor
 resolves_phase: 10
 files:
+
   - .github/workflows/deploy.yml
   - .github/workflows/security-scan.yml
+
 ---
 
 ## Problem
@@ -47,3 +50,13 @@ new releases the way a `@v5` tag does — a bump becomes a two-step lookup-then-
 each time, not a one-line edit).
 
 **Trigger:** any time after this todo is picked up; not gating any current phase.
+
+## Resolution (2026-08-20)
+
+Delivered by Phase 10 Plan 10-01, decision D-05 (the "option 2" risk-tiered path this todo
+itself named): the two `appleboy/*` third-party actions (the ones holding `NETCUP_SSH_KEY`) are
+digest-pinned across all six call sites in `deploy.yml`, and first-party actions
+(`actions/checkout`, `actions/setup-java`, `gradle/actions/wrapper-validation`, etc.) remain
+tag-trusted with an explicit, reasoned risk-acceptance comment near the top of the file. Found
+already satisfied while triaging pending todos after Phase 10 closed; moved straight to
+completed without further action.

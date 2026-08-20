@@ -1,3 +1,4 @@
+completed: 2026-08-20
 ---
 created: 2026-08-16T19:15:00.000Z
 title: Add cache 'gradle' to deploy.yml's run-tests Set up Java step
@@ -5,7 +6,9 @@ area: tooling
 severity: minor
 resolves_phase: 10
 files:
+
   - .github/workflows/deploy.yml
+
 ---
 
 ## Problem
@@ -42,3 +45,10 @@ that can change a build's dependency graph before trusting it).
 
 **Trigger:** any time after this todo is picked up; not gating any current phase.
 Low priority -- purely a CI wall-clock optimization, not a correctness issue.
+
+## Resolution (2026-08-20)
+
+Delivered by Phase 10 Plan 10-01: `deploy.yml`'s `run-tests` job's `Set up Java` step carries
+`cache: 'gradle'` (`.github/workflows/deploy.yml:69`), matching `security-scan.yml`'s existing
+pattern. Found already satisfied while triaging pending todos after Phase 10 closed; moved
+straight to completed without further action.

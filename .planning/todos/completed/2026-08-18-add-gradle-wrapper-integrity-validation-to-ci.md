@@ -1,3 +1,4 @@
+completed: 2026-08-20
 ---
 created: 2026-08-18T20:57:50.115Z
 title: Add Gradle wrapper integrity validation to CI
@@ -5,9 +6,11 @@ area: tooling
 severity: minor
 resolves_phase: 10
 files:
+
   - gradle/wrapper/gradle-wrapper.properties
   - .github/workflows/deploy.yml
   - .github/workflows/security-scan.yml
+
 ---
 
 ## Problem
@@ -32,7 +35,15 @@ companion todo) are the remainder, not currently covered by any existing
 1. Add `distributionSha256Sum` to `gradle-wrapper.properties`, pinning the
    exact Gradle 8.11.1 distribution checksum (obtainable from
    `https://services.gradle.org/distributions/gradle-8.11.1-bin.zip.sha256`).
+
 2. Add a `gradle/actions/wrapper-validation@v4` (or current version) step to
    both `deploy.yml`'s `run-tests` job and `security-scan.yml`, running before
    any `./gradlew` invocation, so a tampered wrapper fails the build loudly
    rather than executing.
+
+## Resolution (2026-08-20)
+
+Delivered by Phase 10: `gradle-wrapper.properties` carries `distributionSha256Sum`, and both
+`deploy.yml` and `security-scan.yml` run `gradle/actions/wrapper-validation@v6` before any
+`./gradlew` invocation. Found already satisfied while triaging pending todos after Phase 10
+closed; moved straight to completed without further action.

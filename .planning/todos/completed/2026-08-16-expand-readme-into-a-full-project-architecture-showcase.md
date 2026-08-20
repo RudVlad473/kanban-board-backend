@@ -1,3 +1,4 @@
+completed: 2026-08-20
 ---
 created: 2026-08-16T11:03:42.954Z
 title: Expand README into a full project architecture showcase
@@ -5,10 +6,12 @@ area: docs
 severity: minor
 resolves_phase: 10
 files:
+
   - README.md
   - docs/ARCHITECTURE.md
   - docs/INFRA_ARCHITECTURE.md
   - docs/diagrams/
+
 ---
 
 ## Problem
@@ -34,8 +37,10 @@ tension with quick task 21's explicit decision to keep README trimmed and push d
 `docs/ARCHITECTURE.md`/`docs/INFRA_ARCHITECTURE.md`. Whoever picks this up should surface that
 tension and get an explicit call rather than silently re-inflating README back to where task 21
 un-did it. Two shapes to weigh:
+
 1. Expand README itself (reverses task 21's structure decision) — read task 21's SUMMARY first
    to understand why it split things out before undoing it.
+
 2. Keep README as the trimmed front door, but expand it with a much more prominent,
    scannable "Engineering highlights" section that links out to already-existing (or
    newly-expanded) depth in `docs/ARCHITECTURE.md` / `docs/INFRA_ARCHITECTURE.md` / a new doc —
@@ -51,3 +56,11 @@ stack, how CI ships to it), verification/quality gates in general, the existing
 this reasoning — Testcontainers over H2, Flyway, Spring Session JDBC, gitleaks over
 TruffleHog/detect-secrets, Netcup over Oracle/AWS/GCP/Hetzner, etc. — mine it rather than
 re-deriving from scratch).
+
+## Resolution (2026-08-20)
+
+Delivered by Phase 10 Plan 10-06 (commit `d5f145c`, "restructure README as
+production-reality-first architecture showcase"): README grew from the ~116-line trimmed front
+door to 269 lines. Found already satisfied while triaging pending todos after Phase 10 closed;
+moved straight to completed without re-verifying which of this todo's two proposed shapes was
+chosen (worth a skim if precise wording matters later).

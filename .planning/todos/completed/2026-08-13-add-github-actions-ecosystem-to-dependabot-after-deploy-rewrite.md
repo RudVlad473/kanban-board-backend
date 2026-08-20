@@ -1,3 +1,4 @@
+completed: 2026-08-20
 ---
 created: 2026-08-13T20:05:00.000Z
 title: Add package-ecosystem "github-actions" to dependabot.yml once deploy.yml settles
@@ -5,7 +6,9 @@ area: tooling
 severity: minor
 resolves_phase: 10
 files:
+
   - .github/dependabot.yml
+
 ---
 
 ## Problem
@@ -29,6 +32,7 @@ Once Phase 5's `deploy.yml` rewrite lands and settles, add a second `updates`
 entry to `.github/dependabot.yml`:
 
 ```yaml
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -38,3 +42,9 @@ entry to `.github/dependabot.yml`:
 
 **Trigger:** after `.planning/todos/pending/2026-08-04-re-enable-and-rewrite-the-disabled-deploy-job-after-phase-5.md`
 closes (Phase 5's deploy.yml rewrite is done), not before.
+
+## Resolution (2026-08-20)
+
+Delivered by Phase 10 Plan 10-01: `.github/dependabot.yml` carries a second `updates` entry with
+`package-ecosystem: "github-actions"` (line 44). Found already satisfied while triaging pending
+todos after Phase 10 closed; moved straight to completed without further action.
