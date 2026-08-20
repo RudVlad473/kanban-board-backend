@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 Phase: 10
 Plan: Not started
 Status: All phases complete
-Last activity: 2026-08-20 - Completed quick task 260820-g3u: 4 easy todos + gradle verification-metadata fix
+Last activity: 2026-08-20 - Completed quick task 260820-giz: OWASP API Security Top 10 audit, 4 new todos filed
 
 Progress: [███████░░░] 75%
 
@@ -70,7 +70,10 @@ in the same pass (quick task `260820-euc`).
 
 Still open and out of v1.3 scope (representative, see `.planning/todos/pending/` for the complete set — ~26 items):
 
-- [security] Audit penetration-testing/security coverage against OWASP API Security Top 10 (CSRF posture, signin rate-limiting, full-depth IDOR, security headers, DTO mass-assignment).
+- [security] IDOR chain consistency: nested path segments (`boardId`, `columnId`) are never cross-checked against the leaf resource's actual parent — a same-user chain-confusion variant `AuthorizationGatingTest` doesn't exercise (`2026-08-20-idor-same-user-chain-consistency-boardid-columnid-not-c.md`).
+- [security] No rate limiting / volumetric brute-force guard on `POST /signin` (`2026-08-20-add-rate-limiting-to-signin-to-bound-brute-force-volume.md`).
+- [security] No CSP anywhere; HSTS likely never emitted behind Caddy (no `forward-headers-strategy`) (`2026-08-20-security-response-headers-csp-and-unreliable-hsts-behind.md`).
+- [minor] CSRF defense reasoning is sound but only half-verified — no test proves an actual cross-origin request is rejected (`2026-08-20-verify-csrf-defense-with-a-real-cross-origin-rejection-t.md`).
 - [minor] Full-system sequence diagram for frontend hand-off; bump Java 21 → 25; enable virtual threads (JDBC/Hibernate pinning risk first).
 - [minor] `E2ETest`-suffix vs. `fastTest`-filter coupling decision; two coexisting session-ceiling enforcers; `ActivityAction` enum misplaced in `entity/`.
 - [minor] `activity_log` has no retention policy; `TaskMovedEvent` carries no position; `UpdateBoardRequestDTO.name` optionality assumption.
@@ -86,6 +89,15 @@ flaky-test fix surfaced a genuine, separate gap in `gradle/verification-metadata
 `guava-33.5.0-jre.pom` checksum) — fixed in the same pass; a new pending todo filed for the
 still-missing CI staleness check that let it go undetected.
 
+**Update (2026-08-20, later still):** the long-open OWASP API Security Top 10 audit todo (quick
+task `260820-giz`) is closed — cited covered / assumed-covered-but-unverified / genuinely-untested
+verdicts for all 10 categories, not just the 6 originally named. DTO mass-assignment and inventory
+management came back adequate; dependency CVEs stayed cross-referenced to the existing todo family
+(nothing new filed there). 4 new todos above capture the confirmed gaps, including one the original
+todo's candidate list didn't name explicitly: `OwnershipVerifierService` validates ownership by
+walking up from the leaf path id only, never cross-checking a nested route's other nominal
+ownership-chain segments against that same id's real parent.
+
 ### Blockers/Concerns
 
 - **[Phase 8, open unknown]** Nonprod Redpanda's memory floor is genuinely unmeasured. Production's reserved caps leave ~2.65GB unreserved on the 7.8GB host, and `mem_limit` is a per-container cap, not a host reservation — this project already hit a cgroup-accounting surprise at exactly this boundary. Requires iterative live restart cycles; if no safe value fits, the second-VPS fallback must actually be exercised.
@@ -100,6 +112,7 @@ still-missing CI staleness check that let it go undetected.
 | 260820-ecm | Resolve WINDOWS.md ledger items 3 and 7: record already-completed live verification proof in INFRA_RUNBOOK.md and mark both fixed | 2026-08-20 | b5a265a | [260820-ecm-resolve-windows-md-ledger-items-3-and-7-](./quick/260820-ecm-resolve-windows-md-ledger-items-3-and-7-/) |
 | 260820-euc | Add paths-ignore filter to deploy.yml so docs-only pushes don't trigger a full production+nonprod redeploy; also close 7 stale pending todos already resolved by Phase 10 | 2026-08-20 | 95f61cc | [260820-euc-add-paths-ignore-filter-to-deploy-yml-so](./quick/260820-euc-add-paths-ignore-filter-to-deploy-yml-so/) |
 | 260820-g3u | Iterate on 4 easy pending todos: docs/CODE_STYLE.md rule 4 correction, tag HistoricalActivityEventReconstructorTest as kafka, qualify bare print() static import in 4 controller tests, fix ResetServiceE2ETest flaky race; also found and fixed a real gap in gradle/verification-metadata.xml along the way | 2026-08-20 | df68443 | [260820-g3u-iterate-on-4-easy-pending-todos-docs-cod](./quick/260820-g3u-iterate-on-4-easy-pending-todos-docs-cod/) |
+| 260820-giz | Audit penetration-testing/security coverage against OWASP API Security Top 10 (2023) — cited verdict for all 10 categories, 4 new gap todos filed (IDOR chain consistency, signin rate-limiting, security response headers, CSRF cross-origin test), originating todo closed with Resolution | 2026-08-20 | 6a77e54 | [260820-giz-audit-penetration-testing-and-security-c](./quick/260820-giz-audit-penetration-testing-and-security-c/) |
 
 ## Deferred Items
 
