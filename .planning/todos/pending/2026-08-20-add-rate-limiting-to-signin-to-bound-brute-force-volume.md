@@ -10,6 +10,16 @@ files:
   - src/test/java/com/vrudenko/kanban_board/security/SigninTimingEqualizationTest.java
 ---
 
+## ASVS 4.0.3 cross-reference
+
+A 33-agent ASVS 4.0.3 Level 2 audit independently rediscovered this same absent-rate-limiting gap
+from three separate angles: **V2.2.1** (Authentication — brute force on `/signin`, this todo's
+original scope), **V8.1.4** (Data Protection — general abnormal-request-volume detection), and
+**V11.1.4** (Business Logic — anti-automation on business flows such as mass board/task creation,
+not just login). Three independent ASVS chapters converging on the identical missing control is
+evidence the original `/signin`-only framing undersold the gap — the Problem and Solution sections
+below have been broadened accordingly.
+
 ## Problem
 
 Filed from the OWASP API Security Top 10 audit closing
@@ -40,11 +50,19 @@ enumeration and timing-equalization make each individual guess non-distinguishab
 raise the cost of guessing at scale (credential stuffing, distributed brute force against weak
 passwords).
 
+**Scope broadened per the ASVS cross-reference above:** the same absent control also leaves every
+authenticated business endpoint (board/column/task/subtask creation, in particular) with no
+abnormal-request-volume detection and no anti-automation guard — V8.1.4 and V11.1.4 name this as a
+general gap, not one confined to the unauthenticated `/signin` path. The fix below should be scoped
+to general request-volume abuse across authenticated business endpoints, not only `POST /signin`.
+
 ## Solution
 
-Recommend a request-rate guard scoped to `POST /signin` (and arguably `/signup`, to bound account-
-enumeration-via-creation and abuse), sized conservatively given this app's actual traffic profile
-(single small VPS, Spring Session JDBC already in the request path):
+Recommend a request-rate guard covering `POST /signin` and `/signup` (to bound account-
+enumeration-via-creation and abuse) **and, per the ASVS cross-reference above, general
+request-volume abuse across authenticated business endpoints** (e.g. rapid mass board/column/task
+creation), sized conservatively given this app's actual traffic profile (single small VPS, Spring
+Session JDBC already in the request path):
 
 1. **Per-IP and/or per-email token-bucket limiter** (Bucket4j is the natural fit given this
    project's existing Gradle-plugin-based approach to adding scoped tooling — see how Error Prone/

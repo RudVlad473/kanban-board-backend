@@ -8,6 +8,13 @@ files:
   - src/main/java/com/vrudenko/kanban_board/handler/GlobalExceptionHandler.java
 ---
 
+## ASVS 4.0.3 cross-reference
+
+A 33-agent ASVS 4.0.3 Level 2 audit independently re-discovered this exact same
+`GlobalExceptionHandler.handleGeneralException` gap (`ex.getMessage()` copied verbatim into the
+`ProblemDetail` `500` response) via **V7.4.1** (Error Handling) and **V14.3.3** (Unintended
+Security Disclosure) — corroborating signal it is worth fixing.
+
 ## Problem
 
 `GlobalExceptionHandler.handleGeneralException` (the `Exception.class` catch-all arm) copies

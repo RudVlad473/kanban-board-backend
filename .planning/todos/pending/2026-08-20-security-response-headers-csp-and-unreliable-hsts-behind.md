@@ -9,6 +9,23 @@ files:
   - Caddyfile
 ---
 
+## ASVS 4.0.3 cross-reference
+
+A 33-agent ASVS 4.0.3 Level 2 audit cross-referenced this todo against **V14.4.3** (CSP),
+**V14.4.5** (HSTS), **V14.4.6** (Referrer-Policy), **V14.4.7** (X-Frame-Options), and **V3.4.4**
+(cookie `__Host-` prefix — a related but separate cookie-hardening item, confirmed genuinely
+absent; `Secure` + `Path=/` are already met, no `Domain` attribute is set). This produced one new
+confirmed finding and one correction to the finding below:
+
+- **New confirmed finding (V14.4.6):** `Referrer-Policy` is also unset. Spring Security's
+  `ReferrerPolicyConfig` does not enable by default, unlike `FrameOptionsConfig`/`HstsConfig` which
+  do.
+- **Correction (V14.4.7), clearly labeled as such:** `X-Frame-Options` DOES fire by default via
+  Spring Security — `FrameOptionsConfig.enable()` sets `XFrameOptionsHeaderWriter` with `DENY` mode
+  unconditionally (this todo's Problem section below already states this correctly). The gap on
+  that specific header is narrower than a reader might otherwise assume from the todo's title — do
+  not claim `X-Frame-Options` is missing.
+
 ## Problem
 
 Filed from the OWASP API Security Top 10 audit closing
@@ -42,6 +59,17 @@ execution environment).
 
 **No CSP anywhere, either layer** — Spring Security ships no default Content-Security-Policy
 header, and nothing in this codebase or `Caddyfile` adds one.
+
+**New confirmed finding (ASVS V14.4.6): `Referrer-Policy` is also unset.** Spring Security's
+`ReferrerPolicyConfig` is not part of the default `HeadersConfigurer` set the way
+`FrameOptionsConfig`/`HstsConfig` are — it must be opted into explicitly, and nothing in
+`SecurityConfiguration` does so.
+
+**Correction (ASVS V14.4.7): `X-Frame-Options` is not missing.** It fires unconditionally by
+default via Spring Security's `FrameOptionsConfig.enable()`, which sets
+`XFrameOptionsHeaderWriter` in `DENY` mode without any explicit configuration — the gap on this
+specific header is narrower than the todo's title might otherwise suggest; do not claim
+`X-Frame-Options` itself is absent.
 
 **Baseline headers (`X-Content-Type-Options`, `X-Frame-Options`, `Cache-Control`) are unconditional
 per Spring Security's own documented defaults, so the code-level trace is a strong claim — but no

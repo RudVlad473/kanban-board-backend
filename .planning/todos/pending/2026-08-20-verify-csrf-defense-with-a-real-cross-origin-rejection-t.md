@@ -10,6 +10,12 @@ files:
   - src/test/java/com/vrudenko/kanban_board/config/CorsConfigTest.java
 ---
 
+## ASVS 4.0.3 cross-reference
+
+A 33-agent ASVS 4.0.3 Level 2 audit independently re-confirmed this same finding via **V4.2.2** and
+**V13.2.3**: the `SameSite=Strict` + CORS allowlist reasoning is sound, but no end-to-end
+cross-origin-rejection test exists yet — no new information beyond what this todo already says.
+
 ## Problem
 
 Filed from the OWASP API Security Top 10 audit closing

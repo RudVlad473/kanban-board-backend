@@ -11,6 +11,14 @@ files:
   - src/test/java/com/vrudenko/kanban_board/security/AuthorizationGatingTest.java
 ---
 
+## ASVS 4.0.3 cross-reference
+
+A 33-agent ASVS 4.0.3 Level 2 audit independently converged on this identical
+`OwnershipVerifierService` leaf-id gap from three chapters: **V1.4.5** (Access Control
+Architecture), **V4.2.1** (Operation Level Access Control), and **V13.1.4** (Generic Web Service
+Security) — no new information beyond what this todo already documents, but corroborating signal
+for the existing `moderate` severity rating.
+
 ## Problem
 
 Filed from the OWASP API Security Top 10 audit closing

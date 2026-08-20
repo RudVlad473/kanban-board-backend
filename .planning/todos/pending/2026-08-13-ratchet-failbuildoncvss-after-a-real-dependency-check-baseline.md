@@ -7,6 +7,14 @@ files:
   - build.gradle
 ---
 
+## ASVS 4.0.3 cross-reference
+
+A 33-agent ASVS 4.0.3 Level 2 audit independently re-confirmed via **V1.14.3** (Configuration
+Architecture) that `build.gradle`'s `failBuildOnCVSS = 11` is still functionally disabled (11 is
+above the 0-10 CVSS scale) and `security-scan.yml`'s `dependencyCheckAnalyze` step is still
+report-only with no `continue-on-error` gate change — no new information, corroborates the
+existing todo is still accurate.
+
 ## Problem
 
 `dependencyCheckAnalyze` (quick task 260813-q1i, Task 4) ships report-only:
