@@ -4,6 +4,16 @@ on:
   push:
     branches:
       - master
+    # Todo 2026-08-19 (deploy.yml has no path filter): a pure docs/planning change has no
+    # runtime effect, so it shouldn't cost a full production+nonprod redeploy (build, two
+    # Flyway verify jobs, two live SSH deploys, schema registration, cleanup). Deliberately
+    # NOT ignoring .github/** as a whole -- a workflow or Dependabot config change genuinely
+    # needs a real deploy-pipeline run to validate, so only the two known-inert path groups
+    # below are excluded.
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - ".planning/**"
 
 env:
   DOCKERHUB_USER: rudenkovladimir
