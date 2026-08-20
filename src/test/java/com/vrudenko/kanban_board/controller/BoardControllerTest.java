@@ -21,11 +21,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.result.MockMvcResultHandlers;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -57,7 +57,7 @@ public class BoardControllerTest extends AbstractAppTest {
             // Act
             // Assert
             mockMvc.perform(get(getBoardPrefix()).with(user(userId)))
-                    .andDo(print())
+                    .andDo(MockMvcResultHandlers.print())
                     .andExpect(status().isOk())
                     .andExpect(content().json(allBoards))
                     .andReturn();
@@ -71,7 +71,7 @@ public class BoardControllerTest extends AbstractAppTest {
             // Act
             // Assert
             mockMvc.perform(get(getBoardPrefix()).with(user(userId)))
-                    .andDo(print())
+                    .andDo(MockMvcResultHandlers.print())
                     .andExpect(status().isOk())
                     .andExpect(content().json("[]"))
                     .andReturn();
@@ -90,7 +90,7 @@ public class BoardControllerTest extends AbstractAppTest {
             // Act
             // Assert
             mockMvc.perform(delete(url).with(user(userId)))
-                    .andDo(print())
+                    .andDo(MockMvcResultHandlers.print())
                     .andExpect(status().isOk())
                     .andReturn();
         }
@@ -120,7 +120,7 @@ public class BoardControllerTest extends AbstractAppTest {
                                     put(url).with(user(userId))
                                             .contentType(APPLICATION_JSON)
                                             .content(objectMapper.writeValueAsString(updateDto)))
-                            .andDo(print())
+                            .andDo(MockMvcResultHandlers.print())
                             .andExpect(status().isOk())
                             .andReturn();
 
@@ -152,7 +152,7 @@ public class BoardControllerTest extends AbstractAppTest {
                             put(url).with(user(userId))
                                     .contentType(APPLICATION_JSON)
                                     .content(objectMapper.writeValueAsString(updateDto)))
-                    .andDo(print())
+                    .andDo(MockMvcResultHandlers.print())
                     .andExpect(status().isNotFound())
                     .andReturn();
         }
@@ -176,7 +176,7 @@ public class BoardControllerTest extends AbstractAppTest {
                             put(url).with(user(userId))
                                     .contentType(APPLICATION_JSON)
                                     .content(objectMapper.writeValueAsString(updateDto)))
-                    .andDo(print())
+                    .andDo(MockMvcResultHandlers.print())
                     .andExpect(status().isBadRequest())
                     .andReturn();
         }
@@ -200,7 +200,7 @@ public class BoardControllerTest extends AbstractAppTest {
                             put(url).with(user(userId))
                                     .contentType(APPLICATION_JSON)
                                     .content(objectMapper.writeValueAsString(updateDto)))
-                    .andDo(print())
+                    .andDo(MockMvcResultHandlers.print())
                     .andExpect(status().isBadRequest())
                     .andReturn();
         }
@@ -223,7 +223,7 @@ public class BoardControllerTest extends AbstractAppTest {
                             put(url).with(user(userId))
                                     .contentType(APPLICATION_JSON)
                                     .content(objectMapper.writeValueAsString(updateDto)))
-                    .andDo(print())
+                    .andDo(MockMvcResultHandlers.print())
                     .andExpect(status().isBadRequest())
                     .andReturn();
         }
@@ -251,7 +251,7 @@ public class BoardControllerTest extends AbstractAppTest {
                                             .with(user(userId))
                                             .contentType(APPLICATION_JSON)
                                             .content(objectMapper.writeValueAsString(saveDTO)))
-                            .andDo(print())
+                            .andDo(MockMvcResultHandlers.print())
                             .andExpect(status().isCreated())
                             .andReturn();
             var responseBody =
@@ -286,7 +286,7 @@ public class BoardControllerTest extends AbstractAppTest {
                                     .with(user(userId))
                                     .contentType(APPLICATION_JSON)
                                     .content(objectMapper.writeValueAsString(saveDTO)))
-                    .andDo(print())
+                    .andDo(MockMvcResultHandlers.print())
                     .andExpect(status().isNotFound());
         }
 
@@ -318,7 +318,7 @@ public class BoardControllerTest extends AbstractAppTest {
                                     .with(user(userId))
                                     .contentType(APPLICATION_JSON)
                                     .content(objectMapper.writeValueAsString(saveDTO)))
-                    .andDo(print())
+                    .andDo(MockMvcResultHandlers.print())
                     .andExpect(status().isBadRequest())
                     .andExpect(
                             jsonPath("$.errors.name")

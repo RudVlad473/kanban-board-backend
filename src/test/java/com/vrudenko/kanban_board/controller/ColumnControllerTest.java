@@ -36,6 +36,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.result.MockMvcResultHandlers;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -44,7 +45,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
-import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -158,7 +158,7 @@ public class ColumnControllerTest extends AbstractAppMockMvcTest {
 
             // Act & Assert
             mockMvc.perform(get(url).with(user(userId)))
-                    .andDo(print())
+                    .andDo(MockMvcResultHandlers.print())
                     .andExpect(status().isOk())
                     .andExpect(content().json(expectedColumns));
         }
@@ -175,7 +175,7 @@ public class ColumnControllerTest extends AbstractAppMockMvcTest {
 
             // Act & Assert
             mockMvc.perform(get(url).with(user(userId)))
-                    .andDo(print())
+                    .andDo(MockMvcResultHandlers.print())
                     .andExpect(status().isOk())
                     .andExpect(content().json(expectedEmptyList));
         }
@@ -197,7 +197,7 @@ public class ColumnControllerTest extends AbstractAppMockMvcTest {
             // like
             // testWithAuthenticatedUser_shouldReturnEmptyList_whenNoColumnsExistForBoard
             mockMvc.perform(get(url).with(user(userId)))
-                    .andDo(print())
+                    .andDo(MockMvcResultHandlers.print())
                     .andExpect(status().isNotFound()); // Or handle
             // as per
             // actual
@@ -232,7 +232,7 @@ public class ColumnControllerTest extends AbstractAppMockMvcTest {
                                             .with(user(userId))
                                             .contentType(APPLICATION_JSON)
                                             .content(objectMapper.writeValueAsString(saveDTO)))
-                            .andDo(print())
+                            .andDo(MockMvcResultHandlers.print())
                             .andExpect(status().isCreated())
                             .andReturn();
             var responseBody =
@@ -271,7 +271,7 @@ public class ColumnControllerTest extends AbstractAppMockMvcTest {
                                     .with(user(userId))
                                     .contentType(APPLICATION_JSON)
                                     .content(objectMapper.writeValueAsString(saveDTO)))
-                    .andDo(print())
+                    .andDo(MockMvcResultHandlers.print())
                     // Assert
                     .andExpect(status().isNotFound());
         }
@@ -338,7 +338,7 @@ public class ColumnControllerTest extends AbstractAppMockMvcTest {
                             put(url).with(user(userId))
                                     .contentType(APPLICATION_JSON)
                                     .content(objectMapper.writeValueAsString(updateDto)))
-                    .andDo(print())
+                    .andDo(MockMvcResultHandlers.print())
                     .andExpect(status().isOk())
                     .andExpect(content().json(objectMapper.writeValueAsString(expectedResponse)))
                     .andReturn();
@@ -364,7 +364,7 @@ public class ColumnControllerTest extends AbstractAppMockMvcTest {
                             put(url).with(user(userId))
                                     .contentType(APPLICATION_JSON)
                                     .content(objectMapper.writeValueAsString(updateDto)))
-                    .andDo(print())
+                    .andDo(MockMvcResultHandlers.print())
                     .andExpect(status().isNotFound())
                     .andReturn();
         }
@@ -388,7 +388,7 @@ public class ColumnControllerTest extends AbstractAppMockMvcTest {
                             put(url).with(user(userId))
                                     .contentType(APPLICATION_JSON)
                                     .content(objectMapper.writeValueAsString(updateDto)))
-                    .andDo(print())
+                    .andDo(MockMvcResultHandlers.print())
                     .andExpect(status().isBadRequest())
                     .andReturn();
         }
@@ -409,7 +409,7 @@ public class ColumnControllerTest extends AbstractAppMockMvcTest {
                             put(url).with(user(userId))
                                     .contentType(APPLICATION_JSON)
                                     .content(objectMapper.writeValueAsString(updateDto)))
-                    .andDo(print())
+                    .andDo(MockMvcResultHandlers.print())
                     .andExpect(status().isBadRequest())
                     .andReturn();
         }
@@ -434,7 +434,7 @@ public class ColumnControllerTest extends AbstractAppMockMvcTest {
                             put(url).with(user(userId))
                                     .contentType(APPLICATION_JSON)
                                     .content(objectMapper.writeValueAsString(updateDto)))
-                    .andDo(print())
+                    .andDo(MockMvcResultHandlers.print())
                     .andExpect(status().isConflict())
                     .andReturn();
         }
