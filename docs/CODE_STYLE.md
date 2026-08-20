@@ -189,10 +189,16 @@ MockMvc gives every `perform(...)` call its own request whose security context i
 end of that chain, each such call establishes a **brand-new** session for that principal instead of
 reusing one. `SecurityConfiguration`'s `MAX_CONCURRENT_SESSIONS = 2`, together with
 `maxSessionsPreventsLogin(true)`, therefore refuses the third such call for one principal within one
-test method — the ceiling and the `sessionAuthenticationStrategy` bean's live-session count reject
-the login outright. The refusal arrives as HTTP 401 carrying the exact same generic
-invalid-credentials envelope a wrong password would produce — deliberate, so a ceiling hit is not a
-credential-validity oracle — which means nothing in the failure itself points at sessions. Measured:
+test method — enforced here by `SessionManagementFilter`'s own DSL-composed
+`CompositeSessionAuthenticationStrategy`, backed by an in-memory `SessionRegistryImpl`. This is a
+**different instance** from the `sessionAuthenticationStrategy` `@Bean` (that bean enforces the
+ceiling only on the real signin/signup path — see "State Management" above — and never runs on this
+MockMvc shortcut at all). The refusal itself is a bare servlet `sendError` — `Content-Type: null`,
+empty body — `SessionManagementFilter`'s own failure-handler fingerprint, not this application's RFC
+7807 `ProblemDetail` envelope (a real wrong-password refusal on the signin path *does* carry that
+envelope, with `code: BAD_CREDENTIALS`; the two are both HTTP 401 but not byte-comparable). Still
+true: nothing in the failure itself leaks a session-specific signal, so a ceiling hit is not a
+credential-validity oracle. Measured:
 four identical `.with(user(userId))` calls in one test method returned `200, 200, 401, 401`. The
 limit is per principal **per test method**, not per class or per JVM run, specifically because
 `AbstractAppTest`'s `@BeforeEach` mints a fresh owning user every test method, so the per-principal
