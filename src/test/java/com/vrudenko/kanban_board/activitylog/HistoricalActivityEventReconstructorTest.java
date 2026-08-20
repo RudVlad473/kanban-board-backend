@@ -22,6 +22,7 @@ import org.assertj.core.api.Assertions;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -36,6 +37,7 @@ import org.springframework.boot.test.context.SpringBootTest;
  * the reconstructor tracks what the consumer actually does, not what it is believed to do.
  */
 @SpringBootTest
+@Tag("kafka")
 class HistoricalActivityEventReconstructorTest extends AbstractKafkaContainerTest {
 
     @Autowired private ActivityLogRepository activityLogRepository;
