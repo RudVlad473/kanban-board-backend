@@ -1,10 +1,13 @@
+completed: 2026-08-20
 ---
 created: 2026-08-13T00:00:00.000Z
 title: "docs/CODE_STYLE.md rule 4's MockMvc-shortcut refusal claims are falsified by measurement"
 area: docs
 severity: minor
 files:
+
   - docs/CODE_STYLE.md
+
 ---
 
 ## Problem
@@ -21,6 +24,7 @@ attribution contradiction. Two sentences in `docs/CODE_STYLE.md` rule 4 (the `.w
    `@Bean`, which never runs on this path at all (that bean is the real signin/signup path's
    enforcer only). See `SecurityConfiguration`'s corrected `sessionManagement` comment and bean
    Javadoc, both fixed by this quick task.
+
 2. **"The refusal arrives as HTTP 401 carrying the exact same generic invalid-credentials envelope
    a wrong password would produce"** — measured false. The MockMvc-shortcut refusal is a bare
    servlet `sendError` (`MockHttpServletResponse.getErrorMessage()` non-null, `Content-Type` null,
@@ -43,9 +47,16 @@ Not yet decided. Candidates for whoever picks this up:
 1. Correct both sentences in `docs/CODE_STYLE.md` rule 4 to name `SessionManagementFilter`'s own
    DSL-composed strategy (not the bean) as the enforcer on this path, and describe the refusal as a
    bare `sendError` rather than the RFC 7807 envelope — citing quick task 260813-m9x's measurement.
+
 2. Leave the doc as directional guidance ("expect a 401, do not rely on session-specific ceiling
    signals leaking") without naming the exact mechanism, if a future maintainer judges that level of
    detail not worth maintaining against Spring Security internals that could shift on a version bump.
 
 Low priority — this is a documentation-accuracy correction with no `src/main` or `src/test`
 behavioral component; nothing currently relies on the wrong claim being true.
+
+## Resolution (2026-08-20)
+
+Went with option 1: corrected both sentences in place, naming `SessionManagementFilter`'s own
+DSL-composed `CompositeSessionAuthenticationStrategy` as the enforcer and describing the refusal
+as a bare `sendError`, citing this same probe evidence.

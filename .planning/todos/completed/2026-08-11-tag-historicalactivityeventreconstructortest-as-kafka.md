@@ -1,11 +1,14 @@
+completed: 2026-08-20
 ---
 created: 2026-08-11T15:45:00.000Z
 title: Decide whether to tag HistoricalActivityEventReconstructorTest as kafka
 area: testing
 severity: minor
 files:
+
   - src/test/java/com/vrudenko/kanban_board/activitylog/HistoricalActivityEventReconstructorTest.java
   - build.gradle
+
 ---
 
 ## Problem
@@ -35,9 +38,11 @@ options for whoever picks this up:
    subclass. Removes real coverage (the historical-schema reconstruction round-trip) from the
    pre-commit gate — consistent with every other Kafka-backed class's tier placement, but a real
    coverage reduction on every commit.
+
 2. **Leave it untagged.** The gate keeps paying for one Redpanda container (or more, under higher
    `maxParallelForks`) on every commit — the status quo, now with a clearer cost given the
    fork-count interaction above.
+
 3. **Split what the class proves across tiers** — e.g. keep a cheap MockMvc/service-level check of
    `HistoricalActivityEventReconstructor`'s pure mapping logic in `fastTest`, and move only the
    real-broker round-trip assertion to the Kafka tier. Larger effort than options 1 or 2; only worth
@@ -46,3 +51,9 @@ options for whoever picks this up:
 
 Whoever picks this up should read the class's own Javadoc first (it explains why the round-trip is
 deliberately against the real pipeline, not a reimplementation) before assuming option 3 is free.
+
+## Resolution (2026-08-20)
+
+Went with option 1: tagged `@Tag("kafka")`, matching every other `AbstractKafkaContainerTest`
+subclass. Verified live both directions — no longer present in `build/test-results/fastTest/`
+after a `fastTest` run, still present and passing in `build/test-results/test/`.

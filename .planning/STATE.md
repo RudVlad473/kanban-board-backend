@@ -5,10 +5,10 @@ milestone_name: Nonprod Environment & CI Hardening
 current_phase: 10
 status: completed
 stopped_at: Phase 10 context gathered
-last_updated: "2026-08-20T08:42:37.331Z"
+last_updated: "2026-08-20T09:39:01.437Z"
 last_activity: 2026-08-20
 last_activity_desc: "Phase 9 closed out: plan 09-03 (Avro schema registration, CI-05) live-verified after finding and fixing a real appleboy/ssh-action fail-fast defect (missing set -e) mid-verification; code review (0 critical/4 warnings/3 info) and gsd-verifier goal check (6/6, no gaps) both passed; ROADMAP/STATE/REQUIREMENTS/PROJECT.md all updated and pushed"
-state_head: 95f61cc8419f488853db068408485e781d763a7a
+state_head: df6844347fe7843305b62daae5aa6b6a82aa4fdf
 progress:
   total_phases: 3
   completed_phases: 3
@@ -32,7 +32,7 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 Phase: 10
 Plan: Not started
 Status: All phases complete
-Last activity: 2026-08-20 - Completed quick task 260820-euc: deploy.yml path filter + closed 7 stale todos
+Last activity: 2026-08-20 - Completed quick task 260820-g3u: 4 easy todos + gradle verification-metadata fix
 
 Progress: [███████░░░] 75%
 
@@ -75,7 +75,16 @@ Still open and out of v1.3 scope (representative, see `.planning/todos/pending/`
 - [minor] `E2ETest`-suffix vs. `fastTest`-filter coupling decision; two coexisting session-ceiling enforcers; `ActivityAction` enum misplaced in `entity/`.
 - [minor] `activity_log` has no retention policy; `TaskMovedEvent` carries no position; `UpdateBoardRequestDTO.name` optionality assumption.
 - [minor] OpenAPI breaking-change detection in CI; `POST /signup` `Location` points at a URI with no GET handler; 4 `Location` sites diverge from signup's pattern.
-- [minor] Ratchet `dependencyCheckAnalyze`'s `failBuildOnCVSS` after a CPE-matched baseline; evaluate PMD/Checkstyle/SpotBugs; alert-service microservice exploration; JavaDoc verbosity policy; `docs/CODE_STYLE.md` rule 4 claim falsified by 260813-m9x.
+- [minor] Ratchet `dependencyCheckAnalyze`'s `failBuildOnCVSS` after a CPE-matched baseline; evaluate PMD/Checkstyle/SpotBugs; alert-service microservice exploration; JavaDoc verbosity policy.
+
+**Update (2026-08-20, later same day):** 4 more small pending todos closed (quick task
+`260820-g3u`) — the `docs/CODE_STYLE.md` rule 4 correction and the bare-static-import lint
+question mentioned above are now resolved, plus `HistoricalActivityEventReconstructorTest` tagged
+`@Tag("kafka")` and `ResetServiceE2ETest`'s flaky-in-CI race root-caused and fixed (an unawaited
+`@Async` Kafka publish racing `resetService.resetAll()`'s own topic-trim step). Verifying the
+flaky-test fix surfaced a genuine, separate gap in `gradle/verification-metadata.xml` (a missing
+`guava-33.5.0-jre.pom` checksum) — fixed in the same pass; a new pending todo filed for the
+still-missing CI staleness check that let it go undetected.
 
 ### Blockers/Concerns
 
@@ -90,6 +99,7 @@ Still open and out of v1.3 scope (representative, see `.planning/todos/pending/`
 | 260818-ied | Add CI-05 requirement to Phase 9: automate Avro schema registry registration for nonprod as part of the CI deploy pipeline, extending deploy.yml with a schema-registration step (mirroring CI-01's flyway-verify-nonprod/deploy-to-nonprod pattern) so production and nonprod schema registries stay in sync on every deploy without a manual step | 2026-08-18 | b985989 | [260818-ied-add-ci-05-requirement-to-phase-9-automat](./quick/260818-ied-add-ci-05-requirement-to-phase-9-automat/) |
 | 260820-ecm | Resolve WINDOWS.md ledger items 3 and 7: record already-completed live verification proof in INFRA_RUNBOOK.md and mark both fixed | 2026-08-20 | b5a265a | [260820-ecm-resolve-windows-md-ledger-items-3-and-7-](./quick/260820-ecm-resolve-windows-md-ledger-items-3-and-7-/) |
 | 260820-euc | Add paths-ignore filter to deploy.yml so docs-only pushes don't trigger a full production+nonprod redeploy; also close 7 stale pending todos already resolved by Phase 10 | 2026-08-20 | 95f61cc | [260820-euc-add-paths-ignore-filter-to-deploy-yml-so](./quick/260820-euc-add-paths-ignore-filter-to-deploy-yml-so/) |
+| 260820-g3u | Iterate on 4 easy pending todos: docs/CODE_STYLE.md rule 4 correction, tag HistoricalActivityEventReconstructorTest as kafka, qualify bare print() static import in 4 controller tests, fix ResetServiceE2ETest flaky race; also found and fixed a real gap in gradle/verification-metadata.xml along the way | 2026-08-20 | df68443 | [260820-g3u-iterate-on-4-easy-pending-todos-docs-cod](./quick/260820-g3u-iterate-on-4-easy-pending-todos-docs-cod/) |
 
 ## Deferred Items
 

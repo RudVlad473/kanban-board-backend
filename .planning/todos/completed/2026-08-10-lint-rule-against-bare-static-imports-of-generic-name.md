@@ -1,13 +1,16 @@
+completed: 2026-08-20
 ---
 created: 2026-08-10T10:59:00.000Z
 title: Consider a lint rule against bare static imports of generically-named methods (e.g. MockMvcResultHandlers.print)
 area: testing
 severity: minor
 files:
+
   - src/test/java/com/vrudenko/kanban_board/controller/BoardControllerTest.java
   - src/test/java/com/vrudenko/kanban_board/controller/TaskControllerTest.java
   - src/test/java/com/vrudenko/kanban_board/controller/SubtaskControllerTest.java
   - src/test/java/com/vrudenko/kanban_board/controller/ColumnControllerTest.java
+
 ---
 
 ## Problem
@@ -33,3 +36,9 @@ Options to evaluate, not yet decided:
 Whoever picks this up should decide whether a blanket "no static imports of generic single-word
 method names" rule is worth the tooling setup, versus just fixing the 38 call sites by hand and
 leaving it as an unenforced convention.
+
+## Resolution (2026-08-20)
+
+Went with option 1: qualified all 41 call sites (the count had grown slightly since this todo was
+filed) as `MockMvcResultHandlers.print()`, replacing the bare static import. Zero new tooling for
+one outlier method name — `spotlessCheck` and `compileTestJava` both pass clean.
