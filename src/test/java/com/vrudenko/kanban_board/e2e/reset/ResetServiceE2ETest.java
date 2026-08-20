@@ -149,6 +149,24 @@ class ResetServiceE2ETest extends AbstractKafkaContainerTest {
                 .until(() -> countRows("activity_log") > 0);
     }
 
+    /**
+     * Awaits {@code activity_log} reaching exactly {@code expectedRowCount}. {@link
+     * com.vrudenko.kanban_board.config.KafkaEventPublisher#onActivityEvent} is {@code @Async} on
+     * {@code AFTER_COMMIT}, so returning from {@link #createDomainFixture()} gives no guarantee its
+     * events have reached the broker yet, let alone been consumed. Callers that then invoke {@link
+     * ResetService#resetAll()} without this wait race a real bug found live (todo
+     * 2026-08-19-resetservicee2etest-flaky-resetall-after-real-traffic.md): a fixture event that
+     * arrives at the broker after {@code resetAll()}'s topic-trim step survives it, gets consumed
+     * by the listener {@code resetAll()} restarts in its {@code finally} block, and lands a stray
+     * row in {@code activity_log} *after* the Postgres truncate already ran -- failing an isZero
+     * assertion that had every right to expect zero.
+     */
+    private void awaitActivityLogRowCount(long expectedRowCount) {
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(30))
+                .until(() -> countRows("activity_log") == expectedRowCount);
+    }
+
     private long endOffset(AdminClient admin, TopicPartition partition) throws Exception {
         return admin.listOffsets(Map.of(partition, OffsetSpec.latest()))
                 .partitionResult(partition)
@@ -177,7 +195,16 @@ class ResetServiceE2ETest extends AbstractKafkaContainerTest {
                             randomId(),
                             Instant.now()));
             awaitActivityLogHasAtLeastOneRow();
+            var rowCountBeforeFixture = countRows("activity_log");
             createDomainFixture();
+            // createDomainFixture's own signup->board->column->task->subtask chain publishes 4
+            // events (BOARD_CREATED/COLUMN_CREATED/TASK_CREATED/SUBTASK_CREATED -- signup itself
+            // emits none, matching the identical chain's proof in docs/INFRA_RUNBOOK.md's nonprod
+            // reset rollout). Awaiting a RELATIVE gain of 4, not a hardcoded absolute total: this
+            // class's sibling tests (e.g. should_succeed_when_resetAllCalledTwiceInARow) have the
+            // same unawaited-publish gap this method is closing, so a fixed total would be fragile
+            // against their own late-arriving events landing in this shared activity_log table.
+            awaitActivityLogRowCount(rowCountBeforeFixture + 4);
 
             // act
             resetService.resetAll();
