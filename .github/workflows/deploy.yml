@@ -111,7 +111,7 @@ jobs:
       # linux/amd64 natively, so the QEMU cross-compilation step this architecture pairing used
       # to require is no longer needed.
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to Docker Hub
         run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u $DOCKERHUB_USER --password-stdin
