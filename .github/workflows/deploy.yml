@@ -138,7 +138,7 @@ jobs:
       # would pay extra CI minutes for no benefit (revisit only if a concrete need for arm64
       # surfaces later).
       - name: Build and push Docker image (linux/amd64)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64
