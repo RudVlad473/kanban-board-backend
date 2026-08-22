@@ -3,7 +3,7 @@ name: CI/CD with Docker
 on:
   push:
     branches:
-      - master
+      - main
     # Todo 2026-08-19 (deploy.yml has no path filter): a pure docs/planning change has no
     # runtime effect, so it shouldn't cost a full production+nonprod redeploy (build, two
     # Flyway verify jobs, two live SSH deploys, schema registration, cleanup). Deliberately
