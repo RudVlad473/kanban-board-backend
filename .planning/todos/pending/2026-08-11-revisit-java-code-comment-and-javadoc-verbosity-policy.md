@@ -4,9 +4,14 @@ title: Revisit Java code comment and JavaDoc verbosity policy
 area: docs
 severity: minor
 files:
+
   - docs/CODE_STYLE.md
   - .claude/CLAUDE.md
   - build.gradle
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem
@@ -26,6 +31,7 @@ well-named identifiers already convey. Not yet clear whether the fix is to:
 - Split long-form rationale out of inline JavaDoc into a linked doc file (e.g.
   `docs/ARCHITECTURE.md` or a dedicated design-notes file), keeping the inline comment as a
   short pointer;
+
 - Or leave the convention as-is if a review concludes the verbosity is warranted for this
   codebase's specific complexity (JPA/Hibernate persistence-context timing, batch-delete
   ordering, etc. — areas where "what surprised me while writing this" genuinely needs more than

@@ -4,6 +4,9 @@ title: Explore an alert-service integration as a separate microservice
 area: backend
 severity: minor
 files: []
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem

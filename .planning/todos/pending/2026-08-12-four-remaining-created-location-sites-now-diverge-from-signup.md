@@ -4,10 +4,15 @@ title: Four remaining ResponseEntity.created(URI.create(request.getRequestURI())
 area: backend
 severity: minor
 files:
+
   - src/main/java/com/vrudenko/kanban_board/controller/BoardController.java:54
   - src/main/java/com/vrudenko/kanban_board/controller/BoardController.java:80
   - src/main/java/com/vrudenko/kanban_board/controller/ColumnController.java:51
   - src/main/java/com/vrudenko/kanban_board/controller/TaskController.java:65
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem

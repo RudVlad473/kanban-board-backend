@@ -5,6 +5,9 @@ area: infra
 severity: minor
 resolves_phase: 8
 files: []
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem
@@ -29,14 +32,18 @@ real frontend repo is involved.
   Docker Compose stack colocated on the same VM as prod, or (b) one of Oracle's separate
   Always-Free AMD `E2.1.Micro` shapes (2 included, independent of the A1 pool) as a
   dedicated small nonprod box.
+
 - **DB isolation** -- Neon branching (free, native) gives nonprod its own branch off the
   same project with no new infra.
+
 - **Kafka isolation** -- either a topic-name prefix per environment on a shared Redpanda
   broker, or a second single-node broker if nonprod lands on its own VM.
+
 - **DNS/TLS** -- a second Caddy vhost + subdomain (e.g. `staging.<duckdns-domain>`).
 - **CI/CD gating** -- a GitHub Actions stage that deploys to nonprod, runs the Playwright
   suite (living in the separate frontend repo) against the live nonprod URL, and only
   then promotes to prod.
+
 - **CORS** -- Phase 07.1 added CORS support for local frontend dev origins only; a
   deployed nonprod frontend origin would need to be added to the allowed-origins
   configuration once nonprod exists.

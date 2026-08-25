@@ -4,7 +4,12 @@ title: gsd-tools' state.record-metric (or equivalent) writes the wrong progress 
 area: tooling
 severity: minor
 files:
+
   - .planning/STATE.md
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem
@@ -33,8 +38,10 @@ commit time.
    trace where `86`/`44` could originate -- check for a hardcoded fallback, a
    stale cached value, or a denominator sourced from somewhere other than the
    frontmatter's own `total_plans`.
+
 2. Fix the calculation to derive `percent` from the same `completed_plans`/
    `total_plans` values being written in the same call, not a separate source.
+
 3. Consider adding a cheap consistency check (e.g. a pre-commit or CI assertion)
    that `progress.percent` in STATE.md's frontmatter is within rounding distance
    of `round(completed_plans / total_plans * 100)`, so a future regression here

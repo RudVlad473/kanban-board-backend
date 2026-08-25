@@ -4,7 +4,12 @@ title: Ratchet dependencyCheckAnalyze's failBuildOnCVSS after a real baseline ex
 area: tooling
 severity: minor
 files:
+
   - build.gradle
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## ASVS 4.0.3 cross-reference
@@ -41,10 +46,12 @@ manual `workflow_dispatch`) and its HTML/JSON report is available:
    `suppressionFile` mechanism, matching on `<packageUrl>` (stable across
    rebuilds) rather than `<sha1>` (which changes on any version bump), and
    cite the evidence for each suppression — do not suppress on faith.
+
 2. With the suppressed count as the real, actionable baseline, pick a
    `failBuildOnCVSS` rung from that number, the same measure-first-then-gate
    sequence Error Prone (quick task 260802-qr8) and JaCoCo (quick task
    260812-eg8) both followed.
+
 3. Update `build.gradle`'s `dependencyCheck` block and its accompanying
    plugin-block comment to reflect the new rung and the baseline it was chosen
    from.

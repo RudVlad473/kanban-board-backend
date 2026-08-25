@@ -4,8 +4,13 @@ title: "No self-service session revocation, and no re-authentication before dest
 area: security
 severity: moderate
 files:
+
   - src/main/java/com/vrudenko/kanban_board/security/SecurityConfiguration.java
   - src/main/java/com/vrudenko/kanban_board/controller/BoardController.java
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem

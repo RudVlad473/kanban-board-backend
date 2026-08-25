@@ -4,7 +4,12 @@ title: deploy.yml has no path filter, so docs-only pushes trigger a full product
 area: ci
 severity: minor
 files:
+
   - .github/workflows/deploy.yml
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem
@@ -15,7 +20,9 @@ files:
 on:
   push:
     branches:
+
       - master
+
 ```
 
 No `paths:`/`paths-ignore:` filter. Every push to `master` runs the full job graph — `run-tests`,

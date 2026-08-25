@@ -4,9 +4,14 @@ title: "No security-relevant event logging on the authentication / access-contro
 area: security
 severity: moderate
 files:
+
   - src/main/java/com/vrudenko/kanban_board/security/AuthenticationController.java
   - src/main/java/com/vrudenko/kanban_board/security/LogoutHandler.java
   - src/main/java/com/vrudenko/kanban_board/service/OwnershipVerifierService.java
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem

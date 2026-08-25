@@ -4,11 +4,16 @@ title: "No explicit Content-Type validation on REST endpoints"
 area: backend
 severity: minor
 files:
+
   - src/main/java/com/vrudenko/kanban_board/controller/BoardController.java
   - src/main/java/com/vrudenko/kanban_board/controller/ColumnController.java
   - src/main/java/com/vrudenko/kanban_board/controller/TaskController.java
   - src/main/java/com/vrudenko/kanban_board/controller/SubtaskController.java
   - src/main/java/com/vrudenko/kanban_board/handler/GlobalExceptionHandler.java
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem

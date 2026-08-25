@@ -4,7 +4,12 @@ title: Kafka-sourced ActivityEvent fields are persisted with no re-validation an
 area: backend
 severity: security
 files:
+
   - src/main/java/com/vrudenko/kanban_board/activitylog/ActivityLogConsumer.java:61
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem
@@ -31,6 +36,7 @@ the *closest* existing requirements, but neither actually covers the specific ga
 
 - INFRA-03 (self-hosted Redpanda, Phase 5) provisions the broker itself — it says nothing about
   SASL/ACL configuration restricting *which clients* may produce to `kanban.activity`.
+
 - INFRA-08 (network firewall audit, Phase 5 success criterion 5: "Redpanda's 9092 must never be
   internet-facing") closes the *network*-level boundary (nothing outside the VM's private network
   can reach the broker's port at all) but says nothing about *application-layer* authorization

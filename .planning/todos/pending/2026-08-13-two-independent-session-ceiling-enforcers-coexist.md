@@ -4,7 +4,12 @@ title: "Two independent session-concurrency enforcers coexist (filter-held, in-m
 area: security
 severity: minor
 files:
+
   - src/main/java/com/vrudenko/kanban_board/security/SecurityConfiguration.java
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem
@@ -19,6 +24,7 @@ Quick task 260813-m9x measured (`PROBE-RAW.txt` Q2; `PROBE-FINDINGS.md`) that
    `ConcurrentSessionControlAuthenticationStrategy` delegate is backed by
    `SpringSessionBackedSessionRegistry`, which reads the live `SPRING_SESSION` JDBC table — so its
    session count is consistent across horizontally scaled instances.
+
 2. A separate strategy `SessionManagementConfigurer` composes from the same DSL calls and hands to
    the `SessionManagementFilter` it installs on the chain. Its
    `ConcurrentSessionControlAuthenticationStrategy` delegate is backed by an in-memory
@@ -52,10 +58,12 @@ Not yet decided. Candidates for whoever picks this up:
    to one enforcer, one registry, one ceiling. Needs care: verify this doesn't change behavior on
    the real signin path (which invokes the bean directly regardless) and add/adjust a test proving
    the filter-held path now shares the JDBC-backed registry too.
+
 2. **Leave both, document the divergence explicitly** — add a note (where `docs/ARCHITECTURE.md`
    makes its horizontal-scaling claim, and/or in `SecurityConfiguration`) that the ceiling's
    cross-instance consistency guarantee applies to the real signin path's enforcer only, not to any
    hypothetical future authentication flow that routes through the standard filter chain.
+
 3. **Do nothing** — if no realistic future flow in this application will ever authenticate through
    a standard Spring Security filter (this app's `AuthenticationController` is fully custom and
    unlikely to change), the second enforcer may be permanently dead code from a behavioral

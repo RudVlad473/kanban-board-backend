@@ -4,9 +4,14 @@ title: TaskMovedEvent carries no position, unlike the new ColumnReorderedEvent (
 area: backend
 severity: minor
 files:
+
   - src/main/java/com/vrudenko/kanban_board/event/TaskMovedEvent.java
   - src/main/avro/AvroTaskMovedEvent.avsc
   - src/main/java/com/vrudenko/kanban_board/service/TaskService.java
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem
@@ -46,10 +51,13 @@ Not yet decided. When picked up:
 
 1. Add `sourcePosition`/`targetPosition` (or equivalent) fields to `AvroTaskMovedEvent.avsc` with
    Avro defaults, so the change is BACKWARD-compatible under the existing subject.
+
 2. Update `TaskMovedEvent`, `ActivityEventAvroMapper` (both directions), `ActivityLogConsumer`'s
    detail map, and `HistoricalActivityEventReconstructor` together.
+
 3. Confirm `SchemaCompatibilityE2ETest` still passes for the now-versioned `AvroTaskMovedEvent`
    subject (version 2, BACKWARD against version 1).
+
 4. Re-read the d-02 todo's correction note (2026-08-11) before deciding compatibility mode — this
    would be the first genuine multi-version subject in this codebase's history, making d-02's
    BACKWARD-vs-BACKWARD_TRANSITIVE question live for the first time rather than moot.

@@ -4,6 +4,10 @@ plan: 01
 requirements-completed: [QUICK-260816-HN1-SECRETSCANNING]
 duration: unknown (resumed mid-execution after a crashed terminal; original start time not recorded)
 completed: 2026-08-16
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
+  status: unknown
 ---
 
 # Quick task 260816-hn1: Wire up secret scanning (gitleaks) — Summary
@@ -28,6 +32,7 @@ registry choice independently matched a fresh check performed before discovering
 
 - **Task 1** (already done pre-resume, verified not redone): pinned `ghcr.io/gitleaks/gitleaks:v8.30.1`
   (digest `sha256:c00b6bd0...`), triaged all 624 reachable commits, authored `.gitleaks.toml`.
+
 - **Task 2**: wired the pre-commit hook (`.githooks/pre-commit`) with three-outcome exit-code
   branching (0=clean, 2=findings, else=scanner unreachable). Found and fixed a real bug in the
   draft during falsification: `--verbose` was missing, so the refusal message referenced
@@ -36,6 +41,7 @@ registry choice independently matched a fresh check performed before discovering
   refusal at repo root, planted-credential refusal under `.planning/` (proving that directory is
   in-scope, not exempted), clean-tree pass after removing the planted value, and scanner-unreachable
   refusal (simulated via an invalid `DOCKER_HOST` rather than stopping the real daemon).
+
 - **Task 3**: added `.github/workflows/secret-scan.yml` (full-history, hard-gated, push/PR/dispatch
   triggers, direct scanner invocation at the byte-identical pinned reference, redacted-artifact
   upload). Smoke-tested the exact CI command locally against a plain checkout. Reconciled
@@ -49,6 +55,7 @@ registry choice independently matched a fresh check performed before discovering
 - **Fork A** (is the one genuine finding a live leak?): **not a live leak** — localhost-only,
   superseded by env-var config years ago, appears in exactly 2 commits total (add + file
   deletion), never reused. Carried forward as documented, not rotated.
+
 - **Fork B** (allowlist vs. baseline file): **narrow per-rule allowlist, as already built** —
   zero blind spots, each entry evidence-cited, scales fine at 13 raw findings.
 
@@ -90,13 +97,16 @@ discovered later — the falsification design worked as intended.
 
 1. `.gitleaks.toml`, `.githooks/pre-commit`, `.github/workflows/secret-scan.yml` all exist,
    reference the identical pinned tag+digest (`grep`-confirmed byte-identical). PASS.
+
 2. Full-history scan with `.gitleaks.toml` in force: 624 commits scanned, **exactly 1 finding**
    (the consciously-carried one). PASS.
+
 3. Planted credential refused at repo root and under `.planning/`. PASS (Task 2).
 4. Identical tree without the planted value commits cleanly. PASS (Task 2).
 5. Scanner-unreachable refuses with distinct wording. PASS (Task 2).
 6. `./gradlew spotlessCheck` and `./gradlew fastTest` passed on every commit in this task (the
    hook itself ran them). PASS.
+
 7. `git status` clean — no scratch canary, no scanner report, no stray file. PASS (verified at
    close-out).
 

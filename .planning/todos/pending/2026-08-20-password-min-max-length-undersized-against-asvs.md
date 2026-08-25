@@ -4,10 +4,15 @@ title: "Password minimum/maximum length undersized against ASVS's bar"
 area: security
 severity: minor
 files:
+
   - src/main/java/com/vrudenko/kanban_board/constant/ValidationConstants.java
   - src/main/java/com/vrudenko/kanban_board/dto/annotation/Password.java
   - src/main/java/com/vrudenko/kanban_board/dto/user_dto/SignupRequestDTO.java
   - src/main/java/com/vrudenko/kanban_board/dto/user_dto/SigninRequestDTO.java
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem

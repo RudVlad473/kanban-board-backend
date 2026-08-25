@@ -4,8 +4,13 @@ title: "Internal Kafka / schema-registry hop has neither SASL auth nor TLS"
 area: security
 severity: moderate
 files:
+
   - docker-compose.prod.yml
   - docs/INFRA_ARCHITECTURE.md
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem

@@ -4,8 +4,13 @@ title: "No notification on auth-detail changes (credential reset, new-device log
 area: security
 severity: minor
 files:
+
   - build.gradle
   - src/main/java/com/vrudenko/kanban_board/security/AuthenticationController.java
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem

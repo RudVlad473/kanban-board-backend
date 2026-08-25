@@ -4,7 +4,12 @@ title: "Password composition regex blocks Unicode-only passwords and violates AS
 area: security
 severity: moderate
 files:
+
   - src/main/java/com/vrudenko/kanban_board/dto/annotation/Password.java
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem

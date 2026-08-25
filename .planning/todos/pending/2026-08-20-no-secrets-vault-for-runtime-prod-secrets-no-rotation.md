@@ -4,8 +4,13 @@ title: "No secrets-vault for runtime production secrets; no stated key/secret ro
 area: security
 severity: moderate
 files:
+
   - docker-compose.prod.yml
   - docs/INFRA_RUNBOOK.md
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem

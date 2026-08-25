@@ -4,8 +4,13 @@ title: "No breached-password check or strength meter on signup"
 area: security
 severity: minor
 files:
+
   - src/main/java/com/vrudenko/kanban_board/dto/annotation/Password.java
   - src/main/java/com/vrudenko/kanban_board/dto/user_dto/SignupRequestDTO.java
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem

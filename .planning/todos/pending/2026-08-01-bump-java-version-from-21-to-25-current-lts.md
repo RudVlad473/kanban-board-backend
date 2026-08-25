@@ -4,9 +4,14 @@ title: Bump Java version from 21 to 25 (current LTS)
 area: tooling
 severity: minor
 files:
+
   - build.gradle
   - Dockerfile
   - .github/workflows/deploy.yml
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem

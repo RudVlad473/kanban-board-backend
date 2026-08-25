@@ -4,10 +4,15 @@ title: "CSRF defense reasoning is sound but only half-verified: no test proves a
 area: security
 severity: minor
 files:
+
   - src/main/java/com/vrudenko/kanban_board/security/SecurityConfiguration.java
   - src/main/java/com/vrudenko/kanban_board/config/CorsConfig.java
   - src/test/java/com/vrudenko/kanban_board/security/SessionCookieAttributesE2ETest.java
   - src/test/java/com/vrudenko/kanban_board/config/CorsConfigTest.java
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## ASVS 4.0.3 cross-reference
@@ -34,6 +39,7 @@ safe, but they are unevenly tested:
   then actually withholds the cookie on a cross-site request — that is inherently a browser
   behavior claim, not something a JVM-side REST Assured test can observe without a real headless
   browser in the loop.
+
 - **`CorsConfig`'s explicit non-wildcard origin allowlist with `allowCredentials(true)`** —
   **unverified as actual rejection behavior**. `CorsConfigTest` asserts the *resolved
   `CorsConfiguration`* (non-wildcard origins, `allowCredentials=true`) but its own class Javadoc is
@@ -61,11 +67,13 @@ and the reasoning chain is sound) — this is a verification gap, not a suspecte
    `Access-Control-Allow-Origin` for that origin (the closest a JVM-side test can get to proving
    real rejection, since the actual *enforcement* of a same-origin policy happens in the browser,
    not the server — the server's job is only to withhold the permissive header).
+
 2. **If a headless-browser-based E2E tier is ever added to this project** (none currently exists),
    that would be the correct place for a literal "cross-site form POST replays the session cookie —
    does it or doesn't it" behavioral proof. Not worth introducing a new test infrastructure tier
    for this alone; note it here so a future session doesn't have to re-derive that this is the gap
    remaining even after item 1 above ships.
+
 3. Once item 1 lands, this category's verdict can be promoted from `assumed-covered-but-unverified`
    to `covered` for the CORS half; the SameSite half remains bounded by what a non-browser test tier
    can prove, which is already the best available evidence.

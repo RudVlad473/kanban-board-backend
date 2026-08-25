@@ -4,8 +4,13 @@ title: D-02's replay-from-zero rationale is not delivered by non-transitive BACK
 area: backend
 severity: minor
 files:
+
   - src/main/java/com/vrudenko/kanban_board/config/AvroSchemaRegistrar.java
   - .planning/phases/04-schema-registry/04-CONTEXT.md
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem
@@ -26,8 +31,10 @@ version 1. Concretely:
 - **V1** `{a: string, b: int}`
 - **V2** `{a: string}` — drops `b`. BACKWARD check passes: a writer field absent from the reader is
   ignored during Avro resolution.
+
 - **V3** `{a: string, b: string (default "")}` — re-adds `b` as a different type. BACKWARD check
   against V2 passes: a reader field absent from the writer resolves to its default.
+
 - **V3 reading V1 data fails**: the writer encoded `b` as `int`, the reader expects `string`, and
   `int` is not promotable to `string`. Each step was legal; the endpoints are not compatible.
 
@@ -44,6 +51,7 @@ capability this project has:
 - `04-04-PLAN.md:80` rejected replaying the `kanban.activity` topic from offset zero as
   **"unavailable, not merely inconvenient"** — the local broker volume is disposable and the
   production broker it would have come from no longer exists.
+
 - `04-04-PLAN.md:45` states the durable historical record is the `activity_log` Postgres table,
   **not** the Kafka topic, which "has no retention guarantee."
 

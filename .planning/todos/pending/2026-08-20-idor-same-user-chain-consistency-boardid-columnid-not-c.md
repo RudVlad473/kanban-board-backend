@@ -4,11 +4,16 @@ title: "IDOR chain consistency: nested path segments (boardId, columnId) are nev
 area: security
 severity: moderate
 files:
+
   - src/main/java/com/vrudenko/kanban_board/service/OwnershipVerifierService.java
   - src/main/java/com/vrudenko/kanban_board/controller/ColumnController.java
   - src/main/java/com/vrudenko/kanban_board/controller/TaskController.java
   - src/main/java/com/vrudenko/kanban_board/controller/SubtaskController.java
   - src/test/java/com/vrudenko/kanban_board/security/AuthorizationGatingTest.java
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## ASVS 4.0.3 cross-reference
@@ -78,9 +83,11 @@ Two independent fixes are both in scope, and should probably both land together:
    `verifyOwnershipOfColumn(userId, boardId, columnId)` throwing `AppEntityNotFoundException` (not
    `AppAccessDeniedException` — the column is not "not owned," the URL is simply wrong) when
    `column.getBoard().getId()` does not equal the supplied `boardId`.
+
 2. **Bind and pass the full path** from every nested controller method (`ColumnController`,
    `TaskController`, `SubtaskController`) instead of only the leaf id, so the new chain-checked
    overload actually has something to compare against.
+
 3. **Add a same-user chain-consistency test** to `AuthorizationGatingTest` (or a new nested class)
    that constructs exactly the scenario above — one owning user, two of their own boards, a request
    whose leaf id belongs to board B addressed via board A's URL — asserting a 404/400, not a silent

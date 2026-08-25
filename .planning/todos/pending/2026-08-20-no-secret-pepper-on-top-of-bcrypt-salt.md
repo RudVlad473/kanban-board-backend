@@ -4,8 +4,13 @@ title: "No secret pepper on top of BCrypt's own per-hash salt"
 area: security
 severity: minor
 files:
+
   - src/main/java/com/vrudenko/kanban_board/config/BeanConfiguration.java
   - src/main/java/com/vrudenko/kanban_board/mapper/UserMapper.java
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem

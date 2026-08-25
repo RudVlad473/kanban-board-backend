@@ -4,9 +4,14 @@ title: Investigate refactoring existing near-duplicate tests to @ParameterizedTe
 area: testing
 severity: minor
 files:
+
   - src/test/java/com/vrudenko/kanban_board/service/OwnershipVerifierServiceTest.java
   - src/test/java/com/vrudenko/kanban_board/service/TaskServiceTest.java
   - src/test/java/com/vrudenko/kanban_board/service/ColumnServiceTest.java
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem

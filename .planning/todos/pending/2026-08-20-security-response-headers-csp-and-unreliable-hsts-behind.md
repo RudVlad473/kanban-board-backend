@@ -4,9 +4,14 @@ title: "No CSP anywhere; HSTS likely never emitted behind Caddy (no forwarded-he
 area: security
 severity: moderate
 files:
+
   - src/main/java/com/vrudenko/kanban_board/security/SecurityConfiguration.java
   - src/main/resources/application.properties
   - Caddyfile
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## ASVS 4.0.3 cross-reference
@@ -20,6 +25,7 @@ confirmed finding and one correction to the finding below:
 - **New confirmed finding (V14.4.6):** `Referrer-Policy` is also unset. Spring Security's
   `ReferrerPolicyConfig` does not enable by default, unlike `FrameOptionsConfig`/`HstsConfig` which
   do.
+
 - **Correction (V14.4.7), clearly labeled as such:** `X-Frame-Options` DOES fire by default via
   Spring Security — `FrameOptionsConfig.enable()` sets `XFrameOptionsHeaderWriter` with `DENY` mode
   unconditionally (this todo's Problem section below already states this correctly). The gap on
@@ -42,9 +48,11 @@ directive are written unconditionally; `Strict-Transport-Security` (HSTS) is wri
 
 - No `server.forward-headers-strategy` property and no `ForwardedHeaderFilter` bean exist anywhere
   in `src/main` (confirmed by reading `application.properties` in full).
+
 - `Caddyfile` (read in full) adds zero `header` directives of its own on either site block — its
   automatic HTTPS (Let's Encrypt via HTTP-01) is a certificate/TLS-termination concern only, and
   does not imply any HSTS/CSP/X-Frame-Options header gets added downstream.
+
 - Both site blocks proxy over plain HTTP internally (`reverse_proxy app:8080` /
   `reverse_proxy app-nonprod:8080`), with no `X-Forwarded-Proto` handling configured on the Spring
   side.
@@ -86,17 +94,20 @@ no equivalent exists for these baseline security headers.
    `Content-Security-Policy` appropriate for a pure JSON REST API (a restrictive default-src
    policy is a reasonable starting point since this backend serves no HTML itself), and confirm
    HSTS's `includeSubDomains`/`preload` posture is a deliberate choice, not a default.
+
 2. **Fix the HSTS-behind-proxy gap**: either configure `server.forward-headers-strategy=framework`
    (or `native`, depending on which is correct for this embedded-Tomcat + Caddy topology) so
    `request.isSecure()` reflects the real, TLS-terminated client connection, or add a
    `ForwardedHeaderFilter` bean explicitly. Confirm Caddy's `reverse_proxy` directive is already
    forwarding `X-Forwarded-Proto`/`X-Forwarded-For` (Caddy does this by default, but verify against
    the actual `Caddyfile`) before assuming the app-side fix alone is sufficient.
+
 3. **Add a real-socket header-assertion test**, modeled on `SessionCookieAttributesE2ETest`'s
    precedent (`@Tag("realSocket")`, `AbstractAppE2ETest`, asserts on the real `HttpResponse`) —
    confirm `X-Content-Type-Options`, `X-Frame-Options`, the new CSP, and (once the forwarded-
    headers fix lands) HSTS are all actually present on the wire, not just theoretically implied by
    Spring Security's documented default behavior.
+
 4. **Live-verify against the actual deployed instance** once the forwarded-headers fix ships — a
    real `curl -I` against the production/nonprod URL is the only way to confirm HSTS is actually
    emitted end-to-end through the real Caddy hop, which this audit's execution environment could

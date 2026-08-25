@@ -4,11 +4,16 @@ title: ActivityAction enum lives in entity/ but is not a JPA entity — relocate
 area: backend
 severity: minor
 files:
+
   - src/main/java/com/vrudenko/kanban_board/entity/ActivityAction.java
   - src/main/java/com/vrudenko/kanban_board/entity/ActivityLogEntity.java
   - src/main/java/com/vrudenko/kanban_board/activitylog/ActivityLogConsumer.java
   - src/main/java/com/vrudenko/kanban_board/dto/activity_dto/ActivityLogResponseDTO.java
   - src/main/java/com/vrudenko/kanban_board/entity/ThemePreference.java
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem
@@ -20,6 +25,7 @@ structure mirrors domain," dedicated to JPA `@Entity` classes (`BoardEntity`, `C
 
 Unlike a value type that only backs a single JPA column, `ActivityAction` is used across three
 distinct layers:
+
 - `entity/ActivityLogEntity.java` — as a persisted `@Enumerated` column
 - `activitylog/ActivityLogConsumer.java` — mapped 1:1 from the publishing Kafka event's class name
 - `dto/activity_dto/ActivityLogResponseDTO.java` — the API-facing representation

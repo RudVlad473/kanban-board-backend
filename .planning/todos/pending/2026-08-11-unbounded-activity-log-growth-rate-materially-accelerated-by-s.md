@@ -4,8 +4,13 @@ title: activity_log has no retention policy, and its growth rate just materially
 area: backend
 severity: minor
 files:
+
   - src/main/resources/db/migration/V3__add_activity_log.sql
   - src/main/java/com/vrudenko/kanban_board/service/SubtaskService.java
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem
@@ -30,9 +35,11 @@ Not yet decided. Candidates for whoever picks this up:
 1. **Time-based retention** — a scheduled job or Flyway-adjacent script deleting/archiving rows
    older than N days/months. Needs a product decision on how long activity history should be
    retorable per board.
+
 2. **Row-count-based retention per board** — cap each board's activity feed at the most recent N
    rows, deleting older ones. Simpler to reason about per-board storage, but changes the semantics
    of "full history" if a board is very active.
+
 3. **Do nothing yet, monitor** — if actual production row counts stay small relative to available
    Postgres storage (this project's deploy target, per `.planning/PROJECT.md`, is a cost-guarded
    Oracle Cloud + Neon stack with real storage limits), this may not need action for a long time.

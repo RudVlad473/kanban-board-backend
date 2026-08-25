@@ -1,5 +1,24 @@
 # Milestones
 
+## v1.3 Nonprod Environment & CI Hardening (Shipped: 2026-08-25)
+
+**Phases completed:** 3 phases, 13 plans, 35 tasks
+
+**Key accomplishments:**
+
+- A second, isolated Compose stack (app-nonprod + redpanda-nonprod) live over real Let's Encrypt HTTPS on the same Netcup VM, backed by an empty Flyway-migrated Neon branch and an independent 14-subject Avro schema registry, with every isolation claim proven by live measurement in docs/INFRA_RUNBOOK.md rather than asserted from config.
+- redpanda-nonprod's memory cap replaced with a live-measured floor (`--memory 128M` / `mem_limit 300m`), found by descending a restart ladder past three independently-confirmed crash-looping rungs (96M/64M/32M) rather than stopping at an assumed value, with the colocation-vs-fallback-VPS decision made by the developer at a blocking checkpoint and recorded on the measured evidence.
+- Two GitHub Environments (production/staging, zero protection rules) populated with nine scoped deploy secrets each, a filesystem-confined deploy-nonprod VM identity proven locked out of production's directory, a public Docker Hub repository for nonprod, and both nonprod CI jobs wired into deploy.yml — the first live run failed on an SSH host-key fingerprint mismatch, and the fix for that then surfaced a second, unrelated defect (nonprod silently pulling production's Docker Hub image). Both were diagnosed and fixed by the coordinator with the human operator's confirmation at each live-affecting step; the live run is now fully green with genuine cross-repository separation confirmed on the VM. Plan complete, 3/3 tasks.
+- `health-check-nonprod` (bounded 30x10s poll, fails the run on a dead nonprod stack), the nonprod image-retention pair (`cleanup-old-images-nonprod`/`cleanup-unused-image-nonprod`, isolated to their own Docker Hub repository), and the repository-level deploy-secret sweep (CI-02) are all written, wired into `deploy.yml`, and now live-verified end to end — green path, red path, idempotency, and cross-repository isolation all confirmed against real infrastructure by the human operator after the orchestrator merged this plan's worktree to `master`.
+- `register-schemas-production` (its own job, running immediately after `deploy-to-netcup` per the human operator's option-a decision) and a registration step inserted inside `deploy-to-nonprod`'s own SSH script (strictly between the broker start and the app start) both reuse `AvroSchemaRegistrar`/`PropertiesLauncher` verbatim to automate the last hand-run step in this project's deploy — now live-verified end to end (green path, red path, idempotency, cross-broker independence), after live verification itself uncovered and fixed a real bug: `appleboy/ssh-action` has no fail-fast behavior of its own, so nonprod's "registration gates the app start" guarantee was false as originally shipped until an explicit `set -e` was added.
+- Digest-pinned TruffleHog verified-credential CI gate added alongside gitleaks in secret-scan.yml, plus a `case`-based pre-commit hook fix so an out-of-tree worktree refuses a staged credential instead of silently reporting clean — Task 3's live-CI checkpoint confirmed the gate on a real run and a real throwaway-credential PR.
+- HARDEN-06 fully shipped: pin bump verified, and the folded NVD_API_KEY bug is diagnosed live (byte length 0, digest matched SHA-256("") exactly), remedied by the repository owner re-setting the secret, and confirmed by a second live run with the diagnostic probe removed.
+- Gradle distribution SHA-256 pin plus `gradle/actions/wrapper-validation@v6` in both CI workflows, and a fully-covering `gradle/verification-metadata.xml` (SHA-256, no PGP) generated only after discovering that `--write-verification-metadata` alone silently under-captures the buildscript classpath and Spotless's own detached formatter configuration. Task 3's Dependabot-cost decision was surfaced to the user (not left on the executor's provisional auto-approval) — they chose softening over accept-as-is.
+- `Secure` set unconditionally on the session cookie in both Spring profiles, proven by a new real-socket RestAssured test against the actual `Set-Cookie` header, then confirmed live against TLS-served nonprod (Task 3) after the wave merged.
+- README.md restructured from a 130-line trimmed front door into a 269-line, 12-section production-reality-first architecture showcase — one embedded, locally-validated Mermaid diagram, a per-row-rationale Stack table, and a Quality & security gates section whose every claim was grepped against the live repository (TruffleHog present, verification-metadata.xml present, 5 digest-pinned appleboy sites, Secure cookie true in both profiles) rather than carried over from memory.
+
+---
+
 ## v1.2 Infra Migration & Schema Registry (Shipped: 2026-08-17)
 
 **Phases completed:** 7 phases, 39 plans, 107 tasks

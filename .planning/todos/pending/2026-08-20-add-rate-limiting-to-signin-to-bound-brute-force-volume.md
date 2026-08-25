@@ -4,10 +4,15 @@ title: "No rate limiting / volumetric brute-force guard on POST /signin"
 area: security
 severity: security
 files:
+
   - src/main/java/com/vrudenko/kanban_board/security/AuthenticationController.java
   - src/main/java/com/vrudenko/kanban_board/security/SecurityConfiguration.java
   - src/test/java/com/vrudenko/kanban_board/security/AuthenticationTest.java
   - src/test/java/com/vrudenko/kanban_board/security/SigninTimingEqualizationTest.java
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## ASVS 4.0.3 cross-reference
@@ -38,9 +43,11 @@ Two existing tests prove adjacent but different properties, and neither one boun
 - `AuthenticationTest.AntiEnumeration` proves a wrong-password and a nonexistent-email response
   are indistinguishable (same 401, same generic body) — it says nothing about how many attempts a
   caller may make.
+
 - `AuthenticationTest.ConcurrentSessionCeiling` proves a *third concurrent session for one already
   partially-authenticated principal* is rejected — a ceiling on simultaneous sessions, not on
   signin attempt volume for a not-yet-authenticated caller.
+
 - `SigninTimingEqualizationTest` proves response-time equalization (defends against a
   credential-existence timing oracle), again orthogonal to volume.
 
@@ -71,10 +78,12 @@ Session JDBC already in the request path):
    for bad credentials — a distinct status code here is fine (unlike the deliberate 401/401
    indistinguishability between wrong-password and ceiling-rejection, over-limit is not a
    credential-validity oracle).
+
 2. **Decide the bound empirically**, not by guessing a round number — e.g. instrument a local run
    to see realistic legitimate-user retry patterns (mistyped password, MFA-less retry) before
    picking a threshold, matching this project's established "measure first, then gate" convention
    (Error Prone, JaCoCo, dependency-check `failBuildOnCVSS` all followed this).
+
 3. **Add a test proving the limiter itself** (e.g. Nth request in a burst returns 429, next
    request after the window resets returns to normal 401/200 behavior) — this is what closes the
    gap this todo exists to name, not just adding the library.

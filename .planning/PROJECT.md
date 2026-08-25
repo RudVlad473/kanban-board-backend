@@ -8,17 +8,17 @@ A Spring Boot 3.5.16 / Java 21 REST API backend for a Kanban board application (
 
 v1.0 through v1.2 shipped the backend-depth showcase (JPA/Hibernate optimistic locking, Kafka event sourcing with dead-letter reliability, idempotent consumption, Avro schema governance — all proven against real Postgres/Kafka, not mocks) and, after the AWS EC2/RDS deploy target was deleted (2026-08-03, cost-risk driven), made the project reachable and cheaply/reliably deployable again on Netcup + Neon + self-hosted Redpanda. The backend is now feature-complete against its own mock-ups and live in production; the differentiator going forward is less "does the backend do X" and more "is the whole system, including a real frontend against this real deploy, provably reliable."
 
-## Current Milestone: v1.3 Nonprod Environment & CI Hardening
+## Current State
 
-**Goal:** Provision a resource-shrunk nonprod/staging environment (co-located on the existing Netcup VPS if capacity allows, exact sizing to be confirmed by research) with its own DB/Kafka isolation and a CI deploy gate, so a separate frontend repo's Playwright E2E suite has a real, non-mocked target to run against — bundled with the smaller CI/deploy hardening todos that were unblocked by v1.2 shipping.
+v1.3 (Nonprod Environment & CI Hardening) shipped 2026-08-25 — Phases 8, 9, and 10 all complete
+and verified (13/13 plans, zero gaps). The backend now has an isolated, continuously-deployed
+nonprod environment colocated on the existing Netcup VPS, and the CI/deploy pipeline's accumulated
+hardening debt (secret scanning, action digest-pinning, Gradle supply-chain integrity, session
+cookie `Secure` flag, README architecture showcase) is closed. Full milestone detail archived at
+[`milestones/v1.3-ROADMAP.md`](milestones/v1.3-ROADMAP.md) and
+[`milestones/v1.3-REQUIREMENTS.md`](milestones/v1.3-REQUIREMENTS.md).
 
-**Target features:**
-- Nonprod/staging deploy target (Netcup-colocated or a second small VPS, decided by research) with its own Neon branch and Kafka/topic isolation
-- CI job deploying to nonprod ahead of/alongside the existing production deploy
-- Dependabot `github-actions` ecosystem entry (deferred during v1.2's in-flight deploy.yml rewrite, now unblocked)
-- CI hardening: TruffleHog live-credential verification pass, GitHub Actions digest-pinning, gradle cache in `run-tests`, gitleaks-in-worktree fix, `security-scan.yml` stale comment/action-version cleanup
-- Session cookie `Secure` flag, now that real TLS exists in production (v1.2 Phase 5)
-- README expanded into a full project architecture showcase
+Next milestone not yet scoped — run `/gsd-new-milestone` to define it.
 
 ## Requirements
 
@@ -47,10 +47,11 @@ v1.0 through v1.2 shipped the backend-depth showcase (JPA/Hibernate optimistic l
 - ✓ Nonprod environment live and resettable: colocated Compose stack (app + second Redpanda broker) on the existing Netcup VPS, isolated Neon branch, real HTTPS on its own DuckDNS subdomain, CORS wired for the eventual frontend origin, and Redpanda's memory floor measured live via iterative restart cycles — NONPROD-01..06, v1.3 Phase 8, done 2026-08-18.
 - ✓ Nonprod continuous deploy on every push to master, fully isolated from production: scoped `production`/`staging` GitHub Environments (repository-level deploy secrets swept to just `NVD_API_KEY`), a separate Docker Hub repository per environment with independent retention sweeps, a bounded health-check gate that fails the run visibly on a dead nonprod stack, and automated Avro schema registration against both registries (nonprod gated ahead of its own app start; production automated in place, zero behavior change to its live deploy script) — CI-01..05, v1.3 Phase 9, done 2026-08-19. Every acceptance criterion live-verified against real infrastructure (not just statically checked), including finding and fixing a real `appleboy/ssh-action` fail-fast defect (missing `set -e`) discovered mid-verification.
 - ✓ Generated OpenAPI spec declares the `ProblemDetail` error envelope on every operation via a global customizer, with an automated regression guard — API-01, v1.3 Phase 9, done 2026-08-19 (scope exception: API-contract completeness, not CI/deploy work, folded in by explicit user decision after a downstream frontend consumer discovered the gap live).
+- ✓ CI, secret-scanning, and session-cookie hardening: Dependabot `github-actions` ecosystem entry (grouped, softened per D-Dependabot-cost); digest-pinned TruffleHog verified-credential gate alongside gitleaks, plus a pre-commit `case`-branch fix for out-of-tree worktrees; both `appleboy/*` SSH actions pinned to immutable digests with a dated risk-acceptance comment for the first-party actions kept tag-trusted; Gradle cache in `run-tests`; Gradle distribution SHA-256 pin + `wrapper-validation` + a fully-covering `verification-metadata.xml`; `security-scan.yml`'s stale comment/action-version drift and its `NVD_API_KEY` resolution bug fixed; `Secure` set unconditionally on the session cookie in both Spring profiles; README restructured into a 269-line, 12-section production-reality architecture showcase — HARDEN-01..08, v1.3 Phase 10, done 2026-08-19. All 8 requirements verified live (8/8), zero gaps.
 
 ### Active
 
-v1.3 (Nonprod Environment & CI Hardening) — Phases 8 and 9 complete (2026-08-18/19). Phase 10 (CI & Deploy Hardening) remains: the 8 `HARDEN-*` requirements (Dependabot `github-actions` ecosystem, TruffleHog live-credential pass, GitHub Actions digest-pinning, gradle cache in `run-tests`, gitleaks-in-worktree fix, `security-scan.yml` stale comment/action cleanup, cookie `Secure` flag, README expansion), plus two Gradle supply-chain todos found during Phase 9 and a `security-scan.yml`/`NVD_API_KEY` resolution bug found during Phase 9's live verification (unrelated to Phase 9's own changes — pre-existing).
+No active milestone — v1.3 shipped 2026-08-25. Run `/gsd-new-milestone` to scope the next one.
 
 ### Out of Scope
 
@@ -60,6 +61,9 @@ v1.3 (Nonprod Environment & CI Hardening) — Phases 8 and 9 complete (2026-08-1
 - GraphQL, Elasticsearch, WebFlux/reactive, Kotlin, Oracle/PL-SQL, Angular — explicitly excluded by the modernization plan as niche/low-ROI for this project's scope
 - Cursor/keyset pagination on the activity feed (PAGE-V2-01) — offset `Pageable` shipped in v1.1 for API consistency; revisit only if activity-log scale becomes a real concern
 - Field-level diff logging, DLT replay/reprocessing admin tooling, real-time push (WebSocket/SSE) of activity updates, retention/archival policy, generic/pluggable event schema — all explicitly excluded from v1.1's scope per REQUIREMENTS.md's Out of Scope table; reasons still valid, no signal any of these are needed yet
+- Per-PR ephemeral environments, ephemeral Neon branch per E2E run, second Neon project — rejected for v1.3 with written rationale; nonprod's own continuous-deploy stack already gives a stable, always-current Playwright target
+- `repository_dispatch` from this repo into the frontend repo's Playwright workflow (FRONTEND-DISPATCH-V2) — hard-blocked, the frontend repo has no workflow file to dispatch into yet
+- Universal digest-pinning of every third-party GitHub Action (narrowed 2026-08-19, D-05) — scoped to just the two `appleboy/*` actions holding real SSH keys; first-party GitHub/Docker actions kept tag-trusted behind a documented risk-acceptance comment
 
 ## Context
 
@@ -74,6 +78,8 @@ v1.3 (Nonprod Environment & CI Hardening) — Phases 8 and 9 complete (2026-08-1
 - Phase 2 (Kafka Foundation, Domain Events & Move Endpoint) was executed successfully but its verification step was never run at the time — discovered during the pre-close audit for v1.1. Retroactively verified 2026-08-03: 15/15 must-haves passed against a live Docker Compose stack, no regressions to Phase 3.
 - **v1.2 close (2026-08-17):** Two phases (6 "Mock-up Feature Gap Closure" and 07.1 "frontend-integration-readiness blockers") had genuinely completed all their plans but were missing this document's Validated entries and, for 07.1, a formal `VERIFICATION.md` altogether — discovered during milestone-close readiness checks (`gsd_run query init.manager`) rather than assumed clean. 07.1 was independently re-verified before milestone close (10/10 goal truths, 118 tests run live, zero gaps) rather than overridden past. `SEED-001` (Confluent Schema Registry) was also found still marked `dormant` in its own tracking file despite being fully delivered by Phase 4 — corrected to `implemented`. None of these were functional gaps in the shipped product, only planning-artifact bookkeeping that had drifted from reality.
 - The app is now live in production at a real HTTPS domain (see `docs/INFRA_RUNBOOK.md` for current infra state) — any future phase touching deploy config, Docker Compose, or CI/CD should treat that as a real, traffic-serving target, not a rehearsal.
+- **v1.3 close (2026-08-25):** STATE.md/ROADMAP.md had drifted stale — both still described Phase 10 as not started despite all 6 plans, summaries, and a passed `10-VERIFICATION.md` (8/8) already on disk. Two ad-hoc spikes run after Phase 10 shipped (`.planning/spikes/001-board-duplicate-name-409-override`, VALIDATED; `002-error-code-coverage-survey`, PARTIAL) investigated per-operation OpenAPI error-response overrides layered on `ProblemDetailOpenApiCustomizer`'s generic bucket; spike 001's own README claimed its experimental `BoardController.java` change and throwaway probe test were reverted/deleted, but they were still present uncommitted at milestone-close time — reverted and cleaned up as part of closing v1.3. Spike 002 flagged three concrete override candidates (ranked): `PATCH /tasks/{taskId}/move`'s misleading 400, `POST /signup`'s 409 (direct copy of spike 001's proven pattern), and `PUT /boards/{boardId}`'s two-cause 409 — none implemented yet, candidates for a follow-up quick task.
+- Two directories under `.planning/quick/` are worth knowing about going forward: `260816-hn1` is fully complete (secret scanning) despite an audit false-positive on its free-text `duration` field; `260824-v7n` (install Docker natively inside WSL2) is a genuinely empty, abandoned directory — unrelated local dev-environment tooling, not a product requirement.
 
 ## Constraints
 
@@ -100,6 +106,11 @@ v1.3 (Nonprod Environment & CI Hardening) — Phases 8 and 9 complete (2026-08-1
 | Pivoted production deploy target from Oracle Cloud A1.Flex to Netcup VPS Lite 2 | Oracle's A1 Flex free-tier ARM capacity proved structurally unavailable after 200+ automated provisioning attempts over 10+ hours across regions; Netcup's two-layer firewall model meets the same externally-verified 80/443-only intent | ✓ Good — fully re-verified, zero drift from recorded intent |
 | Un-deferred `GET /boards/{boardId}/full` and folded it into v1.2 as Phase 6 (Mock-up Feature Gap Closure) rather than leaving it deferred to a hypothetical v2 | Closing the gap between the API and this project's own committed Kanban mock-ups was judged higher-value than an unscoped future milestone; also closes the last mock-up-vs-API gap, making the backend API-complete against its own design reference | ✓ Good — GET /full ships as a single chained LEFT JOIN FETCH round trip, no N+1 |
 | Retroactively verified Phase 07.1 before milestone close rather than overriding the missing verification | `gsd_run query init.manager` flagged `verification_status=missing` for a phase whose plans were all complete — accepting that at milestone-close time would have shipped a formally-unverified phase into the historical record permanently | ✓ Good — 10/10 goal truths, 118 tests run live, zero gaps found |
+| Nonprod colocates on the existing Netcup VPS rather than provisioning a second VPS | Live memory measurement (NONPROD-06, restart-ladder down to a 128M/300m floor) showed colocation fits; the second-VPS fallback was reserved only for if it didn't | ✓ Good — memory floor live-measured, not assumed |
+| Kafka isolation via a second Redpanda broker instance, not topic-prefixing | The Avro registry's `RecordNameStrategy` keys compatibility history by class name, so prefixed topics on the same broker would still share the registry — a genuine isolation gap topic-prefixing alone can't close | ✓ Good |
+| The backend does not gate its own production promotion on the frontend repo's E2E results | Inverted ownership: the frontend gates itself on nonprod reachability instead, since the frontend repo doesn't exist yet to dispatch into (FRONTEND-DISPATCH-V2 stays deferred) | ✓ Good |
+| Digest-pinning narrowed to just the two `appleboy/*` SSH actions, not every third-party `uses:` in `deploy.yml` (D-05) | Those two hold real production/staging SSH keys; pinning every first-party GitHub/Docker action too would add churn without a matching blast-radius reduction — recorded via an explicit, dated risk-acceptance comment instead | ✓ Good |
+| Dependabot's `github-actions` PRs grouped (softened) rather than accepted at raw volume | User chose grouping over accept-as-is when the Dependabot-cost trade-off was surfaced explicitly at a Phase 10 checkpoint, rather than left to the executor's provisional default | ✓ Good |
 
 ## Evolution
 
@@ -119,4 +130,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-19 — Phase 9 complete (Nonprod Continuous Deploy & Scoped CI Credentials); Phase 10 (CI & Deploy Hardening) next*
+*Last updated: 2026-08-25 after v1.3 milestone*

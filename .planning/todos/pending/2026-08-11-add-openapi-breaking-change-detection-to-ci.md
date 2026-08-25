@@ -4,9 +4,14 @@ title: Add OpenAPI breaking-change detection to CI (schema diffing against a che
 area: backend
 severity: minor
 files:
+
   - .github/workflows/
   - build.gradle
   - src/test/java/com/vrudenko/kanban_board/OpenApiDocsTest.java
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem
@@ -29,13 +34,16 @@ minimum should cover:
    approaches: the `springdoc-openapi-gradle-plugin` (generates the spec without a running
    server), or extending the existing `OpenApiDocsTest` (which already hits the live `/api/docs`
    endpoint and asserts a 200) to dump the response body to a file.
+
 2. **Baseline + diff:** check a baseline spec into git; diff the fresh spec against it in CI using
    a breaking-change-aware tool (`oasdiff` is the common choice — Go binary, actively maintained,
    has a ready-made GitHub Action).
+
 3. **Gate policy:** decide hard-fail-on-breaking-change vs. warn-only-first-then-tighten, following
    this repo's established measure-first-then-pick-a-rung pattern (see the ErrorProne rollout,
    `.planning/quick/260802-qr8-*` and `260803-v23-*`, for precedent on how that decision was made
    here previously).
+
 4. **Deliberate-change workflow:** when a breaking change is intentional, the PR that makes it must
    also update the checked-in baseline — making the "deliberate choice" show up as a visible diff
    in review, rather than a silent side effect of an unrelated change.

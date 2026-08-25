@@ -4,8 +4,13 @@ title: "No remote log shipping, no structured/UTC logging standard, no alerting 
 area: infra
 severity: moderate
 files:
+
   - docker-compose.prod.yml
   - docs/plans/backend-modernization/06-observability.md
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem

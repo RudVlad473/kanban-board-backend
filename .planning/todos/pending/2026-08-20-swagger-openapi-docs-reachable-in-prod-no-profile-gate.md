@@ -4,9 +4,14 @@ title: "Swagger / OpenAPI docs are reachable in production with no profile gate"
 area: security
 severity: moderate
 files:
+
   - src/main/java/com/vrudenko/kanban_board/security/SecurityConfiguration.java
   - src/main/java/com/vrudenko/kanban_board/constant/ApiPaths.java
   - src/main/resources/application.properties
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem

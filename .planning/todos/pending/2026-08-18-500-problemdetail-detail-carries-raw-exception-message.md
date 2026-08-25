@@ -5,7 +5,12 @@ area: security
 severity: medium
 resolves_phase: null
 files:
+
   - src/main/java/com/vrudenko/kanban_board/handler/GlobalExceptionHandler.java
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## ASVS 4.0.3 cross-reference

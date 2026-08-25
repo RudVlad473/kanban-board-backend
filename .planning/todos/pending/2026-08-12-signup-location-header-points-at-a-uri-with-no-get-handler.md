@@ -4,8 +4,13 @@ title: POST /signup's Location header names a URI with no GET handler (GET /user
 area: backend
 severity: minor
 files:
+
   - src/main/java/com/vrudenko/kanban_board/security/AuthenticationController.java
   - src/main/java/com/vrudenko/kanban_board/controller/UserController.java
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem

@@ -4,7 +4,12 @@ title: "No documented backup / restore runbook for the production database"
 area: infra
 severity: minor
 files:
+
   - docs/INFRA_RUNBOOK.md
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem

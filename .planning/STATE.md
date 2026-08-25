@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Nonprod Environment & CI Hardening
-current_phase: 10
-status: completed
+status: Awaiting next milestone
 stopped_at: Phase 10 context gathered
-last_updated: "2026-08-20T09:39:01.437Z"
-last_activity: 2026-08-20
-last_activity_desc: "Phase 9 closed out: plan 09-03 (Avro schema registration, CI-05) live-verified after finding and fixing a real appleboy/ssh-action fail-fast defect (missing set -e) mid-verification; code review (0 critical/4 warnings/3 info) and gsd-verifier goal check (6/6, no gaps) both passed; ROADMAP/STATE/REQUIREMENTS/PROJECT.md all updated and pushed"
-state_head: df6844347fe7843305b62daae5aa6b6a82aa4fdf
+last_updated: "2026-08-25T10:03:51.595Z"
+last_activity: 2026-08-25
+last_activity_desc: Milestone v1.3 completed and archived
+state_head: 23e1f9e24c3e384859e562e14fa0c51b6bb63940
 progress:
   total_phases: 3
   completed_phases: 3
   total_plans: 13
   completed_plans: 13
   percent: 100
+current_phase: 10
 current_phase_name: ci-deploy-hardening
 ---
 
@@ -29,12 +29,10 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 
 ## Current Position
 
-Phase: 10
-Plan: Not started
-Status: All phases complete
-Last activity: 2026-08-25 - Completed quick task 260825-dfd: added createdAt timestamp to BoardEntity and BoardResponseDTO
-
-Progress: [███████░░░] 75%
+Phase: Milestone v1.3 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-08-25 — Milestone v1.3 completed and archived
 
 ## Performance Metrics
 
@@ -142,17 +140,31 @@ governance.
 
 Items acknowledged and carried forward (full v1.2-close table in `.planning/milestones/v1.2-ROADMAP.md`):
 
-| Category | Item | Status | Deferred At |
-|----------|------|--------|-------------|
-| Epics | Modernization Epics 3 (OpenAPI half), 4, 6, 7 (Redis, Observability, K8s) | Deferred to future milestones | 2026-07-31 |
-| Kafka | Cursor/keyset pagination on activity feed (PAGE-V2-01) | Deferred to v2 | 2026-08-01 |
-| Infra Polish | INFRA-V2-01..03 (observability stack, blue-green deploys, multi-broker Redpanda HA) | Deferred to v2 | 2026-08-03 |
-| Schema Registry Polish | SCHEMA-V2-01..02 (pre-merge schema-compatibility CI check, compatibility-mode rationale doc) | Deferred to v2 | 2026-08-03 |
-| Frontend coupling | FRONTEND-DISPATCH-V2, FRONTEND-COUPLING-V2 | Deferred — hard-blocked on the frontend repo existing | 2026-08-17 |
-| Nonprod | Per-PR ephemeral environments, ephemeral Neon branch per E2E run, second Neon project | Rejected for v1.3 with written rationale (REQUIREMENTS.md Out of Scope) | 2026-08-17 |
-| Quick task | 260801-p03, 260802-rq5, 260802-ryf (missing/research-only summaries) | Open since v1.1 close | 2026-08-17 |
+| Category | Item | Status | Deferred At | Milestone |
+|----------|------|--------|-------------|-----------|
+| Epics | Modernization Epics 3 (OpenAPI half), 4, 6, 7 (Redis, Observability, K8s) | Deferred to future milestones | 2026-07-31 | v1.2 |
+| Kafka | Cursor/keyset pagination on activity feed (PAGE-V2-01) | Deferred to v2 | 2026-08-01 | v1.2 |
+| Infra Polish | INFRA-V2-01..03 (observability stack, blue-green deploys, multi-broker Redpanda HA) | Deferred to v2 | 2026-08-03 | v1.2 |
+| Schema Registry Polish | SCHEMA-V2-01..02 (pre-merge schema-compatibility CI check, compatibility-mode rationale doc) | Deferred to v2 | 2026-08-03 | v1.2 |
+| Frontend coupling | FRONTEND-DISPATCH-V2, FRONTEND-COUPLING-V2 | Deferred — hard-blocked on the frontend repo existing | 2026-08-17 | v1.2 |
+| Nonprod | Per-PR ephemeral environments, ephemeral Neon branch per E2E run, second Neon project | Rejected for v1.3 with written rationale (REQUIREMENTS.md Out of Scope) | 2026-08-17 | v1.2 |
+| Quick task | 260801-p03, 260802-rq5, 260802-ryf (missing/research-only summaries) | Open since v1.1 close | 2026-08-17 | v1.2 |
+| quick_tasks | 260801-p03-add-explicit-comments-to-taskservice-upd | missing | 2026-08-25 | v1.3 |
+| quick_tasks | 260802-rq5-bump-java-version-from-21-to-25-current- | missing | 2026-08-25 | v1.3 |
+| quick_tasks | 260802-ryf-enable-virtual-threads-in-spring-boot-co | missing | 2026-08-25 | v1.3 |
+| quick_tasks | 260816-hn1-wire-up-secret-scanning-gitleaks-truffle | unknown | 2026-08-25 | v1.3 |
+| quick_tasks | 260824-v7n-install-docker-natively-inside-this-wsl2 | missing | 2026-08-25 | v1.3 |
+| todos | 45 pending todos (full list: `.planning/todos/pending/`) | (presence-only) | 2026-08-25 | v1.3 |
 
-**Known verification overrides: 14 total (recorded at v1.2 close)**
+**Known verification overrides: 14 total (recorded at v1.2 close); 50 newly acknowledged, 0 carried forward from a prior close, at v1.3 close (see above)**
+
+**v1.3 close notes on the 5 flagged quick tasks:**
+
+- `260801-p03`, `260802-rq5`, `260802-ryf` — pre-existing gap, unchanged since v1.1/v1.2 close (see rows above).
+- `260816-hn1` (secret scanning) — false positive: fully complete with both PLAN.md and SUMMARY.md; flagged only because its `duration` frontmatter field is free text ("unknown (resumed mid-execution...)") rather than a parseable value.
+- `260824-v7n` (install Docker natively inside WSL2) — genuinely empty, abandoned directory (scaffolded 2026-08-24, never executed); unrelated local dev-environment tooling, not a v1.3 requirement.
+
+The 45 pending todos are individually listed and categorized in this document's own Pending Todos section above (security/CI/minor backlog, all explicitly out of v1.3 scope per PROJECT.md).
 
 ## Session Continuity
 
@@ -162,4 +174,4 @@ Resume file: .planning/phases/10-ci-deploy-hardening/10-CONTEXT.md
 
 ## Operator Next Steps
 
-- `/gsd-discuss-phase 10` to start Phase 10 (CI & Deploy Hardening) — no CONTEXT.md exists yet for it.
+- Start the next milestone with /gsd-new-milestone

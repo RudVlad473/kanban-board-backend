@@ -4,9 +4,14 @@ title: "No password-change capability exists anywhere in the API"
 area: security
 severity: moderate
 files:
+
   - src/main/java/com/vrudenko/kanban_board/controller/UserController.java
   - src/main/java/com/vrudenko/kanban_board/security/AuthenticationController.java
   - src/main/java/com/vrudenko/kanban_board/service/UserService.java
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem

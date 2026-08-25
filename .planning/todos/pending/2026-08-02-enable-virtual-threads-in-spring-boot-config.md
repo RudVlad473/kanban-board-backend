@@ -4,8 +4,13 @@ title: Enable virtual threads in Spring Boot config
 area: backend
 severity: minor
 files:
+
   - src/main/resources/application.properties
+
 blocked_on: .planning/todos/pending/2026-08-01-bump-java-version-from-21-to-25-current-lts.md
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem
@@ -32,6 +37,7 @@ The parked Java 21→25 / Spring Boot 3.5→4.x upgrade (`2026-08-01-bump-java-v
 ## Original Solution (superseded by the research above — kept for history)
 
 Evaluate before enabling — not a drop-in flip:
+
 - Spring Data JPA/Hibernate and the JDBC driver make blocking calls; under virtual threads, `synchronized` blocks or JDBC connection-pool internals that pin the carrier thread can erase the benefit (or cause pool exhaustion under load). Check HikariCP behavior under virtual threads specifically.
 - Spring Session JDBC's session handling also does blocking JDBC work per-request — same pinning risk applies there.
 - Verify no `synchronized` blocks remain in the request path (services/controllers) that would pin carrier threads.

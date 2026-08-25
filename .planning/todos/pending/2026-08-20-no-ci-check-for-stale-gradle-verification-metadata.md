@@ -4,9 +4,14 @@ title: No CI check for stale Gradle dependency-verification metadata
 area: tooling
 severity: minor
 files:
+
   - gradle/verification-metadata.xml
   - .github/workflows/deploy.yml
   - .github/workflows/security-scan.yml
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem
@@ -40,6 +45,7 @@ never actually delivered. Candidates:
    `./gradlew --write-verification-metadata sha256 <the real build/test tasks> --dry-run` (or the
    non-dry-run form against a scratch copy) and diffs the result against the committed file,
    failing on any difference.
+
 2. At minimum, ensure whatever task set is used to (re)generate the metadata during maintenance
    actually covers `compileTestJava`/`testAnnotationProcessor` and any other configuration a real
    `./gradlew test` resolves — a `help`-only invocation is not sufficient, as this todo's own

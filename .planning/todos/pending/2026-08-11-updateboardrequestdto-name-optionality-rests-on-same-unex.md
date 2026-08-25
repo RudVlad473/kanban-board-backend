@@ -4,7 +4,12 @@ title: UpdateBoardRequestDTO.name's optionality rests on the same unexamined ass
 area: backend
 severity: minor
 files:
+
   - src/main/java/com/vrudenko/kanban_board/dto/board_dto/UpdateBoardRequestDTO.java
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem
@@ -28,6 +33,7 @@ Decide, with the same rigor D-02 applied to the column DTO: either
 
 1. Find or write a test proving a genuine version-only board update use case exists (a UI flow, a
    documented client behavior), which would justify keeping `name` optional as-is; or
+
 2. Conclude no such use case exists and make `UpdateBoardRequestDTO.name` mandatory (`@NotBlank`,
    dropping `@OptionalNotBlank`), matching `UpdateColumnRequestDTO`'s now-documented shape, with a
    comparable class-level Javadoc explaining the choice.

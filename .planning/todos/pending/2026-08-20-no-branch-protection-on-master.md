@@ -4,7 +4,12 @@ title: "No branch protection on master"
 area: ci
 severity: moderate
 files:
+
   - .github/workflows/deploy.yml
+
+audit_acknowledged:
+  milestone: v1.3
+  at: 2026-08-25
 ---
 
 ## Problem
