@@ -419,6 +419,47 @@ Use these entry points:
 Do not make direct repo edits outside a GSD workflow unless the user explicitly asks to bypass it.
 <!-- GSD:workflow-end -->
 
+## Local Development Server
+
+For inspecting live/generated output — the OpenAPI document, an actual HTTP response shape,
+anything you'd otherwise print-and-eyeball from a throwaway test — bring up the local dev stack
+and `curl` it directly instead of writing a throwaway JUnit probe class. A probe class pays the
+full pipeline cost (compile the whole test tree, `spotlessCheck`, boot Spring, coverage
+verification) every iteration; a live server pays a one-time ~20-25s startup and then answers any
+number of `curl` questions in the sub-second range. See `docs/SESSION_LESSONS.md` lesson 7 for
+the incident that motivated this. Reserve an actual test class for an assertion meant to live on
+as permanent regression coverage, not for one-off manual inspection.
+
+```bash
+# 1. Bring up local Postgres + Redpanda (schema registry included) — no .env file needed,
+#    these are throwaway local-only credentials, any values work as long as they're consistent
+#    with the bootRun env below:
+export DB_NAME=kanban_board DB_USER=kanban DB_PASS=localdev
+docker compose up -d postgres redpanda
+
+# 2. Wait for Redpanda's healthcheck (up to ~55s worst case per its own compose comment):
+until docker compose ps redpanda --format '{{.Health}}' | grep -q healthy; do sleep 3; done
+
+# 3. Run the app on the host (NOT the compose `app` service — that builds a Docker image on
+#    every change, far slower than bootRun against the host JVM). DB_HOST/DB_PORT point at the
+#    container's HOST-published port; Postgres is on 5433, not 5432 (see docker-compose.yml's
+#    own comment — avoids clashing with a pre-existing native Postgres on some machines).
+#    KAFKA_BOOTSTRAP_SERVERS/SCHEMA_REGISTRY_URL need no explicit value — application.properties'
+#    localhost:9092 / localhost:8081 defaults already match the compose-published ports.
+export DB_HOST=localhost DB_PORT=5433 DB_NAME=kanban_board DB_USER=kanban DB_PASS=localdev
+export SPRING_JPA_HIBERNATE_DDL_AUTO=validate
+sh ./gradlew bootRun &   # backgrounds it; ~20-25s to "Started KanbanBoardApplication"
+
+# 4. Curl it. NOTE the path: server.servlet.context-path=/api + springdoc.api-docs.path=/docs
+#    means the live endpoint is /api/docs, NOT the springdoc default /v3/api-docs — and every
+#    path inside the returned document is relative to the context-path (shown as "/boards", not
+#    "/api/boards"), even though the real HTTP request needs the /api prefix.
+curl -s http://localhost:8080/api/docs | python3 -m json.tool
+
+# 5. Tear down when done:
+docker compose down   # stop bootRun's process separately (it's not part of the compose stack)
+```
+
 ## GSD Execution Directives
 
 - Source `.dev/gsd-run.sh` instead of re-pasting the runtime resolver in bash blocks: `. ./.dev/gsd-run.sh && gsd_run query ...`.

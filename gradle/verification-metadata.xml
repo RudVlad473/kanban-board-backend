@@ -3,6 +3,10 @@
    <configuration>
       <verify-metadata>true</verify-metadata>
       <verify-signatures>false</verify-signatures>
+      <trusted-artifacts>
+         <trust file=".*-sources[.]jar" regex="true" reason="IDE/LSP tooling (jdtls Buildship import) resolves sources jars for every dependency for go-to-definition; never placed on the compile/runtime classpath or executed, so trusting them does not weaken the classpath integrity guarantee above."/>
+         <trust file=".*-javadoc[.]jar" regex="true" reason="Same as the sources-jar entry above -- IDE-only convenience artifact, never executed."/>
+      </trusted-artifacts>
    </configuration>
    <components>
       <component group="at.yawk.lz4" name="lz4-java" version="1.10.1">
