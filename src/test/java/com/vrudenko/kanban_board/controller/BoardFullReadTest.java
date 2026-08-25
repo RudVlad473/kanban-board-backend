@@ -127,6 +127,27 @@ public class BoardFullReadTest extends AbstractAppMockMvcTest {
         }
 
         @Test
+        void shouldReturnBoardsOwnCreatedAt_matchingFlatEndpoint() throws Exception {
+            // arrange
+            Cookie cookie = signinCookie();
+
+            // act
+            var response =
+                    mockMvc.perform(get(getFullBoardUrl(mockPopulatedBoard.getId())).cookie(cookie))
+                            .andReturn();
+
+            // assert
+            Assertions.assertThat(response.getResponse().getStatus())
+                    .isEqualTo(HttpStatus.OK.value());
+            var body =
+                    objectMapper.readValue(
+                            response.getResponse().getContentAsString(),
+                            BoardFullResponseDTO.class);
+            Assertions.assertThat(body.getCreatedAt()).isNotNull();
+            Assertions.assertThat(body.getCreatedAt()).isEqualTo(mockPopulatedBoard.getCreatedAt());
+        }
+
+        @Test
         void shouldReturnEmptyColumnsArray_whenBoardHasNoColumns() throws Exception {
             // arrange
             Cookie cookie = signinCookie();
