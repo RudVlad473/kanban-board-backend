@@ -109,6 +109,41 @@
 
 ---
 
+## Milestone: v1.3 — Nonprod Environment & CI Hardening
+
+**Shipped:** 2026-08-25
+**Phases:** 3 (8, 9, 10) | **Plans:** 13 | **Sessions:** ~7 days (2026-08-18 → 2026-08-25), 141 commits
+
+### What Was Built
+- A second, isolated Compose stack (app + Redpanda broker) colocated on the existing Netcup VPS, its own Neon branch, its own HTTPS hostname, and a live-measured (not assumed) memory floor found by descending a restart ladder past three crash-looping rungs
+- Nonprod continuous deploy on every master push: scoped `production`/`staging` GitHub Environments, per-environment Docker Hub repositories with independent retention sweeps, a bounded health-check gate, and automated Avro schema registration against both registries
+- CI/deploy hardening closing eight accumulated todos: Dependabot `github-actions` ecosystem, digest-pinned TruffleHog alongside gitleaks, digest-pinned `appleboy/*` actions with a scoped risk-acceptance comment for first-party actions, Gradle cache + wrapper-validation + full dependency-verification metadata, `Secure` session cookie, and a README rebuilt into a 12-section architecture showcase
+
+### What Worked
+- Live-infrastructure verification kept finding real bugs mocked tests structurally can't, again: an SSH host-key fingerprint mismatch traced to a Go SSH client's default algorithm ordering (not a wrong key), nonprod silently pulling production's Docker Hub image, `appleboy/ssh-action` having no fail-fast of its own (`set -e` missing), and an `NVD_API_KEY` secret that resolved to a byte-for-byte-empty string
+- Checkpoint decisions were consistently surfaced to the human operator rather than left to an executor's provisional default — the 09-01 VM-identity/secret-scoping option, and Phase 10's Dependabot-cost softening decision, were both explicit choices with recorded rationale, not auto-approved
+- **The v1.1/v1.2 "verification completeness" gap did NOT recur this milestone** — all three phases shipped with a real, passing `VERIFICATION.md` at the time of their own close, unlike 07.1 and Plan 05-06 in v1.2
+
+### What Was Inefficient
+- A **new** drift class appeared that the old lesson doesn't cover: even with every individual phase correctly verified, the milestone-level rollup (`STATE.md`'s Current Position, `ROADMAP.md`'s Progress table) went stale after Phase 10 closed (2026-08-19) and was never caught until a `/gsd-resume-work` session six days later noticed the disagreement between `ROADMAP.md`'s own per-phase table and its milestone-summary row. Phase-level correctness does not imply milestone-summary correctness.
+- A spike's own closing claim was wrong and went unverified for a week: spike 001's README stated `BoardController.java` was "reverted to its committed state" and the throwaway probe test "deleted" — neither had actually happened. The uncommitted diff and the leftover test file sat in the working tree until the same resume-work session caught it via `git status`, not via re-reading the spike's own account of itself.
+
+### Patterns Established
+- The pre-close artifact audit + acknowledge flow (`audit-open` / `audit-open acknowledge`) was exercised at real scale for the first time (50 items: 5 quick tasks, 45 pending todos) rather than a blanket override — confirms the acknowledge-and-disclose path scales past a handful of items without needing a shortcut.
+- A lightweight spike workflow (`.planning/spikes/`, with a `CONVENTIONS.md` now codifying the pattern) was used for exploratory OpenAPI-documentation investigation that intentionally never touches the shipped deliverable — useful, but its own "reverted/deleted" claims need the same "verify before claiming" discipline as any other completion claim (see What Was Inefficient).
+
+### Key Lessons
+1. **A milestone's own summary artifacts (STATE.md's Current Position, ROADMAP.md's Progress rollup) can drift stale independently of phase-level correctness, and nothing currently re-checks them between a phase's own close and the next explicit `/gsd-complete-milestone` or `/gsd-resume-work` invocation.** Every phase here had a real, passing VERIFICATION.md — the gap was purely in the higher-level bookkeeping that summarizes them. Worth a lightweight post-phase-close sanity check, not just a milestone-close one.
+2. **A completion claim inside a planning artifact (a spike's "reverted and deleted," a plan's "done") is not verified fact until re-checked against the actual working tree** — the same "verify before claiming" discipline that applies to code and tests applies equally to the prose that describes what happened to that code.
+3. **Live-infrastructure verification's bug-finding hit rate held at the same density as v1.1/v1.2, across yet another different layer** (SSH client library defaults, Docker Hub image identity, GitHub Action fail-fast semantics, secret byte-length) — this is now a consistent, load-bearing pattern across every milestone tried, not a one-off.
+
+### Cost Observations
+- Sessions: ~7 days, the fastest milestone yet by wall-clock (v1.0: unspecified single session; v1.1/v1.2: multi-week)
+- Config `mode: yolo` throughout — scope/stats/archival gates auto-approved rather than confirmed interactively
+- Notable: milestone-close itself required real reconciliation work beyond the phases' own execution (stale STATE.md/ROADMAP.md rollup fixed, uncommitted spike leftovers cleaned up, 50-item audit acknowledged) — a smaller but structurally similar cost to v1.2's two extra `gsd-verifier` dispatches at its own close
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -118,6 +153,7 @@
 | v1.0 | 1 | 1 | First milestone — established the tracer-then-reuse plan-sequencing pattern for symmetric entity work (Task then Column) |
 | v1.1 | several | 2 | Extended tracer-first sequencing to producer/consumer Kafka slices; surfaced a real process gap (a phase can finish execution with zero verification) that the pre-milestone-close audit is now the catch for |
 | v1.2 | many (~2 weeks) | 7 | Largest milestone by phase/plan count so far; the v1.1 verification-completeness gap recurred twice (Phase 07.1's missing VERIFICATION.md, Plan 05-06's stale-but-resolved checkpoint) — caught both at milestone-close via `init.manager`/`audit-open` readiness tooling rather than by trusting phase narratives |
+| v1.3 | ~7 days (fastest yet) | 3 | Verification-completeness gap did NOT recur (all 3 phases had real, passing VERIFICATION.md at close) — but a new drift class appeared instead: phase-level artifacts were correct while the milestone-level STATE.md/ROADMAP.md rollup went stale for 6 days, undetected until the next `/gsd-resume-work` |
 
 ### Cumulative Quality
 
@@ -126,9 +162,11 @@
 | v1.0 | 118+ (full suite) | Not tracked | 0 |
 | v1.1 | 178 (full suite, E2E included) | Not tracked | 0 (spring-kafka/Testcontainers-Kafka were already anticipated by the epic spec) |
 | v1.2 | 278 at Phase 7 close, growing further through 07.1 (118 tests independently re-run live across 6 classes at milestone-close verification, 0 failures); JaCoCo ratchet gate added (INSTRUCTION/LINE≥0.90, BRANCH≥0.75) | Ratcheted via JaCoCo (see above) | Flyway, Testcontainers PostgreSQL, gradle-avro-plugin/Avro, OWASP dependency-check, gitleaks — all directly load-bearing for this milestone's own goals (schema governance, prod-parity testing, deploy security), not incidental |
+| v1.3 | Suite continued to grow (new `SessionCookieAttributesE2ETest`, security-response test additions); no full-suite regression reported at any phase close | Not separately re-measured this milestone | TruffleHog (digest-pinned CI image), `gradle/actions/wrapper-validation` — both CI/supply-chain tooling, not application dependencies |
 
 ### Top Lessons (Verified Across Milestones)
 
 1. Tracer-first plan sequencing (prove the pattern once end-to-end, then mechanically reuse for symmetric entities) reduces deviations in follow-on plans — v1.0 Plan 01 had 4 auto-fixed deviations, Plan 02 had 0.
-2. Execution completeness (`has_summary: true`) and verification completeness (`VERIFICATION.md` exists, passed, and still matches reality) are different facts, and naming this as a lesson doesn't prevent recurrence — v1.1 Phase 2 had the gap once; v1.2 reproduced it twice on two different phases despite the standing lesson. Only a structural check run at milestone-close (not phase-close alone) has reliably caught it so far.
-3. Live-infrastructure verification (a real broker, a real running stack, a real CI job log) finds a class of bug — bean-resolution ambiguity, conditional-bean suppression, auth-header/pagination mismatches on a real third-party API — that mocked tests and code review both structurally miss, regardless of how carefully either is done. This held at every scale tried so far: a single Kafka bean (v1.1), a whole production deploy pipeline (v1.2).
+2. Execution completeness (`has_summary: true`) and verification completeness (`VERIFICATION.md` exists, passed, and still matches reality) are different facts, and naming this as a lesson doesn't prevent recurrence — v1.1 Phase 2 had the gap once; v1.2 reproduced it twice on two different phases despite the standing lesson. v1.3 finally broke the pattern (zero recurrence) — but see lesson 4 below for the gap that replaced it.
+3. Live-infrastructure verification (a real broker, a real running stack, a real CI job log) finds a class of bug — bean-resolution ambiguity, conditional-bean suppression, auth-header/pagination mismatches on a real third-party API, SSH client library defaults, secret byte-length — that mocked tests and code review both structurally miss, regardless of how carefully either is done. This held at every scale and every milestone tried so far: a single Kafka bean (v1.1), a whole production deploy pipeline (v1.2), a nonprod CI/CD pipeline (v1.3).
+4. **Phase-level correctness does not imply milestone-level summary correctness.** v1.3 was the first milestone where every individual phase had a real, passing verification artifact, yet the milestone's own rollup documents (STATE.md's Current Position, ROADMAP.md's Progress table) still went stale for days, undetected until the next session explicitly re-derived status from `init.manager`/`ROADMAP.md`'s own per-phase table rather than trusting the summary prose above it.
