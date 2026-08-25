@@ -1,5 +1,6 @@
 package com.vrudenko.kanban_board.dto.board_dto;
 
+import java.time.Instant;
 import java.util.List;
 
 import com.vrudenko.kanban_board.base.entity.BaseBoard;
@@ -29,6 +30,11 @@ public class BoardFullResponseDTO implements BaseId, BaseBoard {
     // document already carries -- so a client reading the nested document has everything it needs
     // to issue a subsequent PUT /boards/{boardId} without a separate flat GET first.
     private Long version;
+
+    // Quick task 260825-h7m: carried here too, not just the flat BoardResponseDTO, so a client
+    // reading this document does not need a second flat GET /boards purely to learn when the
+    // board was created.
+    private Instant createdAt;
 
     private List<ColumnFullResponseDTO> columns;
 }

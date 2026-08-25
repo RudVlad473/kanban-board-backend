@@ -6,6 +6,7 @@ import java.util.UUID;
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.board_dto.BoardFullResponseDTO;
+import com.vrudenko.kanban_board.dto.board_dto.BoardResponseDTO;
 import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.column_dto.ColumnResponseDTO;
 import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
@@ -124,6 +125,27 @@ public class BoardFullReadTest extends AbstractAppMockMvcTest {
             Assertions.assertThat(subtask.getId()).isNotBlank();
             Assertions.assertThat(subtask.getTitle()).isNotBlank();
             Assertions.assertThat(subtask.getVersion()).isNotNull();
+        }
+
+        @Test
+        void shouldReturnBoardsOwnCreatedAt_matchingFlatEndpoint() throws Exception {
+            // arrange
+            Cookie cookie = signinCookie();
+
+            // act
+            var response =
+                    mockMvc.perform(get(getFullBoardUrl(mockPopulatedBoard.getId())).cookie(cookie))
+                            .andReturn();
+
+            // assert
+            Assertions.assertThat(response.getResponse().getStatus())
+                    .isEqualTo(HttpStatus.OK.value());
+            var body =
+                    objectMapper.readValue(
+                            response.getResponse().getContentAsString(),
+                            BoardFullResponseDTO.class);
+            Assertions.assertThat(body.getCreatedAt()).isNotNull();
+            Assertions.assertThat(body.getCreatedAt()).isEqualTo(mockPopulatedBoard.getCreatedAt());
         }
 
         @Test
@@ -256,6 +278,9 @@ public class BoardFullReadTest extends AbstractAppMockMvcTest {
 
     // Confirms the nested read is a genuine replacement for the four-round-trip fan-out, not a
     // lossy summary of it, and that the four flat endpoints are untouched by this plan.
+    // Quick task 260825-h7m: also asserts equivalence at the board level itself (name, version,
+    // createdAt), not only from the columns down -- the board level was the untested gap through
+    // which createdAt reached production missing from this document.
     @Nested
     class FlatEquivalence {
         @Test
@@ -281,6 +306,24 @@ public class BoardFullReadTest extends AbstractAppMockMvcTest {
                     objectMapper.readValue(
                             flatColumnsResponse.getResponse().getContentAsString(),
                             ColumnResponseDTO[].class);
+
+            var flatBoardsResponse =
+                    mockMvc.perform(get(ApiPaths.BOARDS).cookie(cookie)).andReturn();
+            var flatBoards =
+                    objectMapper.readValue(
+                            flatBoardsResponse.getResponse().getContentAsString(),
+                            BoardResponseDTO[].class);
+
+            // assert -- the board's own fields (name, version, createdAt) are present and equal
+            // on the nested document, not only its columns/tasks/subtasks
+            var flatBoard =
+                    Arrays.stream(flatBoards)
+                            .filter(b -> b.getId().equals(mockPopulatedBoard.getId()))
+                            .findFirst()
+                            .orElseThrow();
+            Assertions.assertThat(nestedBody.getName()).isEqualTo(flatBoard.getName());
+            Assertions.assertThat(nestedBody.getVersion()).isEqualTo(flatBoard.getVersion());
+            Assertions.assertThat(nestedBody.getCreatedAt()).isEqualTo(flatBoard.getCreatedAt());
 
             // assert -- every column field the flat DTO carries (id, name, version) is present
             // and equal on the corresponding nested object

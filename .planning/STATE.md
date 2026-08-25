@@ -1,19 +1,13 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.3
-milestone_name: Nonprod Environment & CI Hardening
 status: Awaiting next milestone
-stopped_at: Phase 10 context gathered
-last_updated: "2026-08-25T10:03:51.595Z"
+stopped_at: Completed 260825-h7m-PLAN.md
+last_updated: "2026-08-25T11:06:37.710Z"
 last_activity: 2026-08-25
 last_activity_desc: Milestone v1.3 completed and archived
-state_head: 23e1f9e24c3e384859e562e14fa0c51b6bb63940
-progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 13
-  completed_plans: 13
-  percent: 100
+state_head: 1dd30ea0d2d7f28ab3d1bf359282bd28b7294f08
+milestone_name: Nonprod Environment & CI Hardening
 current_phase: null
 current_phase_name: null
 ---
@@ -48,6 +42,8 @@ Decisions are logged in PROJECT.md's Key Decisions table and `.planning/RETROSPE
 
 No active-milestone decisions pending — next milestone not yet scoped.
 
+- [Phase null]: 260825-h7m: MapStruct name-based auto-mapping was sufficient to carry createdAt onto BoardFullResponseDTO with no explicit @Mapping needed
+
 ### Pending Todos
 
 ~45 pending todos remain in `.planning/todos/pending/` (security/CI/minor backlog, all explicitly
@@ -72,6 +68,7 @@ confusion risk, `NVD_API_KEY` resolution failure) were resolved during Phases 8�
 | 260820-giz | Audit penetration-testing/security coverage against OWASP API Security Top 10 (2023) — cited verdict for all 10 categories, 4 new gap todos filed (IDOR chain consistency, signin rate-limiting, security response headers, CSRF cross-origin test), originating todo closed with Resolution | 2026-08-20 | 6a77e54 | [260820-giz-audit-penetration-testing-and-security-c](./quick/260820-giz-audit-penetration-testing-and-security-c/) |
 | 260820-iwo | File 19 new pending todos + enrich 6 already-filed todos from the ASVS 4.0.3 Level 2 audit (33-agent workflow, 253 requirements traced) — 12 moderate + 7 minor new todos filed, STATE.md Pending Todos refreshed (~26 → ~45 items) | 2026-08-20 | cdaf0b9 | [260820-iwo-file-19-new-pending-todos-and-enrich-6-a](./quick/260820-iwo-file-19-new-pending-todos-and-enrich-6-a/) |
 | 260825-dfd | Add a createdAt timestamp to BoardEntity and expose it on BoardResponseDTO, populated once in BoardService.save() and shared with BoardCreatedEvent's timestamp | 2026-08-25 | 6aadda1 | [260825-dfd-add-a-createdat-timestamp-to-boardentity](./quick/260825-dfd-add-a-createdat-timestamp-to-boardentity/) |
+| 260825-h7m | Add createdAt to BoardFullResponseDTO, carried through the nested GET /boards/{boardId}/full read via MapStruct name-based auto-mapping; extended the flat-equivalence test to cover board-level fields (name/version/createdAt), closing the untested gap that let createdAt reach production missing from the nested document | 2026-08-25 | 1dd30ea | [260825-h7m-add-createdat-to-boardfullresponsedto-ge](./quick/260825-h7m-add-createdat-to-boardfullresponsedto-ge/) |
 
 ## Deferred Items
 
@@ -105,9 +102,9 @@ The 45 pending todos are individually listed and categorized in this document's 
 
 ## Session Continuity
 
-Last session: 2026-08-25T10:08:00.000Z
-Stopped at: v1.3 milestone closed and archived; no active phase or plan
-Resume file: none — next step is `/gsd-new-milestone`
+Last session: 2026-08-25T11:06:12.459Z
+Stopped at: Completed 260825-h7m-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
