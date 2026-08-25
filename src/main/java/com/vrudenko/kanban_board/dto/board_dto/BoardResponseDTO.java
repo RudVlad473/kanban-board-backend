@@ -1,5 +1,7 @@
 package com.vrudenko.kanban_board.dto.board_dto;
 
+import java.time.Instant;
+
 import com.vrudenko.kanban_board.base.entity.BaseBoard;
 import com.vrudenko.kanban_board.base.entity.BaseId;
 
@@ -21,4 +23,6 @@ public class BoardResponseDTO implements BaseId, BaseBoard {
     // extra /full fetch purely to re-read a number the prior response already knew -- the same
     // precedent ColumnResponseDTO already sets. See 07.1-05-PLAN.md's task 1 checkpoint.
     private Long version;
+
+    private Instant createdAt;
 }

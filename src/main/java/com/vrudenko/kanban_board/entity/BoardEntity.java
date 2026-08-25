@@ -1,5 +1,6 @@
 package com.vrudenko.kanban_board.entity;
 
+import java.time.Instant;
 import java.util.Set;
 
 import com.vrudenko.kanban_board.base.entity.BaseBoard;
@@ -63,4 +64,12 @@ public class BoardEntity extends BaseEntity implements BaseBoard {
     @Version
     @Column(nullable = false)
     private Long version;
+
+    // Not @EqualsAndHashCode.Exclude, unlike `version` above: that field mutates on every update,
+    // so a mutable field driving hashCode would strand an object already stored in a hash-based
+    // collection once the field changed. This field is written once in BoardService.save() before
+    // the entity is ever persisted and never mutated afterward, so that hazard does not apply --
+    // deliberately included in equals/hashCode alongside `name` and `user`.
+    @Column(nullable = false)
+    private Instant createdAt;
 }

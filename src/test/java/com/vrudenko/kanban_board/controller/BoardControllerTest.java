@@ -6,6 +6,7 @@ import java.util.UUID;
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.board_dto.BoardResponseDTO;
+import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.board_dto.UpdateBoardRequestDTO;
 import com.vrudenko.kanban_board.dto.column_dto.ColumnResponseDTO;
 import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
@@ -43,6 +44,56 @@ public class BoardControllerTest extends AbstractAppTest {
     @Autowired private ObjectMapper objectMapper;
 
     @Autowired private ColumnService columnService;
+
+    @Nested
+    class Save {
+        @Test
+        void testWithAuthenticatedUser_shouldReturnStableCreatedAt_whenBoardIsCreated()
+                throws Exception {
+            // arrange
+            var userId = getOwningUser().getId();
+            var saveDTO =
+                    SaveBoardRequestDTO.builder()
+                            .name(
+                                    dataFactory.getRandomWord(
+                                            ValidationConstants.MIN_BOARD_NAME_LENGTH + 3))
+                            .build();
+
+            // act
+            var postResponse =
+                    mockMvc.perform(
+                                    post(getBoardPrefix())
+                                            .with(user(userId))
+                                            .contentType(APPLICATION_JSON)
+                                            .content(objectMapper.writeValueAsString(saveDTO)))
+                            .andDo(MockMvcResultHandlers.print())
+                            .andExpect(status().isCreated())
+                            .andReturn();
+            var postBody =
+                    objectMapper.readValue(
+                            postResponse.getResponse().getContentAsString(),
+                            BoardResponseDTO.class);
+
+            var getResponse =
+                    mockMvc.perform(get(getBoardPrefix()).with(user(userId)))
+                            .andDo(MockMvcResultHandlers.print())
+                            .andExpect(status().isOk())
+                            .andReturn();
+            var getBody =
+                    objectMapper.readValue(
+                            getResponse.getResponse().getContentAsString(),
+                            BoardResponseDTO[].class);
+
+            // assert
+            Assertions.assertThat(postBody.getCreatedAt()).isNotNull();
+            var reloaded =
+                    List.of(getBody).stream()
+                            .filter(board -> board.getId().equals(postBody.getId()))
+                            .findFirst()
+                            .orElseThrow();
+            Assertions.assertThat(reloaded.getCreatedAt()).isEqualTo(postBody.getCreatedAt());
+        }
+    }
 
     @Nested
     class FindAllByUserId {

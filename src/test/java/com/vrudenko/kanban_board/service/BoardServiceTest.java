@@ -329,6 +329,79 @@ public class BoardServiceTest extends AbstractAppTest {
         }
     }
 
+    // createdAt (D-13/A1 follow-on: 260825-dfd) -- population, reload stability and
+    // rename-immutability, at the service tier independently of BoardControllerTest's HTTP-boundary
+    // equivalent.
+    @Nested
+    class CreatedAtTest {
+        @Test
+        void shouldPopulateCreatedAt_whenBoardIsSaved() {
+            // arrange
+            var userId = getOwningUser().getId();
+            var boardName =
+                    RandomStringUtils.randomAlphabetic(
+                            ValidationConstants.MAX_BOARD_NAME_LENGTH
+                                    - ValidationConstants.MIN_BOARD_NAME_LENGTH);
+
+            // act
+            var savedBoard =
+                    userService.addBoardByUserId(
+                            userId, SaveBoardRequestDTO.builder().name(boardName).build());
+
+            // assert
+            Assertions.assertThat(savedBoard.getCreatedAt()).isNotNull();
+        }
+
+        @Test
+        void shouldReturnSameCreatedAt_whenBoardIsReloaded() {
+            // arrange
+            var userId = getOwningUser().getId();
+            var boardName =
+                    RandomStringUtils.randomAlphabetic(
+                            ValidationConstants.MAX_BOARD_NAME_LENGTH
+                                    - ValidationConstants.MIN_BOARD_NAME_LENGTH);
+            var savedBoard =
+                    userService.addBoardByUserId(
+                            userId, SaveBoardRequestDTO.builder().name(boardName).build());
+
+            // act
+            var reloadedBoard =
+                    boardService.findAllByUserId(userId).stream()
+                            .filter(board -> board.getId().equals(savedBoard.getId()))
+                            .findFirst()
+                            .orElseThrow();
+
+            // assert
+            Assertions.assertThat(reloadedBoard.getCreatedAt())
+                    .isEqualTo(savedBoard.getCreatedAt());
+        }
+
+        @Test
+        void shouldNotChangeCreatedAt_whenBoardIsRenamed() {
+            // arrange
+            var userId = getOwningUser().getId();
+            var board = mockEmptyBoards.getFirst();
+            var newBoardName =
+                    RandomStringUtils.randomAlphabetic(
+                            ValidationConstants.MAX_BOARD_NAME_LENGTH
+                                    - ValidationConstants.MIN_BOARD_NAME_LENGTH);
+
+            // act
+            var renamedBoard =
+                    boardService.updateById(
+                            userId,
+                            board.getId(),
+                            boardMapper.toUpdateBoardRequestDTO(
+                                    BoardEntity.builder()
+                                            .name(newBoardName)
+                                            .version(board.getVersion())
+                                            .build()));
+
+            // assert
+            Assertions.assertThat(renamedBoard.getCreatedAt()).isEqualTo(board.getCreatedAt());
+        }
+    }
+
     // findFullById -- GAP-04's nested read must cost a statement count invariant to graph size,
     // never 1+1+N+M. See docs/CODE_STYLE.md rule 4 for why countQueries()
     // (getPrepareStatementCount)

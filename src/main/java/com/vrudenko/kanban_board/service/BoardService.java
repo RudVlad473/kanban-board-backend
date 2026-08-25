@@ -1,6 +1,7 @@
 package com.vrudenko.kanban_board.service;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 import com.vrudenko.kanban_board.config.EventIdGenerator;
@@ -191,11 +192,18 @@ public class BoardService {
         var board = boardMapper.fromSaveBoardRequestDTO(dto);
         board.setUser(user);
 
+        // Truncated to microseconds because the `created_at` column is timestamp(6) -- PostgreSQL
+        // drops anything finer -- and this same in-memory Instant both seeds the response DTO
+        // below and re-emerges verbatim on every later database read; without truncation those two
+        // paths could return different values for the same board.
+        var createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        board.setCreatedAt(createdAt);
+
         boardRepository.save(board);
 
         eventPublisher.publishEvent(
                 new BoardCreatedEvent(
-                        eventIdGenerator.generate(), user.getId(), board.getId(), Instant.now()));
+                        eventIdGenerator.generate(), user.getId(), board.getId(), createdAt));
 
         return boardMapper.toResponseDTO(board);
     }
