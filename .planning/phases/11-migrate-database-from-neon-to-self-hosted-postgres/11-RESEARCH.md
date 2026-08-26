@@ -603,7 +603,10 @@ approach: the checked-out migration directory must additionally be copied to the
 | A3 | Removing `prepareThreshold=0` (no pooler in front of Postgres) is safe and potentially beneficial for PgJDBC prepared-statement reuse. | State of the Art table | If some other component in this stack still expects `prepareThreshold=0`'s behavior (unverified), removing it could surface an unexpected `PSQLException` — should be smoke-tested against a real self-hosted instance before being treated as settled, not assumed safe purely from the PgBouncer-workaround reasoning. |
 | A4 | The recommended compose-file ownership (put the shared `postgres` service in `docker-compose.prod.yml`, not `docker-compose.nonprod.yml` or a new third file) is the right call. | Architecture Patterns, Pattern 1 | This specific placement was not one of CONTEXT.md's 13 locked decisions — it is this research's own recommendation, grounded in the existing `kanban-edge` precedent (production already "owns" cross-project shared infra). A planner or user could reasonably choose a dedicated third Compose file instead; worth a one-line confirmation at plan time rather than treated as pre-locked. |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+All three were open at research time and are now answered by the phase plans. Resolutions recorded
+inline below; the original reasoning is kept intact so the basis for each answer stays auditable.
 
 1. **Which Compose file should physically define the `postgres` service?**
    - What we know: D-01 requires one shared instance; the existing `kanban-edge` precedent shows
@@ -613,6 +616,9 @@ approach: the checked-out migration directory must additionally be copied to the
      infra" in one file.
    - Recommendation: Default to `docker-compose.prod.yml` (Assumption A4) unless the planner or user
      raises a preference for a dedicated file during plan review.
+   - **RESOLVED — plan 11-01:** the recommendation was taken. `docker-compose.prod.yml` defines the
+     `postgres` service, following the existing `kanban-edge`/Caddy precedent for cross-project
+     shared infra; no dedicated `docker-compose.db.yml` is introduced.
 
 2. **Literal SSH tunnel vs. one-off-container-over-SSH for D-13.**
    - What we know: Both are technically viable; the one-off-container approach has a directly-proven
@@ -623,6 +629,9 @@ approach: the checked-out migration directory must additionally be copied to the
    - Recommendation: Treat the one-off-container approach as the default recommendation (Pitfall 4)
      but flag this choice explicitly for confirmation during planning rather than silently deciding
      it, since CONTEXT.md's own D-13 wording is genuinely ambiguous on this specific mechanism.
+   - **RESOLVED — plan 11-05, Task 1:** not decided by the planner. The ambiguity was escalated
+     exactly as recommended, as a `checkpoint:decision` gate that puts the tunnel-vs-one-off-container
+     choice to the operator before the CI job is rewritten.
 
 3. **Exact `mem_limit`/`postgresql.conf` values for the new `postgres` service.**
    - What we know: D-08 requires a live restart-ladder measurement (not arithmetic); D-11 requires a
@@ -634,6 +643,10 @@ approach: the checked-out migration directory must additionally be copied to the
      starting the ladder from a conservative initial guess (e.g. `256M`–`512M` internal Postgres
      `shared_buffers`-driven footprint is typically far smaller than Redpanda's Seastar-based
      footprint, so the ladder likely bottoms out lower, but this is not asserted as fact here).
+   - **RESOLVED — plan 11-03:** the recommendation was taken. That plan carries a live restart-ladder
+     measurement task against the running instance, reusing the "Nonprod resource measurement — Plan
+     08-03" methodology. The values stay deliberately unspecified here: they are an output of
+     executing 11-03, not an input to it.
 
 ## Environment Availability
 
