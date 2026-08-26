@@ -127,7 +127,53 @@ services:
     # unexamined. Full rung-by-rung ladder, the failing rung's verbatim OOM evidence, and the
     # independent re-verification: docs/INFRA_RUNBOOK.md, "Self-hosted Postgres resource
     # measurement -- Plan 11-03".
-    mem_limit: 64m
+    #
+    # CORRECTION (Plan 11-08, 2026-08-26) -- the pairing directly above (a 64m cap paired with
+    # shared_buffers=128MB, then in force) was internally inconsistent: the engine's own startup
+    # allocation was double the cgroup ceiling meant to bound it. This closes 11-REVIEW.md's
+    # CR-02 and 11-VERIFICATION.md's gap 1. The 11-03 ladder above could not have caught this --
+    # it fired a sequential burst against a ~55-row dataset, and Linux cgroup accounting only
+    # charges a page once something touches it, so a dataset that small touches only a few
+    # megabytes of the buffer pool regardless of shared_buffers' own declared size. Peak RSS
+    # sitting flat at ~29-30MiB from 512m down to 40m was evidence about the dataset, not about
+    # the cap.
+    #
+    # Why the ceiling had to move rather than only shared_buffers: at max_connections=25 and
+    # work_mem=4MB, max_connections x work_mem alone is 100MB -- no shared_buffers value, not
+    # even zero, makes a 64m ceiling consistent with this connection profile. The invariant now
+    # enforced (mechanically, by this plan's verify script, not merely asserted here): (1)
+    # shared_buffers is at most a quarter of mem_limit -- 64MB <= 256MB/4 = 64MB; (2)
+    # shared_buffers + max_connections * work_mem fits within 85% of mem_limit -- 64MB + 25*4MB =
+    # 164MB <= 0.85*256MB = 217.6MB (64.1% of the cap). Both hold for the adopted pair below, and
+    # both fail on the pre-fix pair, which is what makes the check a real gate rather than a
+    # restated comment.
+    #
+    # Concurrent re-validation (full evidence: docs/INFRA_RUNBOOK.md, "Postgres memory profile
+    # correction -- Plan 11-08"): the combined worst-case sub-run reached 24 concurrent backends
+    # (21 non-idle) against a scratch pgbench dataset sized at ~127MB (scale factor 8, chosen to
+    # comfortably exceed shared_buffers=64MB so the buffer pool was genuinely exercised, not
+    # merely allocated). Sampled `docker stats` peak was 230.9MiB (90.2% of the 256m cap); the
+    # cgroup memory.peak counter also read ~100% of the cap at every tested size (256m and 384m
+    # alike) -- this is normal page-cache saturation under sustained I/O, not imminent OOM risk,
+    # confirmed by the memory.stat breakdown: reclaimable file-backed cache dominated the total
+    # (208-349MB across runs) while the genuinely irreclaimable anon+shmem -- the only memory that
+    # can actually force an OOM-kill -- held essentially constant at ~84MB regardless of cap or
+    # dataset size. Read against anon+shmem, the adopted 256m cap carries 84MB of irreclaimable
+    # demand, 32.8% of the cap, comfortably under this plan's 60% gate; the raw cgroup total is
+    # not the number to trust for that gate under a benchmark that deliberately drives sustained
+    # I/O. Counter-evidence: the unfixed 64m/shared_buffers=128MB pairing was reproduced live
+    # under the same combined workload (during initial scratch-database setup, before the
+    # choreographed sub-runs even began) and the kernel OOM-killer killed the postgres process
+    # (`dmesg -T`: "Memory cgroup out of memory: Killed process ... (postgres) ...
+    # constraint=CONSTRAINT_MEMCG") -- proving CR-02 was a live defect, not a theoretical one.
+    # Postgres's own crash recovery absorbed it (RestartCount stayed 0 -- a killed backend, not
+    # the container's PID 1); both public health endpoints and both databases' 8/8 Flyway rows
+    # were unaffected throughout.
+    #
+    # The profile stays conservative in D-11's sense: shared_buffers went DOWN (128MB -> 64MB,
+    # now half the engine's own stock 128MB default), and work_mem/max_connections are untouched
+    # by design -- not raised, not re-examined away.
+    mem_limit: 256m
     environment:
       POSTGRES_USER: ${POSTGRES_SUPERUSER}
       POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASS}
@@ -152,10 +198,16 @@ services:
     # a JVM app and a Kafka broker; total real demand is two HikariCP pools at
     # maximum-pool-size=5 (10) plus one CI Flyway one-off plus an occasional admin psql --
     # comfortable headroom under 25, stated explicitly rather than left as an invisible default.
+    #
+    # CORRECTED (Plan 11-08, 2026-08-26): shared_buffers halved from 128MB to 64MB -- half the
+    # engine's own stock default, strictly more conservative than before -- so that it is at most
+    # a quarter of the mem_limit above and, together with max_connections x work_mem, fits within
+    # 85% of that cap (the invariant stated and enforced above mem_limit). work_mem and
+    # max_connections are unchanged by design; only shared_buffers moved, and it moved down.
     command:
       - postgres
       - -c
-      - shared_buffers=128MB
+      - shared_buffers=64MB
       - -c
       - work_mem=4MB
       - -c
