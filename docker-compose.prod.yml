@@ -4,20 +4,18 @@
 # full rationale. Netcup is x86_64/4 vCPU/8GB, not Oracle's ARM64/2 OCPU/12GB.
 #
 # This is a STANDALONE file, not an overlay on docker-compose.yml (local dev). The two files'
-# service sets genuinely differ: this file defines no `postgres` service (Neon is the production
-# database) and adds `caddy` (automatic public HTTPS). Compose overlays can add/modify services
-# but cannot remove one, and removing `postgres` here is mandatory -- see 05-02-PLAN.md's
-# trade-off matrix for the full reasoning.
+# service sets differ in shape (this file adds `caddy` for automatic public HTTPS), but as of
+# phase 11 (2026-08-26) they share the same database engine: this file now defines the `postgres`
+# service that Neon previously replaced -- one self-hosted postgres:16 container serving TWO
+# databases (production's own `kanban_prod` and, per D-01, nonprod's `kanban_nonprod` too) with
+# two least-privilege roles, reached by both this project's `app` and
+# docker-compose.nonprod.yml's `app-nonprod` across the shared external `kanban-db` network. See
+# 11-01-PLAN.md's design_alternatives for the full reasoning behind colocating both environments'
+# database on one shared instance rather than two separate containers.
 #
 # Deploy usage (manual, plan 05-04): `docker compose -f docker-compose.prod.yml --env-file
 # .env.prod up -d` from the VM, after copying this file, Caddyfile, and a real .env.prod (never
 # committed -- see .env.prod) onto the VM.
-#
-# Cross-plan integration note: DB_JDBC_PARAMS below is the production value for the JDBC URL
-# query-string placeholder plan 05-01 introduces in application.properties (local-safe default
-# there, non-empty override here). Reconciled at wave-1 merge time: this plan originally drafted
-# the name DB_URL_PARAMS, but 05-01 actually landed as DB_JDBC_PARAMS -- renamed here and in
-# .env.prod to match the variable application.properties actually reads.
 
 x-logging: &default-logging
   # Docker rotates rather than grows at these limits: total on-disk log bytes per container is
@@ -190,17 +188,24 @@ services:
     depends_on:
       redpanda:
         condition: service_healthy
+      # Added phase 11 (plan 11-01): not cosmetic. This app boots Flyway against the datasource
+      # during startup, so starting before the database accepts connections turns a cold VM boot
+      # into a restart loop rather than a clean start.
+      postgres:
+        condition: service_healthy
     environment:
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASS: ${DB_PASS}
-      # Production value for plan 05-01's JDBC URL query-string placeholder -- see the
-      # cross-plan integration note at the top of this file. Expected shape (no leading "?" --
-      # application.properties' URL template already supplies it):
-      # "sslmode=require&channel_binding=require&prepareThreshold=0".
-      DB_JDBC_PARAMS: ${DB_JDBC_PARAMS}
+      # Removed 2026-08-26 (phase 11, plan 11-01): the Neon-era JDBC query-string override is gone
+      # because the connection no longer crosses the public internet, no PgBouncer sits in front
+      # of the engine, and the self-hosted target has no TLS listener configured -- so the app now
+      # falls back to application.properties' own local-safe query-string default
+      # (prepareThreshold=0 alone). Falsifiable: if a TLS listener is ever configured on this
+      # container, this decision is what has to be revisited.
+      # planner-discipline-allow: DB_JDBC_PARAMS
       # Internal Docker network only -- no host port is published for either, matching the local
       # dev naming exactly (docker-compose.yml) so no application config diverges between
       # environments.

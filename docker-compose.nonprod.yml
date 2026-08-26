@@ -36,10 +36,16 @@ networks:
     # production's implicit default network reaches app <-> redpanda.
   kanban-edge:
     # Externally-created network shared with production's Caddy container (created once via
-    # `docker network create kanban-edge`). This is the ONLY thing the two stacks share -- neither
-    # redpanda-nonprod nor production's own app/redpanda services join it.
+    # `docker network create kanban-edge`).
     external: true
     name: kanban-edge
+  kanban-db:
+    # Added phase 11 (plan 11-01): the SECOND -- and only other -- thing the two Compose projects
+    # share (created once via `docker network create kanban-db`). Joined here only by app-nonprod,
+    # reaching docker-compose.prod.yml's shared `postgres` service by its Compose-registered
+    # service name; redpanda-nonprod deliberately does not join it.
+    external: true
+    name: kanban-db
 
 volumes:
   redpanda-nonprod-data:
@@ -132,6 +138,12 @@ services:
     depends_on:
       redpanda-nonprod:
         condition: service_healthy
+      # No `postgres: condition: service_healthy` entry here (phase 11, plan 11-01) -- the shared
+      # instance lives in the OTHER Compose project (docker-compose.prod.yml), and Compose
+      # `depends_on` cannot reference a service outside its own project. On a VM reboot,
+      # app-nonprod may therefore start before the database is accepting connections; `restart:
+      # unless-stopped` plus the app's own healthcheck retries are what converge it. Accepted
+      # consequence of D-01, not an oversight.
     networks:
       default:
       kanban-edge:
@@ -139,13 +151,22 @@ services:
         # container by the name its site block expects, regardless of container_name.
         aliases:
           - app-nonprod
+      kanban-db:
+        # Added phase 11 (plan 11-01) -- no `aliases:` entry needed: Compose registers each
+        # attached service's own name as a DNS alias on every network it joins, and app-nonprod
+        # needs to *resolve* `postgres`, not be resolved by it.
     environment:
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASS: ${DB_PASS}
-      DB_JDBC_PARAMS: ${DB_JDBC_PARAMS}
+      # Removed 2026-08-26 (phase 11, plan 11-01): the Neon-era JDBC query-string override is gone
+      # for the same reason as production's own copy (see docker-compose.prod.yml's `app` service
+      # comment) -- the connection no longer crosses the public internet, no PgBouncer sits in
+      # front of the engine, and the self-hosted target has no TLS listener configured, so the app
+      # falls back to application.properties' own local-safe default.
+      # planner-discipline-allow: DB_JDBC_PARAMS
       KAFKA_BOOTSTRAP_SERVERS: redpanda-nonprod:19092
       SCHEMA_REGISTRY_URL: http://redpanda-nonprod:8081
       # planner-discipline-allow: SPRING_PROFILES_ACTIVE
