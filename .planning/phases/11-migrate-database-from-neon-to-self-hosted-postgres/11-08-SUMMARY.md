@@ -223,3 +223,12 @@ subsequent phases; the next production deploy is what makes the corrected values
 ---
 *Phase: 11-migrate-database-from-neon-to-self-hosted-postgres*
 *Completed: 2026-08-26*
+
+## Self-Check: PASSED
+
+- FOUND: `docker-compose.prod.yml`
+- FOUND: `docs/INFRA_RUNBOOK.md`
+- FOUND: `.planning/phases/11-migrate-database-from-neon-to-self-hosted-postgres/11-08-SUMMARY.md`
+- FOUND commit `dd053df` (Task 2)
+- FOUND commit `8bf4f40` (Task 3)
+- FOUND commit `014cb3e` (SUMMARY, prior revision)
