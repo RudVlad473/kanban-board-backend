@@ -71,3 +71,19 @@ Full details: [milestones/v1.3-ROADMAP.md](milestones/v1.3-ROADMAP.md)
 | v1.3 Nonprod Environment & CI Hardening | 3 | 13/13 | Complete | 2026-08-25 |
 
 Next milestone not yet scoped — run `/gsd-new-milestone` to define it.
+
+### Phase 11: Migrate database from Neon to self-hosted Postgres
+
+**Goal:** Both production and nonprod run against a single self-hosted PostgreSQL 16 container on the existing Netcup VPS — two databases, two least-privilege roles that cannot reach each other's data, no host port published — with Neon decommissioned, the pool/JDBC tuning re-derived for a same-host engine, CI's pre-merge Flyway gate preserved over SSH, and the resulting loss of point-in-time recovery documented as an acknowledged gap.
+**Requirements**: D-01..D-13 (CONTEXT.md decisions — no REQUIREMENTS.md exists for this not-yet-scoped milestone)
+**Depends on:** Phase 10
+**Plans:** 6 plans
+
+Plans:
+
+- [ ] 11-01-PLAN.md — Postgres service, multi-DB/multi-role provisioning, shared `kanban-db` network, env-file contracts (wave 1)
+- [ ] 11-02-PLAN.md — Live cutover of both environments onto the self-hosted instance (wave 2)
+- [ ] 11-03-PLAN.md — Measured memory floors for the database and both app containers (wave 3)
+- [ ] 11-04-PLAN.md — HikariCP/JDBC re-tuning for a same-host engine (wave 3)
+- [ ] 11-05-PLAN.md — CI Flyway verification over SSH against the internal network (wave 4)
+- [ ] 11-06-PLAN.md — Neon decommission and backup-gap documentation (wave 5)
