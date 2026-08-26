@@ -18,6 +18,12 @@ cookie `Secure` flag, README architecture showcase) is closed. Full milestone de
 [`milestones/v1.3-ROADMAP.md`](milestones/v1.3-ROADMAP.md) and
 [`milestones/v1.3-REQUIREMENTS.md`](milestones/v1.3-REQUIREMENTS.md).
 
+Phase 11 (Migrate database from Neon to self-hosted Postgres), run standalone after v1.3 closed
+and not yet folded into a named milestone, shipped 2026-08-26 — 8/8 plans complete, 11/11
+must-haves verified after one gap-closure round. **Neon is now fully decommissioned**; both
+production and nonprod run against a single self-hosted `postgres:16` container on the Netcup VPS.
+See Validated below and `docs/INFRA_RUNBOOK.md` for full detail.
+
 Next milestone not yet scoped — run `/gsd-new-milestone` to define it.
 
 ## Requirements
@@ -48,10 +54,11 @@ Next milestone not yet scoped — run `/gsd-new-milestone` to define it.
 - ✓ Nonprod continuous deploy on every push to master, fully isolated from production: scoped `production`/`staging` GitHub Environments (repository-level deploy secrets swept to just `NVD_API_KEY`), a separate Docker Hub repository per environment with independent retention sweeps, a bounded health-check gate that fails the run visibly on a dead nonprod stack, and automated Avro schema registration against both registries (nonprod gated ahead of its own app start; production automated in place, zero behavior change to its live deploy script) — CI-01..05, v1.3 Phase 9, done 2026-08-19. Every acceptance criterion live-verified against real infrastructure (not just statically checked), including finding and fixing a real `appleboy/ssh-action` fail-fast defect (missing `set -e`) discovered mid-verification.
 - ✓ Generated OpenAPI spec declares the `ProblemDetail` error envelope on every operation via a global customizer, with an automated regression guard — API-01, v1.3 Phase 9, done 2026-08-19 (scope exception: API-contract completeness, not CI/deploy work, folded in by explicit user decision after a downstream frontend consumer discovered the gap live).
 - ✓ CI, secret-scanning, and session-cookie hardening: Dependabot `github-actions` ecosystem entry (grouped, softened per D-Dependabot-cost); digest-pinned TruffleHog verified-credential gate alongside gitleaks, plus a pre-commit `case`-branch fix for out-of-tree worktrees; both `appleboy/*` SSH actions pinned to immutable digests with a dated risk-acceptance comment for the first-party actions kept tag-trusted; Gradle cache in `run-tests`; Gradle distribution SHA-256 pin + `wrapper-validation` + a fully-covering `verification-metadata.xml`; `security-scan.yml`'s stale comment/action-version drift and its `NVD_API_KEY` resolution bug fixed; `Secure` set unconditionally on the session cookie in both Spring profiles; README restructured into a 269-line, 12-section production-reality architecture showcase — HARDEN-01..08, v1.3 Phase 10, done 2026-08-19. All 8 requirements verified live (8/8), zero gaps.
+- ✓ Database migrated off Neon onto a single self-hosted `postgres:16` container on the existing Netcup VPS: two databases (`kanban_prod`/`kanban_nonprod`), two least-privilege roles with proven cross-database isolation, no host port published, HikariCP/JDBC re-tuned for a same-host engine, the pre-merge Flyway CI gate preserved over SSH (no port exception), and Neon decommissioned only after a live, gated cutover — D-01..D-13, Phase 11 (standalone, not yet folded into a named milestone), done 2026-08-26. One gap-closure round needed: the phase's own code review caught a real SQL-injection-shaped defect in the first-boot provisioning script (credentials spliced unescaped into a SQL literal) and a shared_buffers/mem_limit inconsistency that the kernel OOM-killer had already proven live — both closed and re-verified against the production VM, 11/11 must-haves passing. Loss of Neon's point-in-time recovery is an explicitly accepted, documented gap (no automated backup tooling built; a written but untested manual `pg_dump`/`pg_restore` procedure exists instead).
 
 ### Active
 
-No active milestone — v1.3 shipped 2026-08-25. Run `/gsd-new-milestone` to scope the next one.
+No active milestone — v1.3 shipped 2026-08-25; Phase 11 (Neon → self-hosted Postgres migration) shipped standalone 2026-08-26. Run `/gsd-new-milestone` to scope the next one.
 
 ### Out of Scope
 
@@ -84,7 +91,7 @@ No active milestone — v1.3 shipped 2026-08-25. Run `/gsd-new-milestone` to sco
 ## Constraints
 
 - **Tech stack**: Spring Boot 3.5.16, Java 21, Spring Data JPA/Hibernate, PostgreSQL for both production and tests (tests run against a Testcontainers-managed PostgreSQL instance executing the same Flyway migrations) — no new frameworks introduced for this scope
-- **Production infra** (added v1.2): Netcup VPS (Docker Compose), Neon serverless Postgres, self-hosted single-node Redpanda (built-in Confluent-compatible Schema Registry), Caddy (automatic HTTPS), GitHub Actions CI/CD (build → Flyway-verify → deploy → cleanup, gated by fingerprint-pinned SSH)
+- **Production infra** (Netcup VPS since v1.2; database migrated off Neon onto self-hosted Postgres in Phase 11, 2026-08-26): Netcup VPS (Docker Compose), self-hosted `postgres:16` (two databases/roles, no host port published — see `docs/INFRA_RUNBOOK.md`), self-hosted single-node Redpanda (built-in Confluent-compatible Schema Registry), Caddy (automatic HTTPS), GitHub Actions CI/CD (build → Flyway-verify over SSH → deploy → cleanup, gated by fingerprint-pinned SSH)
 - **Testing**: Match existing convention — unit tests for services/DTOs, integration tests (REST Assured) for controllers; query-count assertions via Hibernate `Statistics.getPrepareStatementCount()` (not `getQueryExecutionCount()`, which misses `findById()` calls)
 - **PR discipline**: This work should remain reviewable as its own unit, consistent with the modernization plan's one-epic-per-PR intent
 - **Format check**: `./gradlew spotlessCheck` and `./gradlew test` must pass (matches existing CI)
@@ -111,6 +118,8 @@ No active milestone — v1.3 shipped 2026-08-25. Run `/gsd-new-milestone` to sco
 | The backend does not gate its own production promotion on the frontend repo's E2E results | Inverted ownership: the frontend gates itself on nonprod reachability instead, since the frontend repo doesn't exist yet to dispatch into (FRONTEND-DISPATCH-V2 stays deferred) | ✓ Good |
 | Digest-pinning narrowed to just the two `appleboy/*` SSH actions, not every third-party `uses:` in `deploy.yml` (D-05) | Those two hold real production/staging SSH keys; pinning every first-party GitHub/Docker action too would add churn without a matching blast-radius reduction — recorded via an explicit, dated risk-acceptance comment instead | ✓ Good |
 | Dependabot's `github-actions` PRs grouped (softened) rather than accepted at raw volume | User chose grouping over accept-as-is when the Dependabot-cost trade-off was surfaced explicitly at a Phase 10 checkpoint, rather than left to the executor's provisional default | ✓ Good |
+| Raised postgres `mem_limit` from 64m to 256m rather than only lowering `shared_buffers` further, to fix Phase 11's CR-02 (shared_buffers exceeded its own cgroup cap) | At `max_connections=25`/`work_mem=4MB`, the per-backend sort budget alone is 100MB — no `shared_buffers` value, not even zero, makes a 64MB ceiling internally consistent with that connection profile; the ceiling itself had to move | ✓ Good — live-validated under genuine concurrent load (24 backends) on the production VM, invariant now enforced by a committed script (`scripts/verify-postgres-memory-invariant.py`), not just asserted in a comment |
+| Read cgroup `anon+shmem` (irreclaimable memory), not raw `memory.peak`/`memory.current`, as the OOM-risk signal when validating the corrected profile | Raw cgroup total saturates to ~100% of *any* tested cap under sustained Postgres I/O (WAL/checkpoint/page-cache churn) — that's normal, healthy kernel behavior, not danger; only anon+shmem (shared_buffers plus fixed overhead) can actually force an OOM-kill, and it stayed ~84MB regardless of cap or dataset size | ✓ Good — discovered live during Phase 11's gap-closure validation; recorded in `docs/INFRA_RUNBOOK.md` so a future re-measurement doesn't re-derive this from scratch |
 
 ## Evolution
 
@@ -130,4 +139,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-25 after v1.3 milestone*
+*Last updated: 2026-08-26 after Phase 11 (Neon → self-hosted Postgres migration)*
