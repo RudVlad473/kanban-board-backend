@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.3
 current_phase: 11
-current_phase_name: migrate-database-from-neon-to-self-hosted-postgres
-status: Phase 11 planned — ready to execute
-stopped_at: Phase 11 planned (6 plans, verification passed)
-last_updated: "2026-08-26T14:06:46Z"
+current_phase_name: Migrate database from Neon to self-hosted Postgres
+status: executing
+stopped_at: Completed 11-01-PLAN.md
+last_updated: "2026-08-26T14:25:30.235Z"
 last_activity: 2026-08-26
-last_activity_desc: Phase 11 planned — 6 plans across 5 waves, decision coverage 13/13
-state_head: 5965a403d851e4be0b900b95dad63c25bf51dbf1
+last_activity_desc: Phase 11 execution started
+state_head: 1896723e066861fcbe311ecb25e51dd0d038ade6
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 6
-  completed_plans: 0
+  completed_plans: 1
 milestone_name: Nonprod Environment & CI Hardening
 ---
 
@@ -24,20 +24,25 @@ milestone_name: Nonprod Environment & CI Hardening
 See: .planning/PROJECT.md (updated 2026-08-17)
 
 **Core value:** The backend is feature-complete against its own mock-ups and live in production; the differentiator now is proving the whole system — including a real frontend against a real deploy — is reliable.
-**Current focus:** Planning next milestone (v1.3 shipped 2026-08-25)
+**Current focus:** Phase 11 — Migrate database from Neon to self-hosted Postgres
 
 ## Current Position
 
-Phase: 11 (migrate-database-from-neon-to-self-hosted-postgres) — READY TO EXECUTE
-Plan: 0/6 complete
-Status: Phase 11 planned — ready to execute
-Last activity: 2026-08-26 — Phase 11 planned (6 plans, 5 waves, decision coverage 13/13)
+Phase: 11 (Migrate database from Neon to self-hosted Postgres) — EXECUTING
+Plan: 2 of 6
+Status: Ready to execute
+Last activity: 2026-08-26 — Phase 11 execution started
 
 ## Performance Metrics
 
 v1.0–v1.2 velocity/per-plan detail archived at milestone close — see `.planning/RETROSPECTIVE.md`'s Cost Observations per milestone and `.planning/milestones/v1.2-phases/` for individual plan SUMMARY.md files (each carries an `actuals` frontmatter block with tokens/tasks/commits). This section resets per milestone rather than accumulating a project-lifetime table.
 
 *Updated after each plan completion*
+**Per-Plan Metrics:**
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 11 P01 | 25min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -52,6 +57,9 @@ Decisions are logged in PROJECT.md's Key Decisions table and `.planning/RETROSPE
 No active-milestone decisions pending — next milestone not yet scoped.
 
 - [Phase null]: 260825-h7m: MapStruct name-based auto-mapping was sufficient to carry createdAt onto BoardFullResponseDTO with no explicit @Mapping needed
+- [Phase 11]: Phase 11 plan 01: postgres service placed in docker-compose.prod.yml (not a dedicated third file), following the kanban-edge cross-project precedent
+- [Phase 11]: Phase 11 plan 01: DB_JDBC_PARAMS dropped entirely (not softened) from both app services -- self-hosted target has no TLS listener
+- [Phase 11]: Phase 11 plan 01: postgres mem_limit: 512m is an explicitly-labeled PROVISIONAL Iteration 0 baseline; plan 11-03 owns the measured floor
 
 ### Pending Todos
 
@@ -111,9 +119,9 @@ The 46 pending todos are individually listed and categorized in this document's 
 
 ## Session Continuity
 
-Last session: 2026-08-26T13:06:14.246Z
-Stopped at: Phase 11 context gathered
-Resume file: .planning/phases/11-migrate-database-from-neon-to-self-hosted-postgres/11-CONTEXT.md
+Last session: 2026-08-26T14:25:30.214Z
+Stopped at: Completed 11-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
