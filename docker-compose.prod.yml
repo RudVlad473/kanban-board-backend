@@ -49,11 +49,20 @@ name: kanban-board-backend
 # both this file's `caddy` service and docker-compose.nonprod.yml's `app-nonprod` service, bridges
 # the two projects. This is the ONLY thing the two stacks share -- production's own `app` and
 # `redpanda` do not join it.
+#
+# Added phase 11 (v1.3->v1.4 boundary, plan 11-01): `kanban-db` is the SECOND thing the two
+# projects share -- mirrors kanban-edge's shape exactly. Created once via `docker network create
+# kanban-db`, joined by this file's `postgres` service and, in docker-compose.nonprod.yml, by
+# `app-nonprod` only -- never by `caddy`, `app`, or `redpanda` in this file, and never by
+# `redpanda-nonprod` in the other.
 networks:
   default:
   kanban-edge:
     external: true
     name: kanban-edge
+  kanban-db:
+    external: true
+    name: kanban-db
 
 services:
   caddy:
@@ -82,6 +91,79 @@ services:
       # week-long Let's Encrypt rate-limit ban (T-05-12).
       - caddy-data:/data
       - caddy-config:/config
+    logging: *default-logging
+
+  postgres:
+    # D-02: same tag local dev (docker-compose.yml) and the Testcontainers-backed test suite
+    # already run -- one Postgres version tested across every environment, not a separately
+    # drifting production version.
+    image: postgres:16
+    hostname: postgres
+    restart: unless-stopped
+    # PROVISIONAL Iteration 0 baseline (D-08) -- not yet a measured floor. Mirrors the "Iteration
+    # 0 -- provisional caps (baseline)" precedent this file's own redpanda service and
+    # docs/INFRA_RUNBOOK.md's "Nonprod resource measurement -- Plan 08-03" section both establish:
+    # start from a conservative guess, then replace it with a live restart-ladder measurement.
+    # Plan 11-03 owns that measurement pass and rewrites this line with its result -- do not treat
+    # 512m as anything more than a cgroup backstop chosen before any real traffic hit this
+    # container.
+    mem_limit: 512m
+    environment:
+      POSTGRES_USER: ${POSTGRES_SUPERUSER}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASS}
+      # Set explicitly so the image does not create a stray database named after the superuser
+      # (POSTGRES_DB defaults to POSTGRES_USER's value when unset).
+      POSTGRES_DB: postgres
+      PROD_DB_NAME: ${DB_NAME}
+      PROD_DB_USER: ${DB_USER}
+      PROD_DB_PASS: ${DB_PASS}
+      # D-01's accepted consequence (RESEARCH.md Pitfall 5): this shared instance's init script
+      # needs BOTH environments' credentials at first boot, but it is defined in production's own
+      # Compose project -- so this one file now also carries nonprod's DB credentials. Named with
+      # the NONPROD_ prefix specifically so a future reader or access review reads this as a
+      # deliberate, accepted design decision, not a leak. NONPROD_DB_PASS here and DB_PASS in
+      # .env.nonprod must hold the identical value.
+      NONPROD_DB_NAME: ${NONPROD_DB_NAME}
+      NONPROD_DB_USER: ${NONPROD_DB_USER}
+      NONPROD_DB_PASS: ${NONPROD_DB_PASS}
+    # D-11: deliberately the engine's own small built-in defaults plus a max_connections well
+    # below the stock 100 -- NOT the commonly-cited 25%-of-RAM shared_buffers guidance, which is
+    # scoped to a dedicated database server. This box is a shared 4-vCPU/7.8G VPS already running
+    # a JVM app and a Kafka broker; total real demand is two HikariCP pools at
+    # maximum-pool-size=5 (10) plus one CI Flyway one-off plus an occasional admin psql --
+    # comfortable headroom under 25, stated explicitly rather than left as an invisible default.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=128MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - max_connections=25
+    networks:
+      # `default` must be listed explicitly -- once a service declares any `networks:` key it no
+      # longer implicitly joins the default network, and dropping it here would sever production's
+      # own app -> postgres path.
+      - default
+      - kanban-db
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
+    # No `ports:` entry at all (D-03) -- mirrors redpanda's own posture exactly: nothing is
+    # published to the host, admin access is SSH + `docker exec`.
+    healthcheck:
+      # -h 127.0.0.1 is load-bearing: during initialization the image's entrypoint runs a
+      # temporary server with listen_addresses empty, so a socket-based probe (bare `pg_isready`
+      # with no -h) can report ready while the init scripts are still running. Forcing TCP means
+      # healthy cannot be reached until the real server is listening -- which is exactly what
+      # production's `app` depends_on: service_healthy (Task 2) relies on. Inside a Compose
+      # CMD-SHELL string, shell variables need a doubled dollar sign so Compose passes them
+      # through to the container's shell instead of interpolating them at parse time.
+      test: [ "CMD-SHELL", "pg_isready -h 127.0.0.1 -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
+      interval: 5s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
     logging: *default-logging
 
   app:
@@ -234,3 +316,4 @@ volumes:
   redpanda-data:
   caddy-data:
   caddy-config:
+  postgres-data:
