@@ -36,16 +36,32 @@ set -eo pipefail
 # Falsifiable: if a future postgres-init run leaves either role able to connect to the other's
 # database, the two REVOKE lines below either did not run or were reverted -- check `\l` in psql
 # for a per-database ACL override (an unmodified `=Tc/<owner>` entry means the revoke never ran).
+#
+# 2026-08-26: credential values below reach the query tool as `-v` variable assignments and are
+# referenced with `:"var"` (identifier form) or `:'var'` (SQL-literal form) inside the heredoc --
+# quoting happens server-side against the value as received, so no convention about how a
+# password happens to be generated is load-bearing any more (closes 11-REVIEW.md CR-01 /
+# 11-VERIFICATION.md gap 2). The heredoc delimiter is single-quoted deliberately and must stay
+# that way: an unquoted delimiter lets the shell expand the body again, silently reintroducing
+# string-built SQL. Falsifiable: scripts/verify-postgres-init-quoting.sh boots a throwaway
+# container with hostile credential values (an apostrophe, a SQL-injection-shaped payload, a
+# double-quoted identifier) and fails if this regresses.
 # ---------------------------------------------------------------------------------------------
 
-psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
-    CREATE ROLE "${PROD_DB_USER}" WITH LOGIN PASSWORD '${PROD_DB_PASS}';
-    CREATE DATABASE "${PROD_DB_NAME}" OWNER "${PROD_DB_USER}";
-    REVOKE CONNECT ON DATABASE "${PROD_DB_NAME}" FROM PUBLIC;
-    GRANT CONNECT ON DATABASE "${PROD_DB_NAME}" TO "${PROD_DB_USER}";
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
+    -v prod_user="$PROD_DB_USER" \
+    -v prod_pass="$PROD_DB_PASS" \
+    -v prod_db="$PROD_DB_NAME" \
+    -v nonprod_user="$NONPROD_DB_USER" \
+    -v nonprod_pass="$NONPROD_DB_PASS" \
+    -v nonprod_db="$NONPROD_DB_NAME" <<-'EOSQL'
+    CREATE ROLE :"prod_user" WITH LOGIN PASSWORD :'prod_pass';
+    CREATE DATABASE :"prod_db" OWNER :"prod_user";
+    REVOKE CONNECT ON DATABASE :"prod_db" FROM PUBLIC;
+    GRANT CONNECT ON DATABASE :"prod_db" TO :"prod_user";
 
-    CREATE ROLE "${NONPROD_DB_USER}" WITH LOGIN PASSWORD '${NONPROD_DB_PASS}';
-    CREATE DATABASE "${NONPROD_DB_NAME}" OWNER "${NONPROD_DB_USER}";
-    REVOKE CONNECT ON DATABASE "${NONPROD_DB_NAME}" FROM PUBLIC;
-    GRANT CONNECT ON DATABASE "${NONPROD_DB_NAME}" TO "${NONPROD_DB_USER}";
+    CREATE ROLE :"nonprod_user" WITH LOGIN PASSWORD :'nonprod_pass';
+    CREATE DATABASE :"nonprod_db" OWNER :"nonprod_user";
+    REVOKE CONNECT ON DATABASE :"nonprod_db" FROM PUBLIC;
+    GRANT CONNECT ON DATABASE :"nonprod_db" TO :"nonprod_user";
 EOSQL
