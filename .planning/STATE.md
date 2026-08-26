@@ -4,16 +4,16 @@ milestone: v1.3
 current_phase: 11
 current_phase_name: Migrate database from Neon to self-hosted Postgres
 status: executing
-stopped_at: Completed 11-04-PLAN.md
-last_updated: "2026-08-26T15:32:53.946Z"
+stopped_at: Completed 11-05-PLAN.md
+last_updated: "2026-08-26T16:15:29.348Z"
 last_activity: 2026-08-26
 last_activity_desc: Phase 11 execution started
-state_head: 3c93d991f965fe3da883f5ba5e41fa488d54862e
+state_head: 5592807e2b309793a38e5fa548532b8465443d28
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 6
-  completed_plans: 4
+  completed_plans: 5
 milestone_name: Nonprod Environment & CI Hardening
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 ## Current Position
 
 Phase: 11 (Migrate database from Neon to self-hosted Postgres) — EXECUTING
-Plan: 5 of 6
+Plan: 6 of 6
 Status: Ready to execute
 Last activity: 2026-08-26 — Phase 11 execution started
 
@@ -46,6 +46,7 @@ v1.0–v1.2 velocity/per-plan detail archived at milestone close — see `.plann
 | Phase 11 P02 | 55min | 3 tasks | 1 files |
 | Phase 11 P03 | 90min | 3 tasks | 3 files |
 | Phase 11 P04 | 30min | 2 tasks | 1 files |
+| Phase 11 P05 | 41min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -65,6 +66,9 @@ No active-milestone decisions pending — next milestone not yet scoped.
 - [Phase 11]: Phase 11 plan 01: postgres mem_limit: 512m is an explicitly-labeled PROVISIONAL Iteration 0 baseline; plan 11-03 owns the measured floor
 - [Phase 11]: Phase 11 plan 04: re-derived HikariCP pool for a same-host Postgres engine (min-idle 0->2, connection-timeout 30000->10000, idle-timeout/max-lifetime raised to Hikari defaults, keepalive-time 0->120000), dropped the DB_JDBC_PARAMS query-string override, and proved prepareThreshold=0 removal safe with 1028 observed server-side prepared-statement executions against a real instance
 - [Phase 11]: Phase 11 plan 04: pg_prepared_statements is session-scoped and unusable for cross-session verification from a separate docker exec psql session -- used Postgres's own statement log (log_statement=all) instead, confirmed empirically before adopting
+- [Phase 11]: Phase 11 plan 05: D-13 Task 1 resolved as Option A (one-off Flyway container over SSH), no D-03 exception taken
+- [Phase 11]: Phase 11 plan 05: DB_HOST/DB_NAME moved from GitHub Environment secrets to variables so the resolved database name is provably visible, unmasked, in CI logs (DB_USER/DB_PASS remain secrets)
+- [Phase 11]: Phase 11 plan 05: gate-still-bites evidence gathered via a live VM-local reproduction against a disposable scratch database rather than a throwaway-branch CI push
 
 ### Pending Todos
 
@@ -124,8 +128,8 @@ The 46 pending todos are individually listed and categorized in this document's 
 
 ## Session Continuity
 
-Last session: 2026-08-26T15:32:53.927Z
-Stopped at: Completed 11-04-PLAN.md
+Last session: 2026-08-26T16:15:29.328Z
+Stopped at: Completed 11-05-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
