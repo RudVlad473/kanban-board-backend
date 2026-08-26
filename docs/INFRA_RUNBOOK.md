@@ -97,32 +97,171 @@ before assuming the ruleset itself is wrong.**
   later plan, 05-04) — this probe confirms the firewall layers, not the eventual app.
 - Both firewall layers independently verified to allow 22 and nothing else currently listening.
 
-## Database — Neon
+## Database — self-hosted PostgreSQL
 
-**Superseded 2026-08-26 by "Self-hosted Postgres cutover — Plan 11-02"** — see that section below; this section is kept for historical record only.
+This section replaces the retired "Database — Neon" section below (kept, in the Decommission
+Record further down, only as historical evidence of what was deleted). Neon, the managed provider
+that hosted this database through 2026-08-26, was replaced because its Free plan's 100 CU-hour/month
+compute allowance is scoped **per project** — shared across production and nonprod as two branches
+of one project — and this repository's own always-warm pool settings kept both branches billing
+continuously against that one shared allowance until it ran out mid-month, taking both environments
+down simultaneously with no deploy. See "Self-hosted Postgres cutover — Plan 11-02" for the full
+incident account and cutover evidence, and "Self-hosted Postgres resource measurement — Plan 11-03"
+for the measured resource caps. The provider's project itself was deleted in this plan — see the
+"Decommission Record" section below.
 
 | Field | Value |
 |-------|-------|
+| Image | `postgres:16` |
+| Host | Netcup VPS Lite 2 G12s (the same VM as the application containers) |
+| Databases | `kanban_prod`, `kanban_nonprod` — one shared container, two isolated databases |
+| Roles | `kanban_prod_app`, `kanban_nonprod_app` (least-privilege, connect-isolated — names only, never a value, per this file's own convention) |
+| Engine settings | `shared_buffers=128MB`, `work_mem=4MB`, `max_connections=25` |
+| `mem_limit` | `64m`, measured (see "Self-hosted Postgres resource measurement — Plan 11-03") |
+| Host port | None published — admin access is SSH plus `docker exec`, matching this file's `redpanda` precedent |
+| Volume | `postgres-data` (Compose-managed, `kanban-board-backend_postgres-data`) |
+| Networks | `default` (production project) and external `kanban-db` (shared cross-project, joined by `postgres` and `app-nonprod`) |
+
+No connection string, role password, or superuser credential is recorded here — see
+`.env.prod.example` / `.env.nonprod.example` for the shape of what each environment needs; the real
+values live only in `.env.prod` / `.env.nonprod` on the VM (never committed).
+
+## Decommission Record — Plan 11-06 (2026-08-26)
+
+The managed provider (Neon) was deleted after the self-hosted instance was confirmed working
+end-to-end, per D-07's explicit gate. This section records what was checked before deletion, what
+was deleted, and what is honestly no longer recoverable.
+
+### Gate verified live, before the decision was presented (D-07)
+
+All five conditions were checked live in this session, not inferred from earlier plan summaries:
+production health `200`; nonprod health `200`; both databases at `8`/`8` successful Flyway
+migrations; the latest default-branch GitHub Actions run (`32985965535`, plan 11-05) fully green,
+including both Flyway verification jobs; and neither GitHub Environment's database secrets/variables
+nor either VM `.env` file resolved to the provider's hostname (`DB_HOST` in both was already
+`postgres`; the only remaining `DB_*` values pointed at the self-hosted names/roles).
+
+### Decision (D-07)
+
+**Operator's verbatim answer:** "Delete the project now (recommended per locked D-07)" — presented
+with the one-way consequence stated explicitly (re-adopting the provider later means provisioning
+entirely from scratch: new project, new endpoint, new credentials, nothing carried across) and the
+context that the provider's data was already abandoned (D-04) and its compute was quota-blocked
+until 2026-09-01 regardless, so keeping it dormant would not have restored a usable fallback.
+
+### Part A — what was deleted
+
+| Field | Value |
+|---|---|
 | Project name | `kanban-board-db` |
 | Project ID | `floral-union-23715140` |
 | Organization | Rudenko Vladimir (`org-red-moon-37279582`) |
-| Region | `aws-eu-central-1` (Frankfurt) — closest Neon-offered region to the Netcup VM's Vienna datacenter; Neon has no Austria region |
+| Region | `aws-eu-central-1` (Frankfurt) |
 | Postgres version | 18 |
-| Compute | `ep-delicate-bird-b2lni8pr`, autoscaling 0.25–2 CU, `suspend_timeout_seconds: 0` (scale-to-zero) |
-| Direct host | `ep-delicate-bird-b2lni8pr.c-6.eu-central-1.aws.neon.tech` |
-| Pooled host | `ep-delicate-bird-b2lni8pr-pooler.c-6.eu-central-1.aws.neon.tech` (pooler mode: transaction) |
-| Database state | Empty — no schema, no data, confirmed via `get_database_tables` — Flyway owns schema creation on first deploy |
+| Compute (production branch) | `ep-delicate-bird-b2lni8pr`, autoscaling 0.25-2 CU |
+| Branches | `production` (`br-divine-waterfall-b2864di0`, primary, created 2026-08-14) and `nonprod` (`br-still-shadow-b2r7ez0l`, created 2026-08-18) |
 
-No connection string, user, or password is recorded here — see `.env.prod.example` for the shape
-of what production needs; the real values live only in `.env.prod` on the VM (never committed),
-populated during plan 05-04.
+Deletion date: 2026-08-26. Confirmed via two independent checks against Neon's own control-plane
+API: `list_projects` searched for the project name/id returned an empty result set, and a direct
+`describe_project` call against the same project ID returned `HTTP 404`.
 
-**Resolved in 05-04 Task 1:** `DB_HOST` in `.env.prod` is the **direct** (non-`-pooler`) host,
-confirmed by the app's own boot log (`jdbc:postgresql://ep-delicate-bird-b2lni8pr.c-6.eu-central-1.aws.neon.tech:5432/neondb`).
-The transaction-mode pooler concern below was correct — Flyway's session-scoped advisory lock at
-boot is unsupported under it — and this single-instance app's small HikariCP pool (max 5) gets
-nothing from the pooler's multiplexing anyway, so there was no reason to fight it. This is a
-documented divergence from INFRA-02's literal "pooled" wording, not an oversight.
+**A methodological finding, recorded because it corrects an assumption this plan's own text made:**
+the plan's acceptance criteria expected a real Postgres-protocol connection attempt against the
+former endpoint to fail "at name resolution or connection, not at authentication." Tested live: a
+`psql` connection to the former direct host, with a deliberately wrong password, returned `ERROR:
+password authentication failed for user 'kanban_prod_app'` — the auth-failure shape the plan warned
+against. A control test against a hostname that had **never existed** (`ep-totally-fake-nonexistent-xyz123...`)
+produced the byte-identical error. This proves Neon's edge proxy does not distinguish "wrong
+password" from "endpoint does not exist" at the connection-protocol level — an anti-enumeration
+design choice, the same principle this repository's own `ResetController` applies to its reset
+token header. The control-plane API result (empty list + `404`), not the connection-protocol
+behavior, is the authoritative evidence of deletion here.
+
+### Part B — credential revocation
+
+Checked and confirmed absent: no `neonctl`/`neon` CLI binary installed on the operator's machine, no
+Neon CLI config files, no `NEON_API_KEY`/`NEON_TOKEN` reference in any local shell profile. The
+repository- and CI-facing surface (GitHub Environment secrets/variables, both VM `.env` files) was
+already confirmed clean by the D-07 gate check above, before deletion. Nothing was found to revoke.
+
+### Part C — what was verified unaffected
+
+Both public HTTPS health endpoints returned `200` immediately after the deletion (re-checked, not
+assumed from the pre-deletion gate). Neither GitHub Environment nor either VM `.env` file was
+touched by this task — the check above confirms none of them still referenced the provider, and
+none needed editing as a result of the deletion itself.
+
+### Part D — what is NOT recoverable
+
+Every row abandoned under D-04's fresh-start decision (plan 11-02) — every board, task, subtask,
+user account and activity-log entry the managed provider held — no longer exists anywhere, in any
+form. Re-adopting Neon, or any managed provider, from this point forward means provisioning a new
+project from scratch; nothing about the deleted project (its id, its branches, its data) carries
+across.
+
+### Decommission date
+
+2026-08-26.
+
+## Backups and restore — current coverage and the documented gap (D-12)
+
+**There is no backup of the production database.** Not a reduced backup, not an out-of-date one —
+none exists. A container loss or a volume loss on the Netcup VM means total, unrecoverable data
+loss of everything in `kanban_prod` and `kanban_nonprod`. A reader skimming this heading for
+reassurance should stop here: there isn't any.
+
+**What was lost by leaving Neon.** The managed provider supplied point-in-time recovery as a
+platform feature, at no engineering cost to this project. Nothing on the self-hosted instance
+replaces it. This is an acknowledged, deliberate regression under D-12 — narrower scope for this
+phase, with the automation that would close it explicitly deferred — not an oversight discovered
+after the fact.
+
+**The manual procedure that WOULD be used, if a restore were needed today.** Written from this
+deployment's real container and volume names, so it is usable under pressure rather than a
+description of a procedure:
+
+Dump each database from the running container, over an administrative SSH session as the `deploy`
+user, writing to a timestamped file outside the container (never inside — a dump living only in a
+container that might be the thing that failed is not a backup):
+
+```bash
+# From /opt/deploy/kanban-board-backend, as deploy:
+docker exec kanban-board-backend-postgres-1 pg_dump -U kanban_admin -Fc kanban_prod \
+  > /opt/deploy/kanban-board-backend/kanban_prod-$(date -u +%Y%m%dT%H%M%SZ).dump
+docker exec kanban-board-backend-postgres-1 pg_dump -U kanban_admin -Fc kanban_nonprod \
+  > /opt/deploy/kanban-board-backend/kanban_nonprod-$(date -u +%Y%m%dT%H%M%SZ).dump
+```
+
+(`-Fc`, the custom archive format, is what `pg_restore` below expects; a plain-SQL dump would need
+`psql` instead.) The resulting `.dump` file should be copied off the VM immediately (`scp` to an
+operator machine) — leaving it only on the same host the database itself runs on defends against
+nothing.
+
+Restoring into a fresh container (the shape a total volume loss would require): bring up a new,
+empty `postgres` container against a fresh volume (`docker compose up -d postgres` after `docker
+volume rm` on the old, corrupted volume — or, more simply, a wholly new deploy of plan 11-01's
+manifest), let the init script provision the empty databases and roles as it does on any first
+boot, then:
+
+```bash
+docker cp kanban_prod-<timestamp>.dump kanban-board-backend-postgres-1:/tmp/restore.dump
+docker exec kanban-board-backend-postgres-1 pg_restore -U kanban_admin -d kanban_prod --clean --if-exists /tmp/restore.dump
+```
+
+(repeat for `kanban_nonprod` against its own dump file).
+
+**This procedure is written but has never been executed, as of 2026-08-26.** No test restore has
+been performed, into a scratch database or otherwise. An untested restore procedure is worse than
+no procedure if it is mistaken for a verified one — the command shapes above are believed correct
+from `pg_dump`/`pg_restore`'s documented behavior, not proven against this deployment.
+
+**What closing this gap properly would require**, scoped rather than left vague: a scheduled dump
+(a cron job or systemd timer on the VM, or a CI-triggered job, running the `pg_dump` commands above
+on a regular cadence), off-host storage for the resulting `.dump` files (this VM is a single point
+of failure for both the live data and any backup stored only on it), a retention policy (how many
+dated dumps to keep, and for how long), and at least one actually-executed test restore into a
+scratch database to prove the procedure works before it is relied on. None of this is built by this
+plan — D-12 defers it explicitly.
 
 ## DNS — DuckDNS
 
