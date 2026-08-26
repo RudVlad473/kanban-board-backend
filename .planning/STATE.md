@@ -2,11 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.3
 status: Awaiting next milestone
-stopped_at: Completed 260825-h7m-PLAN.md
-last_updated: "2026-08-25T11:06:37.710Z"
+stopped_at: Phase 11 context gathered
+last_updated: "2026-08-26T13:06:14.272Z"
 last_activity: 2026-08-25
 last_activity_desc: Milestone v1.3 completed and archived
-state_head: 1dd30ea0d2d7f28ab3d1bf359282bd28b7294f08
+state_head: 3e901a34b0a23996f5311a2cfb0447610be1f1ad
+progress:
+  total_phases: 1
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 milestone_name: Nonprod Environment & CI Hardening
 current_phase: null
 current_phase_name: null
@@ -35,6 +40,10 @@ v1.0–v1.2 velocity/per-plan detail archived at milestone close — see `.plann
 *Updated after each plan completion*
 
 ## Accumulated Context
+
+### Roadmap Evolution
+
+- Phase 11 added: Migrate database from Neon to self-hosted Postgres
 
 ### Decisions
 
@@ -102,9 +111,9 @@ The 46 pending todos are individually listed and categorized in this document's 
 
 ## Session Continuity
 
-Last session: 2026-08-25T11:06:12.459Z
-Stopped at: Completed 260825-h7m-PLAN.md
-Resume file: None
+Last session: 2026-08-26T13:06:14.246Z
+Stopped at: Phase 11 context gathered
+Resume file: .planning/phases/11-migrate-database-from-neon-to-self-hosted-postgres/11-CONTEXT.md
 
 ## Operator Next Steps
 
