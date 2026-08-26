@@ -147,65 +147,95 @@ jobs:
             ${{ steps.set_full_image_name.outputs.actual_image_name }}
             ${{ steps.set_full_image_name_nonprod.outputs.actual_image_name_nonprod }}
 
-  # INFRA-06 (Phase 5, plan 05-05 Task 2): verifies this project's Flyway migrations
-  # (src/main/resources/db/migration/V1-V8) apply cleanly against Neon's DIRECT
-  # (non-pooled) endpoint before any image is allowed to reach a VM -- gates deploy.
-  # Runs the official Flyway CLI Docker image (same version Spring Boot 3.5.16's BOM
-  # pins flyway-core/flyway-database-postgresql to, see build.gradle) directly against
-  # the checked-out migration scripts, rather than booting the whole Spring context
-  # (which would also need a reachable Kafka broker in CI for no benefit here) or
-  # inventing a second migration mechanism. This keeps the whole verification inside
-  # this workflow file, matching plan 05-05's declared file scope.
+  # INFRA-06 (Phase 5, plan 05-05 Task 2). REWRITTEN phase 11, plan 11-05 (D-13): the runner has
+  # no route to the self-hosted `postgres` service (D-03, no host port published), so this job no
+  # longer connects from the GitHub-hosted runner at all. Task 1's recorded decision (D-13,
+  # gate="blocking-human", answered "Option A: one-off container over SSH (recommended)") runs the
+  # official Flyway CLI image as a one-off container ON the VM, over SSH, attached to the shared
+  # `kanban-db` network -- the exact pattern `register-schemas-production` below already proves for
+  # schema registration, reusing the same digest-pinned actions and the same secret set. This still
+  # proves what INFRA-06 always proved -- migrations apply cleanly against the real,
+  # already-migrated instance before an image is allowed to reach a VM -- reached differently, not
+  # weakened (an ephemeral in-CI database was explicitly rejected by D-13: it would only prove
+  # migrations apply to an empty database, blind to the migration drift this gate exists to catch).
+  #
+  # DB_HOST/DB_NAME moved from GitHub Environment SECRETS to VARIABLES this plan (`postgres`/
+  # `kanban_prod` here, `postgres`/`kanban_nonprod` in the nonprod twin below) -- a database
+  # hostname/name is not sensitive, and GitHub masks any log line containing a registered secret's
+  # value regardless of where it came from. Task 3 requires reading the REAL resolved database name
+  # out of this job's own log, specifically so a wrong-environment scoping mistake (T-11-26) would
+  # be visible instead of silently redacted to `***`. DB_USER/DB_PASS remain real secrets.
   flyway-verify:
     needs: [ setup, run-tests ]
     runs-on: ubuntu-latest
     if: success()
-    # Phase 9, plan 09-01, part C: this job resolves secrets.DB_HOST/DB_NAME/DB_USER/DB_PASS
-    # against production's own Neon branch, so it now reads them through the `production`
-    # environment rather than an unscoped repository secret.
+    # Phase 9, plan 09-01, part C: this job resolves secrets.DB_USER/DB_PASS and vars.DB_HOST/
+    # DB_NAME against production's own self-hosted database, through the `production` environment.
     environment: production
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Guard against Neon's pooled (transaction-mode) endpoint
-        env:
-          DB_HOST: ${{ secrets.DB_HOST }}
-        run: |
-          # Transaction-mode pooling does not support DDL/schema migration the way a
-          # direct connection does -- a run against the pooled endpoint would either
-          # fail confusingly or, worse, appear to succeed without proving what this job
-          # exists to prove. Neon's own naming convention marks pooled hosts with a
-          # "-pooler" suffix (see docs/INFRA_RUNBOOK.md). Inspected without ever being
-          # printed.
-          if [[ "$DB_HOST" == *"-pooler"* ]]; then
-            echo "::error::DB_HOST carries Neon's pooler marker (-pooler). Flyway migration verification must run against the DIRECT (non-pooled) endpoint only -- refusing to proceed."
-            exit 1
-          fi
-          echo "Guard passed: configured endpoint is not the pooled endpoint."
+      # A container running on the VM cannot see this runner's checkout -- unlike deploy-to-netcup
+      # (which SCPs docker-compose.prod.yml/Caddyfile/the postgres-init script), this job needs the
+      # actual migration SQL files present on the VM before the Flyway container can mount them.
+      # Target is DISTINCT from deploy-to-netcup's own SCP target
+      # (/opt/deploy/kanban-board-backend/) -- this job can run while a previous push's deploy still
+      # holds the deploy-to-netcup-vm concurrency lock, so staging here must never collide with what
+      # that job writes. `rm: true` clears any stale files from a prior run (e.g. a since-renamed
+      # migration) before copying, so this directory always mirrors exactly what was checked out.
+      - name: Stage migration files on the VM
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345  # v1.0.0
+        with:
+          host: ${{ secrets.NETCUP_HOST }}
+          username: ${{ secrets.NETCUP_DEPLOY_USER }}
+          key: ${{ secrets.NETCUP_SSH_KEY }}
+          fingerprint: ${{ secrets.NETCUP_HOST_FINGERPRINT }}
+          rm: true
+          source: "src/main/resources/db/migration"
+          target: "/opt/deploy/kanban-board-backend/ci-flyway-verify/production/"
 
-      - name: Verify Flyway migrations apply cleanly (Neon direct endpoint)
+      - name: Verify Flyway migrations apply cleanly (self-hosted instance, over SSH)
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2  # v1.2.5
         env:
-          FLYWAY_URL: jdbc:postgresql://${{ secrets.DB_HOST }}:5432/${{ secrets.DB_NAME }}?sslmode=require
-          FLYWAY_USER: ${{ secrets.DB_USER }}
-          FLYWAY_PASSWORD: ${{ secrets.DB_PASS }}
-        run: |
-          docker run --rm \
-            -e FLYWAY_URL -e FLYWAY_USER -e FLYWAY_PASSWORD \
-            -v "${{ github.workspace }}/src/main/resources/db/migration:/flyway/sql:ro" \
-            flyway/flyway:11.7.2 migrate
-          # Flyway aborts on the first failed migration by design (recorded in
-          # flyway_schema_history, blocking all subsequent ones) -- no hand-rolled
-          # abort-on-first-failure logic needed here, unlike the old per-script psql
-          # sequence this job replaces in spirit (INFRA-06 was originally scoped
-          # against hand-authored DDL scripts; Phase 04.1/04.2 superseded that
-          # project-wide with Flyway, see 05-05-PLAN.md Task 2's own note).
+          DB_NAME: ${{ vars.DB_NAME }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASS: ${{ secrets.DB_PASS }}
+        with:
+          host: ${{ secrets.NETCUP_HOST }}
+          username: ${{ secrets.NETCUP_DEPLOY_USER }}
+          key: ${{ secrets.NETCUP_SSH_KEY }}
+          fingerprint: ${{ secrets.NETCUP_HOST_FINGERPRINT }}
+          envs: DB_NAME,DB_USER,DB_PASS
+          script: |
+            set -e
+            # set -e (see deploy-to-netcup's full comment below): appleboy/ssh-action has no
+            # fail-fast input of its own -- a failing command mid-script would not otherwise stop
+            # later lines from running.
+            echo "Verifying Flyway migrations against database: ${DB_NAME}"
+            # Replaces the old endpoint-suffix guard, which inspected a hostname marker belonging
+            # to the retired managed provider's pooler -- a marker that can never appear on a
+            # Compose service name, so it was dead code. This asserts the property that
+            # actually matters against the new target: resolvable and reachable over the shared
+            # network, so a DNS/network failure surfaces as a clear, named error instead of an
+            # opaque JDBC connection exception three log lines later.
+            docker run --rm --network kanban-db postgres:16 pg_isready -h postgres -p 5432 -t 5 \
+              || { echo "::error::Cannot resolve/reach the postgres service over the kanban-db network -- refusing to run Flyway against an unreachable target."; exit 1; }
+            docker run --rm --network kanban-db \
+              -e FLYWAY_URL="jdbc:postgresql://postgres:5432/${DB_NAME}" \
+              -e FLYWAY_USER="${DB_USER}" \
+              -e FLYWAY_PASSWORD="${DB_PASS}" \
+              -v /opt/deploy/kanban-board-backend/ci-flyway-verify/production/src/main/resources/db/migration:/flyway/sql:ro \
+              flyway/flyway:11.7.2 migrate
+            # Flyway aborts on the first failed migration by design (recorded in
+            # flyway_schema_history, blocking all subsequent ones) -- no hand-rolled
+            # abort-on-first-failure logic needed here.
 
-  # Nonprod twin of flyway-verify (Phase 9, plan 09-01, part D). A literal copy with one
-  # differing axis -- this job declares the staging environment below. Because GitHub resolves
-  # a job's secrets.* against the environment it declares, the identical DB_HOST/DB_NAME/DB_USER/
-  # DB_PASS references below resolve against the staging environment's own values -- the
-  # nonprod Neon branch -- never production's, without any secret being renamed.
+  # Nonprod twin of flyway-verify (Phase 9, plan 09-01, part D; rewritten phase 11, plan 11-05).
+  # A literal copy with the differing axes called out below -- this job declares the staging
+  # environment, so the identical vars.DB_HOST/DB_NAME and secrets.DB_USER/DB_PASS references
+  # resolve against the staging environment's own values -- the nonprod database -- never
+  # production's, without any name being renamed.
   flyway-verify-nonprod:
     needs: [ setup, run-tests ]
     runs-on: ubuntu-latest
@@ -215,26 +245,43 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Guard against Neon's pooled (transaction-mode) endpoint
-        env:
-          DB_HOST: ${{ secrets.DB_HOST }}
-        run: |
-          if [[ "$DB_HOST" == *"-pooler"* ]]; then
-            echo "::error::DB_HOST carries Neon's pooler marker (-pooler). Flyway migration verification must run against the DIRECT (non-pooled) endpoint only -- refusing to proceed."
-            exit 1
-          fi
-          echo "Guard passed: configured endpoint is not the pooled endpoint."
+      # Own staging path, under nonprod's own deploy user's directory -- DISTINCT from both
+      # production's verify staging path above and from deploy-to-nonprod's own SCP target
+      # (/opt/deploy/kanban-board-nonprod/, copying only docker-compose.nonprod.yml).
+      - name: Stage migration files on the VM
+        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345  # v1.0.0
+        with:
+          host: ${{ secrets.NETCUP_HOST }}
+          username: ${{ secrets.NETCUP_DEPLOY_USER }}
+          key: ${{ secrets.NETCUP_SSH_KEY }}
+          fingerprint: ${{ secrets.NETCUP_HOST_FINGERPRINT }}
+          rm: true
+          source: "src/main/resources/db/migration"
+          target: "/opt/deploy/kanban-board-nonprod/ci-flyway-verify/staging/"
 
-      - name: Verify Flyway migrations apply cleanly (Neon direct endpoint)
+      - name: Verify Flyway migrations apply cleanly (self-hosted instance, over SSH)
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2  # v1.2.5
         env:
-          FLYWAY_URL: jdbc:postgresql://${{ secrets.DB_HOST }}:5432/${{ secrets.DB_NAME }}?sslmode=require
-          FLYWAY_USER: ${{ secrets.DB_USER }}
-          FLYWAY_PASSWORD: ${{ secrets.DB_PASS }}
-        run: |
-          docker run --rm \
-            -e FLYWAY_URL -e FLYWAY_USER -e FLYWAY_PASSWORD \
-            -v "${{ github.workspace }}/src/main/resources/db/migration:/flyway/sql:ro" \
-            flyway/flyway:11.7.2 migrate
+          DB_NAME: ${{ vars.DB_NAME }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASS: ${{ secrets.DB_PASS }}
+        with:
+          host: ${{ secrets.NETCUP_HOST }}
+          username: ${{ secrets.NETCUP_DEPLOY_USER }}
+          key: ${{ secrets.NETCUP_SSH_KEY }}
+          fingerprint: ${{ secrets.NETCUP_HOST_FINGERPRINT }}
+          envs: DB_NAME,DB_USER,DB_PASS
+          script: |
+            set -e
+            echo "Verifying Flyway migrations against database: ${DB_NAME}"
+            docker run --rm --network kanban-db postgres:16 pg_isready -h postgres -p 5432 -t 5 \
+              || { echo "::error::Cannot resolve/reach the postgres service over the kanban-db network -- refusing to run Flyway against an unreachable target."; exit 1; }
+            docker run --rm --network kanban-db \
+              -e FLYWAY_URL="jdbc:postgresql://postgres:5432/${DB_NAME}" \
+              -e FLYWAY_USER="${DB_USER}" \
+              -e FLYWAY_PASSWORD="${DB_PASS}" \
+              -v /opt/deploy/kanban-board-nonprod/ci-flyway-verify/staging/src/main/resources/db/migration:/flyway/sql:ro \
+              flyway/flyway:11.7.2 migrate
 
   # Rewritten for the v1.2 "Infra Migration" milestone (Phase 5, plan 05-05 Task 3).
   # Targets the Netcup VPS provisioned in plan 05-03 -- the originally-planned Oracle
