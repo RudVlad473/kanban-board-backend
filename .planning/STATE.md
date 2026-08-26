@@ -46,7 +46,7 @@ No active-milestone decisions pending — next milestone not yet scoped.
 
 ### Pending Todos
 
-~45 pending todos remain in `.planning/todos/pending/` (security/CI/minor backlog, all explicitly
+~46 pending todos remain in `.planning/todos/pending/` (security/CI/minor backlog, all explicitly
 out of v1.3 scope) — full inventory in this document's Deferred Items table below, acknowledged
 and carried forward at v1.3 close. None block the next milestone; triage candidates for it via
 `.planning/todos/pending/`.
@@ -98,7 +98,7 @@ Items acknowledged and carried forward (full v1.2-close table in `.planning/mile
 - `260816-hn1` (secret scanning) — false positive: fully complete with both PLAN.md and SUMMARY.md; flagged only because its `duration` frontmatter field is free text ("unknown (resumed mid-execution...)") rather than a parseable value.
 - `260824-v7n` (install Docker natively inside WSL2) — genuinely empty, abandoned directory (scaffolded 2026-08-24, never executed); unrelated local dev-environment tooling, not a v1.3 requirement.
 
-The 45 pending todos are individually listed and categorized in this document's own Pending Todos section above (security/CI/minor backlog, all explicitly out of v1.3 scope per PROJECT.md).
+The 46 pending todos are individually listed and categorized in this document's own Pending Todos section above (security/CI/minor backlog, all explicitly out of v1.3 scope per PROJECT.md).
 
 ## Session Continuity
 
