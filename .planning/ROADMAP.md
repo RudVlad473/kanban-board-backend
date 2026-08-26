@@ -80,10 +80,23 @@ Next milestone not yet scoped — run `/gsd-new-milestone` to define it.
 **Plans:** 6 plans
 
 Plans:
+**Wave 1**
 
 - [ ] 11-01-PLAN.md — Postgres service, multi-DB/multi-role provisioning, shared `kanban-db` network, env-file contracts (wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 11-02-PLAN.md — Live cutover of both environments onto the self-hosted instance (wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 11-03-PLAN.md — Measured memory floors for the database and both app containers (wave 3)
 - [ ] 11-04-PLAN.md — HikariCP/JDBC re-tuning for a same-host engine (wave 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 11-05-PLAN.md — CI Flyway verification over SSH against the internal network (wave 4)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 11-06-PLAN.md — Neon decommission and backup-gap documentation (wave 5)
