@@ -144,3 +144,11 @@ None - no external service configuration required. This plan is fully autonomous
 ---
 *Phase: 11-migrate-database-from-neon-to-self-hosted-postgres*
 *Completed: 2026-08-26*
+
+## Self-Check: PASSED
+
+- FOUND: `src/main/resources/application.properties`
+- FOUND: `.planning/phases/11-migrate-database-from-neon-to-self-hosted-postgres/11-04-SUMMARY.md`
+- FOUND commit: `004dd50` (Task 1)
+- FOUND commit: `3c93d99` (Task 2)
+- FOUND commit: `d4a1e76` (plan metadata)
