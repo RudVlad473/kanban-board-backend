@@ -140,13 +140,15 @@ services:
     #
     # Why the ceiling had to move rather than only shared_buffers: at max_connections=25 and
     # work_mem=4MB, max_connections x work_mem alone is 100MB -- no shared_buffers value, not
-    # even zero, makes a 64m ceiling consistent with this connection profile. The invariant now
-    # enforced (mechanically, by this plan's verify script, not merely asserted here): (1)
-    # shared_buffers is at most a quarter of mem_limit -- 64MB <= 256MB/4 = 64MB; (2)
-    # shared_buffers + max_connections * work_mem fits within 85% of mem_limit -- 64MB + 25*4MB =
-    # 164MB <= 0.85*256MB = 217.6MB (64.1% of the cap). Both hold for the adopted pair below, and
-    # both fail on the pre-fix pair, which is what makes the check a real gate rather than a
-    # restated comment.
+    # even zero, makes a 64m ceiling consistent with this connection profile. The invariant is
+    # mechanically enforced by `scripts/verify-postgres-memory-invariant.py` (committed,
+    # re-runnable -- not merely asserted here): (1) shared_buffers is at most a quarter of
+    # mem_limit -- 64MB <= 256MB/4 = 64MB; (2) shared_buffers + max_connections * work_mem fits
+    # within 85% of mem_limit -- 64MB + 25*4MB = 164MB <= 0.85*256MB = 217.6MB (64.1% of the
+    # cap). Both hold for the adopted pair below, and both fail on the pre-fix pair, which is
+    # what makes the script a real gate rather than a restated comment (11-REVIEW.md CR-01,
+    # regenerated review: the earlier claim of "this plan's verify script" referred to a Python
+    # heredoc that ran once during 11-08's execution and was never committed -- fixed here).
     #
     # Concurrent re-validation (full evidence: docs/INFRA_RUNBOOK.md, "Postgres memory profile
     # correction -- Plan 11-08"): the combined worst-case sub-run reached 24 concurrent backends
@@ -261,7 +263,8 @@ services:
     #
     # RE-MEASURED (Plan 11-03, D-10, 2026-08-26): re-examined because the datasource moved from a
     # public-internet round trip (Neon) to a Docker bridge hop (self-hosted postgres), which could
-    # in principle change this container's own working set. At the adopted postgres floor (64m,
+    # in principle change this container's own working set. At the then-adopted postgres floor
+    # (64m, later corrected to 256m by Plan 11-08 -- see that service's own CORRECTION comment
     # above), idle RSS ~428-436MiB and peak RSS ~436MiB during the full burst+Flyway-recreate
     # workload -- ~14.2% of this 3g cap, essentially unchanged from the latency-profile shift.
     # Verdict: KEPT at 3g, not lowered. The measured peak sits far below the cap under this

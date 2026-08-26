@@ -137,8 +137,9 @@ services:
     # MEASURED (Plan 11-03, D-10, 2026-08-26) -- this cap carried no measurement comment at all
     # before this plan. Re-examined for the same reason as production's `app` cap above: the
     # datasource moved from a public-internet round trip (Neon) to a Docker bridge hop
-    # (self-hosted postgres). At the adopted postgres floor (64m, docker-compose.prod.yml), idle
-    # RSS ~460-465MiB and peak RSS ~467.8MiB during the full burst+reset workload -- ~45.7% of
+    # (self-hosted postgres). At the then-adopted postgres floor (64m, docker-compose.prod.yml;
+    # later corrected to 256m by Plan 11-08), idle RSS ~460-465MiB and peak RSS ~467.8MiB during
+    # the full burst+reset workload -- ~45.7% of
     # this 1g cap, a real (not thin) margin already. Verdict: KEPT at 1g, not lowered -- same
     # heap-sizing-follows-cgroup-limit reasoning as production's `app` (this container's own JVM
     # sizes its heap off this cgroup number), and unlike production's ~14% headroom this one

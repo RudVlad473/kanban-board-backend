@@ -3165,8 +3165,11 @@ unchanged. Both arithmetic conditions hold, worked through with the real numbers
   217.6MB (164MB is 64.1% of the cap).
 
 Both conditions fail on the pre-fix pair (`64m` / `128MB`), which is what makes this a real gate —
-`docker-compose.prod.yml`'s own verify script recomputes both from the manifest's live values
-rather than trusting a comment.
+`scripts/verify-postgres-memory-invariant.py` (committed, re-runnable) recomputes both from the
+manifest's live values rather than trusting a comment. (Corrected per 11-REVIEW.md CR-01,
+regenerated review: the script referenced here at first landed only as an uncommitted heredoc run
+once during this plan's own execution, which meant no future edit was actually checked — the
+committed script above closes that gap.)
 
 **The key methodological finding — read the corrected metric, not the raw one.** Raw cgroup
 `memory.peak`/`memory.current` saturated to essentially 100% of *every* tested cap (`256m` and
@@ -3185,12 +3188,12 @@ wording did not anticipate; anon+shmem is the reading this plan trusts for that 
 
 **Order of justification, stated explicitly — the correction to how 11-03 framed its result:** the
 invariant (I1/I2 above) is primary, because it is the only thing that can never silently regress —
-a future edit that breaks the relationship fails the manifest's own verify script rather than
-merely looking wrong. The concurrent measurement (24 backends, 21 non-idle, anon+shmem at 32.8% of
-cap) corroborates that the invariant's assumptions hold in practice. The counter-evidence run (the
-unplanned OOM reproduction above) is what makes the change evidence-backed rather than argued from
-arithmetic alone. 11-03's framing put the measured number first and let it carry the entire
-justification; this plan inverts that order deliberately.
+a future edit that breaks the relationship fails `scripts/verify-postgres-memory-invariant.py`
+rather than merely looking wrong. The concurrent measurement (24 backends, 21 non-idle, anon+shmem
+at 32.8% of cap) corroborates that the invariant's assumptions hold in practice. The counter-evidence
+run (the unplanned OOM reproduction above) is what makes the change evidence-backed rather than
+argued from arithmetic alone. 11-03's framing put the measured number first and let it carry the
+entire justification; this plan inverts that order deliberately.
 
 The profile remains conservative in D-11's sense: `shared_buffers` went **down**, not up — 128MB to
 64MB, now half the engine's own stock default — and `work_mem`/`max_connections` are untouched.
