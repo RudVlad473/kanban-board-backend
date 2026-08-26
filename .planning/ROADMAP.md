@@ -77,7 +77,7 @@ Next milestone not yet scoped — run `/gsd-new-milestone` to define it.
 **Goal:** Both production and nonprod run against a single self-hosted PostgreSQL 16 container on the existing Netcup VPS — two databases, two least-privilege roles that cannot reach each other's data, no host port published — with Neon decommissioned, the pool/JDBC tuning re-derived for a same-host engine, CI's pre-merge Flyway gate preserved over SSH, and the resulting loss of point-in-time recovery documented as an acknowledged gap.
 **Requirements**: D-01..D-13 (CONTEXT.md decisions — no REQUIREMENTS.md exists for this not-yet-scoped milestone)
 **Depends on:** Phase 10
-**Plans:** 3/6 plans executed
+**Plans:** 4/6 plans executed
 
 Plans:
 **Wave 1**
@@ -91,7 +91,7 @@ Plans:
 **Wave 3** *(blocked on Wave 2 completion)*
 
 - [x] 11-03-PLAN.md — Measured memory floors for the database and both app containers (wave 3)
-- [ ] 11-04-PLAN.md — HikariCP/JDBC re-tuning for a same-host engine (wave 3)
+- [x] 11-04-PLAN.md — HikariCP/JDBC re-tuning for a same-host engine (wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
