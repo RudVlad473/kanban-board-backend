@@ -98,14 +98,36 @@ services:
     image: postgres:16
     hostname: postgres
     restart: unless-stopped
-    # PROVISIONAL Iteration 0 baseline (D-08) -- not yet a measured floor. Mirrors the "Iteration
-    # 0 -- provisional caps (baseline)" precedent this file's own redpanda service and
-    # docs/INFRA_RUNBOOK.md's "Nonprod resource measurement -- Plan 08-03" section both establish:
-    # start from a conservative guess, then replace it with a live restart-ladder measurement.
-    # Plan 11-03 owns that measurement pass and rewrites this line with its result -- do not treat
-    # 512m as anything more than a cgroup backstop chosen before any real traffic hit this
-    # container.
-    mem_limit: 512m
+    # MEASURED BASIS (Plan 11-03, 2026-08-26) -- host: Netcup VPS Lite 2 G12s, 4 vCPU / 7.8GiB
+    # measured. Workload: the repo's established 54-request burst (6 columns + 24 tasks + 24
+    # subtasks, after signup+board) fired against BOTH environments concurrently in the same rung
+    # (both HikariCP pools open at once, since per-backend private memory scales with the
+    # connection high-water mark), plus a nonprod admin reset (TRUNCATEs everything) and a full
+    # `app` recreate that re-runs Flyway V1..V8 -- the two paths most likely to set Postgres's
+    # transient peak, which a pure read/write burst never touches.
+    # Ladder descended from the prior unmeasured 512m Iteration-0 baseline: 512m -> 384m -> 320m ->
+    # 256m -> 192m -> 128m -> 64m -> 40m all PASSED (RestartCount=0 sustained across a full
+    # recreate+burst+20s-settle cycle at every rung; peak RSS held flat at ~29-30MiB regardless of
+    # cap, since this app's real traffic shape never grows Postgres's working set). 32m FAILED:
+    # the kernel OOM-killed the postgres process itself 3 times in ~30s (confirmed via `dmesg`:
+    # "Memory cgroup out of memory: Killed process ... (postgres)"), each kill forcing a full
+    # cluster crash-recovery restart (RestartCount=3) and producing real HTTP 500s on the live
+    # public API during the outage window -- not a synthetic/theoretical failure.
+    # Adopted: 64m, NOT the bare lowest-passing rung (40m only left ~10MiB headroom above its
+    # ~29.7MiB measured peak -- too thin given 32m's cliff sits just 8MiB below that). 64m leaves
+    # ~35MiB headroom above the measured ~29.2MiB peak (~54% margin), independently re-verified
+    # from a fresh --force-recreate through a full reset+burst+20s-settle cycle with
+    # RestartCount=0 sustained throughout. This is the same "deliberately NOT set equal to the
+    # measured high-water mark" reasoning the redpanda service's own comment below applies -- a
+    # cap with zero headroom budgets nothing for cgroup accounting overhead, which has already
+    # broken startup once on this box for a different service (Plan 08-03's 96M Redpanda rung).
+    # shared_buffers/work_mem/max_connections: the ladder gave no evidence to change any of
+    # them -- peak RSS never approached shared_buffers' own 128MB allocation at any rung, so
+    # D-11's conservative profile stands unchanged, explicitly re-examined rather than
+    # unexamined. Full rung-by-rung ladder, the failing rung's verbatim OOM evidence, and the
+    # independent re-verification: docs/INFRA_RUNBOOK.md, "Self-hosted Postgres resource
+    # measurement -- Plan 11-03".
+    mem_limit: 64m
     environment:
       POSTGRES_USER: ${POSTGRES_SUPERUSER}
       POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASS}
@@ -184,6 +206,19 @@ services:
     # This does not replace Task 3's own measure-under-load pass (05-04-PLAN.md Task 3) -- that
     # still tunes these numbers against real observed usage; this only makes the container
     # boundary the JVM sizes against match what the comment already claimed.
+    #
+    # RE-MEASURED (Plan 11-03, D-10, 2026-08-26): re-examined because the datasource moved from a
+    # public-internet round trip (Neon) to a Docker bridge hop (self-hosted postgres), which could
+    # in principle change this container's own working set. At the adopted postgres floor (64m,
+    # above), idle RSS ~428-436MiB and peak RSS ~436MiB during the full burst+Flyway-recreate
+    # workload -- ~14.2% of this 3g cap, essentially unchanged from the latency-profile shift.
+    # Verdict: KEPT at 3g, not lowered. The measured peak sits far below the cap under this
+    # synthetic burst, but the JVM's own heap sizing (MaxRAMPercentage=25%, see above) is derived
+    # FROM this cgroup limit -- lowering it would shrink the JVM's usable heap under real,
+    # non-synthetic traffic patterns this measurement's light dataset cannot exercise, unlike
+    # postgres's cgroup accounting, which is largely traffic-shape-independent. This is a
+    # deliberate, evidence-backed decision not to descend this cap in the same live session that
+    # already restarted the shared database nine times, not an unexamined value.
     mem_limit: 3g
     depends_on:
       redpanda:
