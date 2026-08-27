@@ -1,8 +1,8 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '3.5.16'
-    id 'io.spring.dependency-management' version '1.1.6'
-    id 'com.diffplug.spotless' version '7.0.2'
+    id 'org.springframework.boot' version '4.1.1'
+    id 'io.spring.dependency-management' version '1.1.7'
+    id 'com.diffplug.spotless' version '8.10.0'
     id 'net.ltgt.errorprone' version '5.1.0'
 
     // Coverage-gap tracking (quick task 260812-eg8, D-01: measure first, then pick a rung from
@@ -57,7 +57,7 @@ plugins {
     // modules). Ratchet condition: once a real dependencyCheckAnalyze baseline exists and its
     // false positives are suppressed with cited evidence, pick a failBuildOnCVSS rung from that
     // number -- the same measure-first-then-gate sequence Error Prone and JaCoCo both followed.
-    id 'org.owasp.dependencycheck' version '12.2.2'
+    id 'org.owasp.dependencycheck' version '13.0.0'
 }
 
 group = 'com.vrudenko'
@@ -139,10 +139,10 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     implementation 'org.springframework.boot:spring-boot-starter-web'
 
-    compileOnly 'org.projectlombok:lombok:1.18.36'
-    annotationProcessor 'org.projectlombok:lombok:1.18.36'
-    testCompileOnly 'org.projectlombok:lombok:1.18.36'
-    testAnnotationProcessor 'org.projectlombok:lombok:1.18.36'
+    compileOnly 'org.projectlombok:lombok:1.18.46'
+    annotationProcessor 'org.projectlombok:lombok:1.18.46'
+    testCompileOnly 'org.projectlombok:lombok:1.18.46'
+    testAnnotationProcessor 'org.projectlombok:lombok:1.18.46'
 
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
@@ -175,10 +175,10 @@ dependencies {
     implementation 'org.springframework.session:spring-session-jdbc'
 
     // https://mvnrepository.com/artifact/com.google.guava/guava
-    implementation 'com.google.guava:guava:32.0.1-android'
+    implementation 'com.google.guava:guava:33.7.1-android'
 
-    implementation 'org.mapstruct:mapstruct:1.5.3.Final'
-    annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.3.Final'
+    implementation 'org.mapstruct:mapstruct:1.6.3'
+    annotationProcessor 'org.mapstruct:mapstruct-processor:1.6.3'
 
     // https://mvnrepository.com/artifact/org.apache.commons/commons-lang3
     // Bumped from the previously-pinned 3.0 (Phase 4, Task 3 regression fix): Spring Boot's
@@ -205,25 +205,25 @@ dependencies {
     // regresses back to test-only scope. One declaration, not two: `implementation` already
     // extends into the test compile and runtime configurations, so a separate
     // `testImplementation` line would be redundant.
-    implementation 'org.apache.commons:commons-lang3:3.18.0'
+    implementation 'org.apache.commons:commons-lang3:3.20.0'
 
     // https://mvnrepository.com/artifact/org.fluttercode.datafactory/datafactory
     testImplementation 'org.fluttercode.datafactory:datafactory:0.8'
 
-    implementation 'io.vavr:vavr:0.10.4'
+    implementation 'io.vavr:vavr:1.0.1'
 
     testImplementation 'org.springframework.security:spring-security-test'
 
     // https://mvnrepository.com/artifact/org.apache.commons/commons-collections4
-    implementation("org.apache.commons:commons-collections4:4.5.0")
+    implementation("org.apache.commons:commons-collections4:4.6.0")
 
-    implementation 'com.github.f4b6a3:ulid-creator:5.2.0'
+    implementation 'com.github.f4b6a3:ulid-creator:5.2.4'
 
     // https://mvnrepository.com/artifact/org.springdoc/springdoc-openapi-starter-webmvc-ui
-    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.8")
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.0")
 
     // https://mvnrepository.com/artifact/io.rest-assured/rest-assured
-    testImplementation("io.rest-assured:rest-assured:5.5.5")
+    testImplementation("io.rest-assured:rest-assured:6.0.1")
 
     implementation 'org.springframework.kafka:spring-kafka'
 
@@ -233,7 +233,7 @@ dependencies {
 
     // Avro core: schema model, binary encoder/decoder, SpecificRecord/SpecificRecordBase
     // runtime support -- required at runtime by every class the avro plugin generates.
-    implementation 'org.apache.avro:avro:1.12.1'
+    implementation 'org.apache.avro:avro:1.12.2'
 
     // Confluent's KafkaAvroSerializer/KafkaAvroDeserializer + Schema Registry REST client.
     // The kafka-clients exclude exists so Spring Boot's BOM-managed kafka-clients (already
@@ -280,7 +280,7 @@ dependencies {
     // See ActivityEventAvroMapper (Task 3).
 
     // https://mvnrepository.com/artifact/com.tngtech.archunit/archunit-junit5
-    testImplementation 'com.tngtech.archunit:archunit-junit5:1.4.2'
+    testImplementation 'com.tngtech.archunit:archunit-junit5:1.5.0'
 
     errorprone 'com.google.errorprone:error_prone_core:2.50.0'
 }
@@ -508,7 +508,7 @@ jacocoTestCoverageVerification {
 // `runtimeClasspath` entirely fails loudly rather than silently matching nothing -- a floor that
 // can no longer find its target has quietly stopped checking.
 def runtimeDependencyFloors = [
-        'org.apache.commons:commons-lang3': '3.18.0'
+        'org.apache.commons:commons-lang3': '3.20.0'
 ]
 
 tasks.register('verifyRuntimeDependencyFloor') {
