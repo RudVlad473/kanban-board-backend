@@ -4,16 +4,19 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 
 import com.vrudenko.kanban_board.constant.ApiPaths;
+import com.vrudenko.kanban_board.dto.reset_dto.ResetUsersRequestDTO;
 import com.vrudenko.kanban_board.exception.AppAccessDeniedException;
 import com.vrudenko.kanban_board.service.ResetService;
 
 import jakarta.annotation.PostConstruct;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -39,6 +42,12 @@ import org.springframework.web.bind.annotation.RestController;
  * same 403 response) as a request carrying a wrong value. Binding it as required would instead make
  * Spring answer 400 for an absent header and 403 for a wrong one, handing a probe a free
  * distinguisher.
+ *
+ * <p><b>{@code fullReset} query-param contract (quick task 260829-ii3).</b> {@code ?fullReset=true}
+ * selects the unconditional full reset ({@link #reset}, unchanged). Absent, or any other value,
+ * selects the targeted delete ({@link #deleteUsers}), which then requires a {@code userIds} body.
+ * Both routes call the same private {@link #verifyResetToken} helper as the very first thing they
+ * do, so neither route's security check can drift from the other's.
  */
 @Profile("nonprod")
 @RestController
@@ -75,18 +84,36 @@ public class ResetController {
         }
     }
 
-    @PostMapping
+    @PostMapping(params = "fullReset=true")
     public ResponseEntity<Void> reset(
             @RequestHeader(name = RESET_TOKEN_HEADER, required = false) String suppliedToken) {
+        verifyResetToken(suppliedToken);
+
+        resetService.resetAll();
+
+        return ResponseEntity.noContent().build();
+    }
+
+    // params = "fullReset!=true" matches BOTH a request with no fullReset parameter at all and one
+    // present with any value other than exactly "true" -- Spring's negated-equality params
+    // condition is not "present and different", it's "not present-and-equal".
+    @PostMapping(params = "fullReset!=true")
+    public ResponseEntity<Void> deleteUsers(
+            @RequestHeader(name = RESET_TOKEN_HEADER, required = false) String suppliedToken,
+            @Valid @RequestBody ResetUsersRequestDTO dto) {
+        verifyResetToken(suppliedToken);
+
+        resetService.deleteUsers(dto.getUserIds());
+
+        return ResponseEntity.noContent().build();
+    }
+
+    private void verifyResetToken(String suppliedToken) {
         if (suppliedToken == null
                 || suppliedToken.isBlank()
                 || !matchesConfiguredToken(suppliedToken)) {
             throw new AppAccessDeniedException("nonprod reset endpoint");
         }
-
-        resetService.resetAll();
-
-        return ResponseEntity.noContent().build();
     }
 
     private boolean matchesConfiguredToken(String suppliedToken) {

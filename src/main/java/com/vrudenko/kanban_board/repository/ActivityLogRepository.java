@@ -1,10 +1,15 @@
 package com.vrudenko.kanban_board.repository;
 
+import java.util.List;
+
 import com.vrudenko.kanban_board.entity.ActivityLogEntity;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /**
  * {@code existsByEventId} is the idempotency fast path {@code ActivityLogRecorder} checks before
@@ -21,4 +26,13 @@ public interface ActivityLogRepository extends JpaRepository<ActivityLogEntity, 
     boolean existsByEventId(String eventId);
 
     Page<ActivityLogEntity> findAllByBoardId(String boardId, Pageable pageable);
+
+    // Explicit bulk JPQL delete (quick task 260829-ii3), not the derived deleteAllByUserIdIn:
+    // Spring Data JPA implements a derived deleteBy... method without @Modifying as a SELECT
+    // followed by one entityManager.remove() per matched row, which would scale query count with
+    // the number of activity rows for the targeted users -- exactly the pattern this codebase's
+    // Epic 2 scope exists to eliminate. Mirrors SubtaskRepository.deleteAllByTaskIdIn.
+    @Modifying
+    @Query("delete from ActivityLogEntity a where a.userId in :userIds")
+    void deleteAllByUserIdIn(@Param("userIds") List<String> userIds);
 }

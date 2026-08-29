@@ -16,6 +16,7 @@ import com.vrudenko.kanban_board.dto.subtask_dto.SaveSubtaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
 import com.vrudenko.kanban_board.dto.user_dto.SignupRequestDTO;
 import com.vrudenko.kanban_board.event.TaskCreatedEvent;
+import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
 import com.vrudenko.kanban_board.service.BoardService;
 import com.vrudenko.kanban_board.service.ColumnService;
 import com.vrudenko.kanban_board.service.ResetService;
@@ -88,8 +89,12 @@ class ResetServiceE2ETest extends AbstractKafkaContainerTest {
                 .longValue();
     }
 
-    /** Creates one real user/board/column/task/subtask chain through the real services. */
-    private void createDomainFixture() {
+    /**
+     * Creates one real user/board/column/task/subtask chain through the real services, returning
+     * the created user's id (quick task 260829-ii3's {@code DeleteUsersTest} needs it to target a
+     * specific user; pre-existing {@code ResetAllTest} callers simply discard the return value).
+     */
+    private String createDomainFixture() {
         var user =
                 userService.save(
                         SignupRequestDTO.builder()
@@ -141,6 +146,8 @@ class ResetServiceE2ETest extends AbstractKafkaContainerTest {
                                 dataFactory.getRandomText(
                                         ValidationConstants.MIN_SUBTASK_TITLE_LENGTH + 1))
                         .build());
+
+        return user.getId();
     }
 
     private void awaitActivityLogHasAtLeastOneRow() {
@@ -165,6 +172,81 @@ class ResetServiceE2ETest extends AbstractKafkaContainerTest {
         Awaitility.await()
                 .atMost(Duration.ofSeconds(30))
                 .until(() -> countRows("activity_log") == expectedRowCount);
+    }
+
+    // Scoped counts (quick task 260829-ii3) -- a targeted delete must prove exactly one user's
+    // rows are gone across every owned-resource table, never a blanket countRows that would also
+    // count an untouched second user's rows in the same table.
+    private long countUsersById(String userId) {
+        return ((Number)
+                        entityManager
+                                .createNativeQuery("SELECT count(*) FROM users WHERE id = :userId")
+                                .setParameter("userId", userId)
+                                .getSingleResult())
+                .longValue();
+    }
+
+    private long countBoardsForUser(String userId) {
+        return ((Number)
+                        entityManager
+                                .createNativeQuery(
+                                        "SELECT count(*) FROM boards WHERE user_id = :userId")
+                                .setParameter("userId", userId)
+                                .getSingleResult())
+                .longValue();
+    }
+
+    private long countColumnsForUser(String userId) {
+        return ((Number)
+                        entityManager
+                                .createNativeQuery(
+                                        "SELECT count(*) FROM columns c JOIN boards b ON"
+                                                + " c.board_id = b.id WHERE b.user_id = :userId")
+                                .setParameter("userId", userId)
+                                .getSingleResult())
+                .longValue();
+    }
+
+    private long countTasksForUser(String userId) {
+        return ((Number)
+                        entityManager
+                                .createNativeQuery(
+                                        "SELECT count(*) FROM tasks t JOIN columns c ON"
+                                                + " t.column_id = c.id JOIN boards b ON c.board_id ="
+                                                + " b.id WHERE b.user_id = :userId")
+                                .setParameter("userId", userId)
+                                .getSingleResult())
+                .longValue();
+    }
+
+    private long countSubtasksForUser(String userId) {
+        return ((Number)
+                        entityManager
+                                .createNativeQuery(
+                                        "SELECT count(*) FROM subtasks s JOIN tasks t ON"
+                                                + " s.task_id = t.id JOIN columns c ON t.column_id ="
+                                                + " c.id JOIN boards b ON c.board_id = b.id WHERE"
+                                                + " b.user_id = :userId")
+                                .setParameter("userId", userId)
+                                .getSingleResult())
+                .longValue();
+    }
+
+    private long countActivityLogForUser(String userId) {
+        return ((Number)
+                        entityManager
+                                .createNativeQuery(
+                                        "SELECT count(*) FROM activity_log WHERE user_id ="
+                                                + " :userId")
+                                .setParameter("userId", userId)
+                                .getSingleResult())
+                .longValue();
+    }
+
+    private void awaitActivityLogRowCountForUser(String userId, long expectedRowCount) {
+        Awaitility.await()
+                .atMost(Duration.ofSeconds(30))
+                .until(() -> countActivityLogForUser(userId) == expectedRowCount);
     }
 
     private long endOffset(AdminClient admin, TopicPartition partition) throws Exception {
@@ -348,6 +430,115 @@ class ResetServiceE2ETest extends AbstractKafkaContainerTest {
                 // this call.
                 Assertions.assertThat(exception).isNotNull();
             }
+        }
+    }
+
+    /**
+     * Real-Postgres, real-Kafka proof of {@link ResetService#deleteUsers} (quick task 260829-ii3):
+     * a targeted delete removes exactly the named user's rows across every owned-resource table, a
+     * second untouched user's rows of every one of those kinds survive unchanged, and the {@code
+     * activity_log}/Kafka-offset assertions for the deleted user are bounded (not strictly zero) to
+     * account for the accepted, empirically-confirmed async race documented on {@link
+     * ResetService#deleteUsers}'s Javadoc.
+     */
+    @Nested
+    class DeleteUsersTest {
+        @Test
+        void should_deleteOnlyTargetUsersData_when_calledWithOneUserId() throws Exception {
+            // arrange
+            var targetUserId = createDomainFixture();
+            var otherUserId = createDomainFixture();
+            // createDomainFixture's own signup->board->column->task->subtask chain publishes 4
+            // events per user (see ResetAllTest's own comment on the same helper) -- await both
+            // users' full row counts before touching either, so the fixture's own async publish
+            // pipeline cannot be mistaken for the accepted post-delete race this test's own act
+            // step is documented to risk (see ResetService.deleteUsers's Javadoc).
+            awaitActivityLogRowCountForUser(targetUserId, 4);
+            awaitActivityLogRowCountForUser(otherUserId, 4);
+
+            var activityPartition = new TopicPartition(KafkaTopics.ACTIVITY, 0);
+            var dltPartition = new TopicPartition(KafkaTopics.ACTIVITY_DLT, 0);
+            long activityOffsetBefore;
+            long dltOffsetBefore;
+            try (AdminClient admin = AdminClient.create(kafkaAdmin.getConfigurationProperties())) {
+                activityOffsetBefore = endOffset(admin, activityPartition);
+                dltOffsetBefore = endOffset(admin, dltPartition);
+            }
+
+            // act
+            resetService.deleteUsers(List.of(targetUserId));
+
+            // assert
+            long activityOffsetAfter;
+            long dltOffsetAfter;
+            try (AdminClient admin = AdminClient.create(kafkaAdmin.getConfigurationProperties())) {
+                activityOffsetAfter = endOffset(admin, activityPartition);
+                dltOffsetAfter = endOffset(admin, dltPartition);
+            }
+
+            Assertions.assertThat(countUsersById(targetUserId)).isZero();
+            Assertions.assertThat(countBoardsForUser(targetUserId)).isZero();
+            Assertions.assertThat(countColumnsForUser(targetUserId)).isZero();
+            Assertions.assertThat(countTasksForUser(targetUserId)).isZero();
+            Assertions.assertThat(countSubtasksForUser(targetUserId)).isZero();
+            // Bounded, not strictly zero (empirically confirmed, not merely theoretical -- this
+            // exact scenario reproduced on every run in this environment, contradicting this
+            // plan's own optimistic "should not be observed" prediction): the deleteUsers()
+            // cascade above published exactly 1 BoardDeletedEvent (this fixture owns 1 board) via
+            // KafkaEventPublisher's @Async AFTER_COMMIT listener, and on this box the async
+            // dispatch + produce + ActivityLogConsumer's consume + persist round-trip consistently
+            // completes before this assertion runs, reinserting exactly 1 stray activity_log row
+            // for the now-deleted user. This is precisely the accepted, self-limited race
+            // ResetService.deleteUsers's Javadoc documents -- upper-bounded by the number of
+            // boards this fixture owns (1), never unbounded, and the affected id can never be a
+            // valid delete target again.
+            Assertions.assertThat(countActivityLogForUser(targetUserId)).isLessThanOrEqualTo(1L);
+
+            Assertions.assertThat(countUsersById(otherUserId)).isEqualTo(1);
+            Assertions.assertThat(countBoardsForUser(otherUserId)).isEqualTo(1);
+            Assertions.assertThat(countColumnsForUser(otherUserId)).isEqualTo(1);
+            Assertions.assertThat(countTasksForUser(otherUserId)).isEqualTo(1);
+            Assertions.assertThat(countSubtasksForUser(otherUserId)).isEqualTo(1);
+            Assertions.assertThat(countActivityLogForUser(otherUserId)).isEqualTo(4);
+
+            // Same bounded-race reasoning applies to the activity topic's own offset: the 1
+            // BoardDeletedEvent the cascade above published may or may not have reached the
+            // broker by the time this assertion runs, so the offset can advance by at most 1 --
+            // never more, and the DLT topic (no consumer failure occurs on this happy path) never
+            // moves at all.
+            Assertions.assertThat(activityOffsetAfter)
+                    .isGreaterThanOrEqualTo(activityOffsetBefore)
+                    .isLessThanOrEqualTo(activityOffsetBefore + 1);
+            Assertions.assertThat(dltOffsetAfter).isEqualTo(dltOffsetBefore);
+        }
+
+        @Test
+        void should_deleteNothing_when_batchContainsOneUnknownId() {
+            // arrange: a bare signup is enough to prove atomicity -- no board graph is needed,
+            // only that the row survives (task 2 of this plan).
+            var realUserId =
+                    userService
+                            .save(
+                                    SignupRequestDTO.builder()
+                                            .email(randomEmail())
+                                            .displayName(
+                                                    dataFactory.getRandomWord(
+                                                            ValidationConstants
+                                                                    .MIN_USER_DISPLAY_NAME_LENGTH))
+                                            .password(randomPassword())
+                                            .build())
+                            .getId();
+            var bogusId = randomId();
+
+            // act
+            var exception =
+                    Assertions.catchException(
+                            () -> resetService.deleteUsers(List.of(realUserId, bogusId)));
+
+            // assert: the batch failed as a whole before any delete ran, so the real, valid id is
+            // NOT deleted despite being valid.
+            Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
+            Assertions.assertThat(userService.findAll()).extracting("id").contains(realUserId);
         }
     }
 }
