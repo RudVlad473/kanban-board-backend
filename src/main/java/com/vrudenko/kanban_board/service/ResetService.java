@@ -5,7 +5,12 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 import com.vrudenko.kanban_board.constant.KafkaTopics;
+import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
+import com.vrudenko.kanban_board.repository.ActivityLogRepository;
+import com.vrudenko.kanban_board.repository.UserRepository;
 
+import jakarta.persistence.EntityManager;
+import jakarta.transaction.Transactional;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.RecordsToDelete;
@@ -57,6 +62,14 @@ public class ResetService {
 
     @Autowired private ResetTruncateService resetTruncateService;
 
+    @Autowired private UserRepository userRepository;
+
+    @Autowired private UserService userService;
+
+    @Autowired private ActivityLogRepository activityLogRepository;
+
+    @Autowired private EntityManager entityManager;
+
     /**
      * Runs, in order: (1) stop every listener container, (2) trim both activity topics to their
      * current high watermark, (3) truncate every Postgres table, (4) restart every listener
@@ -76,6 +89,54 @@ public class ResetService {
                     .getListenerContainers()
                     .forEach(container -> container.start());
         }
+    }
+
+    /**
+     * Nonprod targeted-delete mode (quick task 260829-ii3): cascade-deletes each listed user's
+     * boards/columns/tasks/subtasks (via {@link UserService#deleteById}, the same cascade the
+     * account-deletion path already uses -- no new deletion mechanism is introduced here) plus that
+     * user's own {@code activity_log} rows, leaving every other user's data and both Kafka activity
+     * topics untouched.
+     *
+     * <p><b>Existence-check-before-any-delete invariant.</b> Every supplied id is verified to
+     * exist, in one batched {@code IN (...)} query, before a single delete runs, all inside this
+     * one {@code @Transactional} method. Without this ordering, a caller who has already cleared
+     * the shared-secret gate could submit a batch containing one real id plus one guessed id and
+     * use the partial-success/404 split as a rudimentary "does this exact user id exist" oracle.
+     * Checking first makes the observable outcome binary -- all deleted, or none deleted plus a 404
+     * -- with no partial-state tell.
+     *
+     * <p><b>Accepted, bounded race with {@code ActivityLogConsumer} (not engineered away).</b>
+     * {@link UserService#deleteById}'s cascade publishes real domain events (e.g. {@code
+     * BoardDeletedEvent}) that {@code KafkaEventPublisher} sends {@code @Async} on {@code
+     * AFTER_COMMIT}. If {@code ActivityLogConsumer} processes one of those events for a
+     * just-deleted user AFTER this method's own synchronous {@code activity_log} cleanup below has
+     * already run and after this transaction has committed, a single stray {@code activity_log} row
+     * referencing that now-nonexistent user can reappear. This is deliberately NOT solved by
+     * pausing every Kafka listener the way {@link #resetAll()} does for the full reset: that would
+     * stall the entire activity feed for every unrelated, still-live user for the duration of a
+     * call meant to be narrowly scoped to a handful of target users -- a disproportionate blast
+     * radius for a feature explicitly scoped to keep Kafka out of it. The affected id can never be
+     * a valid delete target again once its user row is gone, so the risk is self-limited -- the
+     * same accepted-race pattern documented on {@code
+     * SecurityConfiguration#sessionAuthenticationStrategy}'s concurrent-session-ceiling TOCTOU
+     * overshoot.
+     */
+    @Transactional
+    public void deleteUsers(List<String> userIds) {
+        var distinctIds = userIds.stream().distinct().toList();
+
+        if (userRepository.findAllById(distinctIds).size() != distinctIds.size()) {
+            throw new AppEntityNotFoundException("User");
+        }
+
+        for (String id : distinctIds) {
+            userService.deleteById(id);
+        }
+
+        entityManager.flush();
+        activityLogRepository.deleteAllByUserIdIn(distinctIds);
+        entityManager.clear();
     }
 
     /**

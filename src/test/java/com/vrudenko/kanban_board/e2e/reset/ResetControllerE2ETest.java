@@ -1,19 +1,28 @@
 package com.vrudenko.kanban_board.e2e.reset;
 
 import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
 
 import com.vrudenko.kanban_board.constant.ApiPaths;
+import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.controller.ResetController;
+import com.vrudenko.kanban_board.dto.reset_dto.ResetUsersRequestDTO;
+import com.vrudenko.kanban_board.dto.user_dto.SignupRequestDTO;
+import com.vrudenko.kanban_board.service.UserService;
 import com.vrudenko.kanban_board.support.containers.AbstractKafkaContainerTest;
 
 import io.restassured.RestAssured;
+import io.restassured.http.ContentType;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.assertj.core.api.Assertions;
+import org.fluttercode.datafactory.impl.DataFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -47,6 +56,10 @@ class ResetControllerE2ETest extends AbstractKafkaContainerTest {
 
     @PersistenceContext private EntityManager entityManager;
 
+    @Autowired private UserService userService;
+
+    private final DataFactory dataFactory = new DataFactory();
+
     @BeforeEach
     void setupRestAssured() {
         RestAssured.port = port;
@@ -62,6 +75,32 @@ class ResetControllerE2ETest extends AbstractKafkaContainerTest {
                 .longValue();
     }
 
+    private String randomEmail() {
+        return "reset-controller-"
+                + UUID.randomUUID().toString().toLowerCase(Locale.ROOT)
+                + "@example.com";
+    }
+
+    private String randomPassword() {
+        return dataFactory
+                        .getRandomWord(ValidationConstants.MIN_PASSWORD_LENGTH)
+                        .toLowerCase(Locale.ROOT)
+                + "Aa1!";
+    }
+
+    private String signUpBareUser() {
+        return userService
+                .save(
+                        SignupRequestDTO.builder()
+                                .email(randomEmail())
+                                .displayName(
+                                        dataFactory.getRandomWord(
+                                                ValidationConstants.MIN_USER_DISPLAY_NAME_LENGTH))
+                                .password(randomPassword())
+                                .build())
+                .getId();
+    }
+
     @Nested
     class ResetEndpoint {
         @Test
@@ -69,6 +108,7 @@ class ResetControllerE2ETest extends AbstractKafkaContainerTest {
             // act
             var response =
                     given().header(ResetController.RESET_TOKEN_HEADER, CORRECT_TOKEN)
+                            .queryParam("fullReset", "true")
                             .when()
                             .post(ApiPaths.RESET)
                             .then()
@@ -86,6 +126,7 @@ class ResetControllerE2ETest extends AbstractKafkaContainerTest {
             // act
             var response =
                     given().header(ResetController.RESET_TOKEN_HEADER, WRONG_TOKEN)
+                            .queryParam("fullReset", "true")
                             .when()
                             .post(ApiPaths.RESET)
                             .then()
@@ -100,7 +141,12 @@ class ResetControllerE2ETest extends AbstractKafkaContainerTest {
         @Test
         void should_return403ProblemDetail_when_headerIsAbsent() {
             // act
-            var response = given().when().post(ApiPaths.RESET).then().extract();
+            var response =
+                    given().queryParam("fullReset", "true")
+                            .when()
+                            .post(ApiPaths.RESET)
+                            .then()
+                            .extract();
 
             // assert: byte-identical status and code to the wrong-token case above -- absence
             // is not distinguishable from mismatch.
@@ -114,6 +160,7 @@ class ResetControllerE2ETest extends AbstractKafkaContainerTest {
             // act
             var response =
                     given().header(ResetController.RESET_TOKEN_HEADER, "")
+                            .queryParam("fullReset", "true")
                             .when()
                             .post(ApiPaths.RESET)
                             .then()
@@ -128,6 +175,7 @@ class ResetControllerE2ETest extends AbstractKafkaContainerTest {
             // act
             var response =
                     given().header(ResetController.RESET_TOKEN_HEADER, CORRECT_TOKEN)
+                            .queryParam("fullReset", "true")
                             .when()
                             .post(ApiPaths.RESET)
                             .then()
@@ -143,6 +191,7 @@ class ResetControllerE2ETest extends AbstractKafkaContainerTest {
         void should_return204Again_when_calledTwice() {
             // arrange
             given().header(ResetController.RESET_TOKEN_HEADER, CORRECT_TOKEN)
+                    .queryParam("fullReset", "true")
                     .when()
                     .post(ApiPaths.RESET)
                     .then()
@@ -151,6 +200,7 @@ class ResetControllerE2ETest extends AbstractKafkaContainerTest {
             // act
             var response =
                     given().header(ResetController.RESET_TOKEN_HEADER, CORRECT_TOKEN)
+                            .queryParam("fullReset", "true")
                             .when()
                             .post(ApiPaths.RESET)
                             .then()
@@ -158,6 +208,34 @@ class ResetControllerE2ETest extends AbstractKafkaContainerTest {
 
             // assert
             Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.NO_CONTENT.value());
+        }
+    }
+
+    /**
+     * HTTP-level proof of the targeted-delete route (quick task 260829-ii3). Every request here
+     * carries NO {@code fullReset} query parameter, proving that is what a plain {@code POST}
+     * reaches per {@link ResetController}'s {@code params}-based dispatch.
+     */
+    @Nested
+    class DeleteUsersEndpoint {
+        @Test
+        void should_return204AndDeleteTheUser_when_calledWithTheCorrectTokenAndOneUserId() {
+            // arrange
+            var userId = signUpBareUser();
+
+            // act
+            var response =
+                    given().header(ResetController.RESET_TOKEN_HEADER, CORRECT_TOKEN)
+                            .contentType(ContentType.JSON)
+                            .body(ResetUsersRequestDTO.builder().userIds(List.of(userId)).build())
+                            .when()
+                            .post(ApiPaths.RESET)
+                            .then()
+                            .extract();
+
+            // assert
+            Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.NO_CONTENT.value());
+            Assertions.assertThat(userService.findAll()).extracting("id").doesNotContain(userId);
         }
     }
 }
