@@ -16,6 +16,7 @@ import com.vrudenko.kanban_board.dto.subtask_dto.SaveSubtaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
 import com.vrudenko.kanban_board.dto.user_dto.SignupRequestDTO;
 import com.vrudenko.kanban_board.event.TaskCreatedEvent;
+import com.vrudenko.kanban_board.exception.AppEntityNotFoundException;
 import com.vrudenko.kanban_board.service.BoardService;
 import com.vrudenko.kanban_board.service.ColumnService;
 import com.vrudenko.kanban_board.service.ResetService;
@@ -509,6 +510,35 @@ class ResetServiceE2ETest extends AbstractKafkaContainerTest {
                     .isGreaterThanOrEqualTo(activityOffsetBefore)
                     .isLessThanOrEqualTo(activityOffsetBefore + 1);
             Assertions.assertThat(dltOffsetAfter).isEqualTo(dltOffsetBefore);
+        }
+
+        @Test
+        void should_deleteNothing_when_batchContainsOneUnknownId() {
+            // arrange: a bare signup is enough to prove atomicity -- no board graph is needed,
+            // only that the row survives (task 2 of this plan).
+            var realUserId =
+                    userService
+                            .save(
+                                    SignupRequestDTO.builder()
+                                            .email(randomEmail())
+                                            .displayName(
+                                                    dataFactory.getRandomWord(
+                                                            ValidationConstants
+                                                                    .MIN_USER_DISPLAY_NAME_LENGTH))
+                                            .password(randomPassword())
+                                            .build())
+                            .getId();
+            var bogusId = randomId();
+
+            // act
+            var exception =
+                    Assertions.catchException(
+                            () -> resetService.deleteUsers(List.of(realUserId, bogusId)));
+
+            // assert: the batch failed as a whole before any delete ran, so the real, valid id is
+            // NOT deleted despite being valid.
+            Assertions.assertThat(exception).isInstanceOf(AppEntityNotFoundException.class);
+            Assertions.assertThat(userService.findAll()).extracting("id").contains(realUserId);
         }
     }
 }

@@ -5,6 +5,7 @@ import java.util.Locale;
 import java.util.UUID;
 
 import com.vrudenko.kanban_board.constant.ApiPaths;
+import com.vrudenko.kanban_board.constant.ErrorCode;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.controller.ResetController;
 import com.vrudenko.kanban_board.dto.reset_dto.ResetUsersRequestDTO;
@@ -236,6 +237,91 @@ class ResetControllerE2ETest extends AbstractKafkaContainerTest {
             // assert
             Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.NO_CONTENT.value());
             Assertions.assertThat(userService.findAll()).extracting("id").doesNotContain(userId);
+        }
+
+        @Test
+        void should_return400ValidationFailed_when_userIdsIsEmpty() {
+            // act
+            var response =
+                    given().header(ResetController.RESET_TOKEN_HEADER, CORRECT_TOKEN)
+                            .contentType(ContentType.JSON)
+                            .body(ResetUsersRequestDTO.builder().userIds(List.of()).build())
+                            .when()
+                            .post(ApiPaths.RESET)
+                            .then()
+                            .extract();
+
+            // assert
+            Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+            Assertions.assertThat(response.body().jsonPath().getString("code"))
+                    .isEqualTo(ErrorCode.VALIDATION_FAILED.name());
+        }
+
+        @Test
+        void should_return404AndDeleteNothing_when_batchContainsOneUnknownId() {
+            // arrange
+            var realUserId = signUpBareUser();
+            var bogusId = UUID.randomUUID().toString();
+
+            // act
+            var response =
+                    given().header(ResetController.RESET_TOKEN_HEADER, CORRECT_TOKEN)
+                            .contentType(ContentType.JSON)
+                            .body(
+                                    ResetUsersRequestDTO.builder()
+                                            .userIds(List.of(realUserId, bogusId))
+                                            .build())
+                            .when()
+                            .post(ApiPaths.RESET)
+                            .then()
+                            .extract();
+
+            // assert
+            Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.NOT_FOUND.value());
+            Assertions.assertThat(response.body().jsonPath().getString("code"))
+                    .isEqualTo(ErrorCode.ENTITY_NOT_FOUND.name());
+            Assertions.assertThat(userService.findAll()).extracting("id").contains(realUserId);
+        }
+
+        @Test
+        void should_return403ProblemDetail_when_tokenIsWrong() {
+            // arrange
+            var userId = signUpBareUser();
+
+            // act
+            var response =
+                    given().header(ResetController.RESET_TOKEN_HEADER, WRONG_TOKEN)
+                            .contentType(ContentType.JSON)
+                            .body(ResetUsersRequestDTO.builder().userIds(List.of(userId)).build())
+                            .when()
+                            .post(ApiPaths.RESET)
+                            .then()
+                            .extract();
+
+            // assert: same shape as the full-reset path's own wrong-token 403.
+            Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.FORBIDDEN.value());
+            Assertions.assertThat(response.body().jsonPath().getString("code"))
+                    .isEqualTo(ErrorCode.ACCESS_DENIED.name());
+        }
+
+        @Test
+        void should_return403ProblemDetail_when_headerIsAbsent() {
+            // arrange
+            var userId = signUpBareUser();
+
+            // act
+            var response =
+                    given().contentType(ContentType.JSON)
+                            .body(ResetUsersRequestDTO.builder().userIds(List.of(userId)).build())
+                            .when()
+                            .post(ApiPaths.RESET)
+                            .then()
+                            .extract();
+
+            // assert: no oracle on header absence, identical to the full-reset path's guarantee.
+            Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.FORBIDDEN.value());
+            Assertions.assertThat(response.body().jsonPath().getString("code"))
+                    .isEqualTo(ErrorCode.ACCESS_DENIED.name());
         }
     }
 }
