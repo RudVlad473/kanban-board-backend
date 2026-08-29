@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 Phase: 11
 Plan: Not started
 Status: All phases complete
-Last activity: 2026-08-26 — Phase 11 complete
+Last activity: 2026-08-29 - Completed quick task 260829-ii3: In the nonprod reset endpoint, add a REQUIRED request parameter: a list of user IDs to delete, cascading to all resources those users own, following existing ownership-cascade patterns. Resolve: (1) relationship to existing full-reset behavior, (2) whether to also trim Kafka activity topics, (3) preserve existing security posture unchanged.
 
 ## Performance Metrics
 
