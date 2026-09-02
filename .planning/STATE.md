@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v1.3
 current_phase: 11
 status: completed
-stopped_at: Completed quick task 260829-ii3
-last_updated: "2026-08-29T12:43:13.884Z"
-last_activity: 2026-08-26
+stopped_at: Completed quick task 260902-vjo
+last_updated: "2026-09-02T20:59:09.569Z"
+last_activity: 2026-08-29
 last_activity_desc: Phase 11 complete
-state_head: c29a32d4a77fd9845b9d68008528c6bbf4002c7a
+state_head: 46137464dd1b0e20251f314fabd8110923194f7a
 progress:
   total_phases: 1
   completed_phases: 1
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 Phase: 11
 Plan: Not started
 Status: All phases complete
-Last activity: 2026-08-29 - Completed quick task 260829-ii3: In the nonprod reset endpoint, add a REQUIRED request parameter: a list of user IDs to delete, cascading to all resources those users own, following existing ownership-cascade patterns. Resolve: (1) relationship to existing full-reset behavior, (2) whether to also trim Kafka activity topics, (3) preserve existing security posture unchanged.
+Last activity: 2026-09-02 - Completed quick task 260902-vjo: Document Netcup console staleness triage in docs/INFRA_RUNBOOK.md and add a GitHub Actions cron uptime check for both public health endpoints
 
 ## Performance Metrics
 
@@ -47,6 +47,7 @@ v1.0–v1.2 velocity/per-plan detail archived at milestone close — see `.plann
 | Phase 11 P04 | 30min | 2 tasks | 1 files |
 | Phase 11 P05 | 41min | 3 tasks | 2 files |
 | Phase 11 P06 | 40min | 3 tasks | 2 files |
+| Phase quick P260902-vjo | ~40min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -70,6 +71,7 @@ No active-milestone decisions pending — next milestone not yet scoped.
 - [Phase 11]: Phase 11 plan 05: DB_HOST/DB_NAME moved from GitHub Environment secrets to variables so the resolved database name is provably visible, unmasked, in CI logs (DB_USER/DB_PASS remain secrets)
 - [Phase 11]: Phase 11 plan 05: gate-still-bites evidence gathered via a live VM-local reproduction against a disposable scratch database rather than a throwaway-branch CI push
 - [Phase 11]: 260829-ii3: ResetController's params-based two-route split (fullReset=true vs fullReset!=true) routed exactly as predicted; the plan's accepted-async-race assumption for activity_log/topic-offset assertions did not hold empirically and required bounding, not tightening
+- [Phase 11]: 260902-vjo: Netcup SCP console triage guidance added to INFRA_RUNBOOK.md between Access and Firewall sections; new scheduled uptime-check.yml workflow (cron */15, workflow_dispatch, permissions: {}) probes both public health endpoints, proven to bite on non-200/unreachable/wrong-body branches locally
 
 ### Pending Todos
 
@@ -97,6 +99,7 @@ confusion risk, `NVD_API_KEY` resolution failure) were resolved during Phases 8�
 | 260825-dfd | Add a createdAt timestamp to BoardEntity and expose it on BoardResponseDTO, populated once in BoardService.save() and shared with BoardCreatedEvent's timestamp | 2026-08-25 | 6aadda1 | [260825-dfd-add-a-createdat-timestamp-to-boardentity](./quick/260825-dfd-add-a-createdat-timestamp-to-boardentity/) |
 | 260825-h7m | Add createdAt to BoardFullResponseDTO, carried through the nested GET /boards/{boardId}/full read via MapStruct name-based auto-mapping; extended the flat-equivalence test to cover board-level fields (name/version/createdAt), closing the untested gap that let createdAt reach production missing from the nested document | 2026-08-25 | 1dd30ea | [260825-h7m-add-createdat-to-boardfullresponsedto-ge](./quick/260825-h7m-add-createdat-to-boardfullresponsedto-ge/) |
 | 260829-ii3 | In the nonprod reset endpoint, add a REQUIRED targeted-delete mode selected by a fullReset query param: POST /api/admin/reset?fullReset=true keeps the unconditional full reset unchanged, a bare POST with {"userIds": [...]} cascade-deletes only those users' boards/columns/tasks/subtasks and their own activity_log rows via a new ResetService.deleteUsers, reusing UserService.deleteById's existing cascade | 2026-08-29 | c29a32d | [260829-ii3-in-the-nonprod-reset-endpoint-add-a-requ](./quick/260829-ii3-in-the-nonprod-reset-endpoint-add-a-requ/) |
+| 260902-vjo | Document Netcup console staleness triage in docs/INFRA_RUNBOOK.md and add a GitHub Actions cron uptime check for both public health endpoints | 2026-09-02 | 4613746 | [260902-vjo-document-netcup-console-staleness-triage](./quick/260902-vjo-document-netcup-console-staleness-triage/) |
 
 ## Deferred Items
 
@@ -130,8 +133,8 @@ The 46 pending todos are individually listed and categorized in this document's 
 
 ## Session Continuity
 
-Last session: 2026-08-29T12:42:56.410Z
-Stopped at: Completed quick task 260829-ii3
+Last session: 2026-09-02T20:59:09.390Z
+Stopped at: Completed quick task 260902-vjo
 Resume file: None
 
 ## Operator Next Steps
