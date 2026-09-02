@@ -1,0 +1,122 @@
+# Standing uptime probe of both public health endpoints (quick task 260902-vjo).
+#
+# What it guards: whether production and nonprod were actually answering recently. It exists
+# because a frozen Netcup SCP "Screen" console screenshot is not evidence of an outage -- see
+# docs/INFRA_RUNBOOK.md's "Triage -- dating what the Netcup SCP 'Screen' console shows" section
+# for the false alarm this responds to, and go there once a run here goes red.
+#
+# What it cannot do -- stated honestly, not left to be discovered:
+#   (a) GitHub's cron is a floor, not a guarantee: scheduled runs queue on shared runners and can
+#       fire late, so a red run only dates an outage to within roughly the interval plus that
+#       jitter, never to the minute.
+#   (b) GitHub disables scheduled workflows in a public repository after 60 days of repository
+#       inactivity -- this stops silently if the repo goes quiet.
+#   (c) it is a probe, not an alerting system -- a red run sits in the Actions tab; it pages
+#       nobody.
+#   (d) upstream `management.endpoint.health.show-details=never` (application.properties) means a
+#       failure can name the endpoint and its observed status and can never name the failing
+#       subsystem underneath it.
+name: Uptime Check
+
+on:
+  schedule:
+    # GitHub's 5-minute floor is nominal only: schedule events queue on shared runners and can
+    # arrive late, disproportionately near the top of the hour, so */5's real latency edge over
+    # */15 is mostly notional while its run count is 3x -- not worth the extra Actions-tab noise
+    # for a probe that pages nobody.
+    - cron: '*/15 * * * *'
+  workflow_dispatch: {}
+
+# Diverges from security-scan.yml/secret-scan.yml's `permissions: contents: read` -- this job
+# never checks out the repository (the same shape as deploy.yml's health-check-nonprod job, which
+# states the same property), so it needs no scope at all. Flagged rather than left to look like
+# drift, per this repo's own established habit for sibling-file differences.
+permissions: {}
+
+jobs:
+  uptime-check:
+    runs-on: ubuntu-latest
+    # Runaway guard against a hung curl, not a runtime prediction -- worst case is roughly 3
+    # minutes: 2 endpoints x 3 attempts x 20s curl timeout, plus the inter-attempt sleeps.
+    timeout-minutes: 5
+    env:
+      # Both endpoints are public and unauthenticated -- this file carries no secret and needs
+      # none. Folded scalar: one whitespace-separated line, iterated by deliberate unquoted
+      # word-splitting in the script below.
+      HEALTH_URLS: >-
+        https://kanban-board-rud-vlad-473.duckdns.org/api/actuator/health
+        https://kanban-board-rud-vlad-473-nonprod.duckdns.org/api/actuator/health
+      # A single-shot probe from a shared runner turns a transient network blip into a red run --
+      # manufacturing the exact false alarm this file exists to prevent. 3 attempts x 10s stays
+      # sub-minute on a healthy run and is cheap either way.
+      ATTEMPTS: 3
+      SLEEP_SECONDS: 10
+      CURL_MAX_TIME: 20
+      UP_MARKER: '"status":"UP"'
+    steps:
+      # No `${{ }}` interpolation anywhere in this script -- every value arrives through `env:`
+      # above. That is both this repo's documented injection-safety rule (see security-scan.yml's
+      # NVD_API_KEY step comment) and what lets this exact script be extracted and run locally
+      # unmodified (quick task 260902-vjo, Task 3).
+      - name: Check both public health endpoints
+        run: |
+          set -eu
+
+          FAILURES=""
+          ALL_OK=1
+
+          for URL in $HEALTH_URLS; do
+            ATTEMPT=1
+            URL_OK=0
+            LAST_STATUS=""
+            LAST_BODY=""
+
+            while [ "$ATTEMPT" -le "$ATTEMPTS" ]; do
+              RAW=$(curl -s --max-time "$CURL_MAX_TIME" -w '\n%{http_code}' "$URL" || printf '\n000')
+              LAST_STATUS=$(printf '%s' "$RAW" | tail -n1)
+              LAST_BODY=$(printf '%s' "$RAW" | sed '$d')
+
+              if [ "$LAST_STATUS" = "200" ]; then
+                case "$LAST_BODY" in
+                  *"$UP_MARKER"*) URL_OK=1 ;;
+                esac
+              fi
+
+              if [ "$URL_OK" -eq 1 ]; then
+                break
+              fi
+
+              if [ "$LAST_STATUS" = "200" ]; then
+                echo "Attempt $ATTEMPT/$ATTEMPTS: $URL returned 200 but the body did not contain the UP marker"
+              else
+                echo "Attempt $ATTEMPT/$ATTEMPTS: $URL returned status $LAST_STATUS"
+              fi
+
+              if [ "$ATTEMPT" -lt "$ATTEMPTS" ]; then
+                sleep "$SLEEP_SECONDS"
+              fi
+              ATTEMPT=$((ATTEMPT + 1))
+            done
+
+            # One environment being down must never mask the other -- URL_OK is reset per
+            # iteration and the loop never exits early, so every URL in HEALTH_URLS is always
+            # checked regardless of what earlier ones did.
+            if [ "$URL_OK" -eq 1 ]; then
+              echo "$URL: OK (200, UP marker present)"
+            else
+              ALL_OK=0
+              if [ "$LAST_STATUS" = "200" ]; then
+                FAILURES="${FAILURES}::error::$URL returned status 200 but the response body did not contain the UP marker\n"
+              else
+                FAILURES="${FAILURES}::error::$URL returned status $LAST_STATUS (expected 200)\n"
+              fi
+            fi
+          done
+
+          if [ "$ALL_OK" -eq 1 ]; then
+            echo "Both endpoints OK: $HEALTH_URLS"
+            exit 0
+          fi
+
+          printf "%b" "$FAILURES"
+          exit 1
