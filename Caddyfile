@@ -41,6 +41,25 @@
 		}
 
 		zone general {
+			# Excludes the auth paths so the two zones PARTITION rather than compose. Added
+			# 2026-09-03 after measuring the composed behaviour: a request rejected 429 by the
+			# auth zone still spent a general-zone token, so 130 signin attempts from one address
+			# consumed all 120 general events and the next request to any endpoint -- /api/boards
+			# included -- was refused for the rest of the minute. Measured directly: 30 signin
+			# attempts (20 allowed + 10 rejected) left exactly 90 of 120 general events, i.e. all
+			# 30 counted, rejections included.
+			#
+			# The failure needs no crowd, only one stuck client: a frontend retrying signin in a
+			# loop never succeeds, never reaches bcrypt past the 20th attempt, and still starves
+			# that address off the entire API. Everyone behind the same NAT is collateral, since
+			# the key is a source address rather than a person.
+			#
+			# Cost of partitioning, stated so it is not discovered later: one address's ceiling
+			# rises from 120 to 140 requests/minute (120 general + 20 auth). Accepted -- the
+			# bcrypt bound, which is the control that actually matters, is unchanged at 20/5m.
+			match {
+				not path /api/signin* /api/signup*
+			}
 			key {remote_host}
 			events 120
 			window 1m
@@ -78,10 +97,14 @@
 	# roughly 4 attempts/minute/address. Chosen over a tighter 10 (human decision, 2026-09-03)
 	# because the key is an IP: an office or CGNAT pool shares one bucket, so the limit has to
 	# tolerate several distinct real people failing a login at once, not just one. 120 per minute
-	# on the general zone sits comfortably above this repo's own reference 54-request burst
-	# (docs/INFRA_RUNBOOK.md) and above the scheduled health probe. An auth request consumes from
-	# BOTH zones -- the zones compose, they do not partition -- so exhausting the auth zone also
-	# spends twenty of the general zone's budget.
+	# on the general zone sits comfortably above this repo's own reference 56-call board-setup
+	# burst (docs/INFRA_RUNBOOK.md's measured workload: signup, a board, 6 columns, 24 tasks, 24
+	# subtasks) and above the scheduled health probe -- roughly two such bursts per minute from one
+	# address, which a single human using this app does not reach.
+	#
+	# The zones PARTITION: the general zone's matcher excludes the auth paths, so an auth request
+	# spends from the auth zone only. They composed until 2026-09-03; see the general zone's own
+	# comment for the measurement that changed it.
 	#
 	# What is deliberately NOT here, dated 2026-09-03: a `handle_errors 429` block, so a 429 from
 	# this directive does not carry the `application/problem+json` envelope every other error on
