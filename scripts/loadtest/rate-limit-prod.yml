@@ -1,0 +1,66 @@
+# Artillery: prove the production edge rate limiter is live (quick task 260903-dvp, Task 7).
+#
+# Positive half of a two-sided check. Run scripts/loadtest/run-rate-limit-verification.sh, which
+# runs this AND rate-limit-nonprod.yml -- either half alone is not evidence. A limiter accidentally
+# declared at the Caddyfile's top level instead of inside the {$APP_DOMAIN} site block would pass
+# this file and fail the negative control, which is the whole reason the negative control exists.
+#
+# Safety, and the reason this only ever touches /api/signin:
+#   * The auth zone matches `/api/signin* /api/signup*`, but load-testing signup against production
+#     would CREATE real user rows -- one per allowed request, every run. Never point this at signup.
+#   * The credentials below are deliberately invalid, so a request that gets past the limiter is
+#     answered 401 by the app and writes nothing.
+#   * Each allowed request costs one bcrypt hash on a 2 GB VPS. `arrivalCount: 1` with a sequential
+#     loop keeps that to ~20 hashes, not a thundering herd -- this verifies a control, it is not a
+#     capacity test.
+#   * Running this SPENDS THE RUNNER'S OWN IP BUDGET: the source address is limited for the rest of
+#     the 5-minute window, from any client behind the same address. Expected, self-healing, and the
+#     reason a failed run should be retried after the window rather than immediately.
+config:
+  # Overridden by the runner with -t; the default is documentation, not a fallback worth relying on.
+  target: "https://kanban-board-rud-vlad-473.duckdns.org"
+  phases:
+    # One virtual user, arriving once, looping sequentially. Deliberately NOT `arrivalRate` with
+    # concurrency: the assertion is about a per-address COUNT inside a window, and concurrent
+    # arrivals make the transition point unreadable in exactly the way the local verification of
+    # this change already had to work around.
+    - arrivalCount: 1
+      duration: 1
+      name: "auth zone -- 25 sequential signin attempts against a 20/5m budget"
+  plugins:
+    ensure: {}
+    expect: {}
+  # The verdict. `conditions`, NOT `thresholds` -- observed 2026-09-03 against artillery 2.0.24:
+  # an `ensure.thresholds` entry asserts the metric is AT MOST the given value (it exists for
+  # latency budgets like `p99: 100`), so `- "http.codes.429": 1` reads like "expect a 429" and
+  # actually means "fail if more than one 429 arrives". That inversion is silent and backwards in
+  # the worst way -- it would pass against a BROKEN limiter emitting zero or one 429 and fail
+  # against a working one. `conditions` takes a filtrex expression and is the only form here that
+  # can express a lower bound.
+  #
+  # `http.codes.429 > 0` is the load-bearing claim: the limiter is actually in the request path on
+  # this hostname. The 401 floor guards the inverse failure -- if the very first request were 429
+  # the run would "pass" on 429s alone while actually indicating a limiter far tighter than
+  # intended, or a budget already spent by an earlier run inside the same 5-minute window.
+  ensure:
+    conditions:
+      - expression: "http.codes.429 > 0"
+        strict: true
+      - expression: "http.codes.401 >= 10"
+        strict: true
+
+scenarios:
+  - name: "signin until the auth zone rejects"
+    flow:
+      - loop:
+          - post:
+              url: "/api/signin"
+              json:
+                email: "ratelimit-probe@example.invalid"
+                password: "not-a-real-password"
+              # 401 (rejected credentials) and 429 (rejected by the limiter) are both expected
+              # outcomes here; anything else means the request reached a state this probe does not
+              # model, so surface it rather than silently counting it.
+              expect:
+                - statusCode: [401, 429]
+        count: 25

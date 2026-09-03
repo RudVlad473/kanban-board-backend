@@ -1,0 +1,50 @@
+# Artillery: prove the limiter is scoped to production ONLY (quick task 260903-dvp, Task 7).
+#
+# Negative control for rate-limit-prod.yml, and the more informative of the two. Both hostnames are
+# served by the SAME Caddy container running the SAME binary with the SAME Caddyfile -- the only
+# difference is that `rate_limit` appears inside the {$APP_DOMAIN} site block and not inside
+# {$APP_DOMAIN_NONPROD}. So this file is what distinguishes "the limiter is correctly scoped to one
+# site block" from "the limiter is throttling everything", and those two states are indistinguishable
+# from the production side alone.
+#
+# It also protects a real workflow rather than a hypothetical: nonprod runs the chatty e2e suites,
+# which would trip a 120/min general zone. A 429 here is a production incident for CI.
+#
+# Same safety constraints as the production file: signin only (never signup, which would create real
+# rows), deliberately invalid credentials, sequential single user.
+config:
+  target: "https://kanban-board-nonprod-rud-vlad-473.duckdns.org"
+  phases:
+    - arrivalCount: 1
+      duration: 1
+      name: "nonprod -- 25 sequential signin attempts, expecting no limiting at all"
+  plugins:
+    ensure: {}
+    expect: {}
+  # Every one of the 25 must reach the app and be answered 401. Stated as an equality rather than
+  # a floor so that a single 429 -- the exact regression this file exists to catch -- fails the
+  # run even though the other 24 succeeded.
+  #
+  # The runner ALSO computes the 429 count from the JSON report and fails on non-zero. That is
+  # belt-and-braces on purpose: this is the assertion whose silent failure would be worst (a
+  # throttled nonprod breaks the e2e suites), and `expect`'s per-request statusCode check and this
+  # aggregate condition fail on different signals.
+  ensure:
+    conditions:
+      - expression: "http.codes.401 == 25"
+        strict: true
+
+scenarios:
+  - name: "signin 25 times and expect every one to reach the app"
+    flow:
+      - loop:
+          - post:
+              url: "/api/signin"
+              json:
+                email: "ratelimit-probe@example.invalid"
+                password: "not-a-real-password"
+              # 401 ONLY. A 429 here is the failure this whole file exists to catch, so it is
+              # deliberately not in the accepted list -- an unexpected-status failure is the signal.
+              expect:
+                - statusCode: 401
+        count: 25
