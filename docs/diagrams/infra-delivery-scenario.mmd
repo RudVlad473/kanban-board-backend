@@ -51,7 +51,7 @@ sequenceDiagram
 
     GH->>Comp: docker compose exec -T caddy caddy reload<br/>--config /etc/caddy/Caddyfile --adapter caddyfile
     Note over Comp,Caddy: F-1: the Caddyfile is a read-only BIND MOUNT, and a<br/>bind-mounted file's CONTENT is not part of Compose's<br/>config hash -- so `up -d` above never applies a<br/>Caddyfile edit by itself. This reload is what does.<br/>True of every prior Caddyfile edit in this repo's history.
-    GH->>Comp: docker compose exec -T caddy wget -qO-<br/>http://localhost:2019/config/ | grep rate_limit
+    GH->>Comp: docker compose exec -T caddy wget -qO-<br/>http://127.0.0.1:2019/config/ | grep rate_limit
     Note over GH,Comp: reads the config Caddy is actually RUNNING, not the<br/>file that was copied -- fails the job loudly (::error::,<br/>set -e) if the handler is missing after reload
 
     alt run succeeded

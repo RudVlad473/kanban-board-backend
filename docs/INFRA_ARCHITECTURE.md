@@ -105,12 +105,29 @@ is not by itself proof the new container reached `UP`.
 means a Caddyfile edit had zero effect in production until this change. `deploy-to-netcup` now
 runs `docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile`
 immediately after `up -d`, then reads the config Caddy is actually *running* back from its admin
-API (`http://localhost:2019/config/`) and fails the job loudly if the expected handler is absent
+API (`http://127.0.0.1:2019/config/`) and fails the job loudly if the expected handler is absent
 — this is what actually proves the reload took effect, rather than assuming it from a copied file.
+
+That readback address must stay `127.0.0.1` and must never be written as `localhost` (observed
+2026-09-03, `caddy:2.11.4`): Caddy's admin API binds IPv4 only, while the image's `/etc/hosts`
+carries both a `127.0.0.1 localhost` and a `::1 localhost` record, and the image's BusyBox `wget`
+tries the IPv6 record and treats the connection refusal as terminal instead of falling back. The
+`localhost` form therefore fails every time against a perfectly healthy listener. It is
+fail-closed, but it lands *after* `up -d` has already swapped in the new `app` image, so it would
+redden every deploy and let `cleanup-unused-image` (`if: failure()`) delete the app manifest then
+running on the VM. Falsifier: if a future base image ships a `wget` that falls back to the second
+address record, or Caddy's admin API starts binding dual-stack, this constraint dissolves.
+
+**Where the Caddy image-tag invariant is enforced:** `.github/workflows/invariant-checks.yml` runs
+`scripts/verify-caddy-image-tag.py` on every push and pull request, and `deploy.yml`'s
+`build-and-push-caddy-image` job runs it again before building. The PR-triggered workflow is the
+one that makes tag drift unmergeable — `deploy.yml` triggers on push-to-`main` only, so on its own
+it can block a deploy but never a merge.
 
 ## Maintenance Note
 
-This document describes `docker-compose.prod.yml`, `Caddyfile`, `docker/caddy/Dockerfile`, and
+This document describes `docker-compose.prod.yml`, `Caddyfile`, `docker/caddy/Dockerfile`,
+`.github/workflows/invariant-checks.yml`, and
 `.github/workflows/deploy.yml` — specifically the `build-and-push-docker-image` and
 `build-and-push-caddy-image` jobs' `linux/amd64` platform target (the deploy target pivoted from
 Oracle A1 Flex/ARM64 to Netcup/x86_64 in Phase 5), the 14 job names and the job graph (`needs:`
