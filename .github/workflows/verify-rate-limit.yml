@@ -1,0 +1,67 @@
+# Post-deploy verification that the Caddy edge rate limiter is live and correctly scoped
+# (quick task 260903-dvp, Task 7). Runs scripts/loadtest/run-rate-limit-verification.sh.
+#
+# Why this exists as a workflow rather than "run the script on your laptop": the limiter keys on
+# {remote_host}, the TCP peer address, so running the harness SPENDS THE RUNNER'S OWN IP BUDGET --
+# 20 signin attempts, then 429s for the rest of the 5-minute window, for everyone behind that
+# address. Run from a laptop that is the developer's own address, and back-to-back runs collide
+# with each other and lock the developer out of signin meanwhile. A GitHub-hosted runner gets a
+# different egress address per run, so runs neither collide nor touch anyone's real address.
+#
+# The rejected alternative is worth naming so nobody re-proposes it: spoofing the source via
+# X-Forwarded-For. It cannot work and must not be made to work -- {remote_host} was chosen over
+# {client_ip} precisely so the limiter's key is the unforgeable TCP peer rather than a header, and
+# configuring `trusted_proxies` to honour XFF would let any attacker choose their own bucket key.
+# Convenience for testing is not worth deleting the control being tested.
+#
+# workflow_dispatch ONLY, deliberately. It is tempting to chain this to deploy.yml with
+# `workflow_run` so every deploy self-verifies, but each run costs ~20 bcrypt hashes on a 2 GB VPS
+# and rate-limits the runner's address for five minutes. Verification of a control that changes
+# only when the Caddyfile changes does not belong on every app deploy. Run it after a deploy that
+# touched the edge, and after any Caddyfile change.
+name: Verify Rate Limit
+
+on:
+  workflow_dispatch:
+    inputs:
+      prod_url:
+        description: "Production base URL (the hostname that MUST be rate limited)"
+        required: true
+        default: "https://kanban-board-rud-vlad-473.duckdns.org"
+      nonprod_url:
+        description: "Nonprod base URL (the negative control -- MUST NOT be rate limited)"
+        required: true
+        default: "https://kanban-board-nonprod-rud-vlad-473.duckdns.org"
+
+jobs:
+  verify:
+    name: Production limits signin, nonprod does not
+    runs-on: ubuntu-latest
+    # Generous relative to a ~1 minute happy path: the script waits out a full 5-minute window and
+    # retries once if the production half fails, which is its designed response to a budget already
+    # spent by an earlier run against the same address.
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      # pnpm, not npm/npx (see the repo's tooling conventions). The harness shells out to
+      # `pnpm dlx artillery@2.0.24`, so pnpm has to exist before it runs.
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      # No secrets and no VPN: both hostnames are public HTTPS endpoints, and the harness
+      # authenticates with deliberately invalid credentials so a request that passes the limiter is
+      # answered 401 and writes nothing. It never touches /api/signup, which would create real rows.
+      - name: Verify rate limiting on both hostnames
+        run: |
+          ./scripts/loadtest/run-rate-limit-verification.sh \
+            "${{ inputs.prod_url }}" \
+            "${{ inputs.nonprod_url }}"
