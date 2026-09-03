@@ -22,6 +22,11 @@ env:
   # both tags (see build-and-push-docker-image below), so nonprod and production always run
   # byte-identical image content pulled from two independent repositories.
   DOCKERHUB_REPOSITORY_NONPROD: kanban-board-backend-nonprod
+  # Caddy's own repository (quick task 260903-dvp, D-3) -- a THIRD, independent Docker Hub
+  # repository, never the same one as the app: the app image changes every commit, this one
+  # changes only when docker/caddy/Dockerfile changes, and the two must be prunable
+  # (cleanup-old-images below) on separate schedules without touching each other's tags.
+  DOCKERHUB_REPOSITORY_CADDY: kanban-board-caddy
 
 # Risk-acceptance (Phase 10, HARDEN-03, D-05): actions/checkout, actions/setup-java,
 # docker/setup-buildx-action, docker/build-push-action, actions/cache and actions/upload-artifact
@@ -38,12 +43,14 @@ jobs:
     outputs:
       base_image_name: ${{ steps.create_environment_variables.outputs.base_image_name }}
       base_image_name_nonprod: ${{ steps.create_environment_variables.outputs.base_image_name_nonprod }}
+      base_image_name_caddy: ${{ steps.create_environment_variables.outputs.base_image_name_caddy }}
     steps:
       - name: Create environment variables
         id: create_environment_variables
         run: |
           echo "base_image_name=$DOCKERHUB_USER/$DOCKERHUB_REPOSITORY" >> "$GITHUB_OUTPUT"
           echo "base_image_name_nonprod=$DOCKERHUB_USER/$DOCKERHUB_REPOSITORY_NONPROD" >> "$GITHUB_OUTPUT"
+          echo "base_image_name_caddy=$DOCKERHUB_USER/$DOCKERHUB_REPOSITORY_CADDY" >> "$GITHUB_OUTPUT"
 
   run-tests:
     runs-on: ubuntu-latest
@@ -146,6 +153,97 @@ jobs:
           tags: |
             ${{ steps.set_full_image_name.outputs.actual_image_name }}
             ${{ steps.set_full_image_name_nonprod.outputs.actual_image_name_nonprod }}
+
+  # Builds and pushes the pinned Caddy image carrying the edge rate limiter (quick task
+  # 260903-dvp, D-3): the VM is a 2GB box with a documented OOM history, so it only ever pulls --
+  # xcaddy's from-source compile happens here, on the runner, never on the VM. A separate job from
+  # build-and-push-docker-image (not a third tag on that same build) because the two artifacts
+  # share nothing -- different Dockerfile, different context, different base image -- and gating
+  # both behind run-tests independently is simpler than threading one job's inputs into the other.
+  #
+  # No pruning job for this repository (unlike cleanup-old-images/-nonprod below), dated
+  # 2026-09-03: the tag is content-derived (D-5), so at most a handful of distinct tags will ever
+  # exist for it -- one per actual edge change, not one per commit -- and the current one must stay
+  # pullable for a cold VM restart to succeed. The existing cleanup-* jobs already cannot reach
+  # this repository even by accident: they iterate only setup's base_image_name and
+  # base_image_name_nonprod outputs, never base_image_name_caddy.
+  build-and-push-caddy-image:
+    runs-on: ubuntu-latest
+    needs: [ setup, run-tests ]
+    if: success()
+    # Resolves secrets.DOCKERHUB_TOKEN, matching build-and-push-docker-image's own environment.
+    environment: production
+    outputs:
+      caddy_image: ${{ steps.gate_and_derive_tag.outputs.caddy_image }}
+      caddy_image_tag: ${{ steps.gate_and_derive_tag.outputs.caddy_image_tag }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      # Placed first, before Buildx setup or the Docker Hub login below, so a mismatch costs
+      # seconds rather than a full xcaddy compile. scripts/verify-caddy-image-tag.py itself checks
+      # docker/caddy/Dockerfile against docker-compose.prod.yml (I1/I2/I3) -- the explicit
+      # IMAGE/COMPOSE_IMAGE comparison below closes the one drift axis that script cannot see on
+      # its own: this workflow's own DOCKERHUB_REPOSITORY_CADDY (via setup's base_image_name_caddy
+      # output) against the compose file's repository name.
+      - name: Verify the Caddy image tag agrees across Dockerfile, compose, and this workflow
+        id: gate_and_derive_tag
+        run: |
+          python3 scripts/verify-caddy-image-tag.py
+          TAG=$(python3 scripts/verify-caddy-image-tag.py --print-tag)
+          IMAGE="${{ needs.setup.outputs.base_image_name_caddy }}:$TAG"
+          COMPOSE_IMAGE=$(python3 scripts/verify-caddy-image-tag.py --print-compose-image)
+          if [ "$IMAGE" != "$COMPOSE_IMAGE" ]; then
+            echo "::error::Computed image ($IMAGE) disagrees with docker-compose.prod.yml's services.caddy.image ($COMPOSE_IMAGE) -- check DOCKERHUB_REPOSITORY_CADDY above against the compose file's repository name."
+            exit 1
+          fi
+          echo "caddy_image=$IMAGE" >> "$GITHUB_OUTPUT"
+          echo "caddy_image_tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u $DOCKERHUB_USER --password-stdin
+
+      # load: true / push: false here, a separate `docker push` step below -- deliberately not a
+      # single push:true build, because a broken image must never reach the registry: steps 6-7
+      # below are what decide whether this artifact is trustworthy, and they can only run against
+      # an image that already exists locally. cache-from/cache-to type=gha: the image's content
+      # changes only when docker/caddy/Dockerfile changes (F-2/D-2/D-4 are all fixed at specific
+      # pins), so the steady-state cost of rebuilding on every push is a cache hit; any real edit
+      # to the Dockerfile busts the cache and genuinely recompiles.
+      - name: Build Caddy image (linux/amd64)
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/caddy
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: ${{ steps.gate_and_derive_tag.outputs.caddy_image }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # A green `xcaddy build` is not evidence the module was linked in -- prove the artifact
+      # directly, the same two assertions Task 1's local build already proved once by hand.
+      - name: Prove the rate-limit module is actually in the built image
+        run: |
+          docker run --rm "${{ steps.gate_and_derive_tag.outputs.caddy_image }}" caddy version | grep -q 'v2\.11\.4'
+          docker run --rm "${{ steps.gate_and_derive_tag.outputs.caddy_image }}" caddy list-modules | grep -qx 'http.handlers.rate_limit'
+
+      # Adapts the COMMITTED Caddyfile against the freshly built binary, with throwaway domain
+      # values (no real hostname, no ACME attempt) -- the control that keeps a Caddyfile that
+      # fails to adapt from ever reaching the VM, where its only remaining failure mode is a
+      # crash-looping edge behind a green deploy job.
+      - name: Validate the committed Caddyfile against this build
+        run: |
+          docker run --rm -e APP_DOMAIN=example.test -e APP_DOMAIN_NONPROD=nonprod.example.test \
+            -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            "${{ steps.gate_and_derive_tag.outputs.caddy_image }}" \
+            caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
+      - name: Push Caddy image
+        run: docker push "${{ steps.gate_and_derive_tag.outputs.caddy_image }}"
 
   # INFRA-06 (Phase 5, plan 05-05 Task 2). REWRITTEN phase 11, plan 11-05 (D-13): the runner has
   # no route to the self-hosted `postgres` service (D-03, no host port published), so this job no
@@ -293,7 +391,7 @@ jobs:
   # host key is pinned by fingerprint on both steps below -- the old job never verified
   # the host key at all.
   deploy-to-netcup:
-    needs: [ build-and-push-docker-image, flyway-verify ]
+    needs: [ build-and-push-docker-image, flyway-verify, build-and-push-caddy-image ]
     runs-on: ubuntu-latest
     if: success()
     # Phase 9, plan 09-01, part C: this job resolves secrets.NETCUP_* -- production's SSH
@@ -371,8 +469,43 @@ jobs:
             # deploy consumes still converges the VM to the pushed state (the app image
             # tag always changes per commit) rather than erroring on there being
             # nothing to do.
-            docker compose --env-file ./.env.prod -f docker-compose.prod.yml pull app
+            #
+            # `caddy` added to this pull (quick task 260903-dvp, D-3): rudenkovladimir/
+            # kanban-board-caddy must also be public on Docker Hub for this to succeed anonymously
+            # -- see this task's own user_setup requirement, verified before merge.
+            docker compose --env-file ./.env.prod -f docker-compose.prod.yml pull app caddy
             docker compose --env-file ./.env.prod -f docker-compose.prod.yml up -d
+            # Reload Caddy explicitly (F-1, quick task 260903-dvp): docker-compose.prod.yml
+            # bind-mounts ./Caddyfile read-only, and a bind-mounted file's CONTENT is not part of
+            # Compose's config hash -- so `up -d` above is a no-op for `caddy` whenever its image
+            # tag is unchanged (every deploy after the one that first ships this pinned image), and
+            # Caddy keeps serving whatever config it loaded at its own container start. This has
+            # been true of every prior Caddyfile edit in this repo's history; without this line, a
+            # new Caddyfile would have zero effect in production.
+            #
+            # Ordering is load-bearing, dated 2026-09-03: this reload MUST run AFTER `up -d`, never
+            # before. On the one deploy that first ships this pinned image, the container running
+            # at the top of this script is still stock `caddy:2` with no rate_limit module, so
+            # reloading or validating the new Caddyfile against IT would fail on an unrecognised
+            # directive and block the very deploy meant to install the module. After `up -d`, the
+            # image reference has changed and the container has already been recreated from the
+            # new image, which loaded the new Caddyfile at its own startup -- so this reload is a
+            # no-op on that first deploy and is the load-bearing step on every deploy after, where
+            # the tag is unchanged and Compose correctly leaves the container alone.
+            #
+            # Failure semantics: if this reload fails, `set -e` (top of this script) reddens this
+            # job with `app` already swapped in and the previous Caddy config still serving -- the
+            # edge stays up and a human looks. That is the intended end state, not an oversight.
+            # `-T` on both `exec` calls below is required: appleboy/ssh-action runs this script
+            # under a non-interactive shell, and `exec` defaulting to a TTY is a well-known way to
+            # turn a working command into a hard failure.
+            docker compose --env-file ./.env.prod -f docker-compose.prod.yml exec -T caddy \
+              caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+            # Read back the config Caddy is actually RUNNING, not the file that was copied -- the
+            # only thing that closes F-1 rather than assuming the reload above worked.
+            docker compose --env-file ./.env.prod -f docker-compose.prod.yml exec -T caddy \
+              wget -qO- http://localhost:2019/config/ | grep -q '"handler":"rate_limit"' \
+              || { echo "::error::Running Caddy config has no rate_limit handler after reload -- the edge is not rate-limited despite a green deploy."; exit 1; }
 
   # CI-05 (Phase 9, plan 09-03): automates the last hand-run step in this project's deploy --
   # registering the application's 14 Avro schemas against production's registry -- reusing the
