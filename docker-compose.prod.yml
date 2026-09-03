@@ -64,7 +64,23 @@ networks:
 
 services:
   caddy:
-    image: caddy:2
+    # Custom, pinned image (quick task 260903-dvp, D-4/D-5) -- replaces the floating `caddy:2`,
+    # carrying the SHA-pinned edge rate limiter (see docker/caddy/Dockerfile). Built and pushed by
+    # CI's `build-and-push-caddy-image` job (.github/workflows/deploy.yml), never built on this VM.
+    #
+    # Why this tag is a literal while `app`'s below is `${IMAGE_TAG}`, dated 2026-09-03: `app`'s
+    # reference must resolve anew every commit -- this one must NOT, because a reference that
+    # changes per commit would recreate the edge on every deploy and invert the "left running,
+    # no-op not a restart" behaviour docs/INFRA_ARCHITECTURE.md and infra-delivery-scenario.mmd
+    # both document. A literal also means a hand-run `docker compose up -d` on the VM needs no
+    # exported variable.
+    #
+    # This literal is not hand-maintained: scripts/verify-caddy-image-tag.py recomputes it from
+    # docker/caddy/Dockerfile and CI refuses to build the Caddy image when they disagree. The
+    # consequence a future reader will actually hit: a Dependabot Caddy-base bump PR will fail
+    # that gate until this line is updated in the same PR -- that failure is the gate working, not
+    # a flaky check.
+    image: rudenkovladimir/kanban-board-caddy:2.11.4-rl5625512f
     restart: unless-stopped
     ports:
       - "80:80"
