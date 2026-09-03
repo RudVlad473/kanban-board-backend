@@ -48,3 +48,30 @@ updates:
     # Same noise bound as the gradle entry above -- every Dependabot PR still runs deploy.yml's
     # run-tests job like any other PR, so nothing merges untested or unreviewed.
     open-pull-requests-limit: 5
+  # Added quick task 260903-dvp, dated 2026-09-03. Tracks docker/caddy/Dockerfile's two literal
+  # `caddy:2.11.4*` FROM tags (D-4) ONLY.
+  #
+  # What this can never cover, and why that is not a gap to be closed later: the SHA-pinned
+  # github.com/mholt/caddy-ratelimit module baked into that same Dockerfile (D-2). Dependabot's
+  # docker ecosystem compares against released versions; `v0.1.0` is the only tag this plugin has
+  # ever cut, and its pin is a raw commit SHA specifically because master is ahead of that tag.
+  # Structurally, there will never be a newer released version for Dependabot to diff this pin
+  # against -- bumping it is a deliberate manual act, not something this entry will ever open a PR
+  # for. Written here because this is where someone will come looking to find out why it never did.
+  #
+  # A bump PR from this entry will fail CI until docker-compose.prod.yml's `services.caddy.image`
+  # literal is updated in the SAME PR -- the image tag is derived from the base version (D-5), and
+  # scripts/verify-caddy-image-tag.py gates the compose literal against it. That CI failure is the
+  # gate working, not a flaky check -- the identical per-PR chore the `gradle` entry's own comment
+  # above describes for gradle/verification-metadata.xml.
+  #
+  # `directory` is `/docker/caddy`, not `/`: the root Dockerfile's `gradle:8.7-jdk21` and
+  # `eclipse-temurin:21-jre-jammy` pins are deliberately out of scope here -- bumping the app's own
+  # base images triggers a full production and nonprod redeploy per PR and is a separate decision
+  # with its own risk profile. A bounded exclusion, stated with a date, not silence -- silence
+  # reads as coverage.
+  - package-ecosystem: "docker"
+    directory: "/docker/caddy"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 2
