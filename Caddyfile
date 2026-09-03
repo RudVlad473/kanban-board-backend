@@ -52,11 +52,27 @@
 	# (2026-09-03 review, F2 -- caught before merge): the exact list `/api/signin /api/signin/
 	# /api/signup /api/signup/` correctly caught every normalization variant tried against it
 	# (`//api/signin`, `/api/./signin`, `%2f`, `/foo/../api/signin`) but NOT a path parameter --
-	# `/api/signin;x=1` matched no literal and so spent only the general zone's budget, i.e. 120
-	# bcrypt attempts per minute instead of the auth zone's 20 per five. Spring Boot 3's
-	# PathPatternParser strips path parameters before mapping, so that request still reaches the
-	# signin handler. `*` deliberately over-matches (it also covers `/api/signinfoo`, which 404s):
-	# for a rate limiter, matching slightly too much fails safe and matching too little does not.
+	# `/api/signin;x=1` matched no literal and so spent only the general zone's budget rather than
+	# the auth zone's.
+	#
+	# Correction, verified against the running app 2026-09-03: the first version of this note
+	# claimed Spring's PathPatternParser strips path parameters, so that request "still reaches the
+	# signin handler" and cost a bcrypt hash. It does not — `/api/signin;x=1` is answered 401
+	# UNAUTHENTICATED by ProblemDetailAuthenticationEntryPoint, the handler is never reached, and no
+	# hash is computed. So the exact-literal matcher was never the bcrypt exposure that paragraph
+	# described. The `*` form is kept anyway because it is strictly safer and costs nothing, but the
+	# reason is defence in depth, not a hole that was being exploited. Recorded because a wrong
+	# justification in a decision record is worse than none — the next reader would trust it.
+	#
+	# Residual, known and accepted: `*` anchors on `/api/signin`, so a matrix parameter on an
+	# EARLIER segment (`/api;a=b/signin`) still evades the auth zone. Also not exploitable — Spring
+	# answers those 401 UNAUTHENTICATED without reaching the handler — and the general zone still
+	# counts them. Stated so it is not re-derived from scratch.
+	#
+	# `*` deliberately over-matches (it also covers `/api/signinfoo`, which 404s): for a rate
+	# limiter, matching slightly too much fails safe and matching too little does not. Verified
+	# 2026-09-03 that only `/api/signin`, `/api/signup` and `/api/logout` live under these
+	# prefixes, so nothing legitimate and high-volume is caught by the wildcard.
 	#
 	# Why these numbers: 20 requests per 5 minutes on the auth zone bounds sustained cost at
 	# roughly 4 attempts/minute/address. Chosen over a tighter 10 (human decision, 2026-09-03)

@@ -63,10 +63,31 @@ print(codes.get('http.codes.429',0))
 " "$1"
 }
 
+# Distinguish "the limiter misbehaved" from "the probe never reached the limiter's interesting
+# path". Added 2026-09-03 after a review round lost time to the old message, which blamed a spent
+# IP budget for what was actually a 400 -- the probe password failed @Password validation, so every
+# allowed request was rejected before authentication and the 401 counter never moved. Any 4xx that
+# is neither 401 nor 429 means the payload is wrong, and no amount of waiting fixes that.
+explain_failure() {
+  local report="$1"
+  [ -f "$report" ] || return 0
+  python3 -c "
+import json,sys
+c=json.load(open(sys.argv[1])).get('aggregate',{}).get('counters',{})
+odd={k.split('.')[-1]:v for k,v in c.items()
+     if k.startswith('http.codes.') and k.split('.')[-1] not in ('401','429')}
+if odd:
+    print('!! NOTE: saw unexpected status codes %s -- this is a PROBE PAYLOAD problem, not a' % odd)
+    print('!!       limiter problem. A 400 here means the request was rejected by validation')
+    print('!!       before authentication, so it never reached bcrypt or the auth zone.')
+" "$report" 2>/dev/null || true
+}
+
 echo "=== 1/2  Production: the limiter must ENGAGE ==="
 if ! PROD_REPORT="$(run_half prod "$HERE/rate-limit-prod.yml" "$PROD_URL")"; then
-  echo "!! production half failed; most likely this address's budget was already spent."
-  echo "!! waiting out the 5m window and retrying once before calling it a real failure."
+  explain_failure "$OUT/prod.json"
+  echo "!! production half failed; if the note above is absent, this address's budget was most"
+  echo "!! likely already spent -- waiting out the 5m window and retrying once."
   sleep 310
   PROD_REPORT="$(run_half prod-retry "$HERE/rate-limit-prod.yml" "$PROD_URL")" || {
     echo "FAIL: production did not produce the expected 401-then-429 pattern on retry."

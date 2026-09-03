@@ -46,8 +46,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      # No setup-python step: the script is stdlib-only (re, sys, argparse) by design, and
-      # ubuntu-latest ships python3. Adding a toolchain step here would cost more wall-clock than
-      # the check itself takes.
+      # PyYAML is installed explicitly rather than assumed. An earlier version of this file claimed
+      # the script was "stdlib-only" and skipped this step; that was wrong (2026-09-03 review) --
+      # verify-caddy-image-tag.py imports yaml to read docker-compose.prod.yml, inside main(), so
+      # even --print-tag needs it. It fails closed with an explicit "PyYAML is required", so the
+      # gate could never be green-while-broken; but on a runner image without PyYAML it would be
+      # permanently red, i.e. a gate that blocks everything rather than one that checks anything.
+      # ubuntu-latest currently ships it; this step makes that a guarantee instead of a bet.
+      - name: Install the gate's one dependency
+        run: python3 -m pip install --disable-pip-version-check --quiet pyyaml
+
       - name: Verify Caddy image tag invariants
         run: python3 scripts/verify-caddy-image-tag.py

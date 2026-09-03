@@ -57,7 +57,15 @@ scenarios:
               url: "/api/signin"
               json:
                 email: "ratelimit-probe@example.invalid"
-                password: "not-a-real-password"
+                # MUST satisfy @Password (upper + lower + digit + special, 8-64 chars) even though
+                # it is deliberately wrong. Jakarta validation runs BEFORE authentication, so a
+                # format-invalid password is answered 400 VALIDATION_FAILED and never reaches
+                # bcrypt or the limiter's interesting path -- the probe would then assert against a
+                # status it never sees. Found 2026-09-03 (round-2 review): the original
+                # "not-a-real-password" has no uppercase and no digit, which made both halves of
+                # this harness unconditionally red while blaming the limiter. Do not "simplify"
+                # this literal.
+                password: "NotAReal-Password1"
               # 401 (rejected credentials) and 429 (rejected by the limiter) are both expected
               # outcomes here; anything else means the request reached a state this probe does not
               # model, so surface it rather than silently counting it.

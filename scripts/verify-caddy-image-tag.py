@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Recompute the Caddy image tag from docker/caddy/Dockerfile's own live values and gate
+r"""Recompute the Caddy image tag from docker/caddy/Dockerfile's own live values and gate
 docker-compose.prod.yml's `services.caddy.image` literal against it (quick task 260903-dvp, D-5).
 Same shape as scripts/verify-postgres-memory-invariant.py: a committed, re-runnable check, not a
 comment restating an invariant that nothing enforces.
@@ -17,6 +17,24 @@ is that the base version and plugin SHA named in the Dockerfile agree with the t
 pulls -- the axis that actually drifts when someone bumps one and forgets the other. Anything
 broader needs a content hash, not this.
 
+Known holes, enumerated 2026-09-03 rather than left to be rediscovered. None is silent -- each is
+caught downstream before an image can ship -- so they are documented instead of fixed, because
+closing them means parsing Dockerfiles properly and that is a bigger thing than this gate is:
+  * I2 checks that the Dockerfile MENTIONS the flag, not that xcaddy RECEIVES it. Any construction
+    that mentions it inert passes: inside a heredoc body (`RUN <<EOF ... EOF`), after a no-op
+    (`RUN : --with github.com/mholt/caddy-ratelimit@<sha>`), or in a backticked shell comment.
+    Confirmed 2026-09-03 for all three. `docker build` may still succeed for the no-op form, but
+    the resulting image has no rate_limit module and deploy.yml's `caddy list-modules` step fails
+    before any push. Closing this properly means executing the Dockerfile's intent, not reading it.
+  * `strip_comments` is whole-line, so commenting out `RUN xcaddy build \` while leaving its
+    `--with` continuation line uncommented still satisfies I2. Same downstream catch: the
+    continuation becomes an unknown Dockerfile instruction and the build fails.
+  * RUNTIME_FROM_RE takes the LAST `FROM caddy:` line, so appending a final non-caddy stage
+    (`FROM alpine:3.20`) still passes I1. The `caddy list-modules` step catches the resulting image.
+  * A second `--with <a different plugin>` on its own RUN line changes image content without
+    changing the tag. This one has NO downstream catch and is the only reason to reach for a
+    content hash if this file is ever revisited.
+
 Where it runs: .github/workflows/invariant-checks.yml (push and pull_request), and again inside
 deploy.yml's build-and-push-caddy-image job. The first is what makes drift unmergeable; deploy.yml
 alone could not, since it triggers on push-to-main only.
@@ -30,8 +48,11 @@ I2: exactly one `--with github.com/mholt/caddy-ratelimit@<sha>` occurrence in th
     <sha> is 40 hex characters -- a version tag here (e.g. accidentally `@v0.1.0`) would make the
     computed tag unparseable and must fail loudly rather than produce a nonsense tag.
 I3: `services.caddy.image` in docker-compose.prod.yml ends in `:<A>-rl<sha[:8]>`.
+I4: that same image's REPOSITORY equals EXPECTED_COMPOSE_REPO. I3 constrains only what follows the
+    colon, so without this an image in any other namespace carrying the correct tag passes -- a
+    registry substitution rather than tag drift, and invisible to a check that only reads the tag.
 
-All three must FAIL against a deliberately mismatched pair -- that is what makes this a real gate
+All four must FAIL against a deliberately mismatched pair -- that is what makes this a real gate
 rather than a restated comment.
 """
 
@@ -40,6 +61,11 @@ import sys
 
 DOCKERFILE_PATH = "docker/caddy/Dockerfile"
 COMPOSE_PATH = "docker-compose.prod.yml"
+
+# I4's expected repository. Declared here rather than inferred from the compose file, because a
+# value read out of the file it is checking cannot disagree with it -- the assertion has to come
+# from somewhere the drift does not reach. Change this only alongside a deliberate registry move.
+EXPECTED_COMPOSE_REPO = "rudenkovladimir/kanban-board-caddy"
 
 BUILDER_FROM_RE = re.compile(r"^\s*FROM\s+caddy:(\S+?)-builder(?:\s+AS\s+\S+)?\s*$", re.MULTILINE)
 RUNTIME_FROM_RE = re.compile(r"^\s*FROM\s+caddy:(\S+)\s*$", re.MULTILINE)
@@ -150,6 +176,22 @@ def main():
         print(
             f"FAIL: I3 violated: {COMPOSE_PATH}'s services.caddy.image ({compose_image}) does "
             f"not end in the computed tag :{tag} (derived from {DOCKERFILE_PATH})"
+        )
+        return 1
+
+    # I4: the REPOSITORY, not just the tag suffix. Added 2026-09-03 (round-2 review) -- I3 alone
+    # accepts `attacker/kanban-board-caddy:<the correct tag>`, because `endswith(":<tag>")` says
+    # nothing about what precedes the colon. deploy.yml already compared the repository, but only
+    # deploy.yml did, and that runs post-merge; invariant-checks.yml -- the gate whose entire
+    # purpose is to make drift UNMERGEABLE -- called this script alone and so missed exactly the
+    # substitution a PR gate exists to stop. Checked here rather than in a second workflow step so
+    # every caller inherits it.
+    if compose_image.rsplit(":", 1)[0] != EXPECTED_COMPOSE_REPO:
+        print(
+            f"FAIL: I4 violated: {COMPOSE_PATH}'s services.caddy.image ({compose_image}) is not "
+            f"in the expected repository {EXPECTED_COMPOSE_REPO}. The tag matches, so this is a "
+            f"registry substitution rather than tag drift -- confirm it is intentional and update "
+            f"EXPECTED_COMPOSE_REPO in {__file__} if so."
         )
         return 1
 

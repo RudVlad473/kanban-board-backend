@@ -119,10 +119,12 @@ running on the VM. Falsifier: if a future base image ships a `wget` that falls b
 address record, or Caddy's admin API starts binding dual-stack, this constraint dissolves.
 
 **Where the Caddy image-tag invariant is enforced:** `.github/workflows/invariant-checks.yml` runs
-`scripts/verify-caddy-image-tag.py` on every push and pull request, and `deploy.yml`'s
-`build-and-push-caddy-image` job runs it again before building. The PR-triggered workflow is the
-one that makes tag drift unmergeable — `deploy.yml` triggers on push-to-`main` only, so on its own
-it can block a deploy but never a merge.
+`scripts/verify-caddy-image-tag.py` on pull requests and on pushes to `main` — both triggers carry
+the same `docs/**`, `**/*.md`, `.planning/**` `paths-ignore` groups `deploy.yml` uses, which cannot
+skip a PR touching `docker/caddy/Dockerfile` or `docker-compose.prod.yml`. `deploy.yml`'s
+`build-and-push-caddy-image` job runs it again before building. The PR trigger is the one that
+makes tag drift unmergeable — `deploy.yml` fires on push-to-`main` only, so on its own it can block
+a deploy but never a merge.
 
 ## Maintenance Note
 
