@@ -31,7 +31,7 @@ on:
       nonprod_url:
         description: "Nonprod base URL (the negative control -- MUST NOT be rate limited)"
         required: true
-        default: "https://kanban-board-nonprod-rud-vlad-473.duckdns.org"
+        default: "https://kanban-board-rud-vlad-473-nonprod.duckdns.org"
 
 jobs:
   verify:

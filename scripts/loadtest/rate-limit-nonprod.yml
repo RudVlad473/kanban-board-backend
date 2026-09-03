@@ -13,7 +13,7 @@
 # Same safety constraints as the production file: signin only (never signup, which would create real
 # rows), deliberately invalid credentials, sequential single user.
 config:
-  target: "https://kanban-board-nonprod-rud-vlad-473.duckdns.org"
+  target: "https://kanban-board-rud-vlad-473-nonprod.duckdns.org"
   phases:
     - arrivalCount: 1
       duration: 1

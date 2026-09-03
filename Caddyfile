@@ -97,14 +97,26 @@
 	# roughly 4 attempts/minute/address. Chosen over a tighter 10 (human decision, 2026-09-03)
 	# because the key is an IP: an office or CGNAT pool shares one bucket, so the limit has to
 	# tolerate several distinct real people failing a login at once, not just one. 120 per minute
-	# on the general zone sits comfortably above this repo's own reference 56-call board-setup
-	# burst (docs/INFRA_RUNBOOK.md's measured workload: signup, a board, 6 columns, 24 tasks, 24
-	# subtasks) and above the scheduled health probe -- roughly two such bursts per minute from one
-	# address, which a single human using this app does not reach.
+	# on the general zone sits comfortably above this repo's own reference board-setup burst
+	# (docs/INFRA_RUNBOOK.md's measured workload: signup, a board, 6 columns, 24 tasks, 24
+	# subtasks) and above the scheduled health probe. That burst is 56 HTTP calls, of which 55
+	# count against this zone -- the signup is the one call the partition sends to the auth zone
+	# instead -- so roughly two such bursts per minute from one address, which a single human using
+	# this app does not reach.
 	#
 	# The zones PARTITION: the general zone's matcher excludes the auth paths, so an auth request
 	# spends from the auth zone only. They composed until 2026-09-03; see the general zone's own
-	# comment for the measurement that changed it.
+	# comment for the measurement that changed it. The two matchers are exact boolean complements
+	# over the same normalized path, so every request reaching this handler matches exactly one
+	# zone -- which is why zone ordering cannot matter and a request cannot be counted twice.
+	#
+	# What is deliberately NOT limited, verified 2026-09-03 and stated because silence would read
+	# as coverage: the server-wide `OPTIONS * HTTP/1.1` form matches neither zone and is
+	# unlimited. It cannot be fixed here -- Go's net/http answers `OPTIONS *` from its own
+	# globalOptionsHandler before Caddy's route chain runs, so the request never reaches this
+	# directive or the reverse_proxy below. Confirmed pre-existing (identical on the commit before
+	# the partition), and the cost per request is a TLS handshake plus a zero-byte 200: no
+	# application, no database, no bcrypt. Closing it would need a layer in front of Caddy.
 	#
 	# What is deliberately NOT here, dated 2026-09-03: a `handle_errors 429` block, so a 429 from
 	# this directive does not carry the `application/problem+json` envelope every other error on

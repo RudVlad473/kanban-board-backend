@@ -23,7 +23,7 @@
 set -euo pipefail
 
 PROD_URL="${1:-https://kanban-board-rud-vlad-473.duckdns.org}"
-NONPROD_URL="${2:-https://kanban-board-nonprod-rud-vlad-473.duckdns.org}"
+NONPROD_URL="${2:-https://kanban-board-rud-vlad-473-nonprod.duckdns.org}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUT="$(mktemp -d)"
 trap 'rm -rf "$OUT"' EXIT
@@ -82,6 +82,24 @@ if odd:
     print('!!       before authentication, so it never reached bcrypt or the auth zone.')
 " "$report" 2>/dev/null || true
 }
+
+# Preflight. Added 2026-09-03 (round-3 review) after the committed nonprod default turned out to be
+# a hostname that does not exist -- the segments were transposed
+# (kanban-board-nonprod-<id> instead of kanban-board-<id>-nonprod), so the negative control could
+# never have run against the real deployment. Artillery reports that as `getaddrinfo ENOTFOUND`
+# buried in its output while still writing a report whose 429 count is 0 -- which is exactly what
+# a PASSING negative control looks like. Resolve both names up front and fail loudly instead.
+for pair in "production:$PROD_URL" "nonprod:$NONPROD_URL"; do
+  label="${pair%%:*}"; url="${pair#*:}"
+  host="${url#*://}"; host="${host%%/*}"; host="${host%%:*}"
+  if ! getent hosts "$host" >/dev/null 2>&1; then
+    echo "FAIL: the $label hostname '$host' does not resolve. Check it against the two site blocks"
+    echo "      in the Caddyfile and docs/INFRA_RUNBOOK.md before assuming anything about the"
+    echo "      limiter -- an unresolvable nonprod host yields a 429 count of 0, which is"
+    echo "      indistinguishable from a negative control that genuinely passed."
+    exit 1
+  fi
+done
 
 echo "=== 1/2  Production: the limiter must ENGAGE ==="
 if ! PROD_REPORT="$(run_half prod "$HERE/rate-limit-prod.yml" "$PROD_URL")"; then
