@@ -6,9 +6,65 @@
 # swapped in by changing only this environment variable and the DNS A-record; no application
 # change is needed (D-01's stated reversibility).
 {$APP_DOMAIN} {
-	# Reverse-proxies to the app container by its Compose service name on port 8080. This address
-	# resolves only on the internal Compose network -- the app service publishes no host port
-	# (docker-compose.prod.yml), so this is the only path a request can reach it by.
+	# Edge rate limiting (quick task 260903-dvp) -- added ahead of the reverse_proxy line so the
+	# module's own registered directive order (`before basic_auth`, caddyfile.go at the pinned
+	# SHA in docker/caddy/Dockerfile) is honoured without a global options block. Both zones key
+	# on {remote_host}, not {client_ip}.
+	#
+	# Decision, dated 2026-09-03 -- why {remote_host} and not {client_ip}: Caddy is the true edge
+	# here -- no CDN, no load balancer, ports 80/443 published straight on this VM -- so the TCP
+	# peer address IS the client and cannot be forged by a completed TLS handshake. {client_ip}
+	# is X-Forwarded-For-derived once `trusted_proxies` is configured (it is not, anywhere in this
+	# stack, today), which would make the limiter's own key attacker-supplied. Falsifier: put a
+	# CDN or load balancer in front of this Caddy instance and this choice inverts -- at that
+	# point {remote_host} resolves to the proxy's own address for every client, and
+	# `trusted_proxies` plus {client_ip} becomes the correct pair instead.
+	rate_limit {
+		# Enabled deliberately, dated 2026-09-03: the module's own field comment defaults this
+		# off because "keys can contain sensitive information". Here the key is the source
+		# address of a public HTTPS request -- the least sensitive thing in any edge log, and
+		# already the container's `json-file` log subject. Attributing a 429 after the fact is
+		# otherwise impossible from inside the box. Falsifier: if this produces no output at
+		# Caddy's default log level, or materially inflates the 10m x 3 rotation budget
+		# (docker-compose.prod.yml's `x-logging` anchor), delete this line -- it is one token
+		# and nothing else depends on it.
+		log_key
+
+		zone auth {
+			match {
+				path /api/signin /api/signin/ /api/signup /api/signup/
+			}
+			key {remote_host}
+			events 10
+			window 5m
+			ipv6_prefix 56
+		}
+
+		zone general {
+			key {remote_host}
+			events 120
+			window 1m
+			ipv6_prefix 56
+		}
+	}
+
+	# Why both the bare and trailing-slash paths are listed above: Spring Boot 3 does not match a
+	# trailing slash by default, so the slash form already 404s before it ever reaches bcrypt --
+	# these extra literals cost nothing and remove the question. Said here so a future reader does
+	# not delete them as redundant and then have to re-derive why they were added.
+	#
+	# Why these numbers: 10 requests per 5 minutes on the auth zone bounds sustained cost at
+	# roughly 2 attempts/minute/address while still giving a fumbling human a burst of ten; 120
+	# per minute on the general zone sits comfortably above this repo's own reference 54-request
+	# burst (docs/INFRA_RUNBOOK.md) and above the scheduled health probe. An auth request consumes
+	# from BOTH zones -- the zones compose, they do not partition -- so exhausting the auth zone
+	# also spends ten of the general zone's budget.
+	#
+	# What is deliberately NOT here, dated 2026-09-03: a `handle_errors 429` block, so a 429 from
+	# this directive does not carry the `application/problem+json` envelope every other error on
+	# this API returns -- a real, accepted inconsistency in the public contract. Left open because
+	# whether the module's `Retry-After` header survives being rewritten by an error handler is
+	# unproven; closing this is a follow-up with that specific proof as its acceptance criterion.
 	reverse_proxy app:8080
 }
 
@@ -29,6 +85,11 @@
 # suffix, and a wildcard address here would scope this block to every other DuckDNS tenant, not
 # just this project's own two subdomains. Both blocks share the one `caddy-data` volume above, so
 # recreating this container reuses both certificates rather than re-requesting either.
+#
+# Deliberately no rate_limit directive in this block (quick task 260903-dvp): nonprod runs chatty
+# e2e suites that must not be throttled, and its lack of a limit is also the negative control that
+# proves the production block's directive is actually scoped to that block and not leaking global
+# state -- see Task 2's local verification for the observed proof.
 {$APP_DOMAIN_NONPROD} {
 	reverse_proxy app-nonprod:8080
 }
