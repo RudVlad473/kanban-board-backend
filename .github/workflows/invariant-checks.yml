@@ -1,0 +1,53 @@
+# Committed-invariant checks (quick task 260903-dvp, 2026-09-03 review F4).
+#
+# Why this workflow exists at all: deploy.yml already runs scripts/verify-caddy-image-tag.py, but
+# deploy.yml triggers on `push: branches: [main]` ONLY -- it has no `pull_request:` trigger, and
+# giving it one is not an option, since that would arm the deploy jobs on every PR. So the gate
+# fired exclusively AFTER merge, where its only remaining power was to leave `main` undeployed.
+# Two comments (the script's own docstring and .github/dependabot.yml's caddy note) claimed the
+# drift was "unmergeable" and that a bump PR "will fail CI"; both were false until this file
+# existed. Written to make the claim true rather than to soften the claim.
+#
+# Runs on push and pull_request for the same reason secret-scan.yml does, and the argument is
+# worth restating because it is what makes a per-PR gate safe here: this check is a PURE FUNCTION
+# OF THE COMMIT. It reads two committed files and compares them to each other, reaching no
+# network and no registry, so an unchanged tree cannot newly fail here days later the way
+# security-scan.yml's advisory-driven verdict can. That is precisely the property that earns a
+# blocking per-PR run instead of a scheduled advisory one.
+#
+# Scope note, so this file is not mistaken for broader coverage than it has: the tag gate proves
+# the Dockerfile's base version and plugin SHA agree with the compose image literal. It is NOT a
+# content hash of the Dockerfile -- see that script's own docstring for the states it knowingly
+# does not catch.
+name: Invariant Checks
+
+on:
+  push:
+    branches:
+      - main
+    # Same two known-inert path groups deploy.yml ignores. A docs-only or planning-only change
+    # cannot alter the relationship between docker/caddy/Dockerfile and docker-compose.prod.yml,
+    # which is the only thing this workflow reads.
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - ".planning/**"
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - ".planning/**"
+
+jobs:
+  caddy-image-tag:
+    name: Caddy image tag matches its Dockerfile
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      # No setup-python step: the script is stdlib-only (re, sys, argparse) by design, and
+      # ubuntu-latest ships python3. Adding a toolchain step here would cost more wall-clock than
+      # the check itself takes.
+      - name: Verify Caddy image tag invariants
+        run: python3 scripts/verify-caddy-image-tag.py
