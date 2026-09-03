@@ -4,11 +4,23 @@ docker-compose.prod.yml's `services.caddy.image` literal against it (quick task 
 Same shape as scripts/verify-postgres-memory-invariant.py: a committed, re-runnable check, not a
 comment restating an invariant that nothing enforces.
 
-The tag is a fact about the Dockerfile's own contents (base version + plugin commit), and two
-other files -- the compose literal and CI's push step -- must agree with it. Three independently
+The tag encodes TWO facts about the Dockerfile -- its base version and its plugin commit -- and two
+other files, the compose literal and CI's push step, must agree with it. Three independently
 editable places is a defect waiting to happen: a stale compose literal pulls an image that is not
-the one CI built, and nothing errors -- the wrong edge just runs. This script makes that drift
-unmergeable rather than merely discouraged.
+the one CI built, and nothing errors -- the wrong edge just runs.
+
+Scope, stated precisely because the earlier wording overclaimed it (2026-09-03 review, F3): the tag
+is NOT a hash of the Dockerfile, so it does not change when anything else in the file changes. A
+second `--with <other plugin>` on a new RUN line, or a `build:` key added to the compose caddy
+service, both pass this check and are caught by nothing downstream. What this script does guarantee
+is that the base version and plugin SHA named in the Dockerfile agree with the tag the compose file
+pulls -- the axis that actually drifts when someone bumps one and forgets the other. Anything
+broader needs a content hash, not this.
+
+Where it runs: .github/workflows/invariant-checks.yml (push and pull_request), and again inside
+deploy.yml's build-and-push-caddy-image job. The first is what makes drift unmergeable; deploy.yml
+alone could not, since it triggers on push-to-main only.
+
 
 I1: the builder-stage `FROM caddy:<A>-builder` and the runtime-stage `FROM caddy:<B>` in
     docker/caddy/Dockerfile parse cleanly and A == B -- the builder image sets CADDY_VERSION and
@@ -34,8 +46,21 @@ RUNTIME_FROM_RE = re.compile(r"^\s*FROM\s+caddy:(\S+)\s*$", re.MULTILINE)
 PLUGIN_WITH_RE = re.compile(r"--with\s+github\.com/mholt/caddy-ratelimit@(\S+)")
 
 
+def strip_comments(text):
+    """Blank out `#` comment lines so a commented-out directive cannot satisfy an invariant.
+
+    Found 2026-09-03 (review, F3): PLUGIN_WITH_RE matched `#   --with github.com/mholt/...`, so
+    commenting the build line out still computed a valid `-rl<sha>` tag. CI would then build a
+    stock Caddy with no rate-limit module and push it under a tag asserting the module is present.
+    Whole-line only -- Dockerfile `#` is a comment marker just at the start of a line, and a `#`
+    mid-line (in a URL fragment, say) is literal.
+    """
+    return "\n".join("" if line.lstrip().startswith("#") else line for line in text.splitlines())
+
+
 def parse_dockerfile(text):
     """Returns (fails, builder_tag, runtime_tag, sha) -- I1 and I2."""
+    text = strip_comments(text)
     fails = []
 
     builder_match = BUILDER_FROM_RE.search(text)
