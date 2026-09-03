@@ -44,7 +44,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       # PyYAML is installed explicitly rather than assumed. An earlier version of this file claimed
       # the script was "stdlib-only" and skipped this step; that was wrong (2026-09-03 review) --

@@ -62,7 +62,7 @@ jobs:
           fi
 
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       # HARDEN (Phase 10, folded todo): validates the wrapper's shell/batch scripts and its jar
       # against Gradle's own published known-good checksums BEFORE any of them execute -- same
