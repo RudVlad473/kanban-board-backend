@@ -94,7 +94,7 @@ jobs:
       # name is the H2 database's own internal schema version, not the plugin version, and could
       # change independently of a 12.2.2 pin.
       - name: Cache dependency-check data directory
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.gradle/dependency-check-data
           key: dependency-check-data-12.2.2
