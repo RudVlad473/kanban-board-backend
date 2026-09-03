@@ -32,10 +32,10 @@
 
 		zone auth {
 			match {
-				path /api/signin /api/signin/ /api/signup /api/signup/
+				path /api/signin* /api/signup*
 			}
 			key {remote_host}
-			events 10
+			events 20
 			window 5m
 			ipv6_prefix 56
 		}
@@ -48,17 +48,24 @@
 		}
 	}
 
-	# Why both the bare and trailing-slash paths are listed above: Spring Boot 3 does not match a
-	# trailing slash by default, so the slash form already 404s before it ever reaches bcrypt --
-	# these extra literals cost nothing and remove the question. Said here so a future reader does
-	# not delete them as redundant and then have to re-derive why they were added.
+	# Why the auth matcher uses a `*` suffix rather than the four exact literals it replaced
+	# (2026-09-03 review, F2 -- caught before merge): the exact list `/api/signin /api/signin/
+	# /api/signup /api/signup/` correctly caught every normalization variant tried against it
+	# (`//api/signin`, `/api/./signin`, `%2f`, `/foo/../api/signin`) but NOT a path parameter --
+	# `/api/signin;x=1` matched no literal and so spent only the general zone's budget, i.e. 120
+	# bcrypt attempts per minute instead of the auth zone's 20 per five. Spring Boot 3's
+	# PathPatternParser strips path parameters before mapping, so that request still reaches the
+	# signin handler. `*` deliberately over-matches (it also covers `/api/signinfoo`, which 404s):
+	# for a rate limiter, matching slightly too much fails safe and matching too little does not.
 	#
-	# Why these numbers: 10 requests per 5 minutes on the auth zone bounds sustained cost at
-	# roughly 2 attempts/minute/address while still giving a fumbling human a burst of ten; 120
-	# per minute on the general zone sits comfortably above this repo's own reference 54-request
-	# burst (docs/INFRA_RUNBOOK.md) and above the scheduled health probe. An auth request consumes
-	# from BOTH zones -- the zones compose, they do not partition -- so exhausting the auth zone
-	# also spends ten of the general zone's budget.
+	# Why these numbers: 20 requests per 5 minutes on the auth zone bounds sustained cost at
+	# roughly 4 attempts/minute/address. Chosen over a tighter 10 (human decision, 2026-09-03)
+	# because the key is an IP: an office or CGNAT pool shares one bucket, so the limit has to
+	# tolerate several distinct real people failing a login at once, not just one. 120 per minute
+	# on the general zone sits comfortably above this repo's own reference 54-request burst
+	# (docs/INFRA_RUNBOOK.md) and above the scheduled health probe. An auth request consumes from
+	# BOTH zones -- the zones compose, they do not partition -- so exhausting the auth zone also
+	# spends twenty of the general zone's budget.
 	#
 	# What is deliberately NOT here, dated 2026-09-03: a `handle_errors 429` block, so a 429 from
 	# this directive does not carry the `application/problem+json` envelope every other error on
