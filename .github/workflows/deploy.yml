@@ -503,8 +503,18 @@ jobs:
               caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
             # Read back the config Caddy is actually RUNNING, not the file that was copied -- the
             # only thing that closes F-1 rather than assuming the reload above worked.
+            #
+            # 127.0.0.1, never `localhost` (2026-09-03 review, F1 -- this shipped as `localhost`
+            # and was caught before merge): Caddy's admin API binds IPv4-only, while the runtime
+            # image's /etc/hosts carries both `127.0.0.1 localhost` and `::1 localhost`. The
+            # image's wget is BusyBox, which tries the ::1 record and treats the refusal as
+            # terminal instead of falling back to the IPv4 record -- so `localhost` fails 5/5 and
+            # 127.0.0.1 succeeds, against the same listener. That failure is fail-CLOSED but it
+            # lands AFTER `up -d` has already swapped in the new app, so it would redden every
+            # deploy and let `cleanup-unused-image` (if: failure()) delete the app manifest that
+            # is at that moment running on the VM.
             docker compose --env-file ./.env.prod -f docker-compose.prod.yml exec -T caddy \
-              wget -qO- http://localhost:2019/config/ | grep -q '"handler":"rate_limit"' \
+              wget -qO- http://127.0.0.1:2019/config/ | grep -q '"handler":"rate_limit"' \
               || { echo "::error::Running Caddy config has no rate_limit handler after reload -- the edge is not rate-limited despite a green deploy."; exit 1; }
 
   # CI-05 (Phase 9, plan 09-03): automates the last hand-run step in this project's deploy --
