@@ -43,7 +43,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       # pnpm, not npm/npx (see the repo's tooling conventions). The harness shells out to
       # `pnpm dlx artillery@2.0.24`, so pnpm has to exist before it runs.
