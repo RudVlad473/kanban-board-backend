@@ -25,28 +25,38 @@ sequenceDiagram
         GH->>GH: refuse if configured DB host carries<br/>Neon's pooled ("-pooler") marker
         GH->>Neon: Flyway CLI container `migrate`<br/>against direct endpoint, sslmode=require
         Note over GH,Neon: applies this commit's migrations to the REAL<br/>production database now -- before the new image<br/>ever reaches the VM. Schema change and the code<br/>that consumes it are not deployed atomically.
+    and build-and-push-caddy-image (needs: [setup, run-tests])
+        GH->>GH: derive tag from scripts/verify-caddy-image-tag.py,<br/>assert it agrees with docker-compose.prod.yml's literal
+        GH->>GH: build linux/amd64, then prove `caddy version`<br/>and `caddy list-modules` on the built artifact
+        GH->>GH: adapt the committed Caddyfile against<br/>this build (throwaway domain values)
+        GH->>DH: push image -- only after the module and<br/>the Caddyfile are both proven against it
     end
 
-    GH->>Comp: deploy-to-netcup (needs: [build-and-push-docker-image, flyway-verify])<br/>scp docker-compose.prod.yml, Caddyfile over SSH<br/>(host key pinned by fingerprint)
+    GH->>Comp: deploy-to-netcup (needs: [build-and-push-docker-image, flyway-verify, build-and-push-caddy-image])<br/>scp docker-compose.prod.yml, Caddyfile over SSH<br/>(host key pinned by fingerprint)
     Note right of Comp: no --remove-orphans/rm -- the VM's<br/>never-committed .env.prod survives untouched
     Note over GH,Comp: concurrency group "deploy-to-netcup-vm":<br/>a second push mid-deploy QUEUES rather than cancels,<br/>so this scp step is never interrupted half-copied
     GH->>Comp: export IMAGE_TAG (commit short SHA) into the SSH shell<br/>(a shell var outranks --env-file precedence,<br/>so this commit's freshly built tag always wins)
-    GH->>Comp: docker compose pull app
-    Comp->>DH: pull app image<br/>(the VM pulls, not the runner)
+    GH->>Comp: docker compose pull app caddy
+    Comp->>DH: pull app + caddy images<br/>(the VM pulls, never builds -- D-3)
 
     GH->>Comp: docker compose up -d
     Note over Comp: top-level `name: kanban-board-backend` pins project<br/>identity, and every named volume's project-prefixed name,<br/>independent of the working directory this runs from --<br/>Compose resolves to the ALREADY-RUNNING stack<br/>instead of starting a second, unrelated one
     Comp->>Comp: diff each service's resolved config<br/>against what is currently running
     Comp->>App: recreate (image reference resolves to a new<br/>tag every deploy), started only once redpanda's<br/>service_healthy condition is met (already true,<br/>redpanda untouched)
-    Comp--xCaddy: left running -- resolved config is<br/>byte-identical to what's already up (no-op, not a restart)
+    Comp--xCaddy: left running while its content-derived tag (D-5)<br/>is unchanged -- every app-only deploy, recreated<br/>only when the edge itself changes (no-op, not a restart)
     Comp--xRP: left running -- resolved config is<br/>byte-identical to what's already up (no-op, not a restart)
     Note over Caddy,RP: preserves caddy's Let's Encrypt certificate<br/>(no rate-limited re-request) and redpanda's Kafka log<br/>and registered Avro subjects
     Note over Comp,RP: exactly the outcome the project-name pin buys --<br/>the fixed state of the incident in docs/INFRA_RUNBOOK.md,<br/>where a directory-derived project name produced a<br/>fresh, empty volume namespace
     Note over GH,App: honest limit: `up -d` returns once app is STARTED,<br/>not once its healthcheck passes -- nothing in this<br/>pipeline waits on that healthcheck, so a green deploy<br/>job is not by itself proof the new container reached UP
 
+    GH->>Comp: docker compose exec -T caddy caddy reload<br/>--config /etc/caddy/Caddyfile --adapter caddyfile
+    Note over Comp,Caddy: F-1: the Caddyfile is a read-only BIND MOUNT, and a<br/>bind-mounted file's CONTENT is not part of Compose's<br/>config hash -- so `up -d` above never applies a<br/>Caddyfile edit by itself. This reload is what does.<br/>True of every prior Caddyfile edit in this repo's history.
+    GH->>Comp: docker compose exec -T caddy wget -qO-<br/>http://localhost:2019/config/ | grep rate_limit
+    Note over GH,Comp: reads the config Caddy is actually RUNNING, not the<br/>file that was copied -- fails the job loudly (::error::,<br/>set -e) if the handler is missing after reload
+
     alt run succeeded
-        GH->>DH: cleanup-old-images -- attempts to delete every<br/>tag except the one just deployed
-        Note over GH,DH: currently does NOT achieve that -- its DELETE<br/>calls are rejected "unauthorized" (Hub API v2 needs a<br/>token exchange, not Basic auth -- see todo<br/>2026-08-16-cleanup-old-images-delete-calls-rejected-unauthorized.md).<br/>Job reports success while tags still accumulate.
+        GH->>DH: cleanup-old-images -- deletes every tag<br/>except the one just deployed
+        Note over GH,DH: fixed 2026-08-17 (Hub API v2 rejected Basic auth on<br/>deletes with a 401 until then -- needs a token exchange<br/>instead, plus following pagination past page 1). Both<br/>fixes are load-bearing today: token exchange and the<br/>follow-`next`-until-null pagination loop.
     else run failed
         GH->>DH: cleanup-unused-image -- resolves the just-pushed<br/>manifest's digest and deletes that image by digest
     end

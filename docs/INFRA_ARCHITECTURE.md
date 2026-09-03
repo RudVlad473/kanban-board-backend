@@ -50,9 +50,14 @@ volume loses operational continuity, not user data.
 ## Scenario (+1) View — Delivery Path
 
 Traces one key end-to-end scenario — push to `master` through to a running deploy — across the
-other views, confirming they stay consistent with each other. This is the delivery path as it
-runs today: all seven `deploy.yml` jobs, reconciled against the landed Phase 5 Plan 05-05 CI/CD
-cutover by quick task 260816-tqc (2026-08-16).
+other views, confirming they stay consistent with each other. `deploy.yml` holds 14 jobs as of
+quick task 260903-dvp (2026-09-03, up from 7 when this note was first written); this diagram
+traces the **production** delivery path only (`setup` → `run-tests` →
+`{build-and-push-docker-image, flyway-verify, build-and-push-caddy-image}` →
+`deploy-to-netcup` → `register-schemas-production` / `cleanup-old-images` /
+`cleanup-unused-image`) — the nonprod jobs (`flyway-verify-nonprod`, `deploy-to-nonprod`,
+`health-check-nonprod`, `cleanup-old-images-nonprod`, `cleanup-unused-image-nonprod`) exist and
+are deliberately not drawn here; that is this diagram's known limit, not an omission to fix.
 
 ![Sequence diagram: delivery path from push to master to a running deploy](diagrams/infra-delivery-scenario.png)
 <sub>[diagram source](diagrams/infra-delivery-scenario.mmd)</sub>
@@ -77,26 +82,40 @@ not user data); GitHub Actions itself holds no durable state between runs. No st
 pipeline writes application data — `flyway-verify` only applies this repo's own Flyway migrations,
 and the deploy step only replaces running containers.
 
-**The VM-side container switch:** `docker compose up -d` recreates exactly one service, `app`,
-because its `image:` reference (`rudenkovladimir/kanban-board-backend:${IMAGE_TAG}`) resolves to a
-new tag on every deploy; `caddy` and `redpanda` are left running because their resolved
-configuration is byte-identical to what is already up — a no-op for them, not a restart. This
-outcome depends on `docker-compose.prod.yml`'s top-level `name: kanban-board-backend` pin: it
-makes project identity, and every named volume's project-prefixed name, independent of the
-directory the command runs from, so Compose converges the already-running stack instead of
-starting a second, unrelated one against fresh, empty volumes — see `docs/INFRA_RUNBOOK.md` for
-the incident that motivated the pin, where a directory-derived project name did exactly that and
-briefly lost the registered Avro schemas. Honest limit: nothing in this pipeline waits for the new
-`app` container's healthcheck — `up -d` returns once the container is started, not once it is
-healthy — so a green `deploy-to-netcup` job is not by itself proof the new container reached `UP`.
+**The VM-side container switch:** `docker compose up -d` recreates `app` every deploy, because its
+`image:` reference (`rudenkovladimir/kanban-board-backend:${IMAGE_TAG}`) resolves to a new tag on
+every commit. `caddy` (quick task 260903-dvp, D-5) and `redpanda` are left running while their
+resolved configuration is byte-identical to what is already up — a no-op for them, not a restart
+— but this is a *conditional* outcome for `caddy`, not an unconditional one: its `image:` is now a
+content-derived literal (`rudenkovladimir/kanban-board-caddy:2.11.4-rl5625512f`) that only changes
+when `docker/caddy/Dockerfile` itself changes, so a routine app-only deploy leaves it running,
+while a Caddy-affecting change recreates it. This outcome depends on `docker-compose.prod.yml`'s
+top-level `name: kanban-board-backend` pin: it makes project identity, and every named volume's
+project-prefixed name, independent of the directory the command runs from, so Compose converges
+the already-running stack instead of starting a second, unrelated one against fresh, empty
+volumes — see `docs/INFRA_RUNBOOK.md` for the incident that motivated the pin, where a
+directory-derived project name did exactly that and briefly lost the registered Avro schemas.
+Honest limit: nothing in this pipeline waits for the new `app` container's healthcheck — `up -d`
+returns once the container is started, not once it is healthy — so a green `deploy-to-netcup` job
+is not by itself proof the new container reached `UP`.
+
+**The Caddy reload (F-1, quick task 260903-dvp):** `Caddyfile` is bind-mounted read-only into the
+`caddy` container, and a bind-mounted file's *content* is not part of Compose's config hash — so
+`up -d` alone is a no-op for `caddy` on every deploy where its `image:` tag is unchanged, which
+means a Caddyfile edit had zero effect in production until this change. `deploy-to-netcup` now
+runs `docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile`
+immediately after `up -d`, then reads the config Caddy is actually *running* back from its admin
+API (`http://localhost:2019/config/`) and fails the job loudly if the expected handler is absent
+— this is what actually proves the reload took effect, rather than assuming it from a copied file.
 
 ## Maintenance Note
 
-This document describes `docker-compose.prod.yml`, `Caddyfile`, and `.github/workflows/deploy.yml`
-— specifically the `build-and-push-docker-image` job's `linux/amd64` platform target (the deploy
-target pivoted from Oracle A1 Flex/ARM64 to Netcup/x86_64 in Phase 5), the seven job names and the
-job graph (`needs:` edges) in `deploy.yml`, and `docker-compose.prod.yml`'s top-level
-`name: kanban-board-backend` project pin plus the `app` service's `image:` tag interpolation. If
-any of those facts changes — a job renamed or added, the build platform changed, or either of
-those two `docker-compose.prod.yml` lines changed — update this document, and the diagram it links
-to, in the same change: it is the single checked-in description of what actually runs where.
+This document describes `docker-compose.prod.yml`, `Caddyfile`, `docker/caddy/Dockerfile`, and
+`.github/workflows/deploy.yml` — specifically the `build-and-push-docker-image` and
+`build-and-push-caddy-image` jobs' `linux/amd64` platform target (the deploy target pivoted from
+Oracle A1 Flex/ARM64 to Netcup/x86_64 in Phase 5), the 14 job names and the job graph (`needs:`
+edges) in `deploy.yml`, and `docker-compose.prod.yml`'s top-level `name: kanban-board-backend`
+project pin plus the `app` and `caddy` services' `image:` references. If any of those facts
+changes — a job renamed or added, a build platform changed, or any of those `docker-compose.prod.yml`
+lines changed — update this document, and the diagrams it links to, in the same change: it is the
+single checked-in description of what actually runs where.

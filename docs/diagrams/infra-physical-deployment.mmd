@@ -9,7 +9,7 @@ flowchart TB
         style netcup_spacer height:1px,fill:none,stroke:none
 
         subgraph caddy_box["Docker container: caddy"]
-            caddy["caddy<br/>ports 80, 443"]
+            caddy["caddy 2.11.4 + SHA-pinned<br/>rate-limit module (linux/amd64)<br/>ports 80, 443<br/>per-client-IP limit: production<br/>hostname's site block only"]
         end
         netcup_spacer ~~~ caddy_box
         subgraph app_box["Docker container: app"]

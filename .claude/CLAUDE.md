@@ -80,7 +80,10 @@ A Spring Boot 3.5.16 / Java 21 REST API backend for a Kanban board application (
   grounds — see `docs/INFRA_RUNBOOK.md`)
 - Neon serverless Postgres - Database server
 - Self-hosted Redpanda - Kafka-protocol broker, resource-capped
-- Caddy - Automatic public HTTPS / reverse proxy
+- Caddy - Automatic public HTTPS / reverse proxy. A pinned custom image
+  (`docker/caddy/Dockerfile`, CI-built via `build-and-push-caddy-image`), not the stock `caddy:2` —
+  carries an edge rate limiter (`github.com/mholt/caddy-ratelimit`) in front of `/api/signin` and
+  `/api/signup` on the production hostname only (quick task 260903-dvp).
 - Linux environment (from Docker image: `eclipse-temurin:21-jre-jammy`)
 - Ports 80/443 published on the VM; app's port 8080 stays internal-only behind Caddy
 - GitHub Actions - Automated testing, build, Flyway migration verification, and deployment
