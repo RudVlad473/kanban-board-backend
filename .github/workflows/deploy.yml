@@ -145,7 +145,7 @@ jobs:
       # would pay extra CI minutes for no benefit (revisit only if a concrete need for arm64
       # surfaces later).
       - name: Build and push Docker image (linux/amd64)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64
@@ -214,7 +214,7 @@ jobs:
       # pins), so the steady-state cost of rebuilding on every push is a cache hit; any real edit
       # to the Dockerfile busts the cache and genuinely recompiles.
       - name: Build Caddy image (linux/amd64)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: docker/caddy
           platforms: linux/amd64
