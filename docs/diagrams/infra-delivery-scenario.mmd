@@ -2,13 +2,13 @@ sequenceDiagram
     actor Dev as Developer
     participant GH as GitHub Actions runner<br/>(x86_64, ubuntu-latest)
     participant DH as Docker Hub
-    participant Neon as Neon Postgres<br/>(direct, non-pooled endpoint)
 
     box Netcup VPS -- x86_64, Vienna
     participant Comp as Docker Compose CLI<br/>(project: kanban-board-backend)
     participant App as app
     participant Caddy as caddy
     participant RP as redpanda
+    participant PG as postgres 16<br/>(kanban-db network)
     end
 
     Dev->>GH: push to master (the workflow's only trigger)
@@ -22,9 +22,9 @@ sequenceDiagram
         GH->>GH: derive IMAGE_TAG from commit short SHA<br/>(${GITHUB_SHA::7})
         GH->>DH: build linux/amd64 natively (no QEMU --<br/>runner and VM share x86_64) and push image
     and flyway-verify (needs: [setup, run-tests])
-        GH->>GH: refuse if configured DB host carries<br/>Neon's pooled ("-pooler") marker
-        GH->>Neon: Flyway CLI container `migrate`<br/>against direct endpoint, sslmode=require
-        Note over GH,Neon: applies this commit's migrations to the REAL<br/>production database now -- before the new image<br/>ever reaches the VM. Schema change and the code<br/>that consumes it are not deployed atomically.
+        GH->>PG: scp migration scripts to the VM, then over SSH<br/>run pg_isready on the kanban-db network --<br/>refuse if postgres is unresolvable or unreachable
+        GH->>PG: Flyway CLI container `migrate` ON THE VM,<br/>attached to kanban-db, reaching host `postgres`
+        Note over GH,PG: applies this commit's migrations to the REAL<br/>production database now -- before the new image<br/>ever reaches the VM. Schema change and the code<br/>that consumes it are not deployed atomically.
     and build-and-push-caddy-image (needs: [setup, run-tests])
         GH->>GH: derive tag from scripts/verify-caddy-image-tag.py,<br/>assert it agrees with docker-compose.prod.yml's literal
         GH->>GH: build linux/amd64, then prove `caddy version`<br/>and `caddy list-modules` on the built artifact

@@ -1,12 +1,19 @@
 # Infrastructure Architecture
 
 This document describes the production deployment topology introduced by v1.2's Infra Migration
-milestone (Phase 5): a Netcup VPS Lite 2 G12s VM (Vienna, x86_64) running the application, a
-self-hosted Redpanda broker, and Caddy for automatic public HTTPS, backed externally by Neon
-serverless Postgres (Frankfurt) and delivered via GitHub Actions. The original target was Oracle
+milestone (Phase 5) and amended by v1.3's Phase 11: a Netcup VPS Lite 2 G12s VM (Vienna, x86_64)
+running the application, a self-hosted PostgreSQL 16 instance, a self-hosted Redpanda broker, and
+Caddy for automatic public HTTPS, delivered via GitHub Actions. The original target was Oracle
 Cloud's Always Free A1 Flex (ARM64); it was replaced after Oracle's free-tier capacity in the
 planned region proved structurally unavailable — see `docs/INFRA_RUNBOOK.md` and Phase 5 Plan
 05-03's SUMMARY for the pivot rationale.
+
+**The database moved onto the VM in Phase 11 (2026-08-26).** Neon serverless Postgres (Frankfurt)
+was the system of record through v1.2 and this document described it as such until 2026-09-03; the
+Neon project has since been deleted. Every claim below about where data lives, what crosses the VM
+boundary, and how migrations reach the database changed with that move, which is why the
+correction is called out here rather than silently applied — a reader who remembers the Neon
+topology needs to know the difference is real and not a documentation slip.
 
 Per [`docs/DIAGRAM_CONVENTIONS.md`](DIAGRAM_CONVENTIONS.md), each diagram below is one deliberate
 Kruchten 4+1 view, not an ad hoc mix of concerns. The two views chosen are the ones that matter
@@ -35,17 +42,29 @@ punched through the VM's network layers by Docker are 80 and 443.
 **Where TLS terminates:** Caddy terminates public TLS at the VM boundary using an automatically
 obtained, publicly trusted Let's Encrypt certificate (no self-signed/internal TLS). Traffic from
 Caddy to the app inside the VM is plain HTTP — safe only because that hop never leaves the
-internal Docker network. The connection from the app to Neon is a second, independently encrypted
-hop: TLS required (`sslmode=require`) with channel binding (`channel_binding=require`), terminated
-between the app container and Neon's endpoint, unrelated to Caddy's certificate.
+internal Docker network. **There is no second TLS hop.** The app reaches Postgres at
+`jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}` with `DB_HOST=postgres` — a container name on
+the internal `kanban-db` Docker network — and the JDBC URL in `application.properties` carries no
+`sslmode` and no `channel_binding` parameter. That is safe for the same reason the Caddy→app hop
+is: it never leaves the VM. It is worth stating explicitly because the pre-Phase-11 version of this
+document described an encrypted app→Neon hop over the public internet, and someone reading the
+absence of TLS here as an oversight would be re-introducing a requirement that no longer applies.
 
-**Stateful components and where state lives:** the VM itself holds no user data of record — every
-piece of durable application state lives either in Neon (the system of record for all domain data)
-or in two named Docker volumes scoped to operational/transport concerns: Redpanda's data volume
-(the Kafka log and Schema Registry's internal topics — replayable operational state, not the
+**Stateful components and where state lives:** the VM holds the system of record. This is the
+single biggest consequence of Phase 11 and inverts what this section said before: durable
+application state now lives in the `postgres` container's named volume on this VM, not in a managed
+provider. Alongside it sit two volumes scoped to operational/transport concerns — Redpanda's data
+volume (the Kafka log and Schema Registry's internal topics: replayable operational state, not the
 source of truth) and Caddy's certificate/state volume (so container recreation reuses the existing
-Let's Encrypt certificate instead of triggering a rate-limited re-request). Losing either named
-volume loses operational continuity, not user data.
+Let's Encrypt certificate instead of triggering a rate-limited re-request). Losing either of those
+two loses operational continuity; **losing the Postgres volume loses user data outright.**
+
+That raises a real, currently-open exposure rather than a theoretical one: there is no backup. See
+`docs/INFRA_RUNBOOK.md`'s "Backups and restore" section, which documents a `pg_dump`/`pg_restore`
+procedure that has been written but never executed, and the todo
+`.planning/todos/pending/2026-08-20-no-documented-backup-restore-runbook-for-prod-db.md`, which is
+deliberately still open for the scheduled dump, off-host storage, retention policy and one proven
+test restore.
 
 ## Scenario (+1) View — Delivery Path
 
@@ -63,19 +82,25 @@ are deliberately not drawn here; that is this diagram's known limit, not an omis
 <sub>[diagram source](diagrams/infra-delivery-scenario.mmd)</sub>
 
 **Externally reachable vs. internal-only (delivery path):** the GitHub Actions runner reaches
-Docker Hub and Neon's direct endpoint over the public internet (both require real network
-egress); the SSH hop to the VM is authenticated via a pinned host-key fingerprint, not left to
-`StrictHostKeyChecking` defaults. None of these delivery-path connections touch Redpanda or the
-app's internal-only listeners: the pipeline talks to the VM's SSH port only, and Caddy's public
-HTTPS is not part of the delivery path at all.
+Docker Hub over the public internet, and nothing else — since Phase 11 there is no managed database
+endpoint for it to reach. The SSH hop to the VM is authenticated via a pinned host-key fingerprint,
+not left to `StrictHostKeyChecking` defaults. None of these delivery-path connections touch
+Redpanda, Postgres or the app's internal-only listeners: the pipeline talks to Docker Hub and the
+VM's SSH port, and Caddy's public HTTPS is not part of the delivery path at all.
 
 **Where TLS terminates (delivery path):** the SSH connection from the runner to the VM is
-encrypted end-to-end by SSH itself, independent of Caddy's certificate. The `flyway-verify` job
-runs the pinned Flyway CLI container's `migrate` against this repo's own
-`src/main/resources/db/migration` scripts, over Neon's **direct** (non-pooled) endpoint
-specifically for this job — a guard step refuses to proceed if the configured `DB_HOST` carries
-Neon's `-pooler` marker, since transaction-mode pooling does not support DDL/schema migration the
-way a direct connection does (see `docs/INFRA_RUNBOOK.md`).
+encrypted end-to-end by SSH itself, independent of Caddy's certificate — and it is now the *only*
+encrypted delivery-path hop that carries database access, because the migration no longer travels
+over the public internet at all.
+
+`flyway-verify` runs **on the VM**, not on the runner. The runner SCPs this repo's
+`src/main/resources/db/migration` scripts to the VM and then, over SSH, runs the pinned Flyway CLI
+container attached to the internal `kanban-db` Docker network, reaching the database as the
+container name `postgres`. A guard step first runs `pg_isready` against that same network and
+refuses to proceed if the target cannot be resolved or reached, rather than letting Flyway fail
+against an unreachable host. Pre-Phase-11 this job ran on the runner against Neon's direct
+(non-pooled) endpoint and its guard refused a `-pooler` hostname; both that endpoint and that
+failure mode are gone.
 
 **Stateful components (delivery path):** Docker Hub holds the built image tags (build artifacts,
 not user data); GitHub Actions itself holds no durable state between runs. No step in this
@@ -134,7 +159,14 @@ This document describes `docker-compose.prod.yml`, `Caddyfile`, `docker/caddy/Do
 `build-and-push-caddy-image` jobs' `linux/amd64` platform target (the deploy target pivoted from
 Oracle A1 Flex/ARM64 to Netcup/x86_64 in Phase 5), the 14 job names and the job graph (`needs:`
 edges) in `deploy.yml`, and `docker-compose.prod.yml`'s top-level `name: kanban-board-backend`
-project pin plus the `app` and `caddy` services' `image:` references. If any of those facts
-changes — a job renamed or added, a build platform changed, or any of those `docker-compose.prod.yml`
-lines changed — update this document, and the diagrams it links to, in the same change: it is the
-single checked-in description of what actually runs where.
+project pin plus the `app`, `caddy` and `postgres` services' `image:` references. If any of those
+facts changes — a job renamed or added, a build platform changed, or any of those
+`docker-compose.prod.yml` lines changed — update this document, and the diagrams it links to, in
+the same change: it is the single checked-in description of what actually runs where.
+
+**Where the database lives is on that list deliberately, added 2026-09-03.** It was not, and that
+is how this document went on describing Neon as the system of record for the four months after
+Phase 11 moved the database onto the VM — including a TLS hop that no longer exists and a Flyway
+job that no longer runs where it said. The facts most worth listing here are the ones a reader
+would never think to re-check, because they read as settled background rather than as
+configuration.

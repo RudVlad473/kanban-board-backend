@@ -18,13 +18,15 @@ flowchart TB
         subgraph redpanda_box["Docker container: redpanda"]
             redpanda["redpanda<br/>(Kafka broker + Schema Registry,<br/>no host port published)"]
         end
+        subgraph postgres_box["Docker container: postgres"]
+            postgres["postgres 16<br/>(system of record, named volume,<br/>no host port published)"]
+        end
 
         caddy -- "HTTP :8080<br/>(internal Docker network)" --> app
         app -- "Kafka wire protocol :19092<br/>(internal Docker network)" --> redpanda
         app -- "Schema Registry HTTP :8081<br/>(internal Docker network)" --> redpanda
+        app -- "JDBC :5432, no TLS<br/>(internal kanban-db Docker network)" --> postgres
     end
 
-    neon[("Neon serverless Postgres<br/>aws-eu-central-1, Frankfurt<br/>(external, managed)")]
 
     client -- "HTTPS :443 via kanban-board-rud-vlad-473.duckdns.org<br/>(crosses VM boundary)" --> caddy
-    app -- "JDBC over TLS :5432<br/>sslmode=require, channel_binding=require<br/>(crosses VM boundary, public internet)" --> neon
