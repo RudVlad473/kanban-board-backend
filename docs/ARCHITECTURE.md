@@ -247,11 +247,15 @@ Flyway owns the domain schema: `V1__init` → `V2__add_optimistic_locking_versio
 `V3__add_activity_log` → `V4__add_password_hash_not_null` →
 `V5__add_position_subtask_version_theme_board_name_uniqueness` →
 `V6__change_activity_log_event_id_to_varchar` →
-`V7__add_board_optimistic_locking_version_column`. The history deliberately reconstructs how the
-schema actually evolved rather than collapsing it into one snapshot, so a migration replay matches
-the real sequence. V7 (07.1-05) is what gives `boards` the same `@Version` column Column/Task/
-Subtask already had, closing the Board/User optimistic-locking asymmetry noted under
-[Concurrency: optimistic locking](#concurrency-optimistic-locking).
+`V7__add_board_optimistic_locking_version_column` → `V8__add_boards_created_at` →
+`V9__add_columns_color`. The history deliberately reconstructs how the schema actually evolved
+rather than collapsing it into one snapshot, so a migration replay matches the real sequence. V7
+(07.1-05) is what gives `boards` the same `@Version` column Column/Task/Subtask already had,
+closing the Board/User optimistic-locking asymmetry noted under
+[Concurrency: optimistic locking](#concurrency-optimistic-locking). V9 (quick task 260904-obv)
+adds a nullable `columns.color varchar(7)` with no default and no backfill — existing columns have
+no meaningful color, and picking one for them would be a product decision this migration
+deliberately does not make.
 
 Outside the test profile, `spring.jpa.hibernate.ddl-auto=validate` — Hibernate is not allowed to
 create or alter anything. Flyway builds the schema, Hibernate only checks that the entity mappings

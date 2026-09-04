@@ -1,6 +1,7 @@
 package com.vrudenko.kanban_board.security;
 
 import java.util.List;
+import java.util.Map;
 
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
@@ -96,6 +97,11 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
     // D-16's XSS/stored-script group: proves the payload round-trips verbatim, never that it is
     // sanitized. See StoredXss's class Javadoc for the explicit scope statement.
     private static final String XSS_SCRIPT_PAYLOAD = "<script>alert('xss')</script>";
+
+    // quick task 260904-obv (X-1): color's rejection is the deliberate counterpoint to the group's
+    // D-16 verbatim-round-trip decision -- these two payloads must be REJECTED (400), never stored,
+    // because color's format is closed, not because a sanitization policy was introduced.
+    private static final String XSS_ATTRIBUTE_BREAKOUT_PAYLOAD = "\" onload=\"alert(1)";
 
     private ColumnResponseDTO createColumn(Cookie cookie, String boardId, String name)
             throws Exception {
@@ -504,6 +510,51 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
                     .andExpect(jsonPath("$.errors.name").exists());
+        }
+
+        /**
+         * D-16's counterpoint case (X-1): unlike every other free-text field in this group, {@code
+         * color} has a genuine closed format ({@code #RRGGBB}), so a script/HTML payload is
+         * rejected at the DTO boundary rather than round-tripped verbatim. The rejection is proven
+         * on STATUS and on absence from persistence -- never on absence from the response body,
+         * since an unrecognized JSON key is silently dropped by Jackson's default configuration and
+         * would return 201 even if {@code color} did not exist at all; asserting only "the payload
+         * is not reflected in the response" would pass against that codebase too, which is why this
+         * proof anchors on the 400 field-error envelope and a fresh GET.
+         */
+        @ParameterizedTest
+        @ValueSource(strings = {XSS_SCRIPT_PAYLOAD, XSS_ATTRIBUTE_BREAKOUT_PAYLOAD})
+        void shouldReturnBadRequestAndPersistNothing_whenColumnColorIsXssPayload(String payload)
+                throws Exception {
+            // arrange
+            var cookie = signinCookie();
+            var boardId = mockPopulatedBoard.getId();
+            var priorColumnIds =
+                    listColumns(cookie, boardId).stream().map(ColumnResponseDTO::getId).toList();
+            var requestBody =
+                    objectMapper.writeValueAsString(
+                            Map.of("name", "xss-color-holder", "color", payload));
+
+            // act
+            var result =
+                    mockMvc.perform(
+                                    post(BOARD_COLUMNS_URL, boardId)
+                                            .cookie(cookie)
+                                            .contentType(MediaType.APPLICATION_JSON)
+                                            .content(requestBody))
+                            .andReturn();
+
+            // assert: rejected with the field-error envelope
+            Assertions.assertThat(result.getResponse().getStatus())
+                    .isEqualTo(HttpStatus.BAD_REQUEST.value());
+
+            // assert: no column was created at all -- the exact set of column ids is unchanged,
+            // which is a stronger proof than checking the payload's absence from each column's
+            // color (a 400 rejects the whole create, so no column carrying this payload as its
+            // color could exist either way)
+            var afterAttempt = listColumns(cookie, boardId);
+            Assertions.assertThat(afterAttempt.stream().map(ColumnResponseDTO::getId).toList())
+                    .containsExactlyInAnyOrderElementsOf(priorColumnIds);
         }
     }
 

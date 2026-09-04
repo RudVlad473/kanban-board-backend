@@ -128,6 +128,42 @@ public class BoardFullReadTest extends AbstractAppMockMvcTest {
         }
 
         @Test
+        void shouldReturnColorOnNestedColumn_matchingCreatedValue() throws Exception {
+            // arrange -- a column created WITH a color, so the nested read has something
+            // non-null to carry through the ColumnFullMapper chain
+            var coloredColumn =
+                    boardService.addColumnByBoardId(
+                            getOwningUser().getId(),
+                            mockPopulatedBoard.getId(),
+                            SaveColumnRequestDTO.builder()
+                                    .name(
+                                            dataFactory.getRandomWord(
+                                                    ValidationConstants.MIN_COLUMN_NAME_LENGTH))
+                                    .color("#AbCdEf")
+                                    .build());
+            Cookie cookie = signinCookie();
+
+            // act
+            var response =
+                    mockMvc.perform(get(getFullBoardUrl(mockPopulatedBoard.getId())).cookie(cookie))
+                            .andReturn();
+
+            // assert
+            Assertions.assertThat(response.getResponse().getStatus())
+                    .isEqualTo(HttpStatus.OK.value());
+            var body =
+                    objectMapper.readValue(
+                            response.getResponse().getContentAsString(),
+                            BoardFullResponseDTO.class);
+            var nestedColumn =
+                    body.getColumns().stream()
+                            .filter(c -> c.getId().equals(coloredColumn.getId()))
+                            .findFirst()
+                            .orElseThrow();
+            Assertions.assertThat(nestedColumn.getColor()).isEqualTo("#AbCdEf");
+        }
+
+        @Test
         void shouldReturnBoardsOwnCreatedAt_matchingFlatEndpoint() throws Exception {
             // arrange
             Cookie cookie = signinCookie();

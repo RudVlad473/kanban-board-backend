@@ -35,6 +35,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.result.MockMvcResultHandlers;
 
@@ -46,6 +47,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -66,6 +68,8 @@ public class ColumnControllerTest extends AbstractAppMockMvcTest {
     @Autowired private TaskRepository taskRepository;
 
     @Autowired private SubtaskRepository subtaskRepository;
+
+    @Autowired private JdbcTemplate jdbcTemplate;
 
     private String getColumnsPrefix(String boardId) {
         return ApiPaths.BOARDS + "/" + boardId + ApiPaths.COLUMNS;
@@ -465,6 +469,107 @@ public class ColumnControllerTest extends AbstractAppMockMvcTest {
             Assertions.assertThat(orderedColumnIds(boardId))
                     .containsExactly(first.getId(), second.getId(), third.getId());
             Assertions.assertThat(positionsOf(boardId)).containsExactly(0, 1, 2);
+        }
+
+        @Test
+        void shouldCreateWithColor_andPersistItExactly() throws Exception {
+            // arrange
+            var cookie = signinCookie();
+            var boardId = mockEmptyBoards.get(0).getId();
+            var saveDto =
+                    SaveColumnRequestDTO.builder()
+                            .name(
+                                    dataFactory.getRandomWord(
+                                            ValidationConstants.MIN_COLUMN_NAME_LENGTH))
+                            .color("#AbCdEf")
+                            .build();
+
+            // act & assert: response echo -- asserted via jsonPath (not a typed getter) so a
+            // future mutation removing the field from ColumnResponseDTO surfaces as a genuine
+            // runtime assertion failure ("no results for $.color") rather than a compile error
+            var result =
+                    mockMvc.perform(
+                                    post(getColumnsPrefix(boardId))
+                                            .cookie(cookie)
+                                            .contentType(MediaType.APPLICATION_JSON)
+                                            .content(objectMapper.writeValueAsString(saveDto)))
+                            .andExpect(status().isCreated())
+                            .andExpect(jsonPath("$.color").value("#AbCdEf"))
+                            .andReturn();
+
+            // assert: response echo alone is not evidence of persistence -- re-read the row via a
+            // raw SQL query against the column, not the ColumnEntity getter, for the same
+            // compile-vs-runtime-failure reason as the jsonPath check above
+            var createdId =
+                    objectMapper
+                            .readTree(result.getResponse().getContentAsString())
+                            .get("id")
+                            .asText();
+            var persistedColor =
+                    jdbcTemplate.queryForObject(
+                            "SELECT color FROM columns WHERE id = ?", String.class, createdId);
+            Assertions.assertThat(persistedColor).isEqualTo("#AbCdEf");
+        }
+
+        @Test
+        void shouldCreateWithoutColor_andPersistNull() throws Exception {
+            // arrange: the backward-compatibility guard for every existing client -- this case has
+            // no feature-removal red direction (a codebase with no color at all also passes it);
+            // its value is catching a future change that makes color mandatory, not pinning a bug
+            // fix.
+            var cookie = signinCookie();
+            var boardId = mockEmptyBoards.get(0).getId();
+            var saveDto =
+                    SaveColumnRequestDTO.builder()
+                            .name(
+                                    dataFactory.getRandomWord(
+                                            ValidationConstants.MIN_COLUMN_NAME_LENGTH))
+                            .build();
+
+            // act
+            var result =
+                    mockMvc.perform(
+                                    post(getColumnsPrefix(boardId))
+                                            .cookie(cookie)
+                                            .contentType(MediaType.APPLICATION_JSON)
+                                            .content(objectMapper.writeValueAsString(saveDto)))
+                            .andExpect(status().isCreated())
+                            .andReturn();
+
+            // assert: the "color" key is present (this DTO carries no @JsonInclude(NON_NULL)) but
+            // its value is JSON null -- checked via JsonNode rather than a typed getter, same
+            // compile-vs-runtime-failure reasoning as the create-with-color case above
+            var responseNode = objectMapper.readTree(result.getResponse().getContentAsString());
+            Assertions.assertThat(responseNode.has("color")).isTrue();
+            Assertions.assertThat(responseNode.get("color").isNull()).isTrue();
+
+            var createdId = responseNode.get("id").asText();
+            var persistedColor =
+                    jdbcTemplate.queryForObject(
+                            "SELECT color FROM columns WHERE id = ?", String.class, createdId);
+            Assertions.assertThat(persistedColor).isNull();
+        }
+
+        @Test
+        void shouldReturnBadRequest_whenColorIsMalformed() throws Exception {
+            // arrange: hand-written JSON, not the builder -- SaveColumnRequestDTO's builder would
+            // happily accept this string too (Bean Validation only fires at request-validation
+            // time), but a raw JSON body is the shape a genuinely malformed client request takes.
+            var cookie = signinCookie();
+            var boardId = mockEmptyBoards.get(0).getId();
+            var name = dataFactory.getRandomWord(ValidationConstants.MIN_COLUMN_NAME_LENGTH);
+            var invalidBody = "{\"name\":\"" + name + "\",\"color\":\"not-a-color\"}";
+
+            // act & assert: one controller-tier representative -- the full boundary matrix lives
+            // in ColumnColorTest per rule 4's tier split
+            mockMvc.perform(
+                            post(getColumnsPrefix(boardId))
+                                    .cookie(cookie)
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(invalidBody))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.errors.color").exists());
         }
     }
 
