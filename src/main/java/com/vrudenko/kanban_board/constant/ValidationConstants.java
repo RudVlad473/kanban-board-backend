@@ -37,6 +37,11 @@ public final class ValidationConstants {
                     + ValidationConstants.MAX_COLUMN_NAME_LENGTH
                     + " characters";
 
+    public static final int COLUMN_COLOR_LENGTH = 7;
+    public static final String COLUMN_COLOR_PATTERN = "^#[0-9a-fA-F]{6}$";
+    public static final String COLUMN_COLOR_VALIDATION_MESSAGE =
+            "Column color must be a #RRGGBB hex string";
+
     public static final int MIN_TASK_TITLE_LENGTH = 3;
     public static final int MAX_TASK_TITLE_LENGTH = 32;
     public static final String TASK_TITLE_LENGTH_VALIDATION_MESSAGE =

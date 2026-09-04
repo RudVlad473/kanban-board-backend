@@ -3,6 +3,7 @@ package com.vrudenko.kanban_board.entity;
 import java.util.Set;
 
 import com.vrudenko.kanban_board.base.entity.BaseColumn;
+import com.vrudenko.kanban_board.constant.ValidationConstants;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -60,4 +61,7 @@ public class ColumnEntity extends BaseEntity implements BaseColumn {
 
     @Column(nullable = false)
     private Integer position = 0;
+
+    @Column(length = ValidationConstants.COLUMN_COLOR_LENGTH)
+    private String color;
 }
