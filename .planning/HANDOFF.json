@@ -11,7 +11,7 @@
   "completed_tasks": [
     {
       "id": 1,
-      "name": "Quick task 260904-obv — add optional `color` to column, accepted at creation",
+      "name": "Quick task 260904-obv \u2014 add optional `color` to column, accepted at creation",
       "status": "done",
       "commit": "3c80ac7",
       "note": "SHIPPED AND DEPLOYED. Pushed to origin/main; all 14 CI/CD jobs green; V9 migration applied to production and nonprod self-hosted Postgres. Verified live: color present on SaveColumnRequestDTO/ColumnResponseDTO/ColumnFullResponseDTO at https://kanban-board-rud-vlad-473.duckdns.org/api/docs"
@@ -21,11 +21,11 @@
       "name": "Correct the stale Neon database entry in .claude/CLAUDE.md",
       "status": "done",
       "commit": "8d710fb",
-      "note": "COMMITTED LOCALLY ONLY. User explicitly said 'let's just keep it commited' — do NOT push without asking. main is 1 commit ahead of origin/main because of this."
+      "note": "COMMITTED LOCALLY ONLY. User explicitly said 'let's just keep it commited' \u2014 do NOT push without asking. main is 1 commit ahead of origin/main because of this."
     },
     {
       "id": 3,
-      "name": "Quick task 260904-ss1 — publish composed-constraint patterns in the OpenAPI document",
+      "name": "Quick task 260904-ss1 \u2014 publish composed-constraint patterns in the OpenAPI document",
       "status": "done",
       "commit": "ffbf277",
       "note": "4 commits on branch quick/260904-ss1-openapi-constraints (aee9c5a plan, a58eeff customizer, 7bfd92e equivalence tests, c879ddb examples, ffbf277 orchestrator's conjunction fix). Full suite verified green: 514 tests, 0 failures, forced non-cached run."
@@ -34,7 +34,7 @@
       "id": 4,
       "name": "Three-way review (Claude + Codex + Gemini) and fix the confirmed defects",
       "status": "in_progress",
-      "progress": "Claude and Codex reviews COMPLETE and merged; 3 defects confirmed by execution AND independently re-verified by the orchestrator. Gemini FAILED (timeout, zero output) and was relaunched — result unknown. A fixer executor was dispatched and has UNCOMMITTED work in its worktree; see async_jobs."
+      "progress": "Claude and Codex reviews COMPLETE and merged; 3 defects confirmed by execution AND independently re-verified by the orchestrator. Gemini FAILED (timeout, zero output) and was relaunched \u2014 result unknown. A fixer executor was dispatched and has UNCOMMITTED work in its worktree; see async_jobs."
     }
   ],
   "remaining_tasks": [
@@ -49,12 +49,12 @@
     {
       "description": "The fixer executor (in-process subagent) will NOT survive this session, but its git worktree WILL, holding UNCOMMITTED edits to ComposedConstraintPropertyCustomizer.java and Password.java.",
       "type": "technical",
-      "workaround": "Do NOT assume that work is lost. Inspect .claude/worktrees/agent-a2d9d4573207ef980 with `git -C <path> status` and `git diff` FIRST. Either finish the fixes from that diff or discard it deliberately — but look before redoing."
+      "workaround": "Do NOT assume that work is lost. Inspect .claude/worktrees/agent-a2d9d4573207ef980 with `git -C <path> status` and `git diff` FIRST. Either finish the fixes from that diff or discard it deliberately \u2014 but look before redoing."
     },
     {
-      "description": "Gemini review (agy) may or may not still be running as a detached process; its first attempt exited with `Error: timeout waiting for response` and zero bytes.",
+      "description": "Gemini (agy) failed twice with 'Error: timeout waiting for response' and produced zero findings. The 260904-ss1 review coverage is Claude + Codex only.",
       "type": "external",
-      "workaround": "Check /tmp/claude-1000/-home-andre-dev-kanban-board-backend/44d2d4b2-2963-4420-89c0-aa6b3ea0c056/tasks/b22my2fiq.output. Zero bytes plus no live `agy` process means it failed again. Treat 'no findings' as a FAILED run, never as a clean bill of health."
+      "workaround": "Accept two-way coverage, or investigate agy's timeout separately. Both reviewers independently found the D1 flags defect, so the core findings are corroborated."
     }
   ],
   "async_jobs": [
@@ -75,12 +75,12 @@
     {
       "job_id": "gemini-review-retry",
       "backend": "agy (gemini-3.1-pro-high) detached background shell",
-      "status": "unknown_at_pause",
+      "status": "failed_twice",
       "submit_command": "agy --add-dir .worktrees/review-gemini --mode accept-edits --sandbox --model gemini-3.1-pro-high --effort high --dangerously-skip-permissions --print-timeout 35m --print='...'",
       "submitted_at": "2026-09-04T21:50:00Z",
-      "expected_artifacts": ["ranked findings list on stdout"],
+      "expected_artifacts": [],
       "verification_command": "wc -c < /tmp/claude-1000/-home-andre-dev-kanban-board-backend/44d2d4b2-2963-4420-89c0-aa6b3ea0c056/tasks/b22my2fiq.output; ps aux | grep '[a]gy'",
-      "resume_command": "If it produced findings, fold them into the merged list before merging 260904-ss1. If it failed again, say so plainly rather than reporting it as clean."
+      "resume_command": "RESOLVED - do not retry a third time without changing approach. Both attempts exited 'Error: timeout waiting for response' with ~0 bytes (58 bytes on retry, all of it the error). The 260904-ss1 review is therefore a TWO-way review (Claude + Codex), not three. Do not record Gemini as having found nothing."
     }
   ],
   "human_actions_pending": [
@@ -118,7 +118,7 @@
     },
     {
       "decision": "Enforce null-safety with NullAway + JSpecify rather than a lint rule banning `== null`",
-      "rationale": "Established practice, and it reuses the already-wired net.ltgt.errorprone 5.1.0 / error_prone_core 2.50.0 — no new framework. Critically, NullAway USES null checks to narrow @Nullable to @NonNull, so banning `== null` would break the standard tool. Scope: start at AnnotatedPackages = ...kanban_board.service, one line to widen.",
+      "rationale": "Established practice, and it reuses the already-wired net.ltgt.errorprone 5.1.0 / error_prone_core 2.50.0 \u2014 no new framework. Critically, NullAway USES null checks to narrow @Nullable to @NonNull, so banning `== null` would break the standard tool. Scope: start at AnnotatedPackages = ...kanban_board.service, one line to widen.",
       "phase": "queued"
     },
     {
@@ -133,5 +133,5 @@
     ".gsd/dispatch-isolation-sentinel.json"
   ],
   "next_action": "Run `git -C .claude/worktrees/agent-a2d9d4573207ef980 status --porcelain && git diff` to see what the fixer actually completed before assuming anything was lost. Then check whether the Gemini retry produced findings. Only then decide whether to re-dispatch the fixer or finish its diff by hand.",
-  "context_notes": "Two quick tasks ran back to back. 260904-obv is DONE and in production. 260904-ss1 is functionally complete and green (514 tests) but has 3 execution-confirmed defects found by a three-way AI review, currently being fixed. The defects are: (D1) @Pattern.flags() silently dropped so DOTALL is lost and the published pattern rejects multi-line and NBSP values the server accepts; (D2) the phase-2 reassert uses unconditional setters so it LOOSENS any field-level @Schema, making the 'Never loosen' comment false; (D3) @Size counts UTF-16 units while JSON Schema counts code points, so 17 emoji pass the document and fail the Validator; (D4) an internal gitleaks note leaked into the public API document via Password's @Schema description. Method note that repeatedly mattered this session: verify that a check actually RAN, not just that it printed nothing — a failed grep and a clean grep look identical, and Gradle's UP-TO-DATE test task looks exactly like a passing one."
+  "context_notes": "Two quick tasks ran back to back. 260904-obv is DONE and in production. 260904-ss1 is functionally complete and green (514 tests) but has 3 execution-confirmed defects found by a three-way AI review, currently being fixed. The defects are: (D1) @Pattern.flags() silently dropped so DOTALL is lost and the published pattern rejects multi-line and NBSP values the server accepts; (D2) the phase-2 reassert uses unconditional setters so it LOOSENS any field-level @Schema, making the 'Never loosen' comment false; (D3) @Size counts UTF-16 units while JSON Schema counts code points, so 17 emoji pass the document and fail the Validator; (D4) an internal gitleaks note leaked into the public API document via Password's @Schema description. Method note that repeatedly mattered this session: verify that a check actually RAN, not just that it printed nothing \u2014 a failed grep and a clean grep look identical, and Gradle's UP-TO-DATE test task looks exactly like a passing one."
 }
