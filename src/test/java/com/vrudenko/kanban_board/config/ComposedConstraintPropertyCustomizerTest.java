@@ -97,6 +97,27 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
         return node.isMissingNode() || node.isNull() ? null : node.asText();
     }
 
+    /**
+     * Evaluates a candidate value against ONE property's own published {@code pattern}/{@code
+     * minLength}/{@code maxLength}, shared by {@link EquivalenceWithRealValidator} (checking a
+     * hand-picked sample) and {@link ExampleInvariant} (checking every published {@code example}
+     * against its own property). {@code pattern} is evaluated with {@code find()}, not {@code
+     * matches()} -- JSON Schema {@code pattern} is a SEARCH, and {@code matches()} would test a
+     * semantic no client implements.
+     */
+    private boolean valueSatisfiesPublishedConstraints(JsonNode propertyNode, String value) {
+        var minLength = readInt(propertyNode, "minLength");
+        var maxLength = readInt(propertyNode, "maxLength");
+        if (minLength != null && value.length() < minLength) {
+            return false;
+        }
+        if (maxLength != null && value.length() > maxLength) {
+            return false;
+        }
+        var pattern = readText(propertyNode, "pattern");
+        return pattern == null || java.util.regex.Pattern.compile(pattern).matcher(value).find();
+    }
+
     @Nested
     class PublishedConstraints {
 
@@ -523,20 +544,59 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
 
         private boolean documentAccepts(
                 JsonNode document, String schemaName, String propertyName, String value) {
-            var node = propertyNode(document, schemaName, propertyName);
-            var minLength = readInt(node, "minLength");
-            var maxLength = readInt(node, "maxLength");
-            if (minLength != null && value.length() < minLength) {
-                return false;
+            return valueSatisfiesPublishedConstraints(
+                    propertyNode(document, schemaName, propertyName), value);
+        }
+    }
+
+    /**
+     * Proves every published {@code example}, anywhere in the document, satisfies that same
+     * property's own published {@code pattern}/{@code minLength}/{@code maxLength} -- an example
+     * that fails its own constraint is worse than none, since a client copying it straight into a
+     * request gets a 400. Walks EVERY schema/property rather than a checked-in list, so a future
+     * annotation gaining an example is covered with no edit to this test.
+     */
+    @Nested
+    class ExampleInvariant {
+
+        @Test
+        void shouldSatisfyOwnConstraints_whenExamplePublishedAnywhereInDocument() throws Exception {
+            // arrange
+            var document = fetchDocument();
+            var schemas = document.path("components").path("schemas");
+            var failures = new ArrayList<String>();
+            var exampleCount = 0;
+
+            // act
+            var schemaNames = schemas.fieldNames();
+            while (schemaNames.hasNext()) {
+                var schemaName = schemaNames.next();
+                var properties = schemas.path(schemaName).path("properties");
+                var propertyNames = properties.fieldNames();
+                while (propertyNames.hasNext()) {
+                    var propertyName = propertyNames.next();
+                    var node = properties.path(propertyName);
+                    if (!node.has("example")) {
+                        continue;
+                    }
+                    exampleCount++;
+                    var example = node.path("example").asText();
+                    if (!valueSatisfiesPublishedConstraints(node, example)) {
+                        failures.add(
+                                schemaName
+                                        + "."
+                                        + propertyName
+                                        + " -> example '"
+                                        + example
+                                        + "' does not satisfy its own published constraints");
+                    }
+                }
             }
-            if (maxLength != null && value.length() > maxLength) {
-                return false;
-            }
-            var pattern = readText(node, "pattern");
-            // find(), not matches(): JSON Schema `pattern` is a SEARCH, and using matches() here
-            // would test a semantic no client implements.
-            return pattern == null
-                    || java.util.regex.Pattern.compile(pattern).matcher(value).find();
+
+            // assert: the non-vacuity guard first -- a document with zero examples would otherwise
+            // satisfy the loop trivially and read as green
+            Assertions.assertThat(exampleCount).isGreaterThanOrEqualTo(3);
+            Assertions.assertThat(failures).isEmpty();
         }
     }
 }

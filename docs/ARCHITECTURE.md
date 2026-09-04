@@ -38,6 +38,14 @@ ArchUnit rule rather than by convention (see [Testing](#testing)).
   was invisible to this repo's own tests, which assert runtime response bodies and never the
   separately-generated document — it was found instead by a downstream frontend consumer trying to
   generate types from the spec (D-07).
+- **Constraints composed into custom validation annotations are now published too.** `@ColumnColor`,
+  `@BoardName`, `@DisplayName`, `@Password` and friends compose plain Jakarta constraints
+  (`@Pattern`, `@Size`, `@NotBlank`, `@Email`) as meta-annotations, which swagger-core reads only
+  from a field's *directly* declared annotations and never opens. The mechanism is a springdoc
+  `PropertyCustomizer` (`ComposedConstraintPropertyCustomizer`), not the document-level customizer
+  the error envelope above uses, because the composed annotation is the input here and it no longer
+  exists once the document is built. `ComposedConstraintPropertyCustomizerTest` is the guard,
+  proving both that the values are published and that they agree with the real `Validator`.
 - **MapStruct for entity ↔ DTO.** Generated at compile time, so mapping mistakes are compile
   errors and the service layer stays free of mapping boilerplate.
 - **Shared base interfaces** (`BaseBoard`, `BaseTask`, …) tie each DTO to the entity shape it

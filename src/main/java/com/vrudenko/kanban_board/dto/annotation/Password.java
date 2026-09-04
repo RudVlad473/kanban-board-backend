@@ -8,6 +8,7 @@ import java.lang.annotation.Target;
 
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
 import jakarta.validation.ReportAsSingleViolation;
@@ -33,6 +34,12 @@ import jakarta.validation.constraints.Size;
                 "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?]).+$",
         message =
                 "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character")
+@Schema(
+        description =
+                "8-64 characters; must contain at least one uppercase letter, one lowercase"
+                        + " letter, one digit, and one special character. No example is published"
+                        + " here deliberately -- a password-shaped literal in source is exactly what"
+                        + " this repository's gitleaks pre-commit scan looks for.")
 public @interface Password {
     String message() default
             "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character";

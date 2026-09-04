@@ -4,6 +4,7 @@ import java.lang.annotation.*;
 
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
 import jakarta.validation.ReportAsSingleViolation;
@@ -30,6 +31,7 @@ import jakarta.validation.constraints.Pattern;
 @Pattern(
         regexp = ValidationConstants.COLUMN_COLOR_PATTERN,
         message = ValidationConstants.COLUMN_COLOR_VALIDATION_MESSAGE)
+@Schema(example = "#1AB2C3")
 public @interface ColumnColor {
     String message() default "Column color must be a #RRGGBB hex string";
 

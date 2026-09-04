@@ -8,6 +8,7 @@ import java.lang.annotation.Target;
 
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
 import jakarta.validation.ReportAsSingleViolation;
@@ -23,7 +24,8 @@ import jakarta.validation.constraints.Size;
         min = ValidationConstants.MIN_USER_DISPLAY_NAME_LENGTH,
         max = ValidationConstants.MAX_USER_DISPLAY_NAME_LENGTH,
         message = ValidationConstants.DISPLAY_NAME_LENGTH_VALIDATION_MESSAGE)
-@Pattern(regexp = "^[a-zA-Z ]*$", message = "Display name may only contain letters & spaces") public @interface DisplayName {
+@Pattern(regexp = "^[a-zA-Z ]*$", message = "Display name may only contain letters & spaces") @Schema(example = "Ada Lovelace")
+public @interface DisplayName {
     String message() default ValidationConstants.DISPLAY_NAME_LENGTH_VALIDATION_MESSAGE;
 
     Class<?>[] groups() default {};

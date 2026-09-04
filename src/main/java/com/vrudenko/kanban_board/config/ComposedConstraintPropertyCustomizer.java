@@ -177,6 +177,7 @@ public class ComposedConstraintPropertyCustomizer
             return;
         }
         contribute(annotation, accumulator);
+        collectSchemaMeta(annotationType, accumulator);
         for (var meta : annotationType.getAnnotations()) {
             if (meta.annotationType().isAnnotationPresent(Constraint.class)) {
                 walk(meta, pathVisited, accumulator);
@@ -207,6 +208,25 @@ public class ComposedConstraintPropertyCustomizer
         // read: no site in this codebase moves it away from its ".*" default.
     }
 
+    // Reads only example()/description() off a meta io.swagger.v3.oas.annotations.media.Schema --
+    // that annotation carries ~40 other attributes, and ignoring all of them is deliberate scope,
+    // not an oversight. First occurrence wins; a later composed annotation on the same field never
+    // overwrites an example/description an earlier one already contributed.
+    private void collectSchemaMeta(
+            Class<? extends Annotation> annotationType, Accumulator accumulator) {
+        var schemaMeta =
+                annotationType.getAnnotation(io.swagger.v3.oas.annotations.media.Schema.class);
+        if (schemaMeta == null) {
+            return;
+        }
+        if (accumulator.example == null && !schemaMeta.example().isEmpty()) {
+            accumulator.example = schemaMeta.example();
+        }
+        if (accumulator.description == null && !schemaMeta.description().isEmpty()) {
+            accumulator.description = schemaMeta.description();
+        }
+    }
+
     private void raiseMinLength(Accumulator accumulator, int candidate) {
         accumulator.minLength =
                 accumulator.minLength == null
@@ -229,12 +249,20 @@ public class ComposedConstraintPropertyCustomizer
         private Integer minLength;
         private Integer maxLength;
         private String format;
+        private String example;
+        private String description;
 
         void applyTo(Schema<?> property) {
             property.setMinLength(minLength);
             property.setMaxLength(maxLength);
             if (format != null && property.getFormat() == null) {
                 property.setFormat(format);
+            }
+            if (example != null && property.getExample() == null) {
+                property.setExample(example);
+            }
+            if (description != null && property.getDescription() == null) {
+                property.setDescription(description);
             }
             if (patterns.isEmpty()) {
                 return;
