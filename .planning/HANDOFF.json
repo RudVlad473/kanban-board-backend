@@ -1,0 +1,137 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-09-04T22:09:57.829Z",
+  "phase": null,
+  "phase_name": "Quick tasks 260904-obv and 260904-ss1 (no active phase)",
+  "phase_dir": ".planning/quick/260904-ss1-publish-composed-constraint-patterns-in-",
+  "plan": 1,
+  "task": 4,
+  "total_tasks": 5,
+  "status": "paused",
+  "completed_tasks": [
+    {
+      "id": 1,
+      "name": "Quick task 260904-obv — add optional `color` to column, accepted at creation",
+      "status": "done",
+      "commit": "3c80ac7",
+      "note": "SHIPPED AND DEPLOYED. Pushed to origin/main; all 14 CI/CD jobs green; V9 migration applied to production and nonprod self-hosted Postgres. Verified live: color present on SaveColumnRequestDTO/ColumnResponseDTO/ColumnFullResponseDTO at https://kanban-board-rud-vlad-473.duckdns.org/api/docs"
+    },
+    {
+      "id": 2,
+      "name": "Correct the stale Neon database entry in .claude/CLAUDE.md",
+      "status": "done",
+      "commit": "8d710fb",
+      "note": "COMMITTED LOCALLY ONLY. User explicitly said 'let's just keep it commited' — do NOT push without asking. main is 1 commit ahead of origin/main because of this."
+    },
+    {
+      "id": 3,
+      "name": "Quick task 260904-ss1 — publish composed-constraint patterns in the OpenAPI document",
+      "status": "done",
+      "commit": "ffbf277",
+      "note": "4 commits on branch quick/260904-ss1-openapi-constraints (aee9c5a plan, a58eeff customizer, 7bfd92e equivalence tests, c879ddb examples, ffbf277 orchestrator's conjunction fix). Full suite verified green: 514 tests, 0 failures, forced non-cached run."
+    },
+    {
+      "id": 4,
+      "name": "Three-way review (Claude + Codex + Gemini) and fix the confirmed defects",
+      "status": "in_progress",
+      "progress": "Claude and Codex reviews COMPLETE and merged; 3 defects confirmed by execution AND independently re-verified by the orchestrator. Gemini FAILED (timeout, zero output) and was relaunched — result unknown. A fixer executor was dispatched and has UNCOMMITTED work in its worktree; see async_jobs."
+    }
+  ],
+  "remaining_tasks": [
+    {
+      "id": 5,
+      "name": "NullAway + JSpecify wiring, folded together with the expression-oriented null refactor",
+      "status": "not_started",
+      "note": "Fully specified and user-approved; see decisions. Blocked only on 260904-ss1 finishing."
+    }
+  ],
+  "blockers": [
+    {
+      "description": "The fixer executor (in-process subagent) will NOT survive this session, but its git worktree WILL, holding UNCOMMITTED edits to ComposedConstraintPropertyCustomizer.java and Password.java.",
+      "type": "technical",
+      "workaround": "Do NOT assume that work is lost. Inspect .claude/worktrees/agent-a2d9d4573207ef980 with `git -C <path> status` and `git diff` FIRST. Either finish the fixes from that diff or discard it deliberately — but look before redoing."
+    },
+    {
+      "description": "Gemini review (agy) may or may not still be running as a detached process; its first attempt exited with `Error: timeout waiting for response` and zero bytes.",
+      "type": "external",
+      "workaround": "Check /tmp/claude-1000/-home-andre-dev-kanban-board-backend/44d2d4b2-2963-4420-89c0-aa6b3ea0c056/tasks/b22my2fiq.output. Zero bytes plus no live `agy` process means it failed again. Treat 'no findings' as a FAILED run, never as a clean bill of health."
+    }
+  ],
+  "async_jobs": [
+    {
+      "manifest": null,
+      "job_id": "fixer-executor-260904-ss1",
+      "backend": "claude-code in-process subagent (dies with the session)",
+      "status": "running_at_pause",
+      "submit_command": "Agent(gsd-executor, isolation=worktree) briefed with D1-D4 + 5 secondary findings",
+      "submitted_at": "2026-09-04T21:55:00Z",
+      "expected_artifacts": [
+        "commits on branch worktree-agent-a2d9d4573207ef980",
+        ".planning/quick/260904-ss1-publish-composed-constraint-patterns-in-/260904-ss1-FIXES-SUMMARY.md"
+      ],
+      "verification_command": "git -C .claude/worktrees/agent-a2d9d4573207ef980 status --porcelain && git -C .claude/worktrees/agent-a2d9d4573207ef980 log --oneline ffbf277..HEAD",
+      "resume_command": "Inspect the worktree diff; re-dispatch a fresh executor with the same brief if the work is incomplete. Do NOT resume the dead agent id."
+    },
+    {
+      "job_id": "gemini-review-retry",
+      "backend": "agy (gemini-3.1-pro-high) detached background shell",
+      "status": "unknown_at_pause",
+      "submit_command": "agy --add-dir .worktrees/review-gemini --mode accept-edits --sandbox --model gemini-3.1-pro-high --effort high --dangerously-skip-permissions --print-timeout 35m --print='...'",
+      "submitted_at": "2026-09-04T21:50:00Z",
+      "expected_artifacts": ["ranked findings list on stdout"],
+      "verification_command": "wc -c < /tmp/claude-1000/-home-andre-dev-kanban-board-backend/44d2d4b2-2963-4420-89c0-aa6b3ea0c056/tasks/b22my2fiq.output; ps aux | grep '[a]gy'",
+      "resume_command": "If it produced findings, fold them into the merged list before merging 260904-ss1. If it failed again, say so plainly rather than reporting it as clean."
+    }
+  ],
+  "human_actions_pending": [
+    {
+      "action": "Approve the merge of quick/260904-ss1-openapi-constraints into main",
+      "context": "User instruction on 2026-09-04: stop at the merge gate and show the diff before merging to main. This is recorded in project memory as pause-for-code-review-before-merging-to-main.",
+      "blocking": true
+    },
+    {
+      "action": "Decide whether to push main (currently 1 unpushed commit, 8d710fb)",
+      "context": "User said to keep the CLAUDE.md correction committed locally, not pushed.",
+      "blocking": false
+    }
+  ],
+  "decisions": [
+    {
+      "decision": "column `color` is an optional, nullable #RRGGBB hex string; DB column nullable with no backfill; update path deliberately out of scope",
+      "rationale": "Requiring it breaks every existing client; backfilling invents a product decision nobody made. Set-once gap filed as a todo.",
+      "phase": "260904-obv"
+    },
+    {
+      "decision": "Publish composed-constraint patterns via a springdoc PropertyCustomizer that is ALSO registered as a GlobalOpenApiCustomizer",
+      "rationale": "swagger-core's ModelResolver.resolveProperties calls applyBeanValidatorAnnotations a second time AFTER the PropertyCustomizer returns, resetting minLength to 1. Only the document-level phase is guaranteed to run last.",
+      "phase": "260904-ss1"
+    },
+    {
+      "decision": "Publish the password regex in the public API document",
+      "rationale": "Explicit, informed user decision. Do NOT re-litigate. A prose description is published instead of an example, because a password-shaped literal would trip the repo's gitleaks pre-commit scan.",
+      "phase": "260904-ss1"
+    },
+    {
+      "decision": "Fail closed when translating Java regexes to ECMA-262: publish a pattern only where equivalence is proven by a test, otherwise publish none",
+      "rationale": "An absent constraint under-documents; a WRONG constraint makes correct clients reject valid data while looking authoritative. Asymmetric harm.",
+      "phase": "260904-ss1"
+    },
+    {
+      "decision": "Enforce null-safety with NullAway + JSpecify rather than a lint rule banning `== null`",
+      "rationale": "Established practice, and it reuses the already-wired net.ltgt.errorprone 5.1.0 / error_prone_core 2.50.0 — no new framework. Critically, NullAway USES null checks to narrow @Nullable to @NonNull, so banning `== null` would break the standard tool. Scope: start at AnnotatedPackages = ...kanban_board.service, one line to widen.",
+      "phase": "queued"
+    },
+    {
+      "decision": "Fold the expression-oriented null refactor into the NullAway task (user: 'yes fold it')",
+      "rationale": "Sites and target idioms already identified: TaskService:209 -> Optional.map/orElse; ResetController:77,112 -> filter chain; OwnershipVerifierService:36 -> requireNonNull; CurrentUserIdResolver:35 -> filter; KafkaConsumerConfig:144 -> ObjectProvider; KafkaEventPublisher:63 -> thenAccept/exceptionally. The three Swagger guards in ProblemDetailOpenApiCustomizer stay as-is.",
+      "phase": "queued"
+    }
+  ],
+  "uncommitted_files": [
+    ".planning/todos/pending/2026-09-04-audit-codebase-for-property-based-testing-with-jqwik.md",
+    ".planning/config.json",
+    ".gsd/dispatch-isolation-sentinel.json"
+  ],
+  "next_action": "Run `git -C .claude/worktrees/agent-a2d9d4573207ef980 status --porcelain && git diff` to see what the fixer actually completed before assuming anything was lost. Then check whether the Gemini retry produced findings. Only then decide whether to re-dispatch the fixer or finish its diff by hand.",
+  "context_notes": "Two quick tasks ran back to back. 260904-obv is DONE and in production. 260904-ss1 is functionally complete and green (514 tests) but has 3 execution-confirmed defects found by a three-way AI review, currently being fixed. The defects are: (D1) @Pattern.flags() silently dropped so DOTALL is lost and the published pattern rejects multi-line and NBSP values the server accepts; (D2) the phase-2 reassert uses unconditional setters so it LOOSENS any field-level @Schema, making the 'Never loosen' comment false; (D3) @Size counts UTF-16 units while JSON Schema counts code points, so 17 emoji pass the document and fail the Validator; (D4) an internal gitleaks note leaked into the public API document via Password's @Schema description. Method note that repeatedly mattered this session: verify that a check actually RAN, not just that it printed nothing — a failed grep and a clean grep look identical, and Gradle's UP-TO-DATE test task looks exactly like a passing one."
+}
