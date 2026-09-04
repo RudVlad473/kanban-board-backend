@@ -2,6 +2,7 @@ package com.vrudenko.kanban_board.dto.column_dto;
 
 import com.vrudenko.kanban_board.base.entity.BaseColumn;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
+import com.vrudenko.kanban_board.dto.annotation.ColumnColor;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -20,4 +21,6 @@ public class SaveColumnRequestDTO implements BaseColumn {
             max = ValidationConstants.MAX_COLUMN_NAME_LENGTH,
             message = ValidationConstants.COLUMN_NAME_LENGTH_VALIDATION_MESSAGE)
     private String name;
+
+    @ColumnColor private String color;
 }

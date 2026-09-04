@@ -17,4 +17,5 @@ public class ColumnResponseDTO implements BaseId, BaseColumn {
     private String name;
     private Long version;
     private Integer position;
+    private String color;
 }

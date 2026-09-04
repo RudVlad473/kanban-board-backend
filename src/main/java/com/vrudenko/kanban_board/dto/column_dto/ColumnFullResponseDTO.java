@@ -23,5 +23,6 @@ public class ColumnFullResponseDTO implements BaseId, BaseColumn {
     private String name;
     private Long version;
     private Integer position;
+    private String color;
     private List<TaskFullResponseDTO> tasks;
 }
