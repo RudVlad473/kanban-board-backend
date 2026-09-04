@@ -3,16 +3,25 @@ package com.vrudenko.kanban_board.config;
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.annotation.BoardName;
 import com.vrudenko.kanban_board.dto.annotation.DisplayName;
 import com.vrudenko.kanban_board.dto.annotation.OptionalNotBlank;
 import com.vrudenko.kanban_board.dto.annotation.Password;
+import com.vrudenko.kanban_board.dto.board_dto.UpdateBoardRequestDTO;
+import com.vrudenko.kanban_board.dto.column_dto.SaveColumnRequestDTO;
+import com.vrudenko.kanban_board.dto.subtask_dto.SaveSubtaskRequestDTO;
+import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
+import com.vrudenko.kanban_board.dto.task_dto.UpdateTaskRequestDTO;
+import com.vrudenko.kanban_board.dto.user_dto.SignupRequestDTO;
 import com.vrudenko.kanban_board.support.containers.AbstractPostgresContainerTest;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
 import jakarta.validation.constraints.Pattern;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Nested;
@@ -45,6 +54,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainerTest {
 
     @Autowired private MockMvc mockMvc;
+    @Autowired private Validator validator;
 
     @Value("${springdoc.api-docs.path}")
     private String apiDocsPath;
@@ -370,6 +380,163 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
             // assert
             Assertions.assertThat(signupFormat).isEqualTo("email");
             Assertions.assertThat(signinFormat).isEqualTo("email");
+        }
+    }
+
+    /**
+     * Proves the published document and the real {@link Validator} reach the SAME accept/reject
+     * verdict for every field {@link ComposedConstraintPropertyCustomizer} touches -- the actual
+     * correctness contract; {@link PublishedConstraints} only proves values are present, not that
+     * they mean the same thing the enforcer means.
+     *
+     * <p>The published {@code pattern} is evaluated here with Java's regex engine, not ECMA-262.
+     * That is exact for every construct currently in use -- the five distinct regexes in this
+     * codebase (character classes, anchors, lookaheads) are common to both dialects -- and this
+     * test is what would catch a future annotation reaching for a Java-only construct.
+     */
+    @Nested
+    class EquivalenceWithRealValidator {
+
+        private record Case(String schemaName, String propertyName, String value, Object dto) {}
+
+        @Test
+        void shouldMatchRealValidatorVerdict_whenPublishedConstraintsAreEvaluated()
+                throws Exception {
+            // arrange
+            var document = fetchDocument();
+            var overlongDescription =
+                    "a".repeat(ValidationConstants.MAX_TASK_DESCRIPTION_LENGTH + 1);
+            var cases =
+                    List.of(
+                            new Case(
+                                    "SaveColumnRequestDTO",
+                                    "color",
+                                    "#1AB2C3",
+                                    SaveColumnRequestDTO.builder().color("#1AB2C3").build()),
+                            new Case(
+                                    "SaveColumnRequestDTO",
+                                    "color",
+                                    "1AB2C3",
+                                    SaveColumnRequestDTO.builder().color("1AB2C3").build()),
+                            new Case(
+                                    "UpdateBoardRequestDTO",
+                                    "name",
+                                    "Platform Launch",
+                                    UpdateBoardRequestDTO.builder()
+                                            .name("Platform Launch")
+                                            .build()),
+                            new Case(
+                                    "UpdateBoardRequestDTO",
+                                    "name",
+                                    "   ",
+                                    UpdateBoardRequestDTO.builder().name("   ").build()),
+                            new Case(
+                                    "SignupRequestDTO",
+                                    "displayName",
+                                    "Ada Lovelace",
+                                    SignupRequestDTO.builder().displayName("Ada Lovelace").build()),
+                            new Case(
+                                    "SignupRequestDTO",
+                                    "displayName",
+                                    "   ",
+                                    SignupRequestDTO.builder().displayName("   ").build()),
+                            new Case(
+                                    "SignupRequestDTO",
+                                    "password",
+                                    "Sup3r$ecret",
+                                    SignupRequestDTO.builder().password("Sup3r$ecret").build()),
+                            new Case(
+                                    "SignupRequestDTO",
+                                    "password",
+                                    "Sup$ercret",
+                                    SignupRequestDTO.builder().password("Sup$ercret").build()),
+                            new Case(
+                                    "SaveSubtaskRequestDTO",
+                                    "title",
+                                    "abc",
+                                    SaveSubtaskRequestDTO.builder().title("abc").build()),
+                            new Case(
+                                    "SaveSubtaskRequestDTO",
+                                    "title",
+                                    "ab",
+                                    SaveSubtaskRequestDTO.builder().title("ab").build()),
+                            new Case(
+                                    "UpdateTaskRequestDTO",
+                                    "title",
+                                    "Refactor",
+                                    UpdateTaskRequestDTO.builder().title("Refactor").build()),
+                            new Case(
+                                    "UpdateTaskRequestDTO",
+                                    "title",
+                                    "   ",
+                                    UpdateTaskRequestDTO.builder().title("   ").build()),
+                            new Case(
+                                    "SaveTaskRequestDTO",
+                                    "description",
+                                    "A short description",
+                                    SaveTaskRequestDTO.builder()
+                                            .description("A short description")
+                                            .build()),
+                            new Case(
+                                    "SaveTaskRequestDTO",
+                                    "description",
+                                    overlongDescription,
+                                    SaveTaskRequestDTO.builder()
+                                            .description(overlongDescription)
+                                            .build()));
+            var failures = new ArrayList<String>();
+
+            // act
+            for (var testCase : cases) {
+                var validatorAccepts = validatorAccepts(testCase.dto(), testCase.propertyName());
+                var documentAccepts =
+                        documentAccepts(
+                                document,
+                                testCase.schemaName(),
+                                testCase.propertyName(),
+                                testCase.value());
+                if (validatorAccepts != documentAccepts) {
+                    failures.add(
+                            testCase.schemaName()
+                                    + "."
+                                    + testCase.propertyName()
+                                    + "='"
+                                    + testCase.value()
+                                    + "' -> validator accepts="
+                                    + validatorAccepts
+                                    + ", document accepts="
+                                    + documentAccepts);
+                }
+            }
+
+            // assert
+            Assertions.assertThat(failures).isEmpty();
+        }
+
+        private boolean validatorAccepts(Object dto, String propertyName) {
+            Set<ConstraintViolation<Object>> violations = validator.validate(dto);
+            return violations.stream()
+                    .noneMatch(
+                            violation ->
+                                    violation.getPropertyPath().toString().equals(propertyName));
+        }
+
+        private boolean documentAccepts(
+                JsonNode document, String schemaName, String propertyName, String value) {
+            var node = propertyNode(document, schemaName, propertyName);
+            var minLength = readInt(node, "minLength");
+            var maxLength = readInt(node, "maxLength");
+            if (minLength != null && value.length() < minLength) {
+                return false;
+            }
+            if (maxLength != null && value.length() > maxLength) {
+                return false;
+            }
+            var pattern = readText(node, "pattern");
+            // find(), not matches(): JSON Schema `pattern` is a SEARCH, and using matches() here
+            // would test a semantic no client implements.
+            return pattern == null
+                    || java.util.regex.Pattern.compile(pattern).matcher(value).find();
         }
     }
 }
