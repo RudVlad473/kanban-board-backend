@@ -2,6 +2,7 @@ package com.vrudenko.kanban_board.config;
 
 import java.lang.annotation.Annotation;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -271,15 +272,26 @@ public class ComposedConstraintPropertyCustomizer
                 property.setPattern(patterns.iterator().next());
                 return;
             }
-            // size >= 2: conjunction of zero-width lookaheads, one per regex in encounter order.
-            // Each "^(?:Ri)$" is the faithful translation of Java's whole-string
-            // Matcher.matches() into ECMA-262 search semantics; the overall expression is
-            // zero-width and matches only at index 0 because every lookahead opens with "^".
+            // size >= 2: every regex but the LAST becomes a zero-width lookahead; the last one
+            // consumes. Each "^(?:Ri)$" is the faithful translation of Java's whole-string
+            // Matcher.matches() into ECMA-262.
+            //
+            // The trailing consuming term is load-bearing for CONSUMERS, not for correctness under
+            // the spec. JSON Schema evaluates `pattern` as an unanchored search, under which an
+            // all-lookahead conjunction is already correct. But a generated client that instead
+            // full-matches it (Java Pattern.matches, Python re.fullmatch, or a generator that
+            // wraps the pattern in ^...$) sees a zero-width expression, which matches ONLY the
+            // empty string -- so every valid value would be rejected client-side before a request
+            // was ever sent. Measured 2026-09-04 on UpdateBoardRequestDTO.name's own two regexes:
+            // all-lookahead form gave search=true/fullmatch=FALSE for "Platform Launch", this form
+            // gives true/true, and both forms still reject "   " and "" under either reading.
+            var ordered = List.copyOf(patterns);
+            var lastIndex = ordered.size() - 1;
             var conjunction =
-                    patterns.stream()
+                    ordered.subList(0, lastIndex).stream()
                             .map(regex -> "(?=^(?:" + regex + ")$)")
                             .collect(Collectors.joining());
-            property.setPattern(conjunction);
+            property.setPattern(conjunction + "^(?:" + ordered.get(lastIndex) + ")$");
         }
     }
 }

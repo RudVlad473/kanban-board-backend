@@ -102,8 +102,16 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
      * minLength}/{@code maxLength}, shared by {@link EquivalenceWithRealValidator} (checking a
      * hand-picked sample) and {@link ExampleInvariant} (checking every published {@code example}
      * against its own property). {@code pattern} is evaluated with {@code find()}, not {@code
-     * matches()} -- JSON Schema {@code pattern} is a SEARCH, and {@code matches()} would test a
-     * semantic no client implements.
+     * matches()} -- JSON Schema {@code pattern} is a SEARCH, so {@code find()} is the semantics a
+     * spec-compliant validator implements, and testing {@code matches()} here would over-constrain
+     * these equivalence checks.
+     *
+     * <p>That is deliberately NOT the whole story, and {@code
+     * shouldAcceptValidValueUnderFullMatch_whenPatternIsAMultiRegexConjunction} is the counterpart
+     * that covers the rest: a generated client may full-match the published pattern instead, which
+     * is a weaker guarantee than the spec but a real consumer behavior. Search semantics belong
+     * here (they are what correctness means); full-match belongs there (it is what portability
+     * means). Neither test subsumes the other.
      */
     private boolean valueSatisfiesPublishedConstraints(JsonNode propertyNode, String value) {
         var minLength = readInt(propertyNode, "minLength");
@@ -228,6 +236,63 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
                                     + " -> expected a two-regex conjunction, got '"
                                     + actual
                                     + "'");
+                }
+            }
+
+            // assert
+            Assertions.assertThat(failures).isEmpty();
+        }
+
+        /**
+         * A multi-regex conjunction must accept a valid value under FULL-MATCH evaluation, not only
+         * under the unanchored search JSON Schema specifies.
+         *
+         * <p>Spec-compliant validators search, so an all-lookahead conjunction satisfies them and
+         * every other test here passes with one. Generated clients are the consumers that break: a
+         * generator emitting {@code Pattern.matches} / {@code re.fullmatch}, or wrapping the
+         * published pattern in its own anchors, evaluates a zero-width expression against a
+         * non-empty value and rejects it -- client-side, before any request is sent. Pinning the
+         * full-match reading is what forces the conjunction's last term to consume rather than
+         * assert.
+         */
+        @Test
+        void shouldAcceptValidValueUnderFullMatch_whenPatternIsAMultiRegexConjunction()
+                throws Exception {
+            // arrange
+            var document = fetchDocument();
+            record Row(String schema, String property, String valid, String invalid) {}
+            var rows =
+                    List.of(
+                            new Row("UpdateBoardRequestDTO", "name", "Platform Launch", "   "),
+                            new Row("SignupRequestDTO", "displayName", "Ada Lovelace", "   "));
+            var failures = new ArrayList<String>();
+
+            // act
+            for (var row : rows) {
+                var published =
+                        readText(propertyNode(document, row.schema(), row.property()), "pattern");
+                var compiled = java.util.regex.Pattern.compile(published);
+                if (!compiled.matcher(row.valid()).matches()) {
+                    failures.add(
+                            row.schema()
+                                    + "."
+                                    + row.property()
+                                    + " -> published pattern '"
+                                    + published
+                                    + "' REJECTS the valid value '"
+                                    + row.valid()
+                                    + "' under full-match evaluation");
+                }
+                if (compiled.matcher(row.invalid()).matches()) {
+                    failures.add(
+                            row.schema()
+                                    + "."
+                                    + row.property()
+                                    + " -> published pattern '"
+                                    + published
+                                    + "' ACCEPTS the invalid value '"
+                                    + row.invalid()
+                                    + "' under full-match evaluation");
                 }
             }
 
