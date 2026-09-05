@@ -244,3 +244,88 @@ merged, and the merge was not opened.** A three-way review (Claude, Gemini, Code
 one worktree each) is the next step before the human sanctions the merge. Point reviewers at: (1)
 whether any invariant can be satisfied by something the gate should have caught, and (2) whether the
 gate's KNOWN HOLES list is honest or flattering.
+
+## Review Remediation (2026-09-05)
+
+A three-way review (Claude/Gemini/Codex) against commit `72064dd` returned seven independently
+re-verified findings. All seven are fixed, on the same branch, no merge/push.
+
+### What changed
+
+- **F1 (network_mode interpolation, HIGHEST PRIORITY):** `network_mode: ${VAR}` is a literal
+  string to PyYAML; Docker can render it to `host` at deploy time and the gate had no way to know.
+  New invariant **I5**: any `network_mode` value that is a string containing `${` is itself a
+  violation. Scoped to the `network_mode` key only -- not a text search -- so
+  `DB_PORT: ${DB_PORT:-5432}` (present in both covered files under `environment:`) does not
+  false-positive. Proven both ways: mutated `network_mode: ${NETWORK_MODE}` on `postgres` fires
+  I5; the unmodified files (which already carry the `DB_PORT` interpolation) still pass clean.
+- **F2 (include/extends bypass):** New invariant **I6**: a top-level `include:` key, or any
+  service carrying an `extends:` key, is now a violation (previously a documented-but-open hole).
+  `docstring` KNOWN HOLES rewritten to a "CLOSED, not merely narrowed" section explaining why.
+- **F3 (new compose file silently ungated):** New invariant **I7** plus a `DELIBERATELY_EXCLUDED`
+  set (currently `{docker-compose.yml}`, commented with why) and a `find_uncovered_files` pure
+  function. `main()` now globs `docker-compose*.yml` at the repo root and flags any file in
+  neither `ALLOWED_PUBLISHERS` nor `DELIBERATELY_EXCLUDED`, naming the file.
+- **F4 (success line asserted unchecked facts):** The green line is now rendered from
+  `ALLOWED_PUBLISHERS` itself (one clause per covered file, stating its actual allowed set)
+  instead of a hardcoded f-string that could outlive what the checks actually enforce.
+- **F5 (I4 was caddy-by-name):** New per-file `EXPECTED_PORTS` table maps each allowed publisher
+  to its own exact required port set; `find_violations` looks up the allowlisted service's name
+  in that table rather than testing `name == "caddy"`. An allowlisted service with no
+  `EXPECTED_PORTS` entry is itself a violation. `find_violations`'s signature grew a fourth
+  parameter (`expected_ports`) to carry this without a module-global lookup inside the function.
+  Self-test proves this with a synthetic `"edge"` service, not `caddy`, so the generalization is
+  what's under test, not a re-run of the caddy case.
+- **F6 (self-test hardcoding), fixed the way the plan required, not the way the reviewer
+  proposed:** fixtures stayed literal (`PROD_EXPECTED`/`NONPROD_EXPECTED` defined locally, not
+  imported from the gate's `ALLOWED_PUBLISHERS`/`EXPECTED_PORTS`) so a wrong allowlist edit cannot
+  rewrite the test's own expectations and still pass. Added cases for the generalized I4 behavior,
+  I5 (including the DB_PORT scoping-trap negative case), I6 (both include and extends), and I7 --
+  all testable at the pure-function level.
+- **F7 (untracked/tracked `.pyc`):** `.gitignore` gained a `__pycache__/` / `*.pyc` section;
+  `scripts/__pycache__/verify-caddy-image-tag.cpython-314.pyc` (tracked since a prior commit, not
+  this task's doing) was `git rm --cached`. Committed separately from the gate fix, as required.
+
+### Full red/green matrix (every invariant, old and new)
+
+All mutations were applied to the real committed files, run against the gate, then reverted with
+`git checkout -- <file>` and confirmed via `git diff --quiet`. Exit codes and FAIL messages below
+are verbatim from the actual runs.
+
+| Invariant | Mutation | Exit | Message (verbatim) |
+|---|---|---|---|
+| Clean tree (baseline, before and after every mutation) | none | `0` | `invariants OK -- docker-compose.nonprod.yml: no service may publish a host port; docker-compose.prod.yml: only ['caddy'] may publish a host port; no network_mode: host or unresolved interpolation, no include/extends, every compose file at the repo root accounted for` |
+| I1 | Added `ports: ["5432:5432"]` to `postgres` in `docker-compose.prod.yml` | `1` | `FAIL: I1 violated in docker-compose.prod.yml: service \`postgres\` carries a \`ports:\` key but is not in this file's allowed set ['caddy']` |
+| I2 | Set `network_mode: host` on `postgres` in `docker-compose.prod.yml` | `1` | `FAIL: I2 violated in docker-compose.prod.yml: service \`postgres\` sets \`network_mode: host\`, which publishes every listening port on the host and bypasses \`ports:\` entirely` |
+| I3 | Renamed the `caddy:` service key to `caddy-renamed:` in `docker-compose.prod.yml` | `1` | `FAIL: I3 violated in docker-compose.prod.yml: allowed publisher \`caddy\` is not a service in this file` (I1 also fired honestly on `caddy-renamed`'s now-orphaned `ports:` key -- expected side effect, not a bug) |
+| I4 | Added `8443:8443` to `caddy`'s `ports:` in `docker-compose.prod.yml` | `1` | `FAIL: I4 violated in docker-compose.prod.yml: \`caddy\`'s published set is ['80:80', '443:443', '8443:8443'], not exactly ['443:443', '80:80']` |
+| I5 (F1's exact scenario) | Set `network_mode: ${NETWORK_MODE}` on `postgres` in `docker-compose.prod.yml` | `1` | `FAIL: I5 violated in docker-compose.prod.yml: service \`postgres\` sets \`network_mode: '${NETWORK_MODE}'\`, an unresolved environment interpolation -- Docker could render this to \`host\` at deploy time and this gate cannot know, so an unresolved value is itself a violation` |
+| I5 scoping-trap (negative) | Unmodified files already carry `DB_PORT: ${DB_PORT:-5432}` under `environment:` in both covered files | `0` | Same clean-tree OK line above -- confirms the `${` check is scoped to the `network_mode` key, not a text search |
+| I6a | Added top-level `include:\n  - compose-extra.yml` to `docker-compose.prod.yml` | `1` | `FAIL: I6 violated in docker-compose.prod.yml: top-level \`include:\` key is present -- this gate cannot resolve an included file's services, so a publish there would go unseen` |
+| I6b | Added `extends: {file: compose-extra.yml, service: postgres-base}` to `postgres` in `docker-compose.prod.yml` | `1` | `FAIL: I6 violated in docker-compose.prod.yml: service \`postgres\` carries an \`extends:\` key -- this gate cannot resolve the extended service's own keys, so a publish there would go unseen` |
+| I7 (F3's exact scenario) | Created a real scratch `docker-compose.staging.yml` at the repo root publishing `8080:8080` and `5432:5432` | `1` | `FAIL: I7 violated: \`docker-compose.staging.yml\` is a docker-compose*.yml file at the repo root but is in neither ALLOWED_PUBLISHERS nor DELIBERATELY_EXCLUDED -- it would be silently ungated` (file deleted immediately after; `git status` confirmed no residue) |
+| Self-test (all invariants, in-memory) | `python3 scripts/verify-compose-ports-selftest.py` | `0` | `invariants OK: every invariant (I1-I7) proven to fire, plus malformed-document, scoping-trap and clean-document cases` |
+| Sibling gate | `python3 scripts/verify-caddy-image-tag.py` | `0` | `invariants OK: computed tag=2.11.4-rl5625512f compose image=rudenkovladimir/kanban-board-caddy:2.11.4-rl5625512f` |
+
+Every mutation above was individually reverted and `git diff --quiet docker-compose.prod.yml
+docker-compose.nonprod.yml` confirmed clean before moving to the next case, and again before every
+commit. No check failed to fire; nothing in the findings list was left unaddressed.
+
+### Deviations
+
+- Split the originally-drafted single commit into two after noticing `git rm --cached`'s staged
+  deletion had been swept into the gate-fix commit by `git add <gate files>` (which stages
+  additions, not unstages other already-staged changes). Un-committed with `git reset HEAD~1`
+  (mixed reset of the branch's own unpushed tip -- not a hard reset, no working-tree changes lost)
+  and re-split into the two commits the task specified: gate fix, then hygiene.
+- Removed review-finding labels (`F1`-`F7`) and "2026-09-05 review" citations from code comments
+  after drafting them, per this repo's own comment discipline (an identifier a future reader of
+  just the code cannot resolve is noise, not rigor) and per the constraint that planning tokens
+  belong in the runbook/SUMMARY, never in code. The substantive WHY each comment carried was kept;
+  only the citation was cut.
+- No architectural changes; no Rule 4 items encountered.
+
+### What could not be done / left as-is
+
+Nothing. All seven findings are fixed and verified; the clean tree passes; no scratch files
+remain; `.gitignore` covers the bytecode class of file going forward.
