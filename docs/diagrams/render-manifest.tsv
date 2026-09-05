@@ -1,0 +1,12 @@
+# diagram-name<TAB>scale -- scale is the integer Puppeteer scale factor (`-s`) that reproduces
+# this diagram's committed PNG width EXACTLY under scripts/render-diagrams.sh's pinned renderer.
+# Derived empirically 2026-09-05, one render per row, not copied from any prior plan.
+architecture-activity-feed-read	4
+architecture-error-response-split	4
+architecture-mutation-flowchart	4
+architecture-mutation-sequence	4
+architecture-signin-scenario	4
+auth-signin-scenario	1
+auth-signup-scenario	1
+infra-delivery-scenario	2
+infra-physical-deployment	2
