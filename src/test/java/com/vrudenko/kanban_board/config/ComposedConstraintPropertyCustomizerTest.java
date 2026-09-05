@@ -2,6 +2,7 @@ package com.vrudenko.kanban_board.config;
 
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Set;
 
@@ -20,6 +21,10 @@ import com.vrudenko.kanban_board.support.containers.AbstractPostgresContainerTes
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.swagger.v3.core.converter.AnnotatedType;
+import io.swagger.v3.oas.models.Components;
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.media.Schema;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import jakarta.validation.constraints.Pattern;
@@ -33,6 +38,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * Regression guard for {@link ComposedConstraintPropertyCustomizer}: proves that constraints
@@ -60,7 +66,11 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
     private String apiDocsPath;
 
     JsonNode fetchDocument() throws Exception {
-        var response = mockMvc.perform(get(apiDocsPath)).andReturn();
+        // Asserts 200 explicitly (secondary finding, quick task 260904-ss1 round 4, 2026-09-05):
+        // without this, a 500 (or any non-2xx) response body still parses as JSON (an empty
+        // object, or a ProblemDetail error body) and every absence-asserting test in this class
+        // (e.g. shouldLeavePatternAbsent_...) would pass VACUOUSLY against it instead of failing.
+        var response = mockMvc.perform(get(apiDocsPath)).andExpect(status().isOk()).andReturn();
         var body = response.getResponse().getContentAsString();
         var objectMapper = new ObjectMapper();
         return objectMapper.readTree(body);
@@ -77,6 +87,48 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
                 .as("expected a @Pattern meta-annotation on " + annotationType.getSimpleName())
                 .isNotNull();
         return pattern.regexp();
+    }
+
+    /**
+     * D1 (quick task 260904-ss1 round 4, 2026-09-05). The published pattern for an annotation whose
+     * {@code flags()} is non-empty (today, only {@link OptionalNotBlank}'s {@code DOTALL}) is no
+     * longer {@code regexp()} verbatim -- {@code ComposedConstraintPropertyCustomizer} translates
+     * it to an ECMA-262-safe equivalent first. Deriving the EXPECTED value from that same
+     * production translation method (rather than a hand-copied literal) keeps this assertion honest
+     * against a future edit to either the annotation's regex or the translation logic itself,
+     * mirroring {@link #metaPatternOf(Class)}'s "never hand-copy" property for the one annotation
+     * that now needs more than its raw {@code regexp()}.
+     */
+    private String ecmaTranslatedPatternOf(Class<? extends Annotation> annotationType) {
+        var pattern = annotationType.getAnnotation(Pattern.class);
+        Assertions.assertThat(pattern)
+                .as("expected a @Pattern meta-annotation on " + annotationType.getSimpleName())
+                .isNotNull();
+        return ComposedConstraintPropertyCustomizer.ecmaEquivalentOf(
+                        pattern.regexp(), pattern.flags())
+                .orElseThrow(
+                        () ->
+                                new AssertionError(
+                                        "expected a translatable pattern on "
+                                                + annotationType.getSimpleName()));
+    }
+
+    /**
+     * Reads the {@code io.swagger.v3.oas.annotations.media.Schema} meta-annotation itself off a
+     * composed constraint annotation type, mirroring {@link #metaPatternOf(Class)} -- callers read
+     * {@code .description()}/{@code .example()} off the returned annotation rather than a
+     * hand-copied literal, so a future edit to the annotation cannot silently drift out of sync
+     * with what a test expects (secondary finding, quick task 260904-ss1 round 4, 2026-09-05:
+     * {@code collectSchemaMeta}'s {@code description} branch was mutation-blind before this helper
+     * existed -- deleting it kept every test in this class green).
+     */
+    private io.swagger.v3.oas.annotations.media.Schema metaSchemaOf(
+            Class<? extends Annotation> annotationType) {
+        var schema = annotationType.getAnnotation(io.swagger.v3.oas.annotations.media.Schema.class);
+        Assertions.assertThat(schema)
+                .as("expected an @Schema meta-annotation on " + annotationType.getSimpleName())
+                .isNotNull();
+        return schema;
     }
 
     private JsonNode propertyNode(JsonNode document, String schema, String property) {
@@ -126,6 +178,30 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
         return pattern == null || java.util.regex.Pattern.compile(pattern).matcher(value).find();
     }
 
+    /**
+     * The full-match counterpart {@link #valueSatisfiesPublishedConstraints} deliberately does not
+     * cover -- length bounds are irrelevant here on purpose (a generated client's own full-match
+     * check is only ever against {@code pattern}, never against JSON Schema's separate {@code
+     * minLength}/{@code maxLength} keywords).
+     */
+    private boolean valueSatisfiesPublishedPatternUnderFullMatch(
+            JsonNode propertyNode, String value) {
+        var pattern = readText(propertyNode, "pattern");
+        return pattern == null || java.util.regex.Pattern.compile(pattern).matcher(value).matches();
+    }
+
+    /**
+     * Shared by {@link EquivalenceWithRealValidator} and the D1 regression test below -- whether
+     * the real {@link Validator} accepts {@code dto} as far as {@code propertyName} is concerned (a
+     * violation on a DIFFERENT property of the same DTO does not count against it).
+     */
+    private boolean realValidatorAccepts(Object dto, String propertyName) {
+        Set<ConstraintViolation<Object>> violations = validator.validate(dto);
+        return violations.stream()
+                .noneMatch(
+                        violation -> violation.getPropertyPath().toString().equals(propertyName));
+    }
+
     @Nested
     class PublishedConstraints {
 
@@ -169,11 +245,11 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
                             new Row(
                                     "UpdateTaskRequestDTO",
                                     "title",
-                                    metaPatternOf(OptionalNotBlank.class)),
+                                    ecmaTranslatedPatternOf(OptionalNotBlank.class)),
                             new Row(
                                     "UpdateSubtaskRequestDTO",
                                     "title",
-                                    metaPatternOf(OptionalNotBlank.class)),
+                                    ecmaTranslatedPatternOf(OptionalNotBlank.class)),
                             new Row("SignupRequestDTO", "password", metaPatternOf(Password.class)),
                             new Row("SigninRequestDTO", "password", metaPatternOf(Password.class)));
             var failures = new ArrayList<String>();
@@ -467,18 +543,138 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
             Assertions.assertThat(signupFormat).isEqualTo("email");
             Assertions.assertThat(signinFormat).isEqualTo("email");
         }
+
+        /**
+         * D1 (quick task 260904-ss1 round 4, 2026-09-05). Before the fix, {@code
+         * ComposedConstraintPropertyCustomizer.contribute()} republished {@link OptionalNotBlank}'s
+         * {@code regexp()} verbatim and silently dropped {@code flags() = {DOTALL}} -- so the
+         * published pattern's {@code .} never matched a newline, and its {@code \S} was read as
+         * ECMA-262's Unicode-aware version rather than Java's ASCII-only one. Both proven live to
+         * make the published pattern REJECT a value the real {@link Validator} ACCEPTS: a
+         * multi-line title, and a value made solely of {@code U+00A0} non-breaking spaces (Java's
+         * {@code \s} is ASCII-only, so {@code \S} matches {@code U+00A0}; ECMA's {@code \s} is
+         * Unicode-aware and includes it, so ECMA's {@code \S} does not).
+         *
+         * <p>Evaluated here with Java's regex engine against the FIXED, translated pattern, not a
+         * live ECMA-262 engine -- no JS engine is wired into this build or its test classpath (no
+         * GraalJS/Nashorn dependency; confirmed absent by attempting {@code
+         * ScriptEngineManager().getEngineByName("nashorn")}, which returns {@code null} on this
+         * JDK). That substitution is sound here specifically BECAUSE of how the fix works: {@code
+         * ComposedConstraintPropertyCustomizer#ecmaEquivalentOf} rewrites every {@code \s}/{@code
+         * \S} shorthand into an explicit ASCII character class before publishing, so the published
+         * string this test reads back contains NO construct whose meaning differs between the two
+         * dialects -- the one thing that could make Java's engine disagree with ECMA's has been
+         * engineered out of the string itself. Independently confirmed against a REAL ECMA-262
+         * engine during development (Node.js v24.19.0, 2026-09-05, not part of this build/CI):
+         * {@code /^(?:[\s\S]*[^ \t\n\x0B\f\r][\s\S]*)$/.test("a\nb")} → {@code true}, the same
+         * full-match test against three {@code U+00A0} characters → {@code true} -- both agreeing
+         * with the assertions below and with a scratch {@code Pattern.compile(".*\\S.*",
+         * Pattern.DOTALL).matcher(value).matches()} run against the real annotation's own
+         * regex/flags.
+         */
+        @Test
+        void shouldMatchRealValidatorOnMultilineAndNbspOnlyValues_whenPatternIsOptionalNotBlank()
+                throws Exception {
+            // arrange
+            var document = fetchDocument();
+            var multiline = "a\nb";
+            var nbspOnly = "\u00A0\u00A0\u00A0";
+            var node = propertyNode(document, "UpdateTaskRequestDTO", "title");
+
+            // act
+            var documentAcceptsMultiline =
+                    valueSatisfiesPublishedPatternUnderFullMatch(node, multiline);
+            var documentAcceptsNbsp = valueSatisfiesPublishedPatternUnderFullMatch(node, nbspOnly);
+            var validatorAcceptsMultiline =
+                    realValidatorAccepts(
+                            UpdateTaskRequestDTO.builder().title(multiline).build(), "title");
+            var validatorAcceptsNbsp =
+                    realValidatorAccepts(
+                            UpdateTaskRequestDTO.builder().title(nbspOnly).build(), "title");
+
+            // assert: both the real validator's own verdict (proving the fixture values are the
+            // ones the defect report described) and the document/validator agreement (the actual
+            // regression guard)
+            Assertions.assertThat(validatorAcceptsMultiline)
+                    .as("real validator: multiline")
+                    .isTrue();
+            Assertions.assertThat(validatorAcceptsNbsp).as("real validator: NBSP-only").isTrue();
+            Assertions.assertThat(documentAcceptsMultiline)
+                    .as("published pattern vs. real validator: multiline")
+                    .isEqualTo(validatorAcceptsMultiline);
+            Assertions.assertThat(documentAcceptsNbsp)
+                    .as("published pattern vs. real validator: NBSP-only")
+                    .isEqualTo(validatorAcceptsNbsp);
+        }
+
+        /**
+         * D3 decision record (quick task 260904-ss1 round 4, 2026-09-05) -- NOT a fix, a pinned
+         * observation. {@code @Size} counts UTF-16 code units; published {@code maxLength} counts
+         * Unicode code points. A value built from astral characters can satisfy the published
+         * {@code maxLength} while violating the real {@code @Size(max = ...)} it was computed from
+         * (see {@code contribute()}'s {@code Size} branch for the full analysis and the decision
+         * this pins). This test exists so a future change to that decision is deliberate: if it
+         * starts failing, the maxLength-computation strategy changed and this comment block needs
+         * updating to match, not silently deleting.
+         */
+        @Test
+        void shouldAcceptAnAstralHeavyValueThatViolatesTheRealSizeMax_perD3Decision()
+                throws Exception {
+            // arrange
+            var document = fetchDocument();
+            var seventeenEmoji = "😀".repeat(17);
+
+            // act: a spec-compliant JSON Schema validator counts CODE POINTS against maxLength,
+            // never Java's UTF-16-unit String.length() -- deliberately NOT routed through
+            // valueSatisfiesPublishedConstraints, which uses value.length() and would therefore
+            // conflate the very two units this decision record is about
+            var codePointCount = seventeenEmoji.codePointCount(0, seventeenEmoji.length());
+            var utf16UnitCount = seventeenEmoji.length();
+            var publishedMaxLength =
+                    readInt(propertyNode(document, "SaveSubtaskRequestDTO", "title"), "maxLength");
+            var documentAcceptsByCodePointCount = codePointCount <= publishedMaxLength;
+            var validatorAccepts =
+                    realValidatorAccepts(
+                            SaveSubtaskRequestDTO.builder().title(seventeenEmoji).build(), "title");
+
+            // assert: the divergence this decision record pins -- 17 code points (<= max=32,
+            // published check ACCEPTS) but 34 UTF-16 units (> max=32, real validator REJECTS)
+            Assertions.assertThat(codePointCount).isEqualTo(17);
+            Assertions.assertThat(utf16UnitCount).isEqualTo(34);
+            Assertions.assertThat(publishedMaxLength)
+                    .isEqualTo(ValidationConstants.MAX_SUBTASK_TITLE_LENGTH);
+            Assertions.assertThat(documentAcceptsByCodePointCount)
+                    .as("published maxLength, evaluated by code-point count")
+                    .isTrue();
+            Assertions.assertThat(validatorAccepts).as("real @Size (UTF-16 units)").isFalse();
+        }
     }
 
     /**
      * Proves the published document and the real {@link Validator} reach the SAME accept/reject
-     * verdict for every field {@link ComposedConstraintPropertyCustomizer} touches -- the actual
-     * correctness contract; {@link PublishedConstraints} only proves values are present, not that
-     * they mean the same thing the enforcer means.
+     * verdict for the fields listed in {@code cases} below -- the actual correctness contract;
+     * {@link PublishedConstraints} only proves values are present, not that they mean the same
+     * thing the enforcer means. Not literally "every field" this bean touches: {@code email} on
+     * {@code SignupRequestDTO}/{@code SigninRequestDTO} carries no case here, and could not
+     * meaningfully carry one -- this class's own {@link #valueSatisfiesPublishedConstraints} never
+     * reads the published {@code format} keyword (it checks only {@code pattern}/{@code
+     * minLength}/{@code maxLength}), so an equivalence case against {@code email} would compare the
+     * real {@code @Email} validator against a document-side check that structurally cannot see the
+     * one thing that field publishes (corrected, secondary finding, quick task 260904-ss1 round 4,
+     * 2026-09-05 -- this Javadoc previously claimed "every field", which was never true).
      *
      * <p>The published {@code pattern} is evaluated here with Java's regex engine, not ECMA-262.
-     * That is exact for every construct currently in use -- the five distinct regexes in this
-     * codebase (character classes, anchors, lookaheads) are common to both dialects -- and this
-     * test is what would catch a future annotation reaching for a Java-only construct.
+     * That is exact for every {@code pattern} construct currently in use in the {@code cases} below
+     * (character classes, anchors, lookaheads are common to both dialects) with ONE documented
+     * exception: Java's {@code $} also matches immediately before a final line terminator (a
+     * trailing {@code \n}), while ECMA-262's {@code $} (without the {@code m} flag) matches only
+     * true end-of-input -- so a value ending in {@code "\n"} could read as accepted under Java's
+     * engine and rejected under a real ECMA-262 one for a pattern anchored with {@code $}. No case
+     * below exercises a trailing-newline value, so this divergence is latent here, not exercised; a
+     * future case that adds one must not rely on this test's Java-engine evaluation alone
+     * (corrected, secondary finding, 2026-09-05 -- this Javadoc previously claimed Java's
+     * evaluation was "exact for every construct currently in use" with no exception, which was not
+     * true).
      */
     @Nested
     class EquivalenceWithRealValidator {
@@ -600,11 +796,7 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
         }
 
         private boolean validatorAccepts(Object dto, String propertyName) {
-            Set<ConstraintViolation<Object>> violations = validator.validate(dto);
-            return violations.stream()
-                    .noneMatch(
-                            violation ->
-                                    violation.getPropertyPath().toString().equals(propertyName));
+            return realValidatorAccepts(dto, propertyName);
         }
 
         private boolean documentAccepts(
@@ -662,6 +854,144 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
             // satisfy the loop trivially and read as green
             Assertions.assertThat(exampleCount).isGreaterThanOrEqualTo(3);
             Assertions.assertThat(failures).isEmpty();
+        }
+    }
+
+    /**
+     * D4 (quick task 260904-ss1 round 4, 2026-09-05). {@link Password}'s {@code @Schema}
+     * description used to include an internal build-tooling rationale verbatim ("a password-shaped
+     * literal in source is exactly what this repository's gitleaks pre-commit scan looks for"),
+     * disclosing this repo's secret-scanning setup to every API consumer. Truncated at "...one
+     * special character." with the rationale moved to a plain {@code //} comment above the
+     * annotation, where only this codebase's own contributors read it.
+     *
+     * <p>Reading {@code expected} off {@link #metaSchemaOf(Class)} rather than a hand-copied
+     * literal also closes the mutation-blind gap the secondary findings flagged: {@code
+     * collectSchemaMeta}'s {@code description} branch used to be deletable with every test in this
+     * class still green, because nothing compared the published value against the annotation's own
+     * -- this test would now fail if that branch were removed, since {@code expected} would be
+     * non-null while the published description reverted to whatever the schema already had (null,
+     * for these two properties).
+     */
+    @Nested
+    class PublishedDescriptions {
+
+        @Test
+        void shouldNotDiscloseGitleaksScanningSetup_inPasswordDescription() throws Exception {
+            // arrange
+            var document = fetchDocument();
+            var expected = metaSchemaOf(Password.class).description();
+
+            // act
+            var signupDescription =
+                    readText(propertyNode(document, "SignupRequestDTO", "password"), "description");
+            var signinDescription =
+                    readText(propertyNode(document, "SigninRequestDTO", "password"), "description");
+
+            // assert
+            Assertions.assertThat(signupDescription).isEqualTo(expected);
+            Assertions.assertThat(signinDescription).isEqualTo(expected);
+            Assertions.assertThat(signupDescription).doesNotContainIgnoringCase("gitleaks");
+            Assertions.assertThat(signinDescription).doesNotContainIgnoringCase("gitleaks");
+        }
+    }
+
+    /**
+     * D2 (quick task 260904-ss1 round 4, 2026-09-05). Regression guard for {@link
+     * ComposedConstraintPropertyCustomizer.Accumulator#reassertOn}'s tighten-only contract,
+     * exercised directly through this bean's two public interface methods with a hand-built {@link
+     * AnnotatedType}/{@link OpenAPI} -- no {@code @SpringBootTest} context needed, since the whole
+     * point is precise control over what sits on the schema BETWEEN phase 1 ({@link
+     * ComposedConstraintPropertyCustomizer#customize}) and phase 2 ({@link
+     * ComposedConstraintPropertyCustomizer#customise}), which the full document-generation pipeline
+     * does not offer a seam for.
+     */
+    @Nested
+    class ReassertOnTightenOnly {
+
+        private AnnotatedType annotatedTypeFor(
+                Class<?> dtoClass, String fieldName, Schema<?> parentSchema)
+                throws NoSuchFieldException {
+            var field = dtoClass.getDeclaredField(fieldName);
+            return new AnnotatedType()
+                    .parent(parentSchema)
+                    .propertyName(fieldName)
+                    .ctxAnnotations(field.getAnnotations());
+        }
+
+        private OpenAPI documentWith(
+                String schemaName, String propertyName, Schema<?> propertySchema) {
+            var docSchema = new Schema<>();
+            var properties = new LinkedHashMap<String, Schema>();
+            properties.put(propertyName, propertySchema);
+            docSchema.setProperties(properties);
+            var components = new Components();
+            components.addSchemas(schemaName, docSchema);
+            var openApi = new OpenAPI();
+            openApi.setComponents(components);
+            return openApi;
+        }
+
+        @Test
+        void shouldRestoreTheComputedValue_whenSomethingElseLoosenedItBetweenPhases()
+                throws Exception {
+            // arrange
+            var customizer = new ComposedConstraintPropertyCustomizer();
+            var parentSchema = new Schema<>();
+            parentSchema.setName("SaveSubtaskRequestDTO");
+            var propertySchema = new Schema<String>();
+            propertySchema.setType("string");
+            var annotatedType =
+                    annotatedTypeFor(SaveSubtaskRequestDTO.class, "title", parentSchema);
+
+            // act: phase 1 computes minLength/maxLength from @NotBlank + @SubtaskTitle
+            customizer.customize(propertySchema, annotatedType);
+            Assertions.assertThat(propertySchema.getMinLength())
+                    .isEqualTo(ValidationConstants.MIN_SUBTASK_TITLE_LENGTH);
+            Assertions.assertThat(propertySchema.getMaxLength())
+                    .isEqualTo(ValidationConstants.MAX_SUBTASK_TITLE_LENGTH);
+
+            // something else -- swagger-core's own second internal pass per Observation 2 on the
+            // class Javadoc, or, latently, a field-level @Schema -- loosens the SAME schema
+            // object before phase 2 runs
+            propertySchema.setMinLength(1);
+            propertySchema.setMaxLength(999);
+
+            // act: phase 2, the document's last word
+            customizer.customise(documentWith("SaveSubtaskRequestDTO", "title", propertySchema));
+
+            // assert: the computed, tighter values win back
+            Assertions.assertThat(propertySchema.getMinLength())
+                    .isEqualTo(ValidationConstants.MIN_SUBTASK_TITLE_LENGTH);
+            Assertions.assertThat(propertySchema.getMaxLength())
+                    .isEqualTo(ValidationConstants.MAX_SUBTASK_TITLE_LENGTH);
+        }
+
+        @Test
+        void shouldNotLoosenAnAlreadyStricterValue_whenReasserting() throws Exception {
+            // arrange
+            var customizer = new ComposedConstraintPropertyCustomizer();
+            var parentSchema = new Schema<>();
+            parentSchema.setName("SaveSubtaskRequestDTO");
+            var propertySchema = new Schema<String>();
+            propertySchema.setType("string");
+            var annotatedType =
+                    annotatedTypeFor(SaveSubtaskRequestDTO.class, "title", parentSchema);
+            customizer.customize(propertySchema, annotatedType);
+
+            // something else set a STRICTER minLength/maxLength/pattern than this bean computed --
+            // e.g. a field-level @Schema(minLength = 10, maxLength = 20, pattern = "^Sprint .*$")
+            propertySchema.setMinLength(10);
+            propertySchema.setMaxLength(20);
+            propertySchema.setPattern("^Sprint .*$");
+
+            // act
+            customizer.customise(documentWith("SaveSubtaskRequestDTO", "title", propertySchema));
+
+            // assert: reassertOn must not loosen back to its OWN, looser computed values
+            Assertions.assertThat(propertySchema.getMinLength()).isEqualTo(10);
+            Assertions.assertThat(propertySchema.getMaxLength()).isEqualTo(20);
+            Assertions.assertThat(propertySchema.getPattern()).isEqualTo("^Sprint .*$");
         }
     }
 }

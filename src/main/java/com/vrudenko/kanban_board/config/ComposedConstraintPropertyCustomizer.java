@@ -4,6 +4,7 @@ import java.lang.annotation.Annotation;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -60,10 +61,12 @@ import org.springframework.stereotype.Component;
  * AnnotatedType.getParent().getName()} already assigns (no reflective class-name guessing, unlike a
  * {@code GlobalOpenApiCustomizer}-only design would need); {@link #customise(OpenAPI)} then
  * re-applies those same recorded values as the document's last word, overwriting whatever
- * swagger-core's own second pass did in between. What would make this false: a swagger-core release
- * that removes the second {@code applyBeanValidatorAnnotations} call, or guards it against lowering
- * an already-raised bound -- either way this bean's reassertion becomes a harmless no-op, since it
- * only ever restates values it already computed once.
+ * swagger-core's own second pass did in between -- but only ever in the tightening direction, since
+ * a recorded value is a phase-1 snapshot and something other than swagger-core may have set a
+ * stricter value on the same schema since (D2, see {@link Accumulator#reassertOn(Schema)}). What
+ * would make this false: a swagger-core release that removes the second {@code
+ * applyBeanValidatorAnnotations} call, or guards it against lowering an already-raised bound --
+ * either way this bean's reassertion becomes a harmless no-op.
  *
  * <p>Sibling to {@link ProblemDetailOpenApiCustomizer} -- that bean documents a shape swagger-core
  * cannot see at all because it lives outside any DTO ({@code @ControllerAdvice}); this one
@@ -121,7 +124,7 @@ public class ComposedConstraintPropertyCustomizer
                                                 (Schema<?>)
                                                         schema.getProperties().get(propertyName);
                                         if (propertySchema != null) {
-                                            accumulator.applyTo(propertySchema);
+                                            accumulator.reassertOn(propertySchema);
                                         }
                                     });
                         });
@@ -189,8 +192,44 @@ public class ComposedConstraintPropertyCustomizer
 
     private void contribute(Annotation annotation, Accumulator accumulator) {
         if (annotation instanceof Pattern pattern) {
-            accumulator.patterns.add(pattern.regexp());
+            // Publish nothing when no ECMA-262 equivalent can be proven -- see
+            // ecmaEquivalentOf's Javadoc for why a dropped pattern beats a wrong one.
+            ecmaEquivalentOf(pattern.regexp(), pattern.flags())
+                    .ifPresent(accumulator.patterns::add);
         } else if (annotation instanceof Size size) {
+            // D3 (quick task 260904-ss1 round 4, 2026-09-05) -- decision record, not a fix.
+            // @Size counts UTF-16 code units; JSON Schema minLength/maxLength count Unicode code
+            // points. Every code point is >= 1 code unit, so codePoints(v) <= units(v) for any v.
+            // For minLength=N: units(v) >= N is the real constraint; codePoints(v) >= N (the
+            // published check) implies units(v) >= codePoints(v) >= N, so the published check
+            // can only be as strict or STRICTER than the real one -- published minLength can
+            // never accept a value the real validator rejects. Provably safe as-is; no
+            // translation needed or applied.
+            //   For maxLength=N the direction reverses: units(v) <= N is the real constraint, but
+            // codePoints(v) <= N does NOT imply units(v) <= N -- a value built entirely from
+            // astral characters (each 1 code point / 2 code units) can have codePoints(v) <= N
+            // while units(v) as large as 2N, so the published check can ACCEPT a value the real
+            // validator REJECTS (17 "😀" -- 17 code points, 34 UTF-16 units -- against
+            // @SubtaskTitle(max=32), verified empirically 2026-09-05). Chosen mitigation: publish
+            // the value UNCHANGED anyway (option "a" of three considered), because every
+            // alternative has a worse cost for this codebase today --
+            //   - conservative halving (floor(N/2)) is exact-safe but would also wrongly shrink
+            //     every ASCII-only field (BoardName, DisplayName already carry a character-class
+            //     Pattern that makes codePoints(v) == units(v) always, so no divergence is
+            //     reachable there at all) and would invalidate the exact-value assertions this
+            //     bean's own test suite already carries for every field's maxLength;
+            //   - omitting maxLength entirely for the affected fields (TaskTitle, SubtaskTitle,
+            //     Description, Password -- none of which restrict their charset to the BMP)
+            //     throws away real, useful documentation for the overwhelming majority of callers
+            //     who never submit astral characters, to guard a narrow edge case whose actual
+            //     failure mode is a 400 the real validator was always going to produce anyway --
+            //     not a security bypass, since server-side enforcement never changes.
+            //   This becomes the wrong call, and floor(N/2) worth adopting, the day a generated
+            //   API client starts asserting the published maxLength as a hard contract (e.g.
+            //   property-based fuzzing a request body up to the documented boundary and treating
+            //   the resulting 400 as a contract violation rather than an expected validation
+            //   failure) -- at that point the usability cost of a conservative bound is repaid by
+            //   removing a real, client-visible correctness gap.
             if (size.min() != 0) {
                 raiseMinLength(accumulator, size.min());
             }
@@ -207,6 +246,158 @@ public class ComposedConstraintPropertyCustomizer
         // Every other Jakarta constraint contributes nothing to a string schema's
         // pattern/length/format and is silently ignored. @Email.regexp() is deliberately never
         // read: no site in this codebase moves it away from its ".*" default.
+    }
+
+    /**
+     * Translates a Java {@code jakarta.validation.constraints.Pattern} into the ECMA-262 dialect
+     * JSON Schema {@code pattern} is defined against, returning empty when no translation can be
+     * PROVEN equivalent -- publishing nothing is always safer than publishing a WRONG pattern (D1,
+     * quick task 260904-ss1 round 4, 2026-09-05): before this method existed, {@link
+     * #contribute(Annotation, Accumulator)} republished {@code regexp()} verbatim and silently
+     * dropped {@code flags()} entirely, so {@link
+     * com.vrudenko.kanban_board.dto.annotation.OptionalNotBlank}'s {@code DOTALL} was lost and its
+     * {@code \S} was read as ECMA's Unicode-aware version instead of Java's ASCII-only one -- both
+     * proven live (node v24.19.0, 2026-09-05) to make the published pattern REJECT a value the real
+     * {@code jakarta.validation.Validator} ACCEPTS: a multi-line title (published pattern
+     * full-match against {@code "a\nb"}: false; real validator: accepts) and a value made solely of
+     * {@code U+00A0} non-breaking-space characters (published: false; real validator: accepts) --
+     * the document-stricter-than-enforcer direction this bean exists to avoid.
+     *
+     * <p>Handles exactly the two divergences proven above, both via direct character-class
+     * rewriting rather than trying to reason about them dialect-by-dialect:
+     *
+     * <ul>
+     *   <li>{@code DOTALL} -- an unescaped, not-inside-a-class {@code .} becomes {@code [\s\S]},
+     *       since ECMA's {@code .} never matches a line terminator regardless of any flag this
+     *       codebase could reach for.
+     *   <li>{@code \s}/{@code \S} -- always rewritten to an explicit ASCII class ({@code [ \t\n
+     *       \x0B\f\r]} / its negation {@code [^ \t\n\x0B\f\r]}), since Java's shorthand is
+     *       ASCII-only but ECMA's is Unicode-aware (it matches U+00A0); rewriting removes the
+     *       divergence outright instead of trying to track which dialect is in play.
+     * </ul>
+     *
+     * <p>Any OTHER {@code flags()} value ({@code CASE_INSENSITIVE} chief among them -- no portable
+     * ECMA equivalent), an unescaped capturing group, or an unrecognised {@code (?...} construct
+     * makes this method return empty instead of guessing: inline flags like {@code (?i)} are a hard
+     * {@code SyntaxError} in ECMA-262, and a capturing group would silently shift every later
+     * group's number once this regex is concatenated into the multi-pattern conjunction {@link
+     * Accumulator#applyPattern(Schema)} builds (latent today -- no regex in this codebase uses a
+     * capturing group -- but a silent miscount if one ever does).
+     */
+    // Package-private (not private) so ComposedConstraintPropertyCustomizerTest can derive an
+    // expected translated pattern straight from an annotation's own regexp()/flags() -- the same
+    // "never hand-copy a literal" property metaPatternOf already gives every OTHER published
+    // pattern in that test.
+    static Optional<String> ecmaEquivalentOf(String javaRegexp, Pattern.Flag[] flags) {
+        for (var flag : flags) {
+            if (flag != Pattern.Flag.DOTALL) {
+                return Optional.empty();
+            }
+        }
+        if (hasUnsupportedGroupConstruct(javaRegexp)) {
+            return Optional.empty();
+        }
+        // Loop above already guaranteed every flag present (if any) is DOTALL.
+        var dotAll = flags.length > 0;
+        return translateDotAndWhitespaceShorthand(javaRegexp, dotAll);
+    }
+
+    // Rejects an unescaped, not-inside-a-character-class '(' unless it opens a construct this
+    // method recognises as safe to concatenate: '(?:', '(?=', '(?!', '(?<=', '(?<!'. Everything
+    // else -- a bare capturing group, or an unrecognised "(?" form such as an inline flag group
+    // ("(?i)") or a named group ("(?<name>") -- is rejected rather than guessed at.
+    private static boolean hasUnsupportedGroupConstruct(String regexp) {
+        var escaped = false;
+        var inCharClass = false;
+        for (var i = 0; i < regexp.length(); i++) {
+            var c = regexp.charAt(i);
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+            if (c == '\\') {
+                escaped = true;
+                continue;
+            }
+            if (c == '[') {
+                inCharClass = true;
+                continue;
+            }
+            if (c == ']') {
+                inCharClass = false;
+                continue;
+            }
+            if (c == '(' && !inCharClass) {
+                if (i + 1 >= regexp.length() || regexp.charAt(i + 1) != '?') {
+                    return true;
+                }
+                var rest = regexp.substring(i + 2);
+                var recognised =
+                        rest.startsWith(":")
+                                || rest.startsWith("=")
+                                || rest.startsWith("!")
+                                || rest.startsWith("<=")
+                                || rest.startsWith("<!");
+                if (!recognised) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    // Single left-to-right pass, tracking escape state and character-class membership so '.',
+    // '\s' and '\S' are only rewritten where they carry their regex meaning, never inside an
+    // escape sequence or as a literal a preceding backslash already consumed.
+    private static Optional<String> translateDotAndWhitespaceShorthand(
+            String javaRegexp, boolean dotAll) {
+        var out = new StringBuilder();
+        var escaped = false;
+        var inCharClass = false;
+        for (var i = 0; i < javaRegexp.length(); i++) {
+            var c = javaRegexp.charAt(i);
+            if (escaped) {
+                escaped = false;
+                if (c == 's') {
+                    out.append(inCharClass ? " \\t\\n\\x0B\\f\\r" : "[ \\t\\n\\x0B\\f\\r]");
+                } else if (c == 'S') {
+                    if (inCharClass) {
+                        // \S nested inside an already-open character class has no simple negated
+                        // substitute; none of this codebase's patterns do this today, and
+                        // guessing wrong here is worse than publishing nothing.
+                        return Optional.empty();
+                    }
+                    out.append("[^ \\t\\n\\x0B\\f\\r]");
+                } else {
+                    out.append('\\').append(c);
+                }
+                continue;
+            }
+            if (c == '\\') {
+                escaped = true;
+                continue;
+            }
+            if (c == '[') {
+                inCharClass = true;
+                out.append(c);
+                continue;
+            }
+            if (c == ']') {
+                inCharClass = false;
+                out.append(c);
+                continue;
+            }
+            if (c == '.' && !inCharClass && dotAll) {
+                out.append("[\\s\\S]");
+                continue;
+            }
+            out.append(c);
+        }
+        if (escaped) {
+            // Trailing lone backslash -- malformed input; bail rather than guess.
+            return Optional.empty();
+        }
+        return Optional.of(out.toString());
     }
 
     // Reads only example()/description() off a meta io.swagger.v3.oas.annotations.media.Schema --
@@ -242,9 +433,6 @@ public class ComposedConstraintPropertyCustomizer
                         : Math.min(accumulator.maxLength, candidate);
     }
 
-    // Never loosen: minLength/maxLength/patterns are seeded from the schema swagger already built,
-    // so applyTo can only tighten what a direct annotation already published -- true both the first
-    // time customize() calls it and the second time customise(OpenAPI) does.
     private static final class Accumulator {
         private final Set<String> patterns = new LinkedHashSet<>();
         private Integer minLength;
@@ -253,9 +441,62 @@ public class ComposedConstraintPropertyCustomizer
         private String example;
         private String description;
 
+        /**
+         * Phase 1 ({@link PropertyCustomizer}). Unconditional for {@code minLength}/{@code
+         * maxLength}/{@code pattern} is safe HERE ONLY because {@link
+         * ComposedConstraintPropertyCustomizer#seedFrom(Schema)} populated this accumulator FROM
+         * this exact {@code property} before any composed-annotation value was folded in -- there
+         * is nothing already on {@code property} that a value computed here could loosen. That
+         * precondition does NOT hold the second time this schema is touched (Observation 2 on the
+         * enclosing class); {@link #reassertOn(Schema)} is the tighten-only counterpart used there.
+         */
         void applyTo(Schema<?> property) {
             property.setMinLength(minLength);
             property.setMaxLength(maxLength);
+            applyMeta(property);
+            applyPattern(property);
+        }
+
+        /**
+         * Phase 2 ({@link GlobalOpenApiCustomizer}, the document's last word). Tightens only:
+         * raises {@code minLength} only past whatever the schema already carries, lowers {@code
+         * maxLength} only below it, and sets {@code pattern} only when the schema does not already
+         * carry one.
+         *
+         * <p>D2 (quick task 260904-ss1 round 4, 2026-09-05): before this method existed, {@link
+         * #customise(OpenAPI)} called {@link #applyTo(Schema)} here too, which is unconditional --
+         * so this phase, which replays a snapshot recorded during phase 1, could OVERWRITE a value
+         * something else set on the SAME schema object in between with an OLDER, looser one.
+         * Confirmed by this quick task's round-4 review via triple-boot (2026-09-04): a field-level
+         * {@code @Schema(minLength = 10, maxLength = 20, pattern = "^Sprint .*$")} on {@code
+         * SaveBoardRequestDTO.name} was published intact with this bean disabled, and REPLACED by
+         * the looser {@code 1 / 64 / ^[a-zA-Z0-9 ]*$} with it enabled -- neutering only this phase
+         * (leaving {@link #applyTo(Schema)} as phase 1's sole writer) restored the field-level
+         * values. Latent today (no DTO field in this codebase carries its own {@code @Schema}
+         * constraint), but the very fix this quick task made ({@code @Schema} on {@link
+         * com.vrudenko.kanban_board.dto.annotation.Password}, {@link
+         * com.vrudenko.kanban_board.dto.annotation.BoardName}, etc.) introduces {@code @Schema} to
+         * this codebase's vocabulary, so the class-level Javadoc's old claim that phase 2 "only
+         * ever restates values it already computed" was never something a caller of THIS class
+         * could rely on -- it was true only of phase 2's own recorded values, not of what else
+         * might be on the schema by the time phase 2 runs.
+         */
+        void reassertOn(Schema<?> property) {
+            if (minLength != null
+                    && (property.getMinLength() == null || minLength > property.getMinLength())) {
+                property.setMinLength(minLength);
+            }
+            if (maxLength != null
+                    && (property.getMaxLength() == null || maxLength < property.getMaxLength())) {
+                property.setMaxLength(maxLength);
+            }
+            applyMeta(property);
+            if (property.getPattern() == null) {
+                applyPattern(property);
+            }
+        }
+
+        private void applyMeta(Schema<?> property) {
             if (format != null && property.getFormat() == null) {
                 property.setFormat(format);
             }
@@ -265,6 +506,9 @@ public class ComposedConstraintPropertyCustomizer
             if (description != null && property.getDescription() == null) {
                 property.setDescription(description);
             }
+        }
+
+        private void applyPattern(Schema<?> property) {
             if (patterns.isEmpty()) {
                 return;
             }

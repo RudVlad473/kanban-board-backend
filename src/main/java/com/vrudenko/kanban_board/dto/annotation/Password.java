@@ -34,12 +34,15 @@ import jakarta.validation.constraints.Size;
                 "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?]).+$",
         message =
                 "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character")
+// D4 (quick task 260904-ss1, 2026-09-05): no @Schema example is published here deliberately --
+// a password-shaped literal in source is exactly what this repository's gitleaks pre-commit scan
+// looks for. That rationale used to live inside the published `description` itself, disclosing
+// this repo's secret-scanning setup to every API consumer; it belongs here instead, where only
+// this codebase's own contributors read it.
 @Schema(
         description =
                 "8-64 characters; must contain at least one uppercase letter, one lowercase"
-                        + " letter, one digit, and one special character. No example is published"
-                        + " here deliberately -- a password-shaped literal in source is exactly what"
-                        + " this repository's gitleaks pre-commit scan looks for.")
+                        + " letter, one digit, and one special character.")
 public @interface Password {
     String message() default
             "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character";
