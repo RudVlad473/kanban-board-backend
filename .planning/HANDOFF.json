@@ -1,45 +1,47 @@
 {
   "version": "1.0",
-  "timestamp": "2026-09-05T19:21:56.182Z",
+  "timestamp": "2026-09-05T20:32:57.155Z",
   "phase": null,
-  "phase_name": "No active phase — infra/debug session plus one completed quick task",
+  "phase_name": "No active phase — quick task 260905-tw0 (infra diagrams) completed and deployed",
   "phase_dir": null,
   "plan": null,
   "task": null,
   "total_tasks": null,
   "status": "paused",
   "completed_tasks": [
-    {"id": 1, "name": "Debug intermittent TCP connect timeouts to nonprod", "status": "done", "commit": null},
-    {"id": 2, "name": "Quick task 260905-qxi — CI gate: only caddy may publish host ports", "status": "done", "commit": "4f11c7c"},
-    {"id": 3, "name": "Three-way review (Claude/Gemini/Codex) + remediate all 7 findings", "status": "done", "commit": "f479e4c"},
-    {"id": 4, "name": "Merge to main, push, verify deploy green", "status": "done", "commit": "4f11c7c"},
-    {"id": 5, "name": "Migrate agy from Windows .exe to native Linux build", "status": "done", "commit": null},
-    {"id": 6, "name": "Wire ripgrep into REVIEW_BRIEF.md and TOOLING_PREFERENCES.md", "status": "done", "commit": null}
+    {"id": 1, "name": "Quick task 260905-tw0 — pinned mermaid renderer (scripts/render-diagrams.sh + render-manifest.tsv), drift measured on all 9 diagrams", "status": "done", "commit": "93ca958"},
+    {"id": 2, "name": "Four flowchart layout rules with deciding tests in docs/DIAGRAM_CONVENTIONS.md", "status": "done", "commit": "7e9bc5b"},
+    {"id": 3, "name": "Packet-path Scenario (+1) with DOCKER-USER drawn empty and dated; trust boundaries [1]-[5] on the Physical view; Maintenance Note extended", "status": "done", "commit": "199f1c6"},
+    {"id": 4, "name": "Layout fix round after user review: [1] firewall moved outside VM boundary in both views, title/node overlaps cleared", "status": "done", "commit": "2b0bd7b"},
+    {"id": 5, "name": "Merged --ff (linear), pushed, all 14 CI/CD jobs + invariant checks + secret scan green, both environments deployed", "status": "done", "commit": "5b3142d"},
+    {"id": 6, "name": "Netcup ticket copy moved out of /tmp to ~/dev/kanban-net-forensics/netcup-ticket-2026-09-05.txt", "status": "done", "commit": null},
+    {"id": 7, "name": "Tool-tier gotcha added: bare `cd` persists across Bash calls and redirects later commands to the wrong checkout", "status": "done", "commit": null}
   ],
   "remaining_tasks": [
-    {"id": 7, "name": "Infra diagrams: pin .mmd->.png renderer, add hierarchical/top-to-bottom layout rules to DIAGRAM_CONVENTIONS.md, author packet-path Scenario (+1) with DOCKER-USER drawn EMPTY and dated, annotate Physical view with named trust boundaries", "status": "not_started"},
-    {"id": 8, "name": "DOCKER-USER iptables rules on the VM + systemd persistence (After=docker.service, idempotent)", "status": "not_started"},
-    {"id": 9, "name": "Playwright retries on the frontend e2e job (different repo; a peer session is open on it)", "status": "not_started"},
-    {"id": 10, "name": "scripts/review-worktrees.sh (setup/teardown) — the manual worktree dance has now recurred", "status": "not_started"},
-    {"id": 11, "name": "Replace or supplement the uptime check — GitHub fires it ~5x/day, not the 96x its */15 cron requests", "status": "not_started"}
+    {"id": 8, "name": "DOCKER-USER iptables rules on the VM + systemd persistence (After=docker.service, idempotent). Verify by publishing a throwaway port and confirming it is UNREACHABLE from off-box. Then update the 'empty as of 2026-09-05' annotation in docs/INFRA_ARCHITECTURE.md and infra-packet-path-scenario.mmd in the SAME change and re-render.", "status": "not_started"},
+    {"id": 9, "name": "Redesign the VM-side forensics probe: host passive_opens does NOT count DNAT'd connections terminating in caddy's netns, so it cannot correlate with the local prober. Needs a counter read inside the caddy container (nsenter/docker exec cat /proc/net/snmp) or a host-interface capture.", "status": "not_started"},
+    {"id": 10, "name": "Re-render the seven drifted diagrams (todo 2026-09-05-seven-diagrams-drift-from-the-pinned-renderer.md) and convert architecture-mutation-flowchart TD->TB (its own todo)", "status": "not_started"},
+    {"id": 11, "name": "scripts/review-worktrees.sh (setup/teardown) — teardown must only touch .worktrees/review-*, never .claude/worktrees/*", "status": "not_started"},
+    {"id": 12, "name": "Playwright retries on the frontend e2e job (different repo)", "status": "not_started"},
+    {"id": 13, "name": "Uptime check fires ~5x/day vs 96x its */15 cron requests; cannot detect a 134s outage", "status": "not_started"}
   ],
   "blockers": [
-    {"description": "Root cause of the connect timeouts is upstream of the VM (Netcup network). Established by elimination, not by direct observation. Two correlated probes are running to capture direct proof on the next episode.", "type": "external", "workaround": "Frontend e2e retries would neutralise the symptom regardless of cause."}
+    {"description": "Netcup connect-timeout root cause still unproven directly. The one probe failure caught this session (20:14Z) was a POST-connect stall (time_connect 1.08s, total 31s, exit 28), not the 134s SYN-loss signature. The VM counter column is structurally unable to confirm or refute SYN arrival (see task 9).", "type": "external", "workaround": "Frontend e2e retries neutralise the symptom regardless of cause."}
   ],
   "async_jobs": [],
   "human_actions_pending": [
-    {"action": "Netcup ticket was SENT without the source public IP (section 4 left as a placeholder). If netcup asks for it, run `curl ifconfig.me`.", "context": "They need a source address to trace the discard.", "blocking": false},
-    {"action": "Move /tmp/netcup-ticket.txt somewhere durable if still needed — /tmp is tmpfs on this box and is wiped on reboot.", "context": "The sent copy is the ticket; this is the local source.", "blocking": false},
-    {"action": "Decide whether .claude/worktrees/agent-a2d9d4573207ef980 can be reaped — left alone because this session's own header names that branch.", "context": "Clean at 819fa81.", "blocking": false}
+    {"action": "Decide whether .claude/worktrees/agent-a2d9d4573207ef980 can be reaped (clean at 819fa81, which is already on main). Offered twice, not yet answered.", "context": "Harness-owned worktree left from an earlier session.", "blocking": false},
+    {"action": "If netcup asks for the source public IP for the ticket, run `curl ifconfig.me`.", "context": "Ticket was sent without it.", "blocking": false}
   ],
   "decisions": [
-    {"decision": "Gate detects by KEY PRESENCE, not by parsing ports entries", "rationale": "Covers short and long mapping syntax for free; a parser that returns 'allowed' on an unrecognised shape is the silent gate this task removed", "phase": "260905-qxi"},
-    {"decision": "Gate grew from 4 invariants to 7 during review remediation (I5 interpolation, I6 include/extends, I7 unlisted compose file)", "rationale": "All three came from confirmed reviewer bypasses; I5 was found by Codex alone and was NOT in the docstring's known holes", "phase": "260905-qxi"},
-    {"decision": "Rejected the reviewer's proposed fix for the self-test allowlist", "rationale": "Importing ALLOWED_PUBLISHERS would make the test a self-referential oracle — a wrong allowlist edit rewrites its own expectations and stays green. Fixtures kept literal; generalised I4 cases added instead.", "phase": "260905-qxi"},
-    {"decision": "Draw the packet-path diagram BEFORE the iptables work", "rationale": "DOCKER-USER must be drawn empty-and-dated; that empty box IS the finding. Drawing it after populating the chain loses the record of why the rules exist.", "phase": "diagrams"},
-    {"decision": "agy migrated to the native Linux build (1.1.27)", "rationale": "The Chocolatey .exe ran its shell as PowerShell on a UNC path, so it could not see WSL's Docker or any POSIX tool — the cause of the long-standing review wedge", "phase": "tooling"}
+    {"decision": "Renderer is a digest-pinned Docker image (ghcr.io/mermaid-js/mermaid-cli 11.17.0@sha256:a6fb05...), NOT pnpm dlx", "rationale": "Puppeteer renders text with the host's fonts, which npm cannot pin, so the drift check would report noise on any other machine. pnpm dlx form kept in the script header as a documented non-reproducible fallback.", "phase": "260905-tw0"},
+    {"decision": "Match criterion = exact width at manifest scale + 2% height tolerance; colour mode reported not gated", "rationale": "Measured: widths reproduce to the pixel, heights drift in opposite directions across diagrams, ruling out a scale artefact. mmdc cannot force RGB and the script stays stdlib-only.", "phase": "260905-tw0"},
+    {"decision": "Seven pre-existing drifted PNGs left untouched, drift filed as a todo", "rationale": "They are the evidence for the renderer-drift finding; silently re-rendering would erase it.", "phase": "260905-tw0"},
+    {"decision": "Renderer deliberately NOT wired into CI", "rationale": "invariant-checks ignores docs/**; wiring it in would cost a full redeploy on every docs commit plus a 2.36GB image pull. Recorded in the script header as a what-is-NOT-checked decision.", "phase": "260905-tw0"},
+    {"decision": "Merge helper's merge commit replaced with a linear history via git reset --keep", "rationale": "User prefers --ff-only; the tree was byte-identical so nothing was lost.", "phase": "260905-tw0"},
+    {"decision": "Pushed the session-pause wip commit and the pre-dispatch plan commit to main before dispatching", "rationale": "Claude Code worktrees fork from origin/HEAD; pushing keeps HEAD == origin/HEAD so isolation is not degraded to sequential. .planning/** is in every deploy path-ignore so no redeploy fires.", "phase": "260905-tw0"}
   ],
   "uncommitted_files": [],
-  "next_action": "Start the infra diagrams task. First step is pinning the .mmd->.png renderer (no committed render command exists anywhere in the repo, and mmdc is not installed) — without it, 'hierarchical, centered, top-to-bottom' is unverifiable and the committed PNGs can silently drift from their .mmd sources.",
-  "context_notes": "Session ran long and covered three threads: a network debug that produced a sent support ticket, a full quick-task-plus-three-way-review cycle that merged and deployed, and toolchain repairs. main is at 4f11c7c, pushed, deployed green (all 14 CI/CD jobs). Two forensics probes are still collecting (12h bounded, started ~16:47Z, ~546 and ~621 samples, zero failures so far) — check them first on resume; a failed client row against a flat passive_opens is the direct proof the SYN never arrived."
+  "next_action": "Start the DOCKER-USER iptables task (remaining task 8) via /gsd-quick. The empty chain is now drawn and dated, so populating it is unblocked. Plan must include: iptables rules, a systemd unit ordered After=docker.service and idempotent, an off-box negative test (throwaway published port must be UNREACHABLE), and the same-change update + re-render of the two artifacts that say 'empty as of 2026-09-05'.",
+  "context_notes": "Session was one full quick-task cycle (plan -> isolated executor -> my own verification -> user review -> fix round -> merge -> deploy) plus a forensics observation. main = 5b3142d, pushed, deployed green. Probes still running, expire ~04:47Z 2026-09-06: local ~/dev/kanban-net-forensics/probe.csv (819 rows, 1 failure), VM /var/tmp/net-forensics/samples.csv (903 rows). The key forensic lesson: the VM passive_opens counter barely moves while hundreds of probes succeed, because Docker DNAT terminates them in caddy's network namespace — the paired-probe design cannot deliver the direct proof it was built for. Kill probes by PID from pgrep -af, never pkill -f (the pattern matches the SSH command itself)."
 }
