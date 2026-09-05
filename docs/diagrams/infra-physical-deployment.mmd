@@ -2,13 +2,13 @@
 flowchart TB
     client["Browser / API client<br/>(external actor)"]
 
-    subgraph netcup["Netcup VPS Lite 2 G12s — x86_64<br/>Vienna, Austria — trust boundary"]
+    subgraph netcup["Netcup VPS Lite 2 G12s — x86_64<br/>Vienna, Austria — [2] VM host network boundary"]
         direction TB
 
         netcup_spacer[" "]
         style netcup_spacer height:1px,fill:none,stroke:none
 
-        subgraph caddy_box["Docker container: caddy"]
+        subgraph caddy_box["Docker container: caddy — [3] public TLS termination edge"]
             caddy["caddy 2.11.4 + SHA-pinned<br/>rate-limit module (linux/amd64)<br/>ports 80, 443<br/>per-client-IP limit, production<br/>hostname's site block only:<br/>auth 20/5m, general 120/1m"]
         end
         netcup_spacer ~~~ caddy_box
@@ -22,11 +22,11 @@ flowchart TB
             postgres["postgres 16<br/>(system of record, named volume,<br/>no host port published)"]
         end
 
-        caddy -- "HTTP :8080<br/>(internal Docker network)" --> app
-        app -- "Kafka wire protocol :19092<br/>(internal Docker network)" --> redpanda
-        app -- "Schema Registry HTTP :8081<br/>(internal Docker network)" --> redpanda
-        app -- "JDBC :5432, no TLS<br/>(internal kanban-db Docker network)" --> postgres
+        caddy -- "HTTP :8080<br/>[4] Compose-internal Docker network" --> app
+        app -- "Kafka wire protocol :19092<br/>[4] Compose-internal Docker network" --> redpanda
+        app -- "Schema Registry HTTP :8081<br/>[4] Compose-internal Docker network" --> redpanda
+        app -- "JDBC :5432, no TLS<br/>[5] kanban-db Docker network" --> postgres
     end
 
 
-    client -- "HTTPS :443 via kanban-board-rud-vlad-473.duckdns.org<br/>(crosses VM boundary)" --> caddy
+    client -- "[1] Netcup Cloud Firewall (external — not in this repo)<br/>HTTPS :443 via kanban-board-rud-vlad-473.duckdns.org<br/>(crosses VM boundary)" --> caddy

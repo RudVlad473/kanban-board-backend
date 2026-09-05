@@ -1,0 +1,41 @@
+%%{init: {"flowchart": {"subGraphTitleMargin": {"top": 15, "bottom": 15}, "curve": "linear"}}}%%
+flowchart TB
+    client["Internet client<br/>(external actor)"]
+
+    subgraph netcup_edge["[1] Netcup Cloud Firewall (external — not in this repo)"]
+        direction TB
+        netcup_fw["Netcup Cloud Firewall<br/>policy: Default<br/>implicit Drop all INCOMING"]
+    end
+
+    subgraph vm["Netcup VPS Lite 2 G12s — x86_64<br/>[2] VM host network boundary"]
+        direction TB
+
+        prerouting["nat PREROUTING<br/>-A PREROUTING -m addrtype<br/>--dst-type LOCAL -j DOCKER"]
+        forward["filter FORWARD"]
+        docker_user["DOCKER-USER<br/>empty as of 2026-09-05<br/>(no rules at all)"]
+        docker_chain["DOCKER<br/>(per-container DNAT/ACCEPT rules)"]
+
+        input["filter INPUT<br/>-P INPUT DROP<br/>ACCEPT tcp dpt:22/80/443<br/>governs host daemons ONLY —<br/>decorative for container traffic"]
+        sshd["sshd :22<br/>(host daemon, not a container)"]
+
+        prerouting -- "DNAT jump<br/>traverses FORWARD,<br/>never INPUT" --> forward
+        forward --> docker_user
+        docker_user --> docker_chain
+        prerouting -. "also feeds<br/>(host-daemon path)" .-> input
+        input -. "ACCEPT dpt:22 only<br/>reaches a real listener" .-> sshd
+    end
+
+    subgraph compose["[4] Compose-internal Docker network"]
+        direction TB
+        subgraph caddy_box["Docker container: caddy — [3] public TLS termination edge"]
+            caddy["caddy 2.11.4<br/>ports 80, 443"]
+        end
+        subgraph app_box["Docker container: app"]
+            app["app<br/>(Spring Boot, port 8080,<br/>no host port published)"]
+        end
+    end
+
+    client --> netcup_fw
+    netcup_fw -- "HTTPS :443<br/>(crosses VM boundary)" --> prerouting
+    docker_chain --> caddy
+    caddy -- "HTTP :8080<br/>(internal Docker network)" --> app

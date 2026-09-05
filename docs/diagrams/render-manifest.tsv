@@ -9,4 +9,5 @@ architecture-signin-scenario	4
 auth-signin-scenario	1
 auth-signup-scenario	1
 infra-delivery-scenario	2
+infra-packet-path-scenario	2
 infra-physical-deployment	2

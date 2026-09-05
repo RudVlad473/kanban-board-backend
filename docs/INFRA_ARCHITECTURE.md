@@ -16,10 +16,14 @@ correction is called out here rather than silently applied — a reader who reme
 topology needs to know the difference is real and not a documentation slip.
 
 Per [`docs/DIAGRAM_CONVENTIONS.md`](DIAGRAM_CONVENTIONS.md), each diagram below is one deliberate
-Kruchten 4+1 view, not an ad hoc mix of concerns. The two views chosen are the ones that matter
-most for this deployment: **Physical/Deployment** (what runs where, on what hardware) and
-**Scenario (+1)** (the one end-to-end flow — push to master, deploy — traced across the other
-views).
+Kruchten 4+1 view, not an ad hoc mix of concerns. Three views are drawn — one Physical/Deployment
+and two Scenario (+1) views, added at different times for different reasons: **Physical/Deployment**
+(what runs where, on what hardware); **Scenario (+1) — Delivery Path** (push to master through to a
+running deploy, traced across the other views); and **Scenario (+1) — Inbound Packet Path** (added
+2026-09-05, tracing one inbound request through the VM's network layers rather than through the
+deploy pipeline). Updated from "the two views chosen" (singular Scenario) in the same change that
+added the third — leaving that sentence stale here would repeat exactly the failure this document
+already apologises for below with Neon.
 
 ## Physical/Deployment View
 
@@ -65,6 +69,17 @@ procedure that has been written but never executed, and the todo
 `.planning/todos/pending/2026-08-20-no-documented-backup-restore-runbook-for-prod-db.md`, which is
 deliberately still open for the scheduled dump, off-host storage, retention policy and one proven
 test restore.
+
+**Numbered trust boundaries (added 2026-09-05):** the diagram's subgraph and edge labels now carry
+consistent numbers, `[1]` through `[5]`, so this diagram and the packet-path Scenario below can be
+read together against the same boundary set rather than two diagrams inventing their own vocabulary.
+`[1]` is deliberately marked `(external — not in this repo)` — the Netcup Cloud Firewall is a
+control-panel setting on Netcup's infrastructure, not a file in this repository, so it is reviewed
+in no pull request here and its actual ruleset cannot be confirmed from the code. `[2]`–`[5]` are
+boundaries this repository DOES define and version-control: the VM's own host network, Caddy's
+public TLS termination edge, the Compose-internal Docker network, and the `kanban-db` network. The
+distinction matters because it is the entire point of the Scenario below: as of 2026-09-05, `[1]` is
+the only layer that governs traffic to a published container port at all.
 
 ## Scenario (+1) View — Delivery Path
 
@@ -151,6 +166,36 @@ skip a PR touching `docker/caddy/Dockerfile` or `docker-compose.prod.yml`. `depl
 makes tag drift unmergeable — `deploy.yml` fires on push-to-`main` only, so on its own it can block
 a deploy but never a merge.
 
+## Scenario (+1) View — Inbound Packet Path
+
+Traces one inbound packet, from an internet client through the Netcup Cloud Firewall, the VM's
+network stack, and into the Caddy and app containers — a different Scenario from the one above,
+which traces a *deploy*; this one traces a *request*. Added 2026-09-05 after quick task 260905-qxi
+found that this VM's OS-level firewall does not govern container-published ports at all, a fact
+this document had no diagram to express.
+
+![Flowchart: inbound packet path through the VM's network layers](diagrams/infra-packet-path-scenario.png)
+<sub>[diagram source](diagrams/infra-packet-path-scenario.mmd)</sub>
+
+**Reproduce this yourself on the VM** with the same three commands that found the gap:
+`iptables -t nat -S PREROUTING`, `iptables -S INPUT`, `iptables -S DOCKER-USER` (see
+`docs/INFRA_RUNBOOK.md`'s Firewall section for the full output and context).
+
+**The `DOCKER-USER` chain is empty as of 2026-09-05.** Docker's own `-A PREROUTING -m addrtype
+--dst-type LOCAL -j DOCKER` rule DNATs published-port traffic before routing decisions are made, so
+that traffic traverses `FORWARD`, never `INPUT` — the diagram draws this explicitly because a
+packet-path diagram routing container traffic through `INPUT` would draw the exact misconception
+this Scenario exists to correct. `filter INPUT`'s `-P INPUT DROP` policy plus its 22/80/443 ACCEPTs
+therefore governs host-level daemons only (sshd on :22) and is decorative for anything Docker
+publishes. With `DOCKER-USER` empty, **the only layer standing between a published container port
+and the internet today is the Netcup Cloud Firewall — `[1]` in both diagrams above, which lives
+outside this repository and is not reviewed in pull requests.**
+
+This is a tracked, dated claim, not a permanent one: `.planning/todos/pending/2026-09-05-docker-user-chain-empty-on-the-vm.md`
+tracks adding rules to `DOCKER-USER` that would make it false. When that item closes, this section's
+"empty as of 2026-09-05" annotation — in the diagram and in this prose — becomes stale and must be
+updated in the same change, not left describing a chain that no longer matches reality.
+
 ## Maintenance Note
 
 This document describes `docker-compose.prod.yml`, `Caddyfile`, `docker/caddy/Dockerfile`,
@@ -170,3 +215,22 @@ Phase 11 moved the database onto the VM — including a TLS hop that no longer e
 job that no longer runs where it said. The facts most worth listing here are the ones a reader
 would never think to re-check, because they read as settled background rather than as
 configuration.
+
+**Also on this list, added 2026-09-05 (quick task 260905-tw0):**
+
+- **`docs/diagrams/*.mmd` and the render pipeline.** Every diagram's PNG is regenerated from its
+  `.mmd` source with `scripts/render-diagrams.sh`, against the digest-pinned renderer named in that
+  script's own header. Goes stale if a `.mmd` is hand-edited without re-running the script (its
+  `--check` mode catches exactly that), or if the pinned digest is bumped without re-verifying it
+  against the registry (see the script's own header for how).
+- **The VM's iptables facts — specifically `DOCKER-USER`'s contents.** This document's packet-path
+  Scenario states, with a date, that `DOCKER-USER` carries no rules. Goes stale the moment someone
+  adds rules to it on the VM (tracked to close via
+  `.planning/todos/pending/2026-09-05-docker-user-chain-empty-on-the-vm.md`) — and that closure is
+  the point: it is supposed to go stale, and this document must be updated in the same change that
+  makes it so, not discovered stale months later the way the Neon fact was.
+- **The Netcup Cloud Firewall's policy, flagged as external state this repository cannot verify.**
+  Both diagrams above mark it `[1] (external — not in this repo)` for exactly this reason: its
+  ruleset lives in Netcup's control panel, not in a file this document can point at, so this
+  document's description of it ("policy: Default") is only as current as whoever last checked the
+  panel by hand. Goes stale silently if that policy changes and nobody updates this note.
