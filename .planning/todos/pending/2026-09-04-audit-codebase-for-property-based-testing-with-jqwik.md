@@ -93,6 +93,36 @@ confinement; it is the same shape of error as the round-4 decision record that r
 about one direction and declared the result "provably safe". Which bound gets published stays an
 explicit, declared decision; the property's job is to fail when the declaration stops holding.
 
+## Will it slow the suite down? Only if the expensive setup sits inside the loop
+
+A property runs its body N times (jqwik's default is 1000 tries — confirm against the installed
+version rather than trusting this note). So the cost question is never "does jqwik slow things
+down", it is **what is inside the generated loop**:
+
+| Property shape | Per-try cost | At 1000 tries | Verdict |
+|---|---|---|---|
+| Pure unit — regex conjunction, `ecmaEquivalentOf` translation | regex compile + match | well under a second | free; this is candidate 1 |
+| Real `Validator` + a document fetched ONCE in `// arrange` | one `validate()` + a regex match | low single-digit seconds | acceptable |
+| `fetchDocument()` called INSIDE the property body | a MockMvc round trip | 1000 HTTP round trips | the one that hurts |
+
+The third row is the realistic mistake, because every `// arrange` block in
+`ComposedConstraintPropertyCustomizerTest` calls `fetchDocument()` — copying that idiom into a
+property body multiplies it by the try count. Fetch once, generate only the string.
+
+What costs nothing: a property added to the EXISTING `@SpringBootTest` class reuses the same Spring
+context and the same Testcontainers Postgres, so it starts no additional container. The
+`maxParallelForks = 2` concern above applies to a property in a NEW container-backed class, not to
+one added here. The dependency itself is startup noise against a suite that already spends most of
+its ~5-6 minutes booting Postgres and Redpanda (523 tests, 2026-09-05).
+
+**Add a tag when adopting, not later.** Putting properties behind their own `@Tag` lets `fastTest`
+(the pre-commit gate, which already excludes `kafka` and `realSocket`) skip them while CI runs them
+in full. Cheap at adoption, awkward to retrofit once properties are spread across classes.
+
+**The one measurement worth making before adopting:** wall-clock of a single `fetchDocument()` plus
+one `validator.validate()`. That turns the middle row from an estimate into a fact, and it decides
+whether the equivalence property can run at the default try count or needs a lower one.
+
 ## Known integration footgun — do not skip this
 
 jqwik's own Gradle instructions say to configure `useJUnitPlatform { includeEngines 'jqwik' }`.
