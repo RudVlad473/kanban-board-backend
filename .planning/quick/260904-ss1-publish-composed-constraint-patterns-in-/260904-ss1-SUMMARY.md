@@ -52,7 +52,7 @@ metrics:
 actuals:
   tokens: 13012
   tasks: 3
-  commits: 4
+  commits: 5
 ---
 
 # Quick Task 260904-ss1: Publish composed constraint patterns in the OpenAPI document Summary
@@ -328,6 +328,57 @@ ComposedConstraintPropertyCustomizerTest > PublishedConstraints >
 ```
 
 Wiring `ecmaEquivalentOf` into `contribute()`: 15 ComposedConstraint tests, 0 failed.
+
+## Round 5 -- Re-review of the round-4 commit (2026-09-05)
+
+Round 4's own commit was re-reviewed by Claude and Codex (Gemini failed a third time on
+`Error: timeout waiting for response` and is recorded as a FAILED run, not a clean one). Both
+independently found that round 4's D3 decision record argued from a correct inequality to the
+wrong conclusion.
+
+**The minLength half was a live document-stricter-than-enforcer defect, not a safe trade-off.**
+`@Size` counts UTF-16 code units; JSON Schema `minLength` counts code points. A two-emoji title is
+4 units, so `@Size(min = 3)` accepts it, but only 2 code points -- so a spec-compliant generated
+client refuses to send a request the server would have taken. Round 4 verified only that the
+published bound never ACCEPTS what the server REJECTS (the tolerated direction) and called that
+"provably safe". Live on seven properties.
+
+Fixed by publishing `ceil(n / 2)`, the largest bound no server-accepted value can fail. The first
+attempt converted inside `contribute()` and was **incomplete** -- fields carrying a DIRECT `@Size`
+(`SaveColumnRequestDTO.name`, `SaveTaskRequestDTO.title`) are published by swagger-core itself, and
+the accumulator could only raise, so the unconverted `3` won. The bound is now carried in
+`minLengthUnits` and converted once at publish time, and phase 2 may lower a `minLength` it can
+identify as swagger-core's raw unit bound -- recognisable because it equals the unit value the
+accumulator holds, which a field-level `@Schema` would not.
+
+**The DOTALL/`\S` translation had no test that could catch it breaking.** `shouldPublishExactPattern_*`
+derived its expected value by calling `ecmaEquivalentOf`, the method under test, so mutating the
+translation mutated the expectation in lockstep. Proven 2026-09-05: reverting the `\S` branch to
+emit Java's `\S` verbatim left all 15 tests green. Fixed with
+`shouldPublishThisExactLiteralTranslation_whenPatternIsOptionalNotBlank`, a hand-written literal
+that is deliberately independent of production; it fails on that mutation.
+
+Also carried over: the equivalence test keeps its exact-agreement comparison (which is what proved
+the conjunction load-bearing in round 3) rather than relaxing to a one-way implication. The
+stricter-than-enforcer direction now fails unconditionally, and the one deliberate divergence is
+enumerated in `TOLERATED_LOOSER_THAN_ENFORCER`.
+
+### Evidence
+
+| Check | Result |
+|-------|--------|
+| Revert `ceil(n/2)` to verbatim | 4 FAILED, incl. `shouldAcceptAstralValueTheValidatorAccepts_*` |
+| Restore, mutate the `\S` branch | 3 FAILED, incl. `shouldPublishThisExactLiteralTranslation_*` |
+| Full suite + jacoco | `BUILD SUCCESSFUL in 5m 10s`, 521 tests, 0 failures |
+
+### Still open (filed, not fixed)
+
+`ecmaEquivalentOf`'s Javadoc claims it returns empty for anything it cannot prove equivalent, but
+only guards `flags()` and `(`-constructs. `\Q...\E`, `\p{L}`, `\v`, `\h`, `\A`/`\z`, class
+intersection, `[^]]` and possessive quantifiers all pass through verbatim, several producing a
+stricter ECMA pattern and one an outright `SyntaxError`. Latent -- all four `@Pattern`s in this
+codebase translate correctly, verified head-to-head in Java and node -- but the Javadoc promises a
+guarantee the code does not provide. Needs a stricter escape whitelist.
 
 ## Known Stubs
 

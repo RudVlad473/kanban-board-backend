@@ -94,10 +94,14 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
      * {@code flags()} is non-empty (today, only {@link OptionalNotBlank}'s {@code DOTALL}) is no
      * longer {@code regexp()} verbatim -- {@code ComposedConstraintPropertyCustomizer} translates
      * it to an ECMA-262-safe equivalent first. Deriving the EXPECTED value from that same
-     * production translation method (rather than a hand-copied literal) keeps this assertion honest
-     * against a future edit to either the annotation's regex or the translation logic itself,
-     * mirroring {@link #metaPatternOf(Class)}'s "never hand-copy" property for the one annotation
-     * that now needs more than its raw {@code regexp()}.
+     * production translation method mirrors {@link #metaPatternOf(Class)}'s "never hand-copy"
+     * property, so an edit to the annotation's own regex cannot leave this test asserting a stale
+     * literal.
+     *
+     * <p>It CANNOT catch a translation that is merely wrong -- mutate {@code ecmaEquivalentOf} and
+     * every expectation derived here mutates with it. That guard is {@code
+     * shouldPublishThisExactLiteralTranslation_whenPatternIsOptionalNotBlank}, whose hand-written
+     * literal is deliberately independent of production.
      */
     private String ecmaTranslatedPatternOf(Class<? extends Annotation> annotationType) {
         var pattern = annotationType.getAnnotation(Pattern.class);
@@ -275,6 +279,71 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
             Assertions.assertThat(failures).isEmpty();
         }
 
+        /**
+         * The published {@code minLength} must accept every value the real {@code Validator}
+         * accepts. It is counted in code points where {@code @Size} counts UTF-16 code units, so an
+         * astral-heavy value has fewer of the former than the latter and is the case where the two
+         * disagree -- see the decision record at the {@code Size} branch of {@code contribute}.
+         *
+         * <p>This is the assertion that record defers to. Written against a value the validator
+         * genuinely accepts, so it fails if the conversion is ever dropped or inverted.
+         */
+        @Test
+        void shouldAcceptAstralValueTheValidatorAccepts_whenPublishedMinLengthIsEvaluated()
+                throws Exception {
+            // arrange: two emoji -- 4 UTF-16 units (so @Size(min = 3) takes it) but 2 code points
+            var value = "\uD83D\uDE00\uD83D\uDE00";
+            Assertions.assertThat(value.length()).isEqualTo(4);
+            Assertions.assertThat(value.codePointCount(0, value.length())).isEqualTo(2);
+            var document = fetchDocument();
+
+            // act
+            var violations =
+                    validator.validate(SaveSubtaskRequestDTO.builder().title(value).build());
+            var publishedMinLength =
+                    readInt(propertyNode(document, "SaveSubtaskRequestDTO", "title"), "minLength");
+
+            // assert: the validator takes it, and so must the published bound read in code points
+            Assertions.assertThat(violations)
+                    .as("real Validator on a 4-unit, 2-code-point title")
+                    .isEmpty();
+            Assertions.assertThat(publishedMinLength)
+                    .as("published minLength must not exceed the value's code point count")
+                    .isLessThanOrEqualTo(value.codePointCount(0, value.length()));
+        }
+
+        /**
+         * The independent oracle for the ECMA-262 translation. Every OTHER pattern assertion in
+         * this class derives its expectation from production code -- {@link #metaPatternOf(Class)}
+         * reads the annotation, and {@link #ecmaTranslatedPatternOf(Class)} calls {@code
+         * ecmaEquivalentOf} itself. That is right for catching drift and useless for catching a
+         * WRONG translation: mutate the translation and the expectation mutates in lockstep, so the
+         * assertion passes either way. Confirmed 2026-09-05 by reverting the {@code \S} branch to
+         * emit Java's {@code \S} verbatim -- the exact ASCII-vs-Unicode defect the translation
+         * exists to fix -- and watching all 15 tests in this class stay green.
+         *
+         * <p>This literal is hand-written ON PURPOSE and must stay hand-written. It is the only
+         * assertion here that fails when the translation changes MEANING rather than merely
+         * stopping, so replacing it with a derived value silently removes the translation's only
+         * real guard.
+         */
+        @Test
+        void shouldPublishThisExactLiteralTranslation_whenPatternIsOptionalNotBlank()
+                throws Exception {
+            // arrange: @OptionalNotBlank is ".*\S.*" with DOTALL. In ECMA-262 '.' never matches a
+            // line terminator whatever the flags, and \S is Unicode-aware where Java's is
+            // ASCII-only -- so both must be rewritten as explicit character classes.
+            var expected = "[\\s\\S]*[^ \\t\\n\\x0B\\f\\r][\\s\\S]*";
+            var document = fetchDocument();
+
+            // act
+            var published =
+                    readText(propertyNode(document, "UpdateTaskRequestDTO", "title"), "pattern");
+
+            // assert
+            Assertions.assertThat(published).isEqualTo(expected);
+        }
+
         @Test
         void shouldPublishNonEmptyConjunctionPattern_whenFieldCarriesTwoComposedPatterns()
                 throws Exception {
@@ -416,71 +485,75 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
                 throws Exception {
             // arrange
             var document = fetchDocument();
+            // minLength values are hand-written, NOT read from ValidationConstants: the
+            // published bound is ceil(@Size min / 2) per D3, and deriving it from the same
+            // formula production uses would mirror a wrong formula instead of catching it.
+            // maxLength is still published verbatim, so it stays constant-derived.
             record Row(String schema, String property, Integer minLength, Integer maxLength) {}
             var rows =
                     List.of(
                             new Row(
                                     "SaveBoardRequestDTO",
                                     "name",
-                                    ValidationConstants.MIN_BOARD_NAME_LENGTH,
+                                    1,
                                     ValidationConstants.MAX_BOARD_NAME_LENGTH),
                             new Row(
                                     "UpdateBoardRequestDTO",
                                     "name",
-                                    ValidationConstants.MIN_BOARD_NAME_LENGTH,
+                                    1,
                                     ValidationConstants.MAX_BOARD_NAME_LENGTH),
                             new Row("SaveColumnRequestDTO", "color", null, null),
                             new Row(
                                     "SaveColumnRequestDTO",
                                     "name",
-                                    ValidationConstants.MIN_COLUMN_NAME_LENGTH,
+                                    2,
                                     ValidationConstants.MAX_COLUMN_NAME_LENGTH),
                             new Row(
                                     "SaveTaskRequestDTO",
                                     "title",
-                                    ValidationConstants.MIN_TASK_TITLE_LENGTH,
+                                    2,
                                     ValidationConstants.MAX_TASK_TITLE_LENGTH),
                             new Row(
                                     "SaveTaskRequestDTO",
                                     "description",
-                                    ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH,
+                                    1,
                                     ValidationConstants.MAX_TASK_DESCRIPTION_LENGTH),
                             new Row(
                                     "UpdateTaskRequestDTO",
                                     "title",
-                                    ValidationConstants.MIN_TASK_TITLE_LENGTH,
+                                    2,
                                     ValidationConstants.MAX_TASK_TITLE_LENGTH),
                             new Row(
                                     "UpdateTaskRequestDTO",
                                     "description",
-                                    ValidationConstants.MIN_TASK_DESCRIPTION_LENGTH,
+                                    1,
                                     ValidationConstants.MAX_TASK_DESCRIPTION_LENGTH),
                             new Row(
                                     "SaveSubtaskRequestDTO",
                                     "title",
-                                    ValidationConstants.MIN_SUBTASK_TITLE_LENGTH,
+                                    2,
                                     ValidationConstants.MAX_SUBTASK_TITLE_LENGTH),
                             new Row(
                                     "UpdateSubtaskRequestDTO",
                                     "title",
-                                    ValidationConstants.MIN_SUBTASK_TITLE_LENGTH,
+                                    2,
                                     ValidationConstants.MAX_SUBTASK_TITLE_LENGTH),
                             new Row(
                                     "SignupRequestDTO",
                                     "displayName",
-                                    ValidationConstants.MIN_USER_DISPLAY_NAME_LENGTH,
+                                    2,
                                     ValidationConstants.MAX_USER_DISPLAY_NAME_LENGTH),
                             new Row("SignupRequestDTO", "email", 1, null),
                             new Row("SigninRequestDTO", "email", 1, null),
                             new Row(
                                     "SignupRequestDTO",
                                     "password",
-                                    ValidationConstants.MIN_PASSWORD_LENGTH,
+                                    4,
                                     ValidationConstants.MAX_PASSWORD_LENGTH),
                             new Row(
                                     "SigninRequestDTO",
                                     "password",
-                                    ValidationConstants.MIN_PASSWORD_LENGTH,
+                                    4,
                                     ValidationConstants.MAX_PASSWORD_LENGTH));
             var failures = new ArrayList<String>();
 
@@ -511,11 +584,14 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
         }
 
         @Test
-        void shouldRaiseMinLengthToThree_whenSaveSubtaskTitleComposesNotBlankAndSubtaskTitle()
-                throws Exception {
-            // arrange: F1 -- the live document today publishes minLength 1 (from the direct
+        void
+                shouldRaiseMinLengthAboveTheDirectNotBlank_whenSaveSubtaskTitleAlsoComposesSubtaskTitle()
+                        throws Exception {
+            // arrange: F1 -- the live document used to publish minLength 1 (from the direct
             // @NotBlank) while @SubtaskTitle enforces @Size(min = 3), a documented-looser-than-
-            // enforced defect this bean fixes as a side effect
+            // enforced defect this bean fixes as a side effect. The published bound is 2 rather
+            // than 3 because D3 converts UTF-16 units to code points; what matters for F1 is that
+            // it exceeds the direct @NotBlank's 1.
             var document = fetchDocument();
 
             // act
@@ -523,8 +599,7 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
                     readInt(propertyNode(document, "SaveSubtaskRequestDTO", "title"), "minLength");
 
             // assert
-            Assertions.assertThat(minLength)
-                    .isEqualTo(ValidationConstants.MIN_SUBTASK_TITLE_LENGTH);
+            Assertions.assertThat(minLength).isEqualTo(2);
             Assertions.assertThat(minLength).isNotEqualTo(1);
         }
 
@@ -679,6 +754,23 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
     @Nested
     class EquivalenceWithRealValidator {
 
+        /**
+         * The published bound and the enforced one are allowed to disagree here, in this direction
+         * only.
+         *
+         * <p>{@code @Size} counts UTF-16 code units and the published {@code minLength} counts code
+         * points, so the published bound is deliberately the looser of the two -- a short ASCII
+         * value clears it and the real validator still rejects it, costing a 400 the validator was
+         * always going to produce. The opposite direction is never tolerable and is not expressible
+         * here: it fails unconditionally above.
+         *
+         * <p>Keep this set exact. Every entry is a case someone decided to accept; a divergence
+         * that appears without being added is a defect, which is what makes the strict comparison
+         * worth keeping rather than relaxing to a one-way implication.
+         */
+        private static final Set<String> TOLERATED_LOOSER_THAN_ENFORCER =
+                Set.of("SaveSubtaskRequestDTO.title='ab'");
+
         private record Case(String schemaName, String propertyName, String value, Object dto) {}
 
         @Test
@@ -777,17 +869,22 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
                                 testCase.schemaName(),
                                 testCase.propertyName(),
                                 testCase.value());
-                if (validatorAccepts != documentAccepts) {
+                var key =
+                        testCase.schemaName()
+                                + "."
+                                + testCase.propertyName()
+                                + "='"
+                                + testCase.value()
+                                + "'";
+                if (validatorAccepts && !documentAccepts) {
+                    failures.add(key + " -> DOCUMENT STRICTER THAN ENFORCER, never tolerable");
+                } else if (!validatorAccepts
+                        && documentAccepts
+                        && !TOLERATED_LOOSER_THAN_ENFORCER.contains(key)) {
                     failures.add(
-                            testCase.schemaName()
-                                    + "."
-                                    + testCase.propertyName()
-                                    + "='"
-                                    + testCase.value()
-                                    + "' -> validator accepts="
-                                    + validatorAccepts
-                                    + ", document accepts="
-                                    + documentAccepts);
+                            key
+                                    + " -> document looser than enforcer and not in the"
+                                    + " tolerated set");
                 }
             }
 
@@ -946,8 +1043,7 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
 
             // act: phase 1 computes minLength/maxLength from @NotBlank + @SubtaskTitle
             customizer.customize(propertySchema, annotatedType);
-            Assertions.assertThat(propertySchema.getMinLength())
-                    .isEqualTo(ValidationConstants.MIN_SUBTASK_TITLE_LENGTH);
+            Assertions.assertThat(propertySchema.getMinLength()).isEqualTo(2);
             Assertions.assertThat(propertySchema.getMaxLength())
                     .isEqualTo(ValidationConstants.MAX_SUBTASK_TITLE_LENGTH);
 
@@ -961,8 +1057,7 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
             customizer.customise(documentWith("SaveSubtaskRequestDTO", "title", propertySchema));
 
             // assert: the computed, tighter values win back
-            Assertions.assertThat(propertySchema.getMinLength())
-                    .isEqualTo(ValidationConstants.MIN_SUBTASK_TITLE_LENGTH);
+            Assertions.assertThat(propertySchema.getMinLength()).isEqualTo(2);
             Assertions.assertThat(propertySchema.getMaxLength())
                     .isEqualTo(ValidationConstants.MAX_SUBTASK_TITLE_LENGTH);
         }

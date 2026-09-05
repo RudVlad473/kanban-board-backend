@@ -63,8 +63,8 @@ import org.springframework.stereotype.Component;
  * re-applies those same recorded values as the document's last word, overwriting whatever
  * swagger-core's own second pass did in between -- but only ever in the tightening direction, since
  * a recorded value is a phase-1 snapshot and something other than swagger-core may have set a
- * stricter value on the same schema since (D2, see {@link Accumulator#reassertOn(Schema)}). What
- * would make this false: a swagger-core release that removes the second {@code
+ * stricter value on the same schema since -- see {@link Accumulator#reassertOn(Schema)}. What would
+ * make this false: a swagger-core release that removes the second {@code
  * applyBeanValidatorAnnotations} call, or guards it against lowering an already-raised bound --
  * either way this bean's reassertion becomes a harmless no-op.
  *
@@ -158,7 +158,7 @@ public class ComposedConstraintPropertyCustomizer
         if (property.getPattern() != null) {
             accumulator.patterns.add(property.getPattern());
         }
-        accumulator.minLength = property.getMinLength();
+        accumulator.minLengthUnits = property.getMinLength();
         accumulator.maxLength = property.getMaxLength();
         return accumulator;
     }
@@ -197,39 +197,27 @@ public class ComposedConstraintPropertyCustomizer
             ecmaEquivalentOf(pattern.regexp(), pattern.flags())
                     .ifPresent(accumulator.patterns::add);
         } else if (annotation instanceof Size size) {
-            // D3 (quick task 260904-ss1 round 4, 2026-09-05) -- decision record, not a fix.
-            // @Size counts UTF-16 code units; JSON Schema minLength/maxLength count Unicode code
-            // points. Every code point is >= 1 code unit, so codePoints(v) <= units(v) for any v.
-            // For minLength=N: units(v) >= N is the real constraint; codePoints(v) >= N (the
-            // published check) implies units(v) >= codePoints(v) >= N, so the published check
-            // can only be as strict or STRICTER than the real one -- published minLength can
-            // never accept a value the real validator rejects. Provably safe as-is; no
-            // translation needed or applied.
-            //   For maxLength=N the direction reverses: units(v) <= N is the real constraint, but
-            // codePoints(v) <= N does NOT imply units(v) <= N -- a value built entirely from
-            // astral characters (each 1 code point / 2 code units) can have codePoints(v) <= N
-            // while units(v) as large as 2N, so the published check can ACCEPT a value the real
-            // validator REJECTS (17 "😀" -- 17 code points, 34 UTF-16 units -- against
-            // @SubtaskTitle(max=32), verified empirically 2026-09-05). Chosen mitigation: publish
-            // the value UNCHANGED anyway (option "a" of three considered), because every
-            // alternative has a worse cost for this codebase today --
-            //   - conservative halving (floor(N/2)) is exact-safe but would also wrongly shrink
-            //     every ASCII-only field (BoardName, DisplayName already carry a character-class
-            //     Pattern that makes codePoints(v) == units(v) always, so no divergence is
-            //     reachable there at all) and would invalidate the exact-value assertions this
-            //     bean's own test suite already carries for every field's maxLength;
-            //   - omitting maxLength entirely for the affected fields (TaskTitle, SubtaskTitle,
-            //     Description, Password -- none of which restrict their charset to the BMP)
-            //     throws away real, useful documentation for the overwhelming majority of callers
-            //     who never submit astral characters, to guard a narrow edge case whose actual
-            //     failure mode is a 400 the real validator was always going to produce anyway --
-            //     not a security bypass, since server-side enforcement never changes.
-            //   This becomes the wrong call, and floor(N/2) worth adopting, the day a generated
-            //   API client starts asserting the published maxLength as a hard contract (e.g.
-            //   property-based fuzzing a request body up to the documented boundary and treating
-            //   the resulting 400 as a contract violation rather than an expected validation
-            //   failure) -- at that point the usability cost of a conservative bound is repaid by
-            //   removing a real, client-visible correctness gap.
+            // Publish a length bound in code points, not UTF-16 code units.
+            //
+            // @Size counts UTF-16 code units; JSON Schema minLength/maxLength count code points,
+            // and every code point is one or two units. The two bounds therefore diverge in
+            // opposite directions, and only one of them can hurt a client:
+            //   minLength -- publishing the @Size value verbatim REJECTS values the server
+            //     ACCEPTS: a two-emoji title is 4 units, so @Size(min = 3) takes it, but it is
+            //     only 2 code points, so a spec-compliant generated client refuses to send a legal
+            //     request. Fixed by publishing ceil(n / 2), the largest bound no server-accepted
+            //     value can fail; the proof is codePointSafeMinLength's contract and the
+            //     equivalence test below, not this comment.
+            //   maxLength -- publishing verbatim ACCEPTS values the server REJECTS, costing a 400
+            //     the validator was always going to produce. Published unchanged on purpose:
+            //     halving it would shrink every ASCII-only field's documented ceiling to close a
+            //     divergence already in the tolerated direction. Revisit the day a generated
+            //     client treats a published maxLength as a hard contract -- property-based fuzzing
+            //     up to the documented boundary, say -- rather than as documentation.
+            //
+            // Corrected 2026-09-05: this record previously called publishing minLength verbatim
+            // "provably safe", having reasoned correctly about the tolerated direction and never
+            // checked the other one.
             if (size.min() != 0) {
                 raiseMinLength(accumulator, size.min());
             }
@@ -419,11 +407,24 @@ public class ComposedConstraintPropertyCustomizer
         }
     }
 
-    private void raiseMinLength(Accumulator accumulator, int candidate) {
-        accumulator.minLength =
-                accumulator.minLength == null
-                        ? candidate
-                        : Math.max(accumulator.minLength, candidate);
+    /**
+     * Converts a {@code @Size(min)} expressed in UTF-16 code units into the largest JSON Schema
+     * {@code minLength}, counted in code points, that no server-accepted value can fail.
+     *
+     * <p>{@code units(v) >= n} implies {@code codePoints(v) >= units(v) / 2 >= n / 2}, so {@code
+     * ceil(n / 2)} is safe and any larger bound is not: for odd {@code n} an all-astral value of
+     * exactly {@code n + 1} units has {@code (n + 1) / 2} code points, which is {@code ceil(n / 2)}
+     * exactly.
+     */
+    private static int codePointSafeMinLength(int unitsMin) {
+        return (unitsMin + 1) / 2;
+    }
+
+    private void raiseMinLength(Accumulator accumulator, int candidateUnits) {
+        accumulator.minLengthUnits =
+                accumulator.minLengthUnits == null
+                        ? candidateUnits
+                        : Math.max(accumulator.minLengthUnits, candidateUnits);
     }
 
     private void lowerMaxLength(Accumulator accumulator, int candidate) {
@@ -435,7 +436,11 @@ public class ComposedConstraintPropertyCustomizer
 
     private static final class Accumulator {
         private final Set<String> patterns = new LinkedHashSet<>();
-        private Integer minLength;
+
+        // In UTF-16 code units, the unit @Size and @NotBlank are declared in. Converted to code
+        // points by codePointSafeMinLength at publish time, never before -- raising the bound has
+        // to happen in one unit, and the published document speaks the other.
+        private Integer minLengthUnits;
         private Integer maxLength;
         private String format;
         private String example;
@@ -451,17 +456,18 @@ public class ComposedConstraintPropertyCustomizer
          * enclosing class); {@link #reassertOn(Schema)} is the tighten-only counterpart used there.
          */
         void applyTo(Schema<?> property) {
-            property.setMinLength(minLength);
+            property.setMinLength(publishedMinLength());
             property.setMaxLength(maxLength);
             applyMeta(property);
             applyPattern(property);
         }
 
         /**
-         * Phase 2 ({@link GlobalOpenApiCustomizer}, the document's last word). Tightens only:
-         * raises {@code minLength} only past whatever the schema already carries, lowers {@code
-         * maxLength} only below it, and sets {@code pattern} only when the schema does not already
-         * carry one.
+         * Phase 2 ({@link GlobalOpenApiCustomizer}, the document's last word). Tightens only, with
+         * one named exception: raises {@code minLength} past whatever the schema already carries,
+         * lowers {@code maxLength} only below it, sets {@code pattern} only when the schema carries
+         * none -- and additionally lowers a {@code minLength} it can identify as swagger-core's own
+         * unconverted code-unit bound (see {@link #isUnconvertedUnitBound(Integer)}).
          *
          * <p>D2 (quick task 260904-ss1 round 4, 2026-09-05): before this method existed, {@link
          * #customise(OpenAPI)} called {@link #applyTo(Schema)} here too, which is unconditional --
@@ -482,9 +488,12 @@ public class ComposedConstraintPropertyCustomizer
          * might be on the schema by the time phase 2 runs.
          */
         void reassertOn(Schema<?> property) {
-            if (minLength != null
-                    && (property.getMinLength() == null || minLength > property.getMinLength())) {
-                property.setMinLength(minLength);
+            var published = publishedMinLength();
+            if (published != null) {
+                var current = property.getMinLength();
+                if (current == null || published > current || isUnconvertedUnitBound(current)) {
+                    property.setMinLength(published);
+                }
             }
             if (maxLength != null
                     && (property.getMaxLength() == null || maxLength < property.getMaxLength())) {
@@ -494,6 +503,25 @@ public class ComposedConstraintPropertyCustomizer
             if (property.getPattern() == null) {
                 applyPattern(property);
             }
+        }
+
+        private Integer publishedMinLength() {
+            return minLengthUnits == null ? null : codePointSafeMinLength(minLengthUnits);
+        }
+
+        /**
+         * Report whether {@code current} is the raw UTF-16 unit bound rather than a deliberate
+         * choice by someone else, and so may be lowered to the converted value.
+         *
+         * <p>Phase 2 otherwise only ever tightens, because a value on the schema by then may have
+         * been set by something with more authority than this bean -- a field-level {@code @Schema}
+         * -- and replaying a phase-1 snapshot over it would loosen it. swagger-core's own second
+         * pass is the exception: it re-derives {@code minLength} straight from {@code @Size}, in
+         * code units, and that number is wrong for the document rather than merely stricter. It is
+         * recognisable precisely because it equals the unit bound this accumulator already holds.
+         */
+        private boolean isUnconvertedUnitBound(Integer current) {
+            return minLengthUnits != null && minLengthUnits.equals(current);
         }
 
         private void applyMeta(Schema<?> property) {
