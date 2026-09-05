@@ -136,10 +136,31 @@ hour", not "is nonprod up right now", and it pages nobody.
 
 ## Firewall — two independent layers
 
-Both layers enforce the identical policy: allow inbound TCP 22 (SSH), 80 (HTTP, Let's Encrypt
-challenge + redirect), 443 (HTTPS); default-deny everything else inbound. Neither layer opens
-8080 (app), 8081 (Schema Registry), or 9092 (Kafka) — those stay internal-only, reachable only over
-the Docker Compose network once the stack is deployed.
+**CORRECTED 2026-09-05** — this section previously opened with "Both layers enforce the identical
+policy". That was wrong, and the two layers seeing different traffic is the whole point, not a
+detail: Layer 1 governs host-level daemons only and does nothing for anything Docker publishes.
+Observed live on the VM, reproducible with the three commands below:
+
+| Observation | Command | Consequence |
+|-------------|---------|-------------|
+| `-A PREROUTING -m addrtype --dst-type LOCAL -j DOCKER` present; the `DOCKER` chain DNATs published ports to their container | `iptables -t nat -S PREROUTING` | DNAT'd traffic traverses `FORWARD`, **not** `INPUT` |
+| `-P INPUT DROP` plus `--dport 80/443` ACCEPTs (the ruleset below) | `iptables -S INPUT` | Governs host-level daemons only — sshd on :22. Decorative for anything Docker publishes |
+| Empty — no rules at all | `iptables -S DOCKER-USER` | The one chain Docker guarantees it will not touch carries nothing, so nothing here governs container traffic either |
+
+Operationally: a `ports:` key added to any service in a deployed compose file is a public exposure
+gated by exactly one layer — the Netcup Cloud Firewall (Layer 2 below), which lives outside this
+repository, is not reviewed in pull requests, and is not under version control. As of quick task
+260905-qxi, `scripts/verify-compose-ports.py` makes that exposure a reviewed decision instead of a
+silent one: it fails CI on a pull request that adds a `ports:` key to any service outside `caddy`
+in `docker-compose.prod.yml`, on any service at all in `docker-compose.nonprod.yml`, on
+`network_mode: host` anywhere, or on `caddy` publishing beyond 80/443.
+
+What is still open: the empty `DOCKER-USER` chain is exactly what a second enforcing layer inside
+this VM would need to fill, and nothing here does that — see
+`.planning/todos/pending/2026-09-05-docker-user-chain-empty-on-the-vm.md` for the tracked follow-up.
+The gate above reads the committed file; it cannot see a `docker run -p` issued by hand on the VM,
+an edit made directly there, or a container started outside Compose — that residue is exactly what
+the tracked item is for.
 
 ### Layer 1: OS-level (`iptables`, `nft` backend)
 
@@ -155,7 +176,9 @@ ACCEPT  tcp dpt:443
 Persisted via `iptables-persistent`/`netfilter-persistent` (`netfilter-persistent save`, rules live
 in `/etc/iptables/rules.v4`). Verified to survive a full reboot. No ICMP allow rule exists at this
 layer by design — the plan's spec only calls for TCP 22/80/443, so this box does not answer `ping`
-even though it is fully reachable on those three ports.
+even though it is fully reachable on those three ports. As the correction above states, this
+ruleset's practical reach ends at host daemons (sshd) — it does not evaluate traffic to a
+Docker-published port at all.
 
 ### Layer 2: Netcup Cloud Firewall (SCP-managed, stateful)
 
