@@ -54,4 +54,8 @@ out/
 # redaction guarantee was actually verified empirically before any report was trusted.
 .gitleaks-reports/
 
+### Python (scripts/*.py gates and self-tests) ###
+__pycache__/
+*.pyc
+
 
