@@ -9,6 +9,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+import com.vrudenko.kanban_board.dto.annotation.BmpOnly;
+
 import io.swagger.v3.core.converter.AnnotatedType;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.media.Schema;
@@ -191,6 +193,9 @@ public class ComposedConstraintPropertyCustomizer
     }
 
     private void contribute(Annotation annotation, Accumulator accumulator) {
+        if (annotation.annotationType().isAnnotationPresent(BmpOnly.class)) {
+            accumulator.bmpConfined = true;
+        }
         if (annotation instanceof Pattern pattern) {
             // Publish nothing when no ECMA-262 equivalent can be proven -- see
             // ecmaEquivalentOf's Javadoc for why a dropped pattern beats a wrong one.
@@ -207,7 +212,9 @@ public class ComposedConstraintPropertyCustomizer
             //     only 2 code points, so a spec-compliant generated client refuses to send a legal
             //     request. Fixed by publishing ceil(n / 2), the largest bound no server-accepted
             //     value can fail; the proof is codePointSafeMinLength's contract and the
-            //     equivalence test below, not this comment.
+            //     equivalence test below, not this comment. A constraint that enumerates its
+            //     permitted characters can never produce the divergence, and says so by carrying
+            //     @BmpOnly, in which case the exact bound is published instead.
             //   maxLength -- publishing verbatim ACCEPTS values the server REJECTS, costing a 400
             //     the validator was always going to produce. Published unchanged on purpose:
             //     halving it would shrink every ASCII-only field's documented ceiling to close a
@@ -441,6 +448,10 @@ public class ComposedConstraintPropertyCustomizer
         // points by codePointSafeMinLength at publish time, never before -- raising the bound has
         // to happen in one unit, and the published document speaks the other.
         private Integer minLengthUnits;
+
+        // Set when any constraint on this property declares @BmpOnly. A BMP-confined value has one
+        // code unit per code point, so the unit bound needs no conversion to be safe.
+        private boolean bmpConfined;
         private Integer maxLength;
         private String format;
         private String example;
@@ -506,7 +517,10 @@ public class ComposedConstraintPropertyCustomizer
         }
 
         private Integer publishedMinLength() {
-            return minLengthUnits == null ? null : codePointSafeMinLength(minLengthUnits);
+            if (minLengthUnits == null) {
+                return null;
+            }
+            return bmpConfined ? minLengthUnits : codePointSafeMinLength(minLengthUnits);
         }
 
         /**

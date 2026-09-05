@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Set;
 
 import com.vrudenko.kanban_board.constant.ValidationConstants;
+import com.vrudenko.kanban_board.dto.annotation.BmpOnly;
 import com.vrudenko.kanban_board.dto.annotation.BoardName;
 import com.vrudenko.kanban_board.dto.annotation.DisplayName;
 import com.vrudenko.kanban_board.dto.annotation.OptionalNotBlank;
@@ -541,7 +542,7 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
                             new Row(
                                     "SignupRequestDTO",
                                     "displayName",
-                                    2,
+                                    3,
                                     ValidationConstants.MAX_USER_DISPLAY_NAME_LENGTH),
                             new Row("SignupRequestDTO", "email", 1, null),
                             new Row("SigninRequestDTO", "email", 1, null),
@@ -990,6 +991,68 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
             Assertions.assertThat(signinDescription).isEqualTo(expected);
             Assertions.assertThat(signupDescription).doesNotContainIgnoringCase("gitleaks");
             Assertions.assertThat(signinDescription).doesNotContainIgnoringCase("gitleaks");
+        }
+    }
+
+    /**
+     * Guards every {@link BmpOnly} declaration, which is asserted by a human and believed by {@code
+     * ComposedConstraintPropertyCustomizer} when it publishes an exact {@code @Size} bound rather
+     * than the halved one.
+     *
+     * <p>Drives each marked annotation's own {@code @Pattern} against a value containing an astral
+     * character and requires a rejection, and pins the unmarked constraints as unmarked so the
+     * marker cannot spread to one whose pattern permits astral characters everywhere else in the
+     * value. This catches a declaration that has gone stale; it does not prove one correct, and no
+     * test could -- a passing sample is not a proof of BMP confinement.
+     */
+    @Nested
+    class BmpOnlyDeclarations {
+
+        @Test
+        void shouldRejectAnAstralValue_whenAnnotationDeclaresBmpOnly() {
+            // arrange: one astral character embedded in otherwise-permitted text
+            var astral = "Ada \uD83D\uDE00";
+            var marked = List.of(BoardName.class, DisplayName.class);
+            var failures = new ArrayList<String>();
+
+            // act
+            for (var annotationType : marked) {
+                if (!annotationType.isAnnotationPresent(BmpOnly.class)) {
+                    failures.add(annotationType.getSimpleName() + " -> expected @BmpOnly, absent");
+                    continue;
+                }
+                if (java.util.regex.Pattern.compile(metaPatternOf(annotationType))
+                        .matcher(astral)
+                        .matches()) {
+                    failures.add(
+                            annotationType.getSimpleName()
+                                    + " -> declares @BmpOnly but its own @Pattern ACCEPTS an"
+                                    + " astral value");
+                }
+            }
+
+            // assert
+            Assertions.assertThat(failures).isEmpty();
+        }
+
+        @Test
+        void shouldNotDeclareBmpOnly_whenPatternPermitsAstralCharacters() {
+            // arrange: both admit astral characters outside the structure they require
+            var unmarked = List.of(OptionalNotBlank.class, Password.class);
+            var failures = new ArrayList<String>();
+
+            // act
+            for (var annotationType : unmarked) {
+                if (annotationType.isAnnotationPresent(BmpOnly.class)) {
+                    failures.add(
+                            annotationType.getSimpleName()
+                                    + " -> declares @BmpOnly, but its pattern permits astral"
+                                    + " characters");
+                }
+            }
+
+            // assert
+            Assertions.assertThat(failures).isEmpty();
         }
     }
 

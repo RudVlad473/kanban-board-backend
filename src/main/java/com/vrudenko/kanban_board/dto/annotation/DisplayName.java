@@ -25,6 +25,7 @@ import jakarta.validation.constraints.Size;
         max = ValidationConstants.MAX_USER_DISPLAY_NAME_LENGTH,
         message = ValidationConstants.DISPLAY_NAME_LENGTH_VALIDATION_MESSAGE)
 @Pattern(regexp = "^[a-zA-Z ]*$", message = "Display name may only contain letters & spaces") @Schema(example = "Ada Lovelace")
+@BmpOnly
 public @interface DisplayName {
     String message() default ValidationConstants.DISPLAY_NAME_LENGTH_VALIDATION_MESSAGE;
 

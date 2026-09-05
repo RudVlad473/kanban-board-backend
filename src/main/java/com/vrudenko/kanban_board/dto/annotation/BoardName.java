@@ -24,6 +24,7 @@ import jakarta.validation.constraints.Size;
         regexp = "^[a-zA-Z0-9 ]*$",
         message = "Board name may only contain letters, numbers & spaces")
 @Schema(example = "Platform Launch")
+@BmpOnly
 public @interface BoardName {
     String message() default "Board name cannot be empty";
 
