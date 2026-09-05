@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.3
 current_phase: 11
 status: completed
-stopped_at: Completed quick task 260902-vjo
+stopped_at: Completed quick task 260905-tw0
 last_updated: "2026-09-02T20:59:09.569Z"
 last_activity: 2026-08-29
 last_activity_desc: Phase 11 complete
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 Phase: 11
 Plan: Not started
 Status: All phases complete
-Last activity: 2026-09-05 - Completed quick task 260905-qxi: add a CI invariant that only caddy may publish host ports, and correct docs/INFRA_RUNBOOK.md's firewall-layer claim
+Last activity: 2026-09-05 - Completed quick task 260905-tw0: Infra diagrams: pin a digest-pinned mermaid-cli renderer (scripts/render-diagrams.sh + render-manifest.tsv) and measure drift on all nine committed diagrams (7 pre-existing drift 6-11% in height, filed as a todo); add four flowchart layout rules with deciding tests to docs/DIAGRAM_CONVENTIONS.md; add an inbound packet-path Scenario to docs/INFRA_ARCHITECTURE.md with DOCKER-USER drawn empty and dated 2026-09-05; number trust boundaries [1]-[5] on the Physical view incl. the external Netcup Cloud Firewall; extend the Maintenance Note file list
 
 ## Performance Metrics
 
@@ -102,6 +102,7 @@ confusion risk, `NVD_API_KEY` resolution failure) were resolved during Phases 8â
 | 260902-vjo | Document Netcup console staleness triage in docs/INFRA_RUNBOOK.md and add a GitHub Actions cron uptime check for both public health endpoints | 2026-09-02 | 4613746 | [260902-vjo-document-netcup-console-staleness-triage](./quick/260902-vjo-document-netcup-console-staleness-triage/) |
 | 260904-obv | add 'color' field to column and accept it on column creation | 2026-09-04 | 50d4aca | [260904-obv-add-color-field-to-column-and-accept-it-](./quick/260904-obv-add-color-field-to-column-and-accept-it-/) |
 | 260905-qxi | add a CI invariant (scripts/verify-compose-ports.py + self-test) that only caddy may publish host ports 80/443 in the two deployed compose files, wire it into invariant-checks.yml, and correct docs/INFRA_RUNBOOK.md's false "both layers enforce identical policy" firewall claim | 2026-09-05 | 566e725 | [260905-qxi-add-ci-invariant-that-only-caddy-may-pub](./quick/260905-qxi-add-ci-invariant-that-only-caddy-may-pub/) |
+| 260905-tw0 | Infra diagrams: pin a digest-pinned mermaid-cli renderer (scripts/render-diagrams.sh + render-manifest.tsv) and measure drift on all nine committed diagrams (7 pre-existing drift 6-11% in height, filed as a todo); add four flowchart layout rules with deciding tests to docs/DIAGRAM_CONVENTIONS.md; add an inbound packet-path Scenario to docs/INFRA_ARCHITECTURE.md with DOCKER-USER drawn empty and dated 2026-09-05; number trust boundaries [1]-[5] on the Physical view incl. the external Netcup Cloud Firewall; extend the Maintenance Note file list | 2026-09-05 | 2b0bd7b | [260905-tw0-infra-diagrams-pin-a-committed-mmd-png-r](./quick/260905-tw0-infra-diagrams-pin-a-committed-mmd-png-r/) |
 
 ## Deferred Items
 
@@ -135,8 +136,8 @@ The 46 pending todos are individually listed and categorized in this document's 
 
 ## Session Continuity
 
-Last session: 2026-09-02T20:59:09.390Z
-Stopped at: Completed quick task 260902-vjo
+Last session: 2026-09-05T19:30:00Z
+Stopped at: Completed quick task 260905-tw0
 Resume file: None
 
 ## Operator Next Steps
