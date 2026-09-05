@@ -34,12 +34,23 @@ Ranked by expected payoff, not by ease:
    pairs/triples of regexes and arbitrary strings; assert the conjunction accepts exactly the
    intersection, under BOTH `find()` (JSON Schema search semantics) and `matches()` (what a
    generated client may do). This is the site whose defect example-based tests missed today.
-2. **Published-constraints-vs-real-Validator equivalence.** `ComposedConstraintPropertyCustomizerTest`
-   already has an `EquivalenceWithRealValidator` nested class — and its own Javadoc says it checks
-   "a hand-picked sample". That is a property wearing an example's clothes: the real claim is *for
-   ANY string, the published constraints and the real `jakarta.validation.Validator` reach the same
-   verdict*. Generating the strings instead of picking them is a direct upgrade with no new concept
-   to introduce.
+2. **Published-constraints-vs-real-Validator equivalence. Promoted to first place by a second
+   live defect on 2026-09-05 — see "The case this todo is now built on" below.**
+   `ComposedConstraintPropertyCustomizerTest` already has an `EquivalenceWithRealValidator` nested
+   class — and its own Javadoc says it checks "a hand-picked sample". That is a property wearing an
+   example's clothes.
+
+   Write it one-directional, because the two directions are not equally acceptable:
+
+   ```
+   for all s:  realValidator.accepts(s)  implies  publishedSchema.accepts(s)
+   ```
+
+   A document STRICTER than the enforcer blocks a generated client from sending a legal request and
+   is never tolerable. A document LOOSER costs a 400 the validator was always going to produce, and
+   is deliberately allowed for `maxLength` and for the code-point/code-unit gap. The current test
+   encodes that asymmetry by hand, in a `TOLERATED_LOOSER_THAN_ENFORCER` set of literal strings; a
+   property expresses it structurally and stops the set from silently going stale.
 3. **Task position arithmetic — `TaskService` move/reorder.** Classic property-test territory:
    after any sequence of moves, positions within a column should remain a contiguous `0..n-1`
    permutation with no duplicates and no gaps. Example-based tests here can only cover the
@@ -48,10 +59,45 @@ Ranked by expected payoff, not by ease:
    matrix already does this well by hand — but worth checking whether the same matrix repeated
    across annotations would collapse into one parameterized property.
 
+## The case this todo is now built on (2026-09-05)
+
+Quick task 260904-ss1 shipped a SECOND defect that every example-based test missed, in the same
+class, and it is the strongest argument here.
+
+`@Size` counts UTF-16 code units; JSON Schema `minLength` counts Unicode code points. `aA1!` plus
+two emoji is 8 code units (so `@Size(min = 8)` accepts it) and 6 code points (so a published
+`minLength: 8` rejects it) — a generated client would refuse to send a legal password. Live on
+seven properties. Found by a reviewer reasoning about Unicode, after FOUR review rounds and three
+independent AI reviewers had passed over the code; no test in the suite could have failed.
+
+The property above finds it immediately — **but only if the string generator emits supplementary
+plane characters.** For pure ASCII the two counters agree exactly, which is precisely why every
+hand-picked fixture, every manual check and every reviewer's intuition agreed too. A property with
+a Latin-only alphabet would pass forever and prove nothing, reproducing the original blind spot
+with more machinery.
+
+**So: verify jqwik's default `@ForAll String` alphabet against its actual behaviour before trusting
+any green run, and configure the generator explicitly if it does not reach beyond the BMP.** Treat
+a green property whose alphabet you have not checked exactly as you would a test suite you have not
+watched fail.
+
+## Use a property to GUARD a bound, never to DERIVE one
+
+A related trap, worth stating because it was live during the same task. `@DisplayName` carries
+`@Pattern("^[a-zA-Z ]*$")`, which admits no astral character, so its code-point and code-unit counts
+can never diverge and its exact `@Size` bound would be safe to publish verbatim.
+
+It is tempting to establish that with a property — generate strings, find no counterexample,
+publish the exact bound. **That is unsound.** Absence of a counterexample is not proof of BMP
+confinement; it is the same shape of error as the round-4 decision record that reasoned correctly
+about one direction and declared the result "provably safe". Which bound gets published stays an
+explicit, declared decision; the property's job is to fail when the declaration stops holding.
+
 ## Known integration footgun — do not skip this
 
 jqwik's own Gradle instructions say to configure `useJUnitPlatform { includeEngines 'jqwik' }`.
-**Applying that literally here would silently disable all 514 existing tests.** This build has three
+**Applying that literally here would silently disable every one of the existing tests**
+(521 as of 2026-09-05). This build has three
 `useJUnitPlatform` blocks (`test` at build.gradle:296, `fastTest` at :349, `rehearsal` at :672) and
 none of them declares `includeEngines`, so they currently run every discovered engine. Naming only
 `jqwik` would exclude `junit-jupiter`. If engines are named at all, all three blocks need
@@ -75,5 +121,5 @@ Two further build interactions to check rather than assume:
   and no container, so the engine wiring is proven in isolation before anything container-backed
   depends on it.
 - Verify the wiring the way this repo verifies everything else: confirm the full suite count does not
-  drop after the build change. `514` is the current number — a silent engine exclusion shows up there
-  and nowhere else.
+  drop after the build change. `521` is the current number (2026-09-05; it was 514 when this todo was
+  filed) — a silent engine exclusion shows up there and nowhere else.
