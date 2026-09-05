@@ -19,6 +19,13 @@
 # the Dockerfile's base version and plugin SHA agree with the compose image literal. It is NOT a
 # content hash of the Dockerfile -- see that script's own docstring for the states it knowingly
 # does not catch.
+#
+# Second job added 2026-09-05: scripts/verify-compose-ports.py checks
+# that only `caddy` publishes a host port, and only 80/443. This earns the same per-PR blocking
+# run as the job above and for the identical reason -- on this VM the OS iptables layer does not
+# see anything Docker publishes (DNAT traverses FORWARD, never INPUT), so the compose file is
+# where the decision to expose a port is actually made and reviewed. See that script's own
+# docstring for the full argument and its KNOWN HOLES.
 name: Invariant Checks
 
 on:
@@ -58,3 +65,22 @@ jobs:
 
       - name: Verify Caddy image tag invariants
         run: python3 scripts/verify-caddy-image-tag.py
+
+  compose-published-ports:
+    name: Only Caddy publishes host ports (80/443)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install the gate's one dependency
+        run: python3 -m pip install --disable-pip-version-check --quiet pyyaml
+
+      # Runs ahead of the gate: if the gate's own logic has been edited into something that
+      # cannot fire, that must be the failure reported here, not a green gate reading a
+      # compliant file.
+      - name: Verify the gate's invariants can fire
+        run: python3 scripts/verify-compose-ports-selftest.py
+
+      - name: Verify compose published-ports invariants
+        run: python3 scripts/verify-compose-ports.py

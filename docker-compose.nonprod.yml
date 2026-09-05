@@ -67,6 +67,8 @@ services:
       - redpanda-nonprod-data:/var/lib/redpanda/data
     # No `ports:` key at all -- neither the Kafka listener nor the Schema Registry is published to
     # the host, matching production's own redpanda service exactly.
+    # Mechanically enforced: scripts/verify-compose-ports.py fails CI if this service ever gains one --
+    # this file's allowed set is empty, so any `ports:` key here is a violation, no exceptions.
     command:
       - redpanda
       - start
@@ -188,6 +190,8 @@ services:
       # plan 08-02.
       APP_RESET_TOKEN: ${APP_RESET_TOKEN}
     # No `ports:` key -- Caddy is the only path in, over the shared kanban-edge network.
+    # Mechanically enforced: scripts/verify-compose-ports.py fails CI if this service ever gains one --
+    # this file's allowed set is empty, so any `ports:` key here is a violation, no exceptions.
     healthcheck:
       test: [ "CMD-SHELL", "wget -q -O - http://localhost:8080/api/actuator/health | grep -q '\"status\":\"UP\"' || exit 1" ]
       interval: 10s

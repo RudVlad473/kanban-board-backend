@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-r"""Gate: only `caddy` may publish a host port, and only 80/443 (quick task 260905-qxi).
+r"""Gate: only `caddy` may publish a host port, and only 80/443.
 Same shape as scripts/verify-caddy-image-tag.py: a committed, re-runnable check, not a comment
 restating an invariant that nothing enforces.
 
@@ -65,7 +65,8 @@ to report" is the exact failure mode this gate exists to remove.
 import sys
 
 # Per-file allowed-publisher sets, declared here rather than derived from the files being checked --
-# a value read out of the file it guards cannot disagree with it. D-02: PER FILE, not one global set.
+# a value read out of the file it guards cannot disagree with it. The allowed set is PER FILE
+# (each covered path maps to its own set), never one global set shared across both files.
 ALLOWED_PUBLISHERS = {
     "docker-compose.prod.yml": {"caddy"},
     "docker-compose.nonprod.yml": set(),

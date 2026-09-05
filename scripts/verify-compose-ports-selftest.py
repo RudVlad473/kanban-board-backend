@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Self-test for scripts/verify-compose-ports.py's `find_violations` (quick task 260905-qxi, D-08).
+"""Self-test for scripts/verify-compose-ports.py's `find_violations`.
 
 Prevents the failure this whole task was opened to fix, one level up: an edit to the gate that
 makes an invariant unfireable is invisible against a compose file that already satisfies every

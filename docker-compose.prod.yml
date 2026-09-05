@@ -241,6 +241,7 @@ services:
       - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
     # No `ports:` entry at all (D-03) -- mirrors redpanda's own posture exactly: nothing is
     # published to the host, admin access is SSH + `docker exec`.
+    # Mechanically enforced: scripts/verify-compose-ports.py fails CI if this service ever gains one.
     healthcheck:
       # -h 127.0.0.1 is load-bearing: during initialization the image's entrypoint runs a
       # temporary server with listen_addresses empty, so a socket-based probe (bare `pg_isready`
@@ -320,6 +321,7 @@ services:
     # No `ports:` entry -- Caddy reaches this container over the internal Compose network by
     # service name (app:8080) only. Publishing 8080 here would offer the whole API over plain
     # HTTP, bypassing Caddy's TLS termination entirely (T-05-08, INFRA-04).
+    # Mechanically enforced: scripts/verify-compose-ports.py fails CI if this service ever gains one.
     healthcheck:
       # Asserts the aggregate status is UP, not merely that some response arrived -- a check that
       # returns success while the database is unreachable is the failure mode T-05-06 names and
@@ -413,6 +415,7 @@ services:
       - --default-log-level=info
     # No `ports:` entry at all -- neither the Kafka listener nor the Schema Registry is published
     # to the host. The app and Caddy reach this service only over the internal Compose network.
+    # Mechanically enforced: scripts/verify-compose-ports.py fails CI if this service ever gains one.
     volumes:
       - redpanda-data:/var/lib/redpanda/data
     healthcheck:
