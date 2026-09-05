@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 Phase: 11
 Plan: Not started
 Status: All phases complete
-Last activity: 2026-09-04 - Completed quick task 260904-obv: add 'color' field to column and accept it on column creation
+Last activity: 2026-09-05 - Completed quick task 260905-qxi: add a CI invariant that only caddy may publish host ports, and correct docs/INFRA_RUNBOOK.md's firewall-layer claim
 
 ## Performance Metrics
 
@@ -101,6 +101,7 @@ confusion risk, `NVD_API_KEY` resolution failure) were resolved during Phases 8â
 | 260829-ii3 | In the nonprod reset endpoint, add a REQUIRED targeted-delete mode selected by a fullReset query param: POST /api/admin/reset?fullReset=true keeps the unconditional full reset unchanged, a bare POST with {"userIds": [...]} cascade-deletes only those users' boards/columns/tasks/subtasks and their own activity_log rows via a new ResetService.deleteUsers, reusing UserService.deleteById's existing cascade | 2026-08-29 | c29a32d | [260829-ii3-in-the-nonprod-reset-endpoint-add-a-requ](./quick/260829-ii3-in-the-nonprod-reset-endpoint-add-a-requ/) |
 | 260902-vjo | Document Netcup console staleness triage in docs/INFRA_RUNBOOK.md and add a GitHub Actions cron uptime check for both public health endpoints | 2026-09-02 | 4613746 | [260902-vjo-document-netcup-console-staleness-triage](./quick/260902-vjo-document-netcup-console-staleness-triage/) |
 | 260904-obv | add 'color' field to column and accept it on column creation | 2026-09-04 | 50d4aca | [260904-obv-add-color-field-to-column-and-accept-it-](./quick/260904-obv-add-color-field-to-column-and-accept-it-/) |
+| 260905-qxi | add a CI invariant (scripts/verify-compose-ports.py + self-test) that only caddy may publish host ports 80/443 in the two deployed compose files, wire it into invariant-checks.yml, and correct docs/INFRA_RUNBOOK.md's false "both layers enforce identical policy" firewall claim | 2026-09-05 | 566e725 | [260905-qxi-add-ci-invariant-that-only-caddy-may-pub](./quick/260905-qxi-add-ci-invariant-that-only-caddy-may-pub/) |
 
 ## Deferred Items
 
