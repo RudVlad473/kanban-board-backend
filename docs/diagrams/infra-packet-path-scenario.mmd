@@ -16,7 +16,7 @@ flowchart TB
         prerouting["nat PREROUTING<br/>-A PREROUTING -m addrtype<br/>--dst-type LOCAL -j DOCKER"]
         vm_spacer ~~~ prerouting
         forward["filter FORWARD"]
-        docker_user["DOCKER-USER<br/>empty as of 2026-09-05<br/>(no rules at all)"]
+        docker_user["DOCKER-USER<br/>policy as of 2026-09-06:<br/>allow established, allow<br/>ports 80/443, drop the rest"]
         docker_chain["DOCKER<br/>(per-container DNAT/ACCEPT rules)"]
 
         input["filter INPUT<br/>-P INPUT DROP<br/>ACCEPT tcp dpt:22/80/443<br/>governs host daemons ONLY —<br/>decorative for container traffic"]

@@ -22,9 +22,11 @@ has no Caddy service of its own; it shares production's over the external `kanba
 
 KNOWN HOLES, enumerated now rather than left to be rediscovered:
   * This reads the COMMITTED file, not the running host. A `-p` flag on a hand-run `docker run`, an
-    edit made directly on the VM, or a container started outside Compose is invisible here. Nothing
-    in this repository can close that; the runtime `DOCKER-USER` chain rules are tracked separately
-    (.planning/todos/pending/2026-09-05-docker-user-chain-empty-on-the-vm.md).
+    edit made directly on the VM, or a container started outside Compose is invisible here. This
+    gate cannot close that; the runtime `DOCKER-USER` chain now carries its own version-controlled
+    policy and drift check instead (infra/vm/docker-user-firewall.sh, quick task 260906-feq) --
+    that script's `check` subcommand is what detects a live chain diverging from what is committed,
+    which this gate structurally cannot see.
   * `expose:` is not checked, because it publishes nothing to the host -- container-to-container
     only. Not an omission.
   * The allowed set (ALLOWED_PUBLISHERS below) is editable in the same pull request that adds a

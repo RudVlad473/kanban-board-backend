@@ -77,9 +77,10 @@ read together against the same boundary set rather than two diagrams inventing t
 control-panel setting on Netcup's infrastructure, not a file in this repository, so it is reviewed
 in no pull request here and its actual ruleset cannot be confirmed from the code. `[2]`–`[5]` are
 boundaries this repository DOES define and version-control: the VM's own host network, Caddy's
-public TLS termination edge, the Compose-internal Docker network, and the `kanban-db` network. The
-distinction matters because it is the entire point of the Scenario below: as of 2026-09-05, `[1]` is
-the only layer that governs traffic to a published container port at all.
+public TLS termination edge, the Compose-internal Docker network, and the `kanban-db` network. As of
+2026-09-06 (quick task 260906-feq), `[1]` is no longer the only layer governing traffic to a
+published container port: `DOCKER-USER`, inside `[2]`, now carries a version-controlled default-drop
+policy of its own — see the Scenario below for the ruleset and the evidence it works.
 
 ## Scenario (+1) View — Delivery Path
 
@@ -181,20 +182,48 @@ this document had no diagram to express.
 `iptables -t nat -S PREROUTING`, `iptables -S INPUT`, `iptables -S DOCKER-USER` (see
 `docs/INFRA_RUNBOOK.md`'s Firewall section for the full output and context).
 
-**The `DOCKER-USER` chain is empty as of 2026-09-05.** Docker's own `-A PREROUTING -m addrtype
---dst-type LOCAL -j DOCKER` rule DNATs published-port traffic before routing decisions are made, so
-that traffic traverses `FORWARD`, never `INPUT` — the diagram draws this explicitly because a
-packet-path diagram routing container traffic through `INPUT` would draw the exact misconception
+**The `DOCKER-USER` chain carries a real policy as of 2026-09-06.** Docker's own `-A PREROUTING -m
+addrtype --dst-type LOCAL -j DOCKER` rule DNATs published-port traffic before routing decisions are
+made, so that traffic traverses `FORWARD`, never `INPUT` — the diagram draws this explicitly because
+a packet-path diagram routing container traffic through `INPUT` would draw the exact misconception
 this Scenario exists to correct. `filter INPUT`'s `-P INPUT DROP` policy plus its 22/80/443 ACCEPTs
-therefore governs host-level daemons only (sshd on :22) and is decorative for anything Docker
-publishes. With `DOCKER-USER` empty, **the only layer standing between a published container port
-and the internet today is the Netcup Cloud Firewall — `[1]` in both diagrams above, which lives
-outside this repository and is not reviewed in pull requests.**
+still governs host-level daemons only (sshd on :22) and remains decorative for anything Docker
+publishes — that part of the picture is unchanged.
 
-This is a tracked, dated claim, not a permanent one: `.planning/todos/pending/2026-09-05-docker-user-chain-empty-on-the-vm.md`
-tracks adding rules to `DOCKER-USER` that would make it false. When that item closes, this section's
-"empty as of 2026-09-05" annotation — in the diagram and in this prose — becomes stale and must be
-updated in the same change, not left describing a chain that no longer matches reality.
+What changed is `DOCKER-USER` itself. It now carries five rules, defined in
+`infra/vm/docker-user-firewall.sh` and installed via `infra/vm/docker-user-firewall.service`
+(`PartOf=docker.service`, so the policy reapplies on every dockerd restart, not just at boot): allow
+`RELATED,ESTABLISHED` traffic and non-`eth0` traffic first (container egress and inter-container
+traffic must not be caught by the final DROP), allow TCP to the two published host ports (80 and
+443, matched by `--ctorigdstport` so the rule reads the pre-DNAT host port rather than the
+post-DNAT container port), then drop everything else arriving from the internet for a container.
+
+**Proven, not merely stated (quick task 260906-feq, 2026-09-06):** a throwaway canary container
+published a host port (49999) with no legitimate reason to be reachable. Off-box (never on-box —
+a loopback probe cannot see a DNAT bypass), that port answered `200` with the canary body before the
+rules were applied and timed out (`curl` exit 28) after — the exact inversion a real policy change
+should produce. The chain's own DROP-rule packet counter incremented by exactly the number of SYNs
+the after-probe generated, while the 80/443 RETURN rules' counters kept rising under concurrent real
+site traffic — proving the drop was attributable to `DOCKER-USER` specifically, not to the packet
+never arriving at all. Both public health endpoints stayed at `200` and `ssh` access was unaffected
+throughout. The policy was then re-verified to survive both a `systemctl restart docker` (which
+cycles every container) and a full VM reboot, re-running the same `iptables -t nat -S PREROUTING` /
+`iptables -S INPUT` / `iptables -S DOCKER-USER` triad that originally found the gap — no manual
+reapplication was needed either time.
+
+**What this layer deliberately does not cover: IPv6.** `ip6tables -P INPUT ACCEPT` remains the
+policy on this VM, and Docker's `docker-proxy` binds `[::]:80` and `[::]:443` directly — because the
+containers hold no IPv6 address, inbound IPv6 to a published port terminates on that host socket and
+is evaluated by `ip6tables INPUT`, never by `FORWARD`, so the `DOCKER-USER` policy above cannot reach
+it at all. Every published port is reachable over IPv6 with no host-level filtering today. This was
+measured, not assumed, during 260906-feq's planning and is deliberately out of that task's scope
+(unverifiable from a box with no IPv6 egress) — tracked in a dedicated todo rather than folded
+silently into this "closed" state. See `docs/INFRA_RUNBOOK.md`'s Firewall section for the full
+Layer 3 writeup and the todo reference.
+
+The originating tracked item, `.planning/todos/completed/2026-09-05-docker-user-chain-empty-on-the-vm.md`,
+closed with this change — see its Resolution section for the full evidence trail and which of its
+two requirements (persistence, re-verification) were met by which mechanism.
 
 ## Maintenance Note
 
@@ -223,12 +252,14 @@ configuration.
   script's own header. Goes stale if a `.mmd` is hand-edited without re-running the script (its
   `--check` mode catches exactly that), or if the pinned digest is bumped without re-verifying it
   against the registry (see the script's own header for how).
-- **The VM's iptables facts — specifically `DOCKER-USER`'s contents.** This document's packet-path
-  Scenario states, with a date, that `DOCKER-USER` carries no rules. Goes stale the moment someone
-  adds rules to it on the VM (tracked to close via
-  `.planning/todos/pending/2026-09-05-docker-user-chain-empty-on-the-vm.md`) — and that closure is
-  the point: it is supposed to go stale, and this document must be updated in the same change that
-  makes it so, not discovered stale months later the way the Neon fact was.
+- **The VM's iptables facts — specifically `DOCKER-USER`'s contents.** The source of truth is now
+  `infra/vm/docker-user-firewall.sh` (installed on the VM per `infra/vm/README.md`), not this
+  document's prose. Run `ssh netcup-prod '/usr/local/sbin/docker-user-firewall.sh check'` to detect
+  drift between the committed ruleset and the live chain — it exits non-zero and prints the
+  expected-vs-live diff on any mismatch. This document's packet-path Scenario still describes the
+  policy in force and the evidence it works, and must be updated again if the script's ruleset ever
+  changes (a new published port, an IPv6 closure) — the same discipline that closed the prior
+  "empty as of 2026-09-05" staleness applies to whatever replaces today's five-rule policy.
 - **The Netcup Cloud Firewall's policy, flagged as external state this repository cannot verify.**
   Both diagrams above mark it `[1] (external — not in this repo)` for exactly this reason: its
   ruleset lives in Netcup's control panel, not in a file this document can point at, so this

@@ -134,33 +134,45 @@ cannot be dated to one of these two sections is genuinely new, and that is when 
 demand. Its honest limit: it answers "were both endpoints answering within roughly the last quarter-
 hour", not "is nonprod up right now", and it pages nobody.
 
-## Firewall — two independent layers
+## Firewall — three layers
 
-**CORRECTED 2026-09-05** — this section previously opened with "Both layers enforce the identical
-policy". That was wrong, and the two layers seeing different traffic is the whole point, not a
-detail: Layer 1 governs host-level daemons only and does nothing for anything Docker publishes.
-Observed live on the VM, reproducible with the three commands below:
+**UPDATED 2026-09-06 (quick task 260906-feq)** — `DOCKER-USER` no longer carries "nothing at all";
+it is now a real, version-controlled layer (Layer 3 below). The table's third row previously read
+"Empty — no rules at all"; that has changed, and this section changes with it rather than being
+left describing a chain that no longer matches reality.
 
 | Observation | Command | Consequence |
 |-------------|---------|-------------|
 | `-A PREROUTING -m addrtype --dst-type LOCAL -j DOCKER` present; the `DOCKER` chain DNATs published ports to their container | `iptables -t nat -S PREROUTING` | DNAT'd traffic traverses `FORWARD`, **not** `INPUT` |
 | `-P INPUT DROP` plus `--dport 80/443` ACCEPTs (the ruleset below) | `iptables -S INPUT` | Governs host-level daemons only — sshd on :22. Decorative for anything Docker publishes |
-| Empty — no rules at all | `iptables -S DOCKER-USER` | The one chain Docker guarantees it will not touch carries nothing, so nothing here governs container traffic either |
+| Five rules: allow established, allow non-`eth0`, allow TCP 80/443 (`--ctorigdstport`), drop the rest | `iptables -S DOCKER-USER` | The chain Docker guarantees it will not touch now carries a real, version-controlled policy for container-published traffic — see Layer 3 below |
 
 Operationally: a `ports:` key added to any service in a deployed compose file is a public exposure
-gated by exactly one layer — the Netcup Cloud Firewall (Layer 2 below), which lives outside this
-repository, is not reviewed in pull requests, and is not under version control. As of quick task
-260905-qxi, `scripts/verify-compose-ports.py` makes that exposure a reviewed decision instead of a
-silent one: it fails CI on a pull request that adds a `ports:` key to any service outside `caddy`
-in `docker-compose.prod.yml`, on any service at all in `docker-compose.nonprod.yml`, on
-`network_mode: host` anywhere, or on `caddy` publishing beyond 80/443.
+first gated by the compose-file review gate, then by Layer 3 below if it slips through anyway, and
+finally by the Netcup Cloud Firewall (Layer 2), which lives outside this repository, is not
+reviewed in pull requests, and is not under version control. As of quick task 260905-qxi,
+`scripts/verify-compose-ports.py` makes the compose-file half of that exposure a reviewed decision
+instead of a silent one: it fails CI on a pull request that adds a `ports:` key to any service
+outside `caddy` in `docker-compose.prod.yml`, on any service at all in `docker-compose.nonprod.yml`,
+on `network_mode: host` anywhere, or on `caddy` publishing beyond 80/443.
 
-What is still open: the empty `DOCKER-USER` chain is exactly what a second enforcing layer inside
-this VM would need to fill, and nothing here does that — see
-`.planning/todos/pending/2026-09-05-docker-user-chain-empty-on-the-vm.md` for the tracked follow-up.
-The gate above reads the committed file; it cannot see a `docker run -p` issued by hand on the VM,
-an edit made directly there, or a container started outside Compose — that residue is exactly what
-the tracked item is for.
+What is still open, genuinely, after this change:
+
+1. **The Netcup Cloud Firewall (Layer 2) remains outside version control.** It is not reviewed in
+   pull requests and this repository cannot confirm its live ruleset from code — Layer 3 closes the
+   in-VM gap, not this one.
+2. **IPv6 is not covered by Layer 3 at all.** `ip6tables -P INPUT ACCEPT` is still the live policy,
+   and `docker-proxy` binds `[::]:80`/`[::]:443` directly — inbound IPv6 to a published port
+   terminates on that host socket and is evaluated by `ip6tables INPUT`, never by `FORWARD`, so
+   nothing this task added can reach it. Every published port is reachable over IPv6 with no
+   host-level filtering today. Measured during 260906-feq's planning, deliberately out of that
+   task's scope (unverifiable from a box with no IPv6 egress — confirmed via `curl -6 ifconfig.me`
+   returning empty with no default v6 route), and tracked in a dedicated todo rather than silently
+   left uncovered. See Layer 3 below for the full measured values.
+3. **Layer 3 reads only the committed script, same caveat as the compose gate.** A `docker run -p`
+   issued by hand on the VM, or a manual `iptables -F DOCKER-USER` followed by no reapplication
+   before the systemd unit next fires, is invisible until `docker-user-firewall.sh check` is run —
+   see Layer 3's re-verification command below.
 
 ### Layer 1: OS-level (`iptables`, `nft` backend)
 
@@ -197,6 +209,88 @@ stable since. This points at a stuck sync/propagation state on Netcup's side whe
 first assigned, not a rule-configuration mistake. **If this VM (or a future one) ever goes
 unexpectedly unreachable right after a Netcup Cloud Firewall change, try an off/on toggle cycle
 before assuming the ruleset itself is wrong.**
+
+### Layer 3: `DOCKER-USER` (in-VM, version-controlled) — added 2026-09-06, quick task 260906-feq
+
+The one chain Docker guarantees it will never write rules into itself, which makes it the correct
+place for a container-traffic policy that survives `docker` restarts and reboots without racing
+dockerd's own chain rebuild. Filled from empty (the state described above through 2026-09-05) after
+`.planning/todos/completed/2026-09-05-docker-user-chain-empty-on-the-vm.md` found that no OS-level
+layer on this VM governed container-published traffic at all.
+
+**The ruleset**, applied in this order (source of truth: `infra/vm/docker-user-firewall.sh`):
+
+```
+iptables -A DOCKER-USER -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
+iptables -A DOCKER-USER ! -i eth0 -j RETURN
+iptables -A DOCKER-USER -p tcp -m conntrack --ctorigdstport 80 -j RETURN
+iptables -A DOCKER-USER -p tcp -m conntrack --ctorigdstport 443 -j RETURN
+iptables -A DOCKER-USER -j DROP
+```
+
+The first two RETURN rules must precede the DROP or container egress (image pulls, Caddy's ACME
+renewals, either app reaching Redpanda) breaks — and breaks as a silent hang, since the outbound SYN
+leaves fine and only the reply dies. `--ctorigdstport` (not `--dport`) matches the pre-DNAT host
+port rather than the post-DNAT container port — today's mappings are identity (80→80, 443→443) so
+this would not have been caught by testing if it were wrong, which is exactly why it matters for any
+future non-identity mapping. TCP-only, IPv4-only: enabling Caddy's HTTP/3 will require publishing
+`443/udp` and adding a matching rule here.
+
+**Persistence — deliberately NOT `netfilter-persistent save`.** `iptables-save` captures the entire
+filter table, so saving now would also freeze a snapshot of Docker's own runtime-managed chains
+(`DOCKER`, `DOCKER-BRIDGE`, `DOCKER-CT`, `DOCKER-FORWARD`) alongside this one's five rules — the
+`/etc/iptables/rules.v4` already on this VM (dated 2026-08-14, predating this change) is exactly
+that kind of stale snapshot: a `:DOCKER-USER - [0:0]` chain with no rules, plus dockerd chains that
+have since diverged. Boot-time restore from that file also races dockerd's own chain rebuild, since
+netfilter-persistent's restore runs before `docker.service` starts. Instead, `infra/vm/docker-user-firewall.service`
+(`Type=oneshot`, `RemainAfterExit=yes`, `PartOf=docker.service`) re-applies the ruleset via
+`docker-user-firewall.sh apply` after every `docker.service` start — including a plain
+`systemctl restart docker`, which the systemd unit alone would miss without `PartOf`. Installed by
+hand, deliberately not wired into `deploy.yml` — see `infra/vm/README.md` for why (no review gate at
+apply time; iptables is host-global while `deploy.yml`'s scp targets are per-environment).
+
+**Re-verification command** (the drift check): `ssh netcup-prod '/usr/local/sbin/docker-user-firewall.sh check'`.
+Exits non-zero and prints the expected-vs-live diff on any mismatch.
+
+**Evidence this actually works, measured 2026-09-06 (quick task 260906-feq):**
+
+- A throwaway canary container publishing host port 49999 (no legitimate reason to be reachable)
+  answered `HTTP 200` from off-box before the rules were applied, and timed out (`curl` exit 28)
+  after — the required inversion. (The Netcup Cloud Firewall initially masked this port entirely,
+  making the probe structurally unable to attribute a Layer-3 effect; a temporary, scoped Netcup
+  console rule permitting the probe source IP was opened for the duration of the test and removed
+  immediately after, confirmed removed by the operator.)
+- The chain's DROP-rule packet counter incremented by exactly the SYNs the after-probe generated (7
+  packets) and did not increment further under concurrent legitimate 80/443 traffic, while the 80
+  and 443 RETURN rules' own counters rose under that same live traffic (0→1 and 6→30 packets
+  respectively) — proving the chain is genuinely on the live packet path, not an inert one nothing
+  traverses.
+- Both public health endpoints stayed at `200` and `ssh netcup-prod true` kept succeeding throughout
+  the apply, immediately after, and again after a full `systemctl restart docker` (all 6 containers
+  cycled) and a full VM reboot (~59s from reboot command to confirmed-healthy health endpoints).
+- **Reboot proof, closing the originating todo's second requirement in full:** the same three
+  discovery commands that originally found the gap were re-run immediately after a genuine reboot
+  (`uptime -s` confirmed a fresh boot, not a stale SSH session) —
+  `iptables -t nat -S PREROUTING` unchanged, `iptables -S INPUT` unchanged, `iptables -S DOCKER-USER`
+  showing all five rules with no manual reapplication. `docker-user-firewall.sh check` and
+  `systemctl is-enabled`/`is-active docker-user-firewall.service` both confirmed clean immediately
+  after.
+- An armed `systemd-run --on-active=600 --unit=fw-rollback` transient timer (flushing `DOCKER-USER`
+  automatically) protected the live-apply window in Task 1; it was disarmed once the ruleset was
+  confirmed working, before the timer could fire.
+
+**What Layer 3 deliberately does not cover — IPv6.** `ip6tables -P INPUT ACCEPT` is still this VM's
+live policy, and Docker's `docker-proxy` binds `[::]:80` and `[::]:443` directly. Because the
+containers hold no IPv6 address, inbound IPv6 to a published port terminates on that host socket and
+is evaluated by `ip6tables INPUT` — never by `FORWARD`, which is the only chain Layer 3 touches. This
+means every published port is reachable over IPv6 today with **zero host-level filtering**, exactly
+as before this change. Measured during 260906-feq's planning (`docker info` shows
+`EnableUserlandProxy: true` with docker-proxy processes bound to `[::]:80`/`[::]:443`), left
+deliberately open on operator decision (2026-09-06): mirroring the IPv4 ruleset into ip6tables would
+be unverifiable from this dev box, which has no IPv6 egress at all (`curl -6 ifconfig.me` returns
+empty, no default v6 route), so a change here could not be proven working the way the IPv4 change
+was. Tracked in a dedicated todo carrying these measured values rather than folded silently into
+this "closed" gap.
 
 ## Verified state (2026-08-14)
 
