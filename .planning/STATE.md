@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v1.3
 current_phase: 11
 status: completed
-stopped_at: Completed quick task 260905-tw0
-last_updated: "2026-09-02T20:59:09.569Z"
-last_activity: 2026-08-29
-last_activity_desc: Phase 11 complete
+stopped_at: Completed quick task 260906-feq
+last_updated: "2026-09-06T10:14:00.000Z"
+last_activity: 2026-09-06
+last_activity_desc: Completed quick task 260906-feq: DOCKER-USER iptables rules on the VM
 state_head: 46137464dd1b0e20251f314fabd8110923194f7a
 progress:
   total_phases: 1
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 Phase: 11
 Plan: Not started
 Status: All phases complete
-Last activity: 2026-09-05 - Completed quick task 260905-tw0: Infra diagrams: pin a digest-pinned mermaid-cli renderer (scripts/render-diagrams.sh + render-manifest.tsv) and measure drift on all nine committed diagrams (7 pre-existing drift 6-11% in height, filed as a todo); add four flowchart layout rules with deciding tests to docs/DIAGRAM_CONVENTIONS.md; add an inbound packet-path Scenario to docs/INFRA_ARCHITECTURE.md with DOCKER-USER drawn empty and dated 2026-09-05; number trust boundaries [1]-[5] on the Physical view incl. the external Netcup Cloud Firewall; extend the Maintenance Note file list
+Last activity: 2026-09-06 - Completed quick task 260906-feq: filled the previously-empty DOCKER-USER iptables chain with a version-controlled default-drop policy for Docker-published ports (80/443), reviewed three ways (Claude, Gemini, Codex) before execution, proved with an off-box before/after canary probe with packet-counter attribution, made self-reapplying via a systemd unit verified across a docker restart AND a full VM reboot, corrected the runbook/architecture-doc/diagram trio that described the chain as empty since 2026-09-05, and filed a new todo for the separately-scoped IPv6 gap
 
 ## Performance Metrics
 
@@ -103,6 +103,7 @@ confusion risk, `NVD_API_KEY` resolution failure) were resolved during Phases 8â
 | 260904-obv | add 'color' field to column and accept it on column creation | 2026-09-04 | 50d4aca | [260904-obv-add-color-field-to-column-and-accept-it-](./quick/260904-obv-add-color-field-to-column-and-accept-it-/) |
 | 260905-qxi | add a CI invariant (scripts/verify-compose-ports.py + self-test) that only caddy may publish host ports 80/443 in the two deployed compose files, wire it into invariant-checks.yml, and correct docs/INFRA_RUNBOOK.md's false "both layers enforce identical policy" firewall claim | 2026-09-05 | 566e725 | [260905-qxi-add-ci-invariant-that-only-caddy-may-pub](./quick/260905-qxi-add-ci-invariant-that-only-caddy-may-pub/) |
 | 260905-tw0 | Infra diagrams: pin a digest-pinned mermaid-cli renderer (scripts/render-diagrams.sh + render-manifest.tsv) and measure drift on all nine committed diagrams (7 pre-existing drift 6-11% in height, filed as a todo); add four flowchart layout rules with deciding tests to docs/DIAGRAM_CONVENTIONS.md; add an inbound packet-path Scenario to docs/INFRA_ARCHITECTURE.md with DOCKER-USER drawn empty and dated 2026-09-05; number trust boundaries [1]-[5] on the Physical view incl. the external Netcup Cloud Firewall; extend the Maintenance Note file list | 2026-09-05 | 2b0bd7b | [260905-tw0-infra-diagrams-pin-a-committed-mmd-png-r](./quick/260905-tw0-infra-diagrams-pin-a-committed-mmd-png-r/) |
+| 260906-feq | Fill the empty DOCKER-USER iptables chain with a version-controlled default-drop policy for Docker-published ports (infra/vm/docker-user-firewall.sh + systemd unit, PartOf=docker.service), reviewed three ways (Claude/Gemini/Codex) pre-execution which caught a checkpoint that silently defaulted to rebooting production and other real gaps, proved via off-box canary probe + packet-counter attribution + a genuine VM reboot, and corrected the runbook/architecture-doc/diagram that had described the chain as empty since 2026-09-05; IPv6 gap left open and filed as a new todo per operator decision | 2026-09-06 | f47f912 | [260906-feq-docker-user-iptables-rules-on-the-vm-sys](./quick/260906-feq-docker-user-iptables-rules-on-the-vm-sys/) |
 
 ## Deferred Items
 
@@ -136,8 +137,8 @@ The 46 pending todos are individually listed and categorized in this document's 
 
 ## Session Continuity
 
-Last session: 2026-09-05T19:30:00Z
-Stopped at: Completed quick task 260905-tw0
+Last session: 2026-09-06T10:14:00Z
+Stopped at: Completed quick task 260906-feq
 Resume file: None
 
 ## Operator Next Steps
