@@ -1,0 +1,223 @@
+SUBJECT: Intermittent inbound TCP SYN loss to VPS v2202608397723499373
+         (159.195.114.230) on port 443
+
+================================================================
+1. PRODUCT
+================================================================
+
+  Product ID   : v2202608397723499373
+  IPv4         : 159.195.114.230
+  rDNS         : v2202608397723499373.happysrv.de
+  Datacenter   : Vienna, Austria
+  Product name : VPS Lite 2 G12s (shown in the SCP as "VPS 1000 G12")
+
+
+================================================================
+2. SUMMARY
+================================================================
+
+On 2026-09-05 we saw four occasions on which inbound TCP connections to
+port 443 failed to establish at all. There was no SYN-ACK, no RST and no
+ICMP reply. The connection attempts were met with silence.
+
+Each attempt gave up after about 134.8 seconds. That is not a timeout we
+configured. It is how long the Linux kernel on the affected client takes
+to abandon a connection when every SYN it sends goes unanswered.
+
+We verified this rather than assuming it. From the same client, we
+opened a connection to 192.0.2.1 port 443, an address reserved by
+RFC 5737 and guaranteed to be unrouted, so every SYN is certain to be
+discarded. That control attempt gave up after 134.71 seconds. The real
+failure gave up after 134.812 seconds. The two agree to within
+0.1 seconds.
+
+We therefore have direct evidence that the failure signature is total
+loss of every SYN packet for the whole duration, and not a slow server,
+a refused connection or an application error.
+
+Between these occasions the host answers normally, in 40 to 160 ms.
+
+
+================================================================
+3. WHEN IT HAPPENED
+================================================================
+
+An important qualification about precision. Three of the four data
+points below are the start and end times of an automated test job, not
+of the outage itself. The test job ran for several minutes and a single
+request inside it failed. The actual loss window is a subinterval of
+roughly 134 seconds somewhere inside each range. We cannot narrow it
+further from our side, so please treat each range as "the failure
+occurred somewhere within this window".
+
+Times are CEST (your local time), with UTC in brackets. All on
+2026-09-05.
+
+  #   Window start           Window end             Type
+  --  ---------------------  ---------------------  -----------------
+  1   16:28 (14:28 UTC)      16:31 (14:31 UTC)      CI job window
+  2   16:34 (14:34 UTC)      16:38 (14:38 UTC)      CI job window
+  3   18:13 (16:13 UTC)      18:16 (16:16 UTC)      Direct curl attempt
+  4   18:22 (16:22 UTC)      18:26 (16:26 UTC)      CI job window
+
+Window 3 is the most precise of the four: it is a single curl command
+that ran for 134.812 seconds and then failed. The other three each
+contain one failed request among many that succeeded.
+
+For contrast, an identical CI job at 16:17 to 16:20 CEST (14:17 to
+14:20 UTC) passed completely.
+
+
+================================================================
+4. AFFECTED CLIENTS
+================================================================
+
+The failures came from two unrelated networks during the same period,
+which rules out a single client, a single ISP and a single route.
+
+  - GitHub-hosted CI runners (Microsoft Azure address space).
+    We cannot supply their source addresses. GitHub allocates runner
+    addresses per job from a large shared pool and our CI logs do not
+    record them.
+
+  - A residential broadband connection, which produced window 3.
+    Public IP: <FILL IN -- run: curl ifconfig.me>
+
+Exact client error from window 3:
+
+  curl: (28) Failed to connect to
+  kanban-board-rud-vlad-473-nonprod.duckdns.org port 443
+  after 134812 ms: Could not connect to server
+
+
+================================================================
+5. THE SERVER WAS HEALTHY THROUGHOUT
+================================================================
+
+Each item below is a measurement taken on the VPS, not an assumption.
+Counters described as cumulative are since the last boot, 19 days ago.
+
+  Check                        Value             What it shows
+  --------------------------   ---------------   --------------------
+  TcpExtListenOverflows        0                 The accept queue never
+                                                 overflowed, so the host
+                                                 never silently dropped
+                                                 a SYN. This is the key
+                                                 measurement: a full
+                                                 accept queue discards
+                                                 SYNs silently and would
+                                                 look identical to the
+                                                 client.
+  TcpExtListenDrops            17                Negligible over 19 days.
+                                                 Cannot account for
+                                                 134 seconds of loss.
+  eth0 RX errors               0                 The network interface
+  eth0 RX dropped              0                 saw no damaged and no
+  eth0 RX missed               0                 discarded frames.
+  nf_conntrack_count           9 of 262144       The connection tracking
+                                                 table was almost empty.
+  Listeners :80 and :443       LISTEN,           The server was
+                               backlog 4096,     accepting connections.
+                               Recv-Q 0
+  iptables INPUT chain         explicit ACCEPT   Not blocked by the
+                               tcp dpt:443       operating system
+                                                 firewall.
+  Uptime                       19 days           No reboot occurred in
+                               (since            any window.
+                               2026-08-17)
+  Kernel OOM killer            most recent       No memory pressure in
+                               entries are       any window.
+                               2026-08-26
+  Docker daemon journal        no container      No service restarted in
+                               events between    any window.
+                               00:00 and 16:36
+                               UTC
+  Reverse proxy log            no errors logged  The proxy logged no
+                               in any of the     failure of any kind
+                               four windows      during the windows.
+                                                 Note: this proxy is
+                                                 configured to log
+                                                 errors only, not
+                                                 successful requests.
+
+Because nothing between the network interface and the application can
+silently discard a SYN for 134 seconds, and because the interface itself
+counted zero drops, we believe the packets never reached the VPS. That
+points to a discard upstream, inside your network.
+
+We state that last point as a conclusion drawn by elimination. We have
+not observed the packets being discarded, and we would value your logs
+to confirm or refute it.
+
+
+================================================================
+6. NETWORK PATH FROM THE AFFECTED CLIENT
+================================================================
+
+traceroute, taken 2026-09-05 at 19:29 CEST:
+
+   7   144.208.208.167   ae1-0.bbr01.anx103.vie.at.anexia-it.net   18.2 ms
+   8   94.16.25.37                                                 18.1 ms
+   9   152.53.100.1                                                17.9 ms
+  10+  * *
+
+Please do not read the silence from hop 10 onward as evidence of the
+fault. This VPS has no ICMP allow rule in its own firewall, so it never
+answers traceroute, whether it is healthy or not. The trace is included
+only to show the route and to identify the last responding hops, which
+are within your network.
+
+
+================================================================
+7. QUESTIONS
+================================================================
+
+  1. Does the Cloud Firewall policy assigned to this VPS, or any DDoS
+     or SYN-rate mitigation in front of it, discard inbound SYN packets?
+     Do your logs show discards for 159.195.114.230 port 443 during the
+     windows in section 3?
+
+  2. Is there a limit on new connections per source address that a burst
+     of parallel HTTPS requests could reach?
+
+  3. Related earlier incident. On 2026-08-14, immediately after the
+     Cloud Firewall policy was first assigned to this VPS, the server
+     became completely unreachable, including ICMP, for more than seven
+     minutes, while the SCP displayed a correct rule set. Switching
+     "Firewall active" off restored access immediately, and switching it
+     back on then worked correctly. Could the present symptom be a
+     milder recurrence of that same synchronisation fault?
+
+
+================================================================
+8. WHAT WE HAVE RULED OUT
+================================================================
+
+Each of these was excluded by its own measurement.
+
+  - A new deployment. The only container change on 2026-09-05 was at
+    16:38 UTC, which is after all four windows.
+
+  - Memory exhaustion. The most recent kernel OOM events are from
+    2026-08-26.
+
+  - DNS. On 2026-09-05 we queried three independent public resolvers
+    (Google 8.8.8.8, Cloudflare 1.1.1.1 and Quad9 9.9.9.9). All three
+    returned A = 159.195.114.230 and no AAAA record, so no IPv6 path is
+    involved. No dynamic-DNS updater runs on the host; we confirmed
+    there is no cron job and no systemd timer for one. The A record is
+    static. A DNS failure would also produce a resolution error rather
+    than a connection timeout.
+
+  - The application. There is no HTTP status code at all, because the
+    TCP connection never completes.
+
+  - Our own rate limiting. The affected hostname has no rate limit
+    configured, and a rate limit returns HTTP 429 rather than causing a
+    connection timeout.
+
+  - The client software and the client network. The same unchanged code
+    passed one CI run and failed three others, and failures came from
+    two unrelated networks.
+
+Thank you for your help.
