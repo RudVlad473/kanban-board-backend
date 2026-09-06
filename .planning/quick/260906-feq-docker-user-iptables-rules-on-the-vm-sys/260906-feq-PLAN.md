@@ -13,6 +13,7 @@ files_modified:
   - docs/diagrams/infra-packet-path-scenario.mmd
   - docs/diagrams/infra-packet-path-scenario.png
   - .planning/todos/pending/2026-09-05-docker-user-chain-empty-on-the-vm.md
+  - scripts/verify-compose-ports.py
 autonomous: false
 requirements: [SEC-DOCKER-USER-01]
 user_setup: []
@@ -195,9 +196,12 @@ as a working firewall. Also confirm Docker created a DNAT entry for 49999 in
 
 Step 3, measure the BEFORE state from off-box. From this dev box, probe
 `http://159.195.114.230:49999/` with an 8-second cap, recording HTTP status, total time and curl's
-exit code. Interpret strictly: status 200 with the canary body means the hole is real and off-box
-visible; curl exit 7 means the packet reached the VM but was refused; curl exit 28 means it was
-filtered before reaching any listener.
+exit code. Interpret with care: status 200 with the canary body means the hole is real and off-box
+visible; curl exit 28 means the packet was filtered before reaching any listener (a timeout — no
+response at all, from anything). Curl exit 7 means something actively refused the connection, but
+the exit code alone does NOT prove where — it could be the VM refusing (unexpected, since step 2
+just confirmed the canary listens) or an upstream device issuing a reject/RST instead of a silent
+drop. Do not attribute exit 7 to either cause without further evidence.
   - If status 200, proceed to step 4 — the probe can attribute a change to Layer 3 on its own.
   - If exit 28, the Netcup Cloud Firewall is masking the port and this probe is structurally
     unable to test DOCKER-USER. Stop and raise it to the user as a decision, presenting: (i)
@@ -205,10 +209,17 @@ filtered before reaching any listener.
     for the duration of the test, then remove it and verify the removal; or (ii) accept the off-box
     probe as a no-regression check only, rest the Layer-3 claim on packet counters alone, and say
     exactly that in the runbook. Do not silently pick one.
+  - If exit 7, this contradicts step 2's control (the canary was just confirmed listening) and the
+    exit code cannot attribute the refusal on its own. Stop and surface it to the user as an
+    unexpected precondition rather than proceeding on an assumption — do not treat it as
+    equivalent to either the status-200 or exit-28 branch.
 
 Step 4, arm the safety net before touching anything. Schedule a transient rollback that flushes
-DOCKER-USER after 300 seconds using `systemd-run --on-active=300 --unit=fw-rollback`, so a ruleset
-that takes the site down self-clears without needing a working session.
+DOCKER-USER after 600 seconds using `systemd-run --on-active=600 --unit=fw-rollback`, so a ruleset
+that takes the site down self-clears without needing a working session. 600s (not a tighter value)
+is sized against steps 5-9 below, several of which are human-check-gated and therefore take real
+wall-clock time to read and confirm, not just to execute — a timer sized to the apply command alone
+could fire mid-verification and revert the fix before it was ever confirmed working.
 
 Step 5, apply the ruleset from the design section exactly, in order, by hand for this task; Task 2
 turns it into the committed script. Then dump `iptables -S DOCKER-USER` and check it against the
@@ -248,9 +259,15 @@ documentation must cite real numbers, not restate intent.
 Turn Task 1's hand-applied ruleset into version-controlled, self-reapplying infrastructure.
 
 Write `infra/vm/docker-user-firewall.sh` under `set -euo pipefail` with three subcommands. `apply`
-flushes DOCKER-USER then appends the five rules from the design section in order — flush-then-append
-is what makes it idempotent, and it is safe precisely because Docker never places anything in this
-chain. `check` compares the live `iptables -S DOCKER-USER` output against the expected ruleset and
+replaces the chain's contents with the five rules from the design section, atomically — build the
+ruleset as an `iptables-restore` fragment (table `filter`, chain `DOCKER-USER`, `--noflush` to leave
+every other chain untouched) rather than a flush followed by five sequential `-A` calls, so a
+failure mid-apply cannot leave a partial or fully-open chain live on a production box. Flush-then-
+append is safe to reason about (Docker never places anything in this chain) but is not atomic; if
+`iptables-restore` proves impractical for a single-chain replace, `apply` must instead verify the
+resulting rule count immediately after applying and abort loudly — never silently leave a partial
+policy in place. `check` compares the live `iptables -S DOCKER-USER` output against the expected
+ruleset and
 exits non-zero on any difference. `show` prints the chain with per-rule packet counters, for the
 runbook's re-verification step. Hold the external interface name in a single variable at the top so
 a NIC rename is a one-line edit rather than a five-line hunt.
@@ -258,8 +275,11 @@ a NIC rename is a one-line edit rather than a five-line hunt.
 Give the script a header carrying the decisions a future reader would otherwise reverse: why
 persistence is a systemd unit rather than `netfilter-persistent save` (the saved file would also
 snapshot Docker's runtime-managed chains — the stale `/etc/iptables/rules.v4` already on the box is
-the evidence); why `--ctorigdstport` rather than `--dport`; that the conntrack RETURN must stay
-first or container egress breaks in a way that presents as a hang; and that this policy is TCP-only
+the evidence); why `--ctorigdstport` rather than `--dport`; that the RELATED,ESTABLISHED and
+non-eth0 RETURN rules must both precede the final DROP or container egress breaks in a way that
+presents as a hang (their order relative to EACH OTHER does not matter — for this five-rule set
+they match mutually exclusive traffic, so swapping them changes nothing; only their position ahead
+of the DROP is load-bearing); and that this policy is TCP-only
 and IPv4-only, so enabling HTTP/3 will require publishing 443/udp and adding a matching rule here.
 State plainly what is deliberately not checked, following the precedent set by
 `scripts/render-diagrams.sh`'s own header.
@@ -327,13 +347,18 @@ having no rule at all.
 Recommended: 2. An unverifiable firewall change is not an improvement, and option 2 still surfaces
 the finding rather than burying it.
   </options>
-  <resume-signal>The user answers with a number for each decision. If no answer is given, proceed as option 1 for the reboot and option 2 for IPv6.</resume-signal>
+  <resume-signal>The user answers with a number for each decision. Decision 1 (reboot) requires an
+explicit answer — if none is given, HALT and wait rather than rebooting production on a timeout or
+a silent default; a reboot is a production-affecting action and must never proceed without express
+confirmation. Decision 2 (IPv6) may default to option 2 (leave open, document, file todo) if
+unanswered, since that option changes nothing about the live system and is the current status
+quo.</resume-signal>
   <done>Both decisions recorded, with the chosen option written into the Task 3 documentation.</done>
 </task>
 
 <task type="auto">
   <name>Task 3: Update the runbook, the architecture doc and the diagram, re-render, and close the todo</name>
-  <files>docs/INFRA_RUNBOOK.md, docs/INFRA_ARCHITECTURE.md, docs/diagrams/infra-packet-path-scenario.mmd, docs/diagrams/infra-packet-path-scenario.png, .planning/todos/pending/2026-09-05-docker-user-chain-empty-on-the-vm.md</files>
+  <files>docs/INFRA_RUNBOOK.md, docs/INFRA_ARCHITECTURE.md, docs/diagrams/infra-packet-path-scenario.mmd, docs/diagrams/infra-packet-path-scenario.png, .planning/todos/pending/2026-09-05-docker-user-chain-empty-on-the-vm.md, scripts/verify-compose-ports.py</files>
   <action>
 Every claim below that says the chain is empty is now false and must change in this one commit.
 Run `./scripts/render-diagrams.sh --check infra-packet-path-scenario` first and record the result,
@@ -341,9 +366,14 @@ so the before-state of the diagram is known rather than assumed.
 
 In `docs/diagrams/infra-packet-path-scenario.mmd`, replace the `docker_user` node's label — it
 currently reads that the chain is empty as of a date — with the policy actually in force: the
-established-return, the non-eth0 return, the two permitted published ports, and the default drop,
-dated 2026-09-06. Keep the label within the layout rules in `docs/DIAGRAM_CONVENTIONS.md`; consult
-that file before changing node text, since it is what governs these flowcharts. Then re-render with
+established-return, the non-eth0 return, the two permitted published ports (state them as "80 and
+443", not as raw iptables match syntax), and the default drop, dated 2026-09-06. Write it in plain
+language for a general reader, consistent with the existing empty-chain label's style — this
+diagram communicates the policy, it does not transcribe CLI syntax. Note: `DIAGRAM_CONVENTIONS.md`
+has no explicit label-length rule (its four rules are about flowchart direction, spine/leaf shape,
+`~~~` rank-alignment links, and the shared init block, not label text) — but Mermaid auto-scales
+node width to fit text, so keep the label to a few short lines like the one it replaces, to avoid
+crowding the diagram. Then re-render with
 `./scripts/render-diagrams.sh infra-packet-path-scenario` — the digest-pinned Docker renderer named
 in that script's header, never a `pnpm dlx` substitute, per its own decision record. Commit the
 regenerated PNG in the same commit as the `.mmd` edit.
@@ -378,11 +408,17 @@ of its two original requirements (persistence, re-verification) were met by whic
 including the deliberate override of its own `netfilter-persistent save` suggestion and why. File a
 new todo for the IPv6 finding carrying the measured values.
 
+`scripts/verify-compose-ports.py` (around its "Nothing in this repository can close that" comment)
+still cites this todo's `pending/` path as the tracked location for the DOCKER-USER gap. Update that
+comment in this same commit to point at the new source of truth
+(`infra/vm/docker-user-firewall.sh`) now that the gap is closed, rather than leaving it citing a
+path that no longer exists there.
+
 Note for budgeting: the pre-commit hook runs gitleaks, then Spotless, then the full Java test
 suite, even on a docs-and-shell-only change.
   </action>
   <verify>
-    <automated>./scripts/render-diagrams.sh --check infra-packet-path-scenario &amp;&amp; grep -q 'ctorigdstport' docs/diagrams/infra-packet-path-scenario.mmd &amp;&amp; grep -q 'infra/vm/docker-user-firewall.sh' docs/INFRA_RUNBOOK.md &amp;&amp; grep -q 'infra/vm/docker-user-firewall.sh' docs/INFRA_ARCHITECTURE.md &amp;&amp; test -f .planning/todos/completed/2026-09-05-docker-user-chain-empty-on-the-vm.md &amp;&amp; test ! -f .planning/todos/pending/2026-09-05-docker-user-chain-empty-on-the-vm.md &amp;&amp; git diff --cached --name-only | grep -q 'infra-packet-path-scenario.png'</automated>
+    <automated>./scripts/render-diagrams.sh --check infra-packet-path-scenario &amp;&amp; ! grep -q 'empty as of' docs/diagrams/infra-packet-path-scenario.mmd &amp;&amp; grep -qi 'drop' docs/diagrams/infra-packet-path-scenario.mmd &amp;&amp; grep -q 'infra/vm/docker-user-firewall.sh' docs/INFRA_RUNBOOK.md &amp;&amp; grep -q 'infra/vm/docker-user-firewall.sh' docs/INFRA_ARCHITECTURE.md &amp;&amp; test -f .planning/todos/completed/2026-09-05-docker-user-chain-empty-on-the-vm.md &amp;&amp; test ! -f .planning/todos/pending/2026-09-05-docker-user-chain-empty-on-the-vm.md &amp;&amp; git diff --cached --name-only | grep -q 'infra-packet-path-scenario.png'</automated>
     <human-check>Read the rendered PNG and confirm the DOCKER-USER node states the live policy and that no title or node overlap was introduced by the longer label.</human-check>
   </verify>
   <done>The mermaid source, its regenerated PNG, both docs and the todo are updated in one commit; `--check` passes for the re-rendered diagram; no remaining prose in either doc describes the chain as empty; the IPv6 caveat appears in both the architecture doc and a newly filed todo.</done>
