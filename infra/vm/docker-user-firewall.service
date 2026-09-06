@@ -1,0 +1,16 @@
+[Unit]
+Description=Apply the DOCKER-USER inbound firewall policy for Docker-published ports
+# PartOf is the load-bearing directive here: without it this unit runs at boot only, and a
+# `systemctl restart docker` leaves DOCKER-USER in whatever state dockerd left it in. PartOf
+# ties this unit's lifecycle to docker.service so a restart of the latter re-runs this one too.
+After=docker.service
+Requires=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/docker-user-firewall.sh apply
+
+[Install]
+WantedBy=multi-user.target
