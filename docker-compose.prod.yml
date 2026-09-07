@@ -53,6 +53,12 @@ name: kanban-board-backend
 # kanban-db`, joined by this file's `postgres` service and, in docker-compose.nonprod.yml, by
 # `app-nonprod` only -- never by `caddy`, `app`, or `redpanda` in this file, and never by
 # `redpanda-nonprod` in the other.
+#
+# Added phase 12, plan 12-03: `kanban-metrics` is the THIRD cross-project network -- scope is
+# Prometheus reaching the nonprod Redpanda broker's native metrics endpoint (D-04's "one shared
+# stack monitors BOTH environments" claim). Created once via `docker network create
+# kanban-metrics`, joined by exactly two services: this file's `prometheus` and
+# docker-compose.nonprod.yml's `redpanda-nonprod` -- never by anything else in either file.
 networks:
   default:
   kanban-edge:
@@ -61,6 +67,9 @@ networks:
   kanban-db:
     external: true
     name: kanban-db
+  kanban-metrics:
+    external: true
+    name: kanban-metrics
 
 services:
   caddy:
@@ -523,6 +532,9 @@ services:
       # endpoint is not worth it.
     networks:
       - default
+      # Plan 12-03: the ONLY route to the nonprod Redpanda broker's admin API (D-04). Joined by
+      # nothing else in this file -- not grafana, not cadvisor, not app, not caddy.
+      - kanban-metrics
     # PROVISIONAL Iteration-0 baseline (Plan 12-01, 2026-09-07) -- no measurement ladder has been
     # run yet. Plan 12-05 owns the measured floor, the same way plan 11-01 set postgres's initial
     # 512m baseline and 11-03 then descended it. Set high on purpose so the ladder has somewhere to
@@ -652,6 +664,121 @@ services:
       # end-to-end against a running container before committing this, not assumed from a syntax
       # reading.
       test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/9080 && printf \"GET /ready HTTP/1.0\\r\\n\\r\\n\" >&3 && head -n1 <&3 | grep -q 200'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    logging: *default-logging
+
+  # Per-container CPU/memory/network breakdown (Phase 12, plan 12-03 -- D-05). Registry note: the
+  # pre-migration `gcr.io/cadvisor/cadvisor` path is dead for any tag at or after v0.53.0; this
+  # image lives at `ghcr.io/google/cadvisor` and a future tag bump must not revert to the old path.
+  cadvisor:
+    image: ghcr.io/google/cadvisor:v0.60.5
+    hostname: cadvisor
+    restart: unless-stopped
+    # D-05 amended 2026-09-07 (see 12-03-PLAN.md <decision_amendments>): D-05's literal text names
+    # `/var/run/docker.sock`, `/sys` and `/proc`. The set below is BROADER in two places (the whole
+    # `/var/run` directory, plus `/rootfs` and `/var/lib/docker`) and OMITS `/proc` entirely. This
+    # is a deliberate, disclosed amendment, not a drift: D-05's literal set leaves cAdvisor
+    # starting, answering `/metrics`, and emitting empty or self-only per-container series (Pitfall
+    # 3) -- cAdvisor needs `/rootfs` and `/var/lib/docker` to resolve container filesystem and
+    # image-layer state, and reads its own procfs (host-wide for the counters it uses) rather than
+    # needing a `/proc` bind. What D-05 actually protects -- every mount read-only, no `privileged`,
+    # no `pid: host` -- is fully preserved; only the file surface widened, never the privilege
+    # posture. Full amendment recorded in docs/INFRA_RUNBOOK.md's "### cAdvisor mount posture".
+    volumes:
+      - /:/rootfs:ro
+      # Read-only here is STRICTER than cAdvisor's own upstream example, which mounts this
+      # read-write. A future reader "fixing" this back to `:rw` to match upstream would be
+      # reverting a deliberate decision, not correcting an oversight.
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    # Deliberately NOT set: `privileged: true` or `pid: host`. Both are needed only for
+    # process-level metrics, which D-05's stated scope (per-container CPU/mem/network) explicitly
+    # excludes -- their absence here is a scoping decision, not an oversight.
+    networks:
+      # `default` must be listed explicitly -- once a service declares any `networks:` key it no
+      # longer implicitly joins the default network, and dropping it here would sever
+      # prometheus -> cadvisor.
+      - default
+    # Listens on 8080 -- does not collide with `app:8080` above; they are distinct containers on
+    # the network and Compose's internal DNS + per-container port namespace keeps them separate.
+    #
+    # PROVISIONAL Iteration-0 baseline (Plan 12-03, 2026-09-07) -- no measurement ladder has been
+    # run yet. Plan 12-05 owns the measured floor, the same way plan 11-01 set postgres's initial
+    # 512m baseline and 11-03 then descended it. Set high on purpose so the ladder has somewhere to
+    # descend from, not to justify a number.
+    mem_limit: 512m
+    # No `ports:` entry at all -- mirrors every other internal-only service in this file. Only
+    # Prometheus reaches this container, over the internal `default` network.
+    # Mechanically enforced: scripts/verify-compose-ports.py fails CI if this service ever gains one.
+    healthcheck:
+      # sh + wget both present (confirmed live, 2026-09-07: `docker run --rm --entrypoint sh
+      # ghcr.io/google/cadvisor:v0.60.5 -c 'echo ok'` succeeds, `which wget` resolves) -- mirrors
+      # node-exporter's own `/metrics`-as-readiness-signal pattern in this file; cAdvisor has no
+      # dedicated health endpoint documented for this tag.
+      test: [ "CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/metrics || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    logging: *default-logging
+
+  # Postgres-internal metrics via a dedicated least-privilege role (Phase 12, plan 12-03 -- D-06).
+  # `--auto-discover-databases` makes ONE exporter sufficient for D-01's single shared instance --
+  # it covers both `kanban_prod` and `kanban_nonprod` rather than running two near-identical
+  # containers.
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.20.1
+    hostname: postgres-exporter
+    restart: unless-stopped
+    command:
+      - '--auto-discover-databases'
+    environment:
+      # This plan SUPERSEDES 12-RESEARCH.md's Code Examples, which show a single DATA_SOURCE_NAME
+      # DSN URI with the password interpolated into it. Do NOT reinstate that: `@ : / ? # %` are
+      # all structural inside a URI, so a password containing any of them either corrupts the
+      # connection or redirects it to an attacker-chosen host. Same hazard class Phase 11 plan
+      # 11-07 (finding CR-01) hardened docker/postgres-init/01-create-databases-and-roles.sh
+      # against, using the identical fix: hand the credential to the tool that owns the format
+      # (here, the exporter's own `url.UserPassword(user, pass)`, which percent-encodes both
+      # components) instead of building the string ourselves. Falsifier: if a future exporter
+      # release changes that assembly or its variable precedence, re-verify against that release's
+      # own docs before trusting this split.
+      #
+      # Host, port, database and parameters ONLY -- no scheme, no credentials of any kind here.
+      DATA_SOURCE_URI: 'postgres:5432/kanban_prod?sslmode=disable'
+      DATA_SOURCE_USER: monitoring
+      DATA_SOURCE_PASS: ${MONITORING_DB_PASS}
+      # No DATA_SOURCE_NAME set -- not empty, not commented-in, absent. It outranks the trio above
+      # in the exporter's own resolution order, so a leftover value would silently win and
+      # reinstate the interpolated-credential DSN while the three correct variables sit there
+      # looking right.
+      #
+      # This Postgres has no TLS listener (same posture `app` already runs against, Phase 11) --
+      # matches the actual deployment rather than asserting a security property that isn't there.
+      # Falsifier: configuring a TLS listener on this instance is what would require revisiting
+      # `sslmode=disable`.
+    networks:
+      # `default` must be listed explicitly -- once a service declares any `networks:` key it no
+      # longer implicitly joins the default network, and dropping it here would sever
+      # prometheus -> postgres-exporter and postgres-exporter -> postgres.
+      - default
+    # PROVISIONAL Iteration-0 baseline (Plan 12-03, 2026-09-07) -- no measurement ladder has been
+    # run yet. Plan 12-05 owns the measured floor, the same way plan 11-01 set postgres's initial
+    # 512m baseline and 11-03 then descended it. Set high on purpose so the ladder has somewhere to
+    # descend from, not to justify a number.
+    mem_limit: 128m
+    # No `ports:` entry at all -- mirrors every other internal-only service in this file. Only
+    # Prometheus reaches this container, over the internal `default` network.
+    # Mechanically enforced: scripts/verify-compose-ports.py fails CI if this service ever gains one.
+    healthcheck:
+      # sh + wget both present (confirmed live, 2026-09-07, same check as cadvisor above). No
+      # dedicated health endpoint documented for this tag -- mirrors node-exporter's own
+      # `/metrics`-as-readiness-signal pattern in this file.
+      test: [ "CMD-SHELL", "wget -q -O /dev/null http://localhost:9187/metrics || exit 1" ]
       interval: 10s
       timeout: 5s
       retries: 5

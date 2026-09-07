@@ -46,6 +46,14 @@ networks:
     # service name; redpanda-nonprod deliberately does not join it.
     external: true
     name: kanban-db
+  kanban-metrics:
+    # Added phase 12, plan 12-03: the THIRD thing the two Compose projects share (created once via
+    # `docker network create kanban-metrics`). Joined here only by redpanda-nonprod, reaching
+    # docker-compose.prod.yml's `prometheus` service so it can scrape this broker's native metrics
+    # endpoint -- otherwise the nonprod broker is unreachable and D-04's "one shared stack monitors
+    # BOTH environments" claim is false for that target.
+    external: true
+    name: kanban-metrics
 
 volumes:
   redpanda-nonprod-data:
@@ -62,7 +70,11 @@ services:
     networks:
       - default
       # Deliberately NOT on kanban-edge -- only app-nonprod may reach the shared edge network;
-      # the broker and its schema registry stay reachable only from app-nonprod (T-08-08).
+      # the broker and its schema registry stay reachable only from app-nonprod (T-08-08). This
+      # broker's ONE other membership (plan 12-03) is kanban-metrics, a deliberately scoped
+      # exception whose only other member is production's `prometheus` -- it does not widen
+      # reachability from anywhere else.
+      - kanban-metrics
     volumes:
       - redpanda-nonprod-data:/var/lib/redpanda/data
     # No `ports:` key at all -- neither the Kafka listener nor the Schema Registry is published to

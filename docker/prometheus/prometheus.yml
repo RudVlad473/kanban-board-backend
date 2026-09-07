@@ -13,3 +13,49 @@ scrape_configs:
       - targets: ["node-exporter:9100"]
         labels:
           env: prod
+
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
+        # `env: prod` describes where THIS SCRAPER lives, not what it sees -- cAdvisor's own
+        # per-container metric labels distinguish prod from nonprod containers regardless of this
+        # job-level label.
+        labels:
+          env: prod
+
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+        # `shared`, not `prod` -- D-01's one Postgres instance serves BOTH databases, so labelling
+        # this target `prod` would be false.
+        labels:
+          env: shared
+
+  - job_name: redpanda
+    metrics_path: /public_metrics
+    static_configs:
+      - targets: ["redpanda:9644"]
+        # Verified live on this deployment (Plan 12-03 Task 1, 2026-09-07): the production
+        # broker's admin API already answers on its own non-loopback address on 9644 -- both the
+        # in-container non-loopback probe and the loopback probe returned 200, and an off-container
+        # request from `prometheus` on the production `default` network returned real
+        # `redpanda_application_build` metrics. No `--admin-addr` flag was needed; a verified
+        # default and an assumed one are not the same thing, and only one of them is worth
+        # building on.
+        labels:
+          env: prod
+      - targets: ["redpanda-nonprod:9644"]
+        # Verified live on this deployment (Plan 12-03 Task 1, 2026-09-07): the nonprod broker's
+        # admin API also already answers on its own non-loopback address on 9644 (both the
+        # in-container non-loopback and loopback probes returned 200) -- this is the one target
+        # this phase's research predicted would silently fail without the kanban-metrics network
+        # (Pitfall 1); it is reachable here because prometheus and redpanda-nonprod both joined
+        # that network in this same edit.
+        labels:
+          env: nonprod
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["prometheus:9090"]
+        labels:
+          env: prod
