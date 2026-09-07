@@ -15,6 +15,16 @@
 # current mechanism) -- NOT table_manager/chunk_store_config, which Loki 2.x+ superseded. Loki 3.x
 # refuses to start with retention_enabled: true and no delete_request_store configured (a startup
 # failure, not a silent one, but confusing if unanticipated), so that key is set explicitly below.
+#
+# schema_config.configs[0].from is deliberately far in the past, NOT the deploy date. Discovered
+# live on plan 12-02's Task 2 deploy: Promtail's first run tails each container's log file from its
+# start, and Docker's `10m x 3` rotation means a quiet container's (redpanda's) on-disk backlog can
+# predate the deploy by weeks. A `from:` of "today" makes every one of those pre-deploy lines land
+# outside any schema period -- Loki returns a hard 500 "no schema config found for time X" instead
+# of the softer "too old, dropped" 400 those in-window-but-stale lines get, and Promtail's client
+# retries a failed (500) batch forever, which blocks that stream's newer entries from ever being
+# sent. Backdating costs nothing -- schema periods don't pre-allocate storage -- so `from:` should
+# always be set safely before any container's earliest possible log line, not the day of this change.
 
 auth_enabled: false
 
@@ -34,7 +44,7 @@ common:
 
 schema_config:
   configs:
-    - from: 2026-09-07
+    - from: 2024-01-01
       store: tsdb
       object_store: filesystem
       schema: v13
