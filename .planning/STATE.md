@@ -4,16 +4,16 @@ milestone: v1.3
 current_phase: 12
 current_phase_name: Self-hosted observability stack
 status: executing
-stopped_at: Completed 12-02-PLAN.md
-last_updated: "2026-09-07T14:31:56.228Z"
+stopped_at: Completed 12-04-PLAN.md
+last_updated: "2026-09-07T17:04:21.000Z"
 last_activity: 2026-09-07
-last_activity_desc: Phase 12 execution started
-state_head: d0a54b1c3a5f9c2996463bdef9b30b6842345ee7
+last_activity_desc: Completed 12-04-PLAN.md (Grafana dashboards), resuming toward 12-05
+state_head: f19115512215630e3b1da476812850a1506795ca
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 14
-  completed_plans: 10
+  completed_plans: 11
 milestone_name: Nonprod Environment & CI Hardening
 ---
 
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 ## Current Position
 
 Phase: 12 (Self-hosted observability stack) — EXECUTING
-Plan: 1 of 6
-Status: Executing Phase 12
-Last activity: 2026-09-07 — Phase 12 execution started
+Plan: 5 of 6
+Status: Executing Phase 12 — 12-01..12-04 complete, 12-05/12-06 remaining
+Last activity: 2026-09-07 — Completed 12-04-PLAN.md (Grafana dashboards as committed JSON)
 
 ## Performance Metrics
 
@@ -51,6 +51,8 @@ v1.0–v1.2 velocity/per-plan detail archived at milestone close — see `.plann
 | Phase quick P260902-vjo | ~40min | 3 tasks | 2 files |
 | Phase 12 P01 | 94min | 3 tasks | 6 files |
 | Phase 12 P02 | 70min | 3 tasks | 6 files |
+| Phase 12 P03 | 130min | 3 tasks | 5 files |
+| Phase 12 P04 | 123min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -80,6 +82,9 @@ No active-milestone decisions pending — next milestone not yet scoped.
 - [Phase 12]: node-exporter uses a host-root read-only bind mount + --path.rootfs/procfs/sysfs instead of network_mode:host/pid:host (forbidden by verify-compose-ports.py I2); node_network_* still leaks host interface topology via the sysfs bind, corrected in the compose comment post-deploy
 - [Phase 12]: Phase 12 plan 02: general lesson for any future Loki deploy against an already-populated Docker host -- schema_config.from and reject_old_samples_max_age must both predate the oldest on-disk log backlog, not the deploy date; a third distinct too_far_behind per-stream ordering guard is an accepted operational characteristic, not something to configure around
 - [Phase 12]: Phase 12 plan 02: .planning/config.json gained git.allow_default_branch_commits: true, making explicit this project's already-established branching_strategy: none convention
+- [Phase 12]: Phase 12 plan 04: two real bugs found in a vendored postgres-exporter Grafana dashboard by diffing its PromQL against the live exporter's own /metrics output and against 12-03's actual scrape job name -- two metric renames (pg_replication_lag/pg_database_size) and one template-variable job-label mismatch; reusable playbook for any future vendored dashboard
+- [Phase 12]: Phase 12 plan 04: 2 of 13 postgres-exporter dashboard panels (Max Connections, Shared Buffers) diagnosed as a Grafana 13.2.1 legacy singlestat panel-type rendering bug -- underlying data confirmed correct via direct /api/ds/query call -- accepted as a documented finding rather than fixed (would need a singlestat->stat panel-type migration, out of scope)
+- [Phase 12]: Phase 12 plan 04: fixed an unrelated CI gap found mid-plan -- .github/workflows/deploy.yml's Caddyfile validation step was missing APP_DOMAIN_MONITORING (needed by 12-01's third Caddyfile block), silently failing production deploys since 12-01 merged
 
 ### Pending Todos
 
@@ -145,10 +150,11 @@ The 46 pending todos are individually listed and categorized in this document's 
 
 ## Session Continuity
 
-Last session: 2026-09-07T14:20:48.194Z
-Stopped at: Completed 12-02-PLAN.md
-Resume file: None
+Last session: 2026-09-07T17:04:21.000Z
+Stopped at: Session resumed, wrote 12-04-SUMMARY.md, proceeding to /gsd-execute-phase 12 for 12-05/12-06
+Resume file: None (.planning/HANDOFF.json and both .continue-here.md files consumed and can be cleared)
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Continue Phase 12 via `/gsd-execute-phase 12` (12-05: measured mem_limit floors; 12-06: phase close-out)
+- After Phase 12 closes: start the next milestone with /gsd-new-milestone
