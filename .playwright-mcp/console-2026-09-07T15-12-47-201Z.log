@@ -1,0 +1,15 @@
+[    2129ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "username"): (More info: https://goo.gl/9p2vKq) %o @ https://kanban-board-rud-vlad-473-monitoring.duckdns.org/login:0
+[    9956ms] [WARNING] Deprecation warning: value provided is not in a recognized RFC2822 or ISO format. moment construction falls back to js Date(), which is not reliable across all browsers and versions. Non RFC2822/ISO date formats are discouraged. Please refer to http://momentjs.com/guides/#/warnings/js-date/ for more info.
+Arguments: 
+[0] _isAMomentObject: true, _isUTC: false, _useUTC: false, _l: undefined, _i: Thu, 27 Aug 2026 13:03:49, _f: undefined, _strict: undefined, _locale: [object Object]
+Error
+    at a.createFromInputFallback (https://kanban-board-rud-vlad-473-monitoring.duckdns.org/public/build/6029.ced17922ce65e4fd1ef9.js:624:3)
+    at an (https://kanban-board-rud-vlad-473-monitoring.duckdns.org/public/build/6029.ced17922ce65e4fd1ef9.js:624:25639)
+    at un (https://kanban-board-rud-vlad-473-monitoring.duckdns.org/public/build/6029.ced17922ce65e4fd1ef9.js:624:29347)
+    at aa (https://kanban-board-rud-vlad-473-monitoring.duckdns.org/public/build/6029.ced17922ce65e4fd1ef9.js:624:29213)
+    at on (https://kanban-board-rud-vlad-473-monitoring.duckdns.org/public/build/6029.ced17922ce65e4fd1ef9.js:624:28930)
+    at sa (https://kanban-board-rud-vlad-473-monitoring.duckdns.org/public/build/6029.ced17922ce65e4fd1ef9.js:624:29707)
+    at A (https://kanban-board-rud-vlad-473-monitoring.duckdns.org/public/build/6029.ced17922ce65e4fd1ef9.js:624:29740)
+    at a (https://kanban-board-rud-vlad-473-monitoring.duckdns.org/public/build/6029.ced17922ce65e4fd1ef9.js:621:89)
+    at u (https://kanban-board-rud-vlad-473-monitoring.duckdns.org/public/build/6540.6529110183207d2360bc.js:2:59617)
+    at f (https://kanban-board-rud-vlad-473-monitoring.duckdns.org/public/build/6540.6529110183207d2360bc.js:344:119158) @ https://kanban-board-rud-vlad-473-monitoring.duckdns.org/public/build/6029.ced17922ce65e4fd1ef9.js:620

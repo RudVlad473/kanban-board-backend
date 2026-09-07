@@ -1041,7 +1041,7 @@
       "tableColumn": "pg_settings_shared_buffers_bytes{instance=\"db01vp-nbg6a.obs.noris.net:9187\", job=\"postgres-exporter\", server=\"213.95.132.73:5432\"}",
       "targets": [
         {
-          "expr": "pg_settings_shared_buffers_bytes{instance=\"$Instance\"}",
+          "expr": "max(pg_settings_shared_buffers_bytes{instance=\"$Instance\"})",
           "refId": "A"
         }
       ],
@@ -1130,7 +1130,7 @@
       "tableColumn": "pg_settings_max_connections{instance=\"db01vp-nbg6a.obs.noris.net:9187\", job=\"postgres-exporter\", server=\"213.95.132.73:5432\"}",
       "targets": [
         {
-          "expr": "pg_settings_max_connections{instance=\"$Instance\"}",
+          "expr": "max(pg_settings_max_connections{instance=\"$Instance\"})",
           "refId": "A"
         }
       ],

@@ -1,0 +1,1 @@
+[  724344ms] [ERROR] Misconfigured AnnotationsDataLayer: Data source is required for annotations. Resolving default data source a {type: prometheus, uid: PBFA97CFB590B2093} @ https://kanban-board-rud-vlad-473-monitoring.duckdns.org/public/build/6540.6529110183207d2360bc.js:200
