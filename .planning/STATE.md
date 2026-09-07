@@ -1,15 +1,15 @@
 ---
-gsd_state_version: 1.0
+gsd_state_version: "1.0"
 milestone: v1.3
 current_phase: 11
 status: completed
-stopped_at: Completed quick task 260906-feq
-last_updated: "2026-09-06T10:14:00.000Z"
+stopped_at: Phase 12 context gathered
+last_updated: "2026-09-07T09:22:41.853Z"
 last_activity: 2026-09-06
-last_activity_desc: Completed quick task 260906-feq: DOCKER-USER iptables rules on the VM
-state_head: 46137464dd1b0e20251f314fabd8110923194f7a
+last_activity_desc: "Completed quick task 260906-feq: DOCKER-USER iptables rules on the VM"
+state_head: a17fccefaccedfa5f60327a952b5e5e69ce35a12
 progress:
-  total_phases: 1
+  total_phases: 2
   completed_phases: 1
   total_plans: 8
   completed_plans: 8
@@ -54,6 +54,7 @@ v1.0–v1.2 velocity/per-plan detail archived at milestone close — see `.plann
 ### Roadmap Evolution
 
 - Phase 11 added: Migrate database from Neon to self-hosted Postgres
+- Phase 12 added: Self-hosted observability stack
 
 ### Decisions
 
@@ -137,9 +138,9 @@ The 46 pending todos are individually listed and categorized in this document's 
 
 ## Session Continuity
 
-Last session: 2026-09-06T10:14:00Z
-Stopped at: Completed quick task 260906-feq
-Resume file: None
+Last session: 2026-09-07T09:22:41.671Z
+Stopped at: Phase 12 context gathered
+Resume file: .planning/phases/12-self-hosted-observability-stack/12-CONTEXT.md
 
 ## Operator Next Steps
 
