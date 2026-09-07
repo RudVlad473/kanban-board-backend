@@ -104,10 +104,15 @@ Plans:
 ### Phase 12: Self-hosted observability stack
 
 **Goal:** Metrics (CPU/memory/disk, per-container and host-level) and log aggregation are queryable without any paid SaaS — Prometheus + Grafana + Loki/Promtail + cAdvisor + node_exporter running as additional containers on the existing Netcup VPS, retention and `mem_limit`s sized against measured headroom (4.9 GiB RAM free of 7.8 GiB, CPU load avg 0.11/4 vCPU, 222 GB disk free — measured 2026-09-07), and the Grafana UI reachable only through Caddy (not publicly exposed) rather than a raw published port. Closes the metrics/log-shipping half of `.planning/todos/pending/2026-08-20-no-remote-log-shipping-structured-logging-or-alerting.md`; the alerting half is out of scope for this phase.
-**Requirements**: TBD (no REQUIREMENTS.md for this not-yet-scoped milestone — decisions to be captured in this phase's CONTEXT.md)
+**Requirements**: D-01 through D-08, the eight locked decisions in `12-CONTEXT.md` (no REQUIREMENTS.md for this not-yet-scoped milestone — those decisions are the acceptance surface instead)
 **Depends on:** Phase 11
-**Plans:** 0 plans
+**Plans:** 6 plans
 
 Plans:
 
-- [ ] TBD (run /gsd-plan-phase 12 to break down)
+- [ ] 12-01-PLAN.md — Tracer: node_exporter → Prometheus → Grafana → Caddy, proven end to end over public HTTPS (D-03, D-04, D-07)
+- [ ] 12-02-PLAN.md — Loki + Promtail: all six containers' logs queryable in Grafana, 30d retention (D-01, D-07, D-08)
+- [ ] 12-03-PLAN.md — cAdvisor, postgres_exporter, both Redpanda brokers, and the kanban-metrics cross-project network (D-04, D-05, D-06)
+- [ ] 12-04-PLAN.md — Grafana dashboards as committed JSON, rendering real data (D-04, D-05, D-06)
+- [ ] 12-05-PLAN.md — Restart-ladder measurement replacing all seven provisional mem_limits (D-04, D-05, D-06, D-07)
+- [ ] 12-06-PLAN.md — Caddy mem_limit, architecture doc + diagram correction, folded-todo closure (D-01, D-02)
