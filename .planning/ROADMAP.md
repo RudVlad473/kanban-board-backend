@@ -100,3 +100,14 @@ Plans:
 **Wave 5** *(blocked on Wave 4 completion)*
 
 - [x] 11-06-PLAN.md — Neon decommission and backup-gap documentation (wave 5)
+
+### Phase 12: Self-hosted observability stack
+
+**Goal:** Metrics (CPU/memory/disk, per-container and host-level) and log aggregation are queryable without any paid SaaS — Prometheus + Grafana + Loki/Promtail + cAdvisor + node_exporter running as additional containers on the existing Netcup VPS, retention and `mem_limit`s sized against measured headroom (4.9 GiB RAM free of 7.8 GiB, CPU load avg 0.11/4 vCPU, 222 GB disk free — measured 2026-09-07), and the Grafana UI reachable only through Caddy (not publicly exposed) rather than a raw published port. Closes the metrics/log-shipping half of `.planning/todos/pending/2026-08-20-no-remote-log-shipping-structured-logging-or-alerting.md`; the alerting half is out of scope for this phase.
+**Requirements**: TBD (no REQUIREMENTS.md for this not-yet-scoped milestone — decisions to be captured in this phase's CONTEXT.md)
+**Depends on:** Phase 11
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 12 to break down)
