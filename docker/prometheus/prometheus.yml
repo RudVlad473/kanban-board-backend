@@ -1,0 +1,15 @@
+# Prometheus scrape config (Phase 12, plan 12-01 tracer). Mounted read-only into the `prometheus`
+# service in docker-compose.prod.yml at /etc/prometheus/prometheus.yml. The `env` label on each
+# target is D-04's prod/nonprod discriminator on a deliberately single shared Prometheus instance
+# -- established here on the first target so every later target plan 12-03 adds follows an existing
+# convention rather than inventing one.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]
+        labels:
+          env: prod

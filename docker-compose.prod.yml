@@ -98,6 +98,9 @@ services:
       # Consumed by Caddyfile's second site block ({$APP_DOMAIN_NONPROD}, added plan 08-01) --
       # the nonprod hostname, D-05.
       APP_DOMAIN_NONPROD: ${APP_DOMAIN_NONPROD}
+      # Consumed by Caddyfile's third site block ({$APP_DOMAIN_MONITORING}, added plan 12-01) --
+      # the Grafana/monitoring hostname (D-03).
+      APP_DOMAIN_MONITORING: ${APP_DOMAIN_MONITORING}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       # Named volumes (not bind mounts, not ephemeral) so container recreation reuses the existing
@@ -426,8 +429,144 @@ services:
       start_period: 15s
     logging: *default-logging
 
+  # Host-level CPU/memory/disk/network metrics (Phase 12, plan 12-01 tracer -- D-03/D-04/D-07).
+  node-exporter:
+    image: prom/node-exporter:v1.12.1
+    hostname: node-exporter
+    restart: unless-stopped
+    # This service's entire deliverable rests on seeing the HOST's own root filesystem, not this
+    # container's own. The upstream project's own Docker recipe pairs `--path.rootfs=/host` with
+    # `network_mode: host` and `pid: host`; neither namespace grant is used here:
+    #   - `network_mode: host` is forbidden outright by scripts/verify-compose-ports.py invariant
+    #     I2, by name, in both deployed compose files -- it would publish every listening port on
+    #     the host without ever touching a `ports:` key, which is exactly the exposure that gate
+    #     exists to make impossible.
+    #   - `pid: host` is omitted deliberately, not by oversight: `--path.procfs=/host/proc` below
+    #     reaches the host's real procfs through the same read-only bind and yields the same
+    #     CPU/memory/load numbers without joining the host PID namespace, and this phase collects
+    #     no per-process metrics that would need more.
+    # Disclosed cost of both omissions: without `network_mode: host`, `node_network_*` series
+    # describe THIS CONTAINER's own network namespace, not the VM's NIC -- host network throughput
+    # is deliberately NOT collected by this phase. An undisclosed gap in one metric family would
+    # read as coverage; this comment is that disclosure (see also 12-01-PLAN.md design_alternatives).
+    volumes:
+      # The host's own root filesystem, read-only, with `rslave` propagation so submounts of `/`
+      # (the VM's real block devices) are visible inside rather than stopping at the top-level
+      # bind. This is node-exporter's ONLY volume -- it is otherwise stateless and takes no named
+      # volume.
+      - /:/host:ro,rslave
+    command:
+      - '--path.rootfs=/host'
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      # `$$` (not a single `$`) -- Compose consumes a single `$` here as an environment
+      # interpolation before the container ever sees the regex, silently truncating it at the
+      # first `$` and changing its meaning. Drops the pseudo-filesystems and the container-storage
+      # mounts so the filesystem series describe the VM's real disks, not a container overlay.
+      - '--collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run|var/lib/docker/.+|var/lib/containers/storage/.+)($$|/)'
+    networks:
+      # `default` must be listed explicitly -- once a service declares any `networks:` key it no
+      # longer implicitly joins the default network, and dropping it here would sever
+      # prometheus -> node-exporter.
+      - default
+    # PROVISIONAL Iteration-0 baseline (Plan 12-01, 2026-09-07) -- no measurement ladder has been
+    # run yet. Plan 12-05 owns the measured floor, the same way plan 11-01 set postgres's initial
+    # 512m baseline and 11-03 then descended it. Set high on purpose so the ladder has somewhere to
+    # descend from, not to justify a number.
+    mem_limit: 128m
+    # No `ports:` entry at all -- mirrors postgres's/redpanda's own posture exactly. Only
+    # Prometheus reaches this container, over the internal `default` network.
+    # Mechanically enforced: scripts/verify-compose-ports.py fails CI if this service ever gains one.
+    healthcheck:
+      # node_exporter ships a real shell and `wget` (verified via `docker run --rm --entrypoint sh
+      # prom/node-exporter:v1.12.1 -c 'echo ok'`, 2026-09-07); it has no dedicated health endpoint,
+      # so its own `/metrics` response is the readiness signal.
+      test: [ "CMD-SHELL", "wget -q -O /dev/null http://localhost:9100/metrics || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    logging: *default-logging
+
+  prometheus:
+    image: prom/prometheus:v3.14.0
+    hostname: prometheus
+    restart: unless-stopped
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      # D-07: 30 days, not the 15-day default this flag exists to override. 222 GB free measured
+      # 2026-09-07 (docs/INFRA_RUNBOOK.md) against a personal-scale workload -- see this plan's
+      # T-12-06 threat-register entry for the accepted-risk disposition if headroom later drops.
+      - '--storage.tsdb.retention.time=30d'
+      # Deliberately NOT --web.enable-lifecycle: it would let plan 12-03 reload a changed
+      # prometheus.yml without a restart, but it adds an unauthenticated POST endpoint to a service
+      # whose only access control is "nothing else is on this network". Restarting Prometheus costs
+      # seconds and loses no data (the TSDB lives on the prometheus-data named volume), so the
+      # endpoint is not worth it.
+    networks:
+      - default
+    # PROVISIONAL Iteration-0 baseline (Plan 12-01, 2026-09-07) -- no measurement ladder has been
+    # run yet. Plan 12-05 owns the measured floor, the same way plan 11-01 set postgres's initial
+    # 512m baseline and 11-03 then descended it. Set high on purpose so the ladder has somewhere to
+    # descend from, not to justify a number.
+    mem_limit: 1g
+    # No `ports:` entry at all -- mirrors postgres's/redpanda's own posture exactly. Only Grafana
+    # (as a datasource client) and this box's own operator (docker exec) reach this container.
+    # Mechanically enforced: scripts/verify-compose-ports.py fails CI if this service ever gains one.
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -q -O /dev/null http://localhost:9090/-/healthy || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    logging: *default-logging
+
+  grafana:
+    image: grafana/grafana:13.2.1
+    hostname: grafana
+    restart: unless-stopped
+    volumes:
+      # One mount covers datasources now (this plan) and dashboards from plan 12-04 onward -- both
+      # live under docker/grafana/provisioning/ in the repo.
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      # Both of these already match the image's current default -- set explicitly anyway. Under
+      # D-03, Grafana's own login is the ONLY gate in front of every metric this phase collects; an
+      # unstated default that silently changed in a future image tag would remove that gate without
+      # this file ever showing a diff. Silence here would read as coverage, not confirmation.
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    networks:
+      - default
+    # PROVISIONAL Iteration-0 baseline (Plan 12-01, 2026-09-07) -- no measurement ladder has been
+    # run yet. Plan 12-05 owns the measured floor, the same way plan 11-01 set postgres's initial
+    # 512m baseline and 11-03 then descended it. Set high on purpose so the ladder has somewhere to
+    # descend from, not to justify a number.
+    mem_limit: 512m
+    # No `ports:` entry at all -- Caddy reaches this container over the internal `default` network
+    # by service name (grafana:3000) only, mirroring how it already reaches `app`/`app-nonprod`.
+    # Mechanically enforced: scripts/verify-compose-ports.py fails CI if this service ever gains one.
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -q -O /dev/null http://localhost:3000/api/health || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging: *default-logging
+
 volumes:
   redpanda-data:
   caddy-data:
   caddy-config:
   postgres-data:
+  # Phase 12, plan 12-01: Prometheus's TSDB (30-day retention, D-07) and Grafana's own state
+  # (dashboards saved to the DB, session/auth data) -- both named so container recreation reuses
+  # them rather than starting cold.
+  prometheus-data:
+  grafana-data:

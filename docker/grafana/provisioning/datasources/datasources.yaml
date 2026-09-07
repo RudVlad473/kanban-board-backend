@@ -1,0 +1,11 @@
+# Grafana datasource provisioning (Phase 12, plan 12-01 tracer). Provisioned as code rather than
+# created through the UI: a UI-created datasource lives only in the grafana-data volume and is
+# invisible in git, so a volume loss would silently lose the wiring, not just the dashboards.
+# Plan 12-02 appends the Loki datasource to this same file.
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true

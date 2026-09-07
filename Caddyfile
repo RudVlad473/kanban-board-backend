@@ -151,3 +151,50 @@
 {$APP_DOMAIN_NONPROD} {
 	reverse_proxy app-nonprod:8080
 }
+
+# Third site block, added plan 12-01 (v1.4, Phase 12). {$APP_DOMAIN_MONITORING} is supplied by
+# docker-compose.prod.yml's caddy.environment.APP_DOMAIN_MONITORING -- an enumerated DuckDNS
+# subdomain, never a wildcard, for the same reason the {$APP_DOMAIN_NONPROD} block above gives:
+# DuckDNS is a shared public suffix. Shares the one caddy-data volume with the other two blocks, so
+# recreating this container reuses this hostname's certificate too rather than re-requesting it.
+#
+# D-03 makes Grafana's own login the ONLY authentication gate on this hostname -- no basic_auth, no
+# IP allowlist, both deliberately absent here and both reversible later with no migration and no
+# data movement if that posture ever changes.
+#
+# The rate_limit block below IS present, under a dated amendment to D-03 recorded in
+# 12-01-PLAN.md's <decision_amendments> section (2026-09-07): D-03's own analogy is to the app's
+# endpoints, which this repo already rate-limits at this exact Caddy edge (the {$APP_DOMAIN}
+# block's `zone auth` above) while Spring Security alone authenticates them -- so throttling was
+# never the control D-03 banned, only an authentication-class gate was. Under D-04/D-08 this single
+# Grafana credential guards every metric and (from plan 12-02) every container's logs across both
+# environments, making it the login with the largest blast radius on this box, not the smallest --
+# leaving it with no brute-force bound would be the actual departure from D-03's own benchmark.
+#
+# The zone matches /login* only, not the whole site block: a site-wide zone would spend Grafana's
+# own request budget on its dashboard's /api/ds/query and /public/** asset requests -- the same
+# non-obvious coupling that ruled out routing Grafana under the production hostname's own site
+# block (12-01-PLAN.md design alternative C) in the first place. The thresholds are the existing
+# `zone auth` numbers verbatim, reusing an already measured-and-argued setting rather than coining
+# a second one. The custom Caddy image already carries the caddy-ratelimit module (quick task
+# 260903-dvp), so no image change is needed here.
+{$APP_DOMAIN_MONITORING} {
+	rate_limit {
+		# Same rationale as the {$APP_DOMAIN} block's own log_key above: the key is a source
+		# address, the least sensitive thing in any edge log, and already the container's own
+		# json-file log subject.
+		log_key
+
+		zone grafana_login {
+			match {
+				path /login*
+			}
+			key {remote_host}
+			events 20
+			window 5m
+			ipv6_prefix 56
+		}
+	}
+
+	reverse_proxy grafana:3000
+}
