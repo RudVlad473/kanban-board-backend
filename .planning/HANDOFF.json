@@ -1,47 +1,40 @@
 {
   "version": "1.0",
-  "timestamp": "2026-09-05T20:32:57.155Z",
-  "phase": null,
-  "phase_name": "No active phase — quick task 260905-tw0 (infra diagrams) completed and deployed",
-  "phase_dir": null,
-  "plan": null,
-  "task": null,
-  "total_tasks": null,
+  "timestamp": "2026-09-07T14:24:10.401Z",
+  "phase": "12",
+  "phase_name": "Self-hosted observability stack",
+  "phase_dir": ".planning/phases/12-self-hosted-observability-stack",
+  "plan": 3,
+  "task": 1,
+  "total_tasks": 6,
   "status": "paused",
   "completed_tasks": [
-    {"id": 1, "name": "Quick task 260905-tw0 — pinned mermaid renderer (scripts/render-diagrams.sh + render-manifest.tsv), drift measured on all 9 diagrams", "status": "done", "commit": "93ca958"},
-    {"id": 2, "name": "Four flowchart layout rules with deciding tests in docs/DIAGRAM_CONVENTIONS.md", "status": "done", "commit": "7e9bc5b"},
-    {"id": 3, "name": "Packet-path Scenario (+1) with DOCKER-USER drawn empty and dated; trust boundaries [1]-[5] on the Physical view; Maintenance Note extended", "status": "done", "commit": "199f1c6"},
-    {"id": 4, "name": "Layout fix round after user review: [1] firewall moved outside VM boundary in both views, title/node overlaps cleared", "status": "done", "commit": "2b0bd7b"},
-    {"id": 5, "name": "Merged --ff (linear), pushed, all 14 CI/CD jobs + invariant checks + secret scan green, both environments deployed", "status": "done", "commit": "5b3142d"},
-    {"id": 6, "name": "Netcup ticket copy moved out of /tmp to ~/dev/kanban-net-forensics/netcup-ticket-2026-09-05.txt", "status": "done", "commit": null},
-    {"id": 7, "name": "Tool-tier gotcha added: bare `cd` persists across Bash calls and redirects later commands to the wrong checkout", "status": "done", "commit": null}
+    {"id": "12-01", "name": "Thin end-to-end observability slice (node_exporter/Prometheus/Grafana)", "status": "done", "commit": "9f43c0e"},
+    {"id": "12-02", "name": "Log aggregation (Loki/Promtail)", "status": "done", "commit": "4b84eb7"}
   ],
   "remaining_tasks": [
-    {"id": 8, "name": "DOCKER-USER iptables rules on the VM + systemd persistence (After=docker.service, idempotent). Verify by publishing a throwaway port and confirming it is UNREACHABLE from off-box. Then update the 'empty as of 2026-09-05' annotation in docs/INFRA_ARCHITECTURE.md and infra-packet-path-scenario.mmd in the SAME change and re-render.", "status": "not_started"},
-    {"id": 9, "name": "Redesign the VM-side forensics probe: host passive_opens does NOT count DNAT'd connections terminating in caddy's netns, so it cannot correlate with the local prober. Needs a counter read inside the caddy container (nsenter/docker exec cat /proc/net/snmp) or a host-interface capture.", "status": "not_started"},
-    {"id": 10, "name": "Re-render the seven drifted diagrams (todo 2026-09-05-seven-diagrams-drift-from-the-pinned-renderer.md) and convert architecture-mutation-flowchart TD->TB (its own todo)", "status": "not_started"},
-    {"id": 11, "name": "scripts/review-worktrees.sh (setup/teardown) — teardown must only touch .worktrees/review-*, never .claude/worktrees/*", "status": "not_started"},
-    {"id": 12, "name": "Playwright retries on the frontend e2e job (different repo)", "status": "not_started"},
-    {"id": 13, "name": "Uptime check fires ~5x/day vs 96x its */15 cron requests; cannot detect a 134s outage", "status": "not_started"}
+    {"id": "12-03", "name": "Per-container + Postgres metrics (cAdvisor + postgres_exporter)", "status": "not_started"},
+    {"id": "12-04", "name": "Three provisioned Grafana dashboards", "status": "not_started"},
+    {"id": "12-05", "name": "Replace Iteration-0 provisional resource ceilings with measured floors", "status": "not_started"},
+    {"id": "12-06", "name": "Phase close-out: last uncapped container, architecture docs, diagrams, todo closure", "status": "not_started"}
   ],
-  "blockers": [
-    {"description": "Netcup connect-timeout root cause still unproven directly. The one probe failure caught this session (20:14Z) was a POST-connect stall (time_connect 1.08s, total 31s, exit 28), not the 134s SYN-loss signature. The VM counter column is structurally unable to confirm or refute SYN arrival (see task 9).", "type": "external", "workaround": "Frontend e2e retries neutralise the symptom regardless of cause."}
-  ],
+  "blockers": [],
   "async_jobs": [],
-  "human_actions_pending": [
-    {"action": "Decide whether .claude/worktrees/agent-a2d9d4573207ef980 can be reaped (clean at 819fa81, which is already on main). Offered twice, not yet answered.", "context": "Harness-owned worktree left from an earlier session.", "blocking": false},
-    {"action": "If netcup asks for the source public IP for the ticket, run `curl ifconfig.me`.", "context": "Ticket was sent without it.", "blocking": false}
-  ],
+  "human_actions_pending": [],
   "decisions": [
-    {"decision": "Renderer is a digest-pinned Docker image (ghcr.io/mermaid-js/mermaid-cli 11.17.0@sha256:a6fb05...), NOT pnpm dlx", "rationale": "Puppeteer renders text with the host's fonts, which npm cannot pin, so the drift check would report noise on any other machine. pnpm dlx form kept in the script header as a documented non-reproducible fallback.", "phase": "260905-tw0"},
-    {"decision": "Match criterion = exact width at manifest scale + 2% height tolerance; colour mode reported not gated", "rationale": "Measured: widths reproduce to the pixel, heights drift in opposite directions across diagrams, ruling out a scale artefact. mmdc cannot force RGB and the script stays stdlib-only.", "phase": "260905-tw0"},
-    {"decision": "Seven pre-existing drifted PNGs left untouched, drift filed as a todo", "rationale": "They are the evidence for the renderer-drift finding; silently re-rendering would erase it.", "phase": "260905-tw0"},
-    {"decision": "Renderer deliberately NOT wired into CI", "rationale": "invariant-checks ignores docs/**; wiring it in would cost a full redeploy on every docs commit plus a 2.36GB image pull. Recorded in the script header as a what-is-NOT-checked decision.", "phase": "260905-tw0"},
-    {"decision": "Merge helper's merge commit replaced with a linear history via git reset --keep", "rationale": "User prefers --ff-only; the tree was byte-identical so nothing was lost.", "phase": "260905-tw0"},
-    {"decision": "Pushed the session-pause wip commit and the pre-dispatch plan commit to main before dispatching", "rationale": "Claude Code worktrees fork from origin/HEAD; pushing keeps HEAD == origin/HEAD so isolation is not degraded to sequential. .planning/** is in every deploy path-ignore so no redeploy fires.", "phase": "260905-tw0"}
+    {"decision": "Worktree isolation auto-degrades to sequential (none) for this run", "rationale": "local main is repeatedly ahead of origin/main (12+ unpushed commits); Claude Code forks worktrees from origin/HEAD, so isolated dispatch would miss recent work (#48/#3659). Re-check dispatch-isolation sentinel each wave — it drifts back to harness-worktree between dispatches and must be re-forced to none.", "phase": "12"},
+    {"decision": "Orchestrator performs VM deploy steps directly (not the executor subagent) once the human gives DIRECT authorization in-conversation", "rationale": "the gsd-executor subagent correctly refuses to treat an orchestrator-relayed 'user confirmed X' as genuine consent for irreversible production actions (SSH deploy, credential handling) — this is by design, not a bug. The orchestrator holds the real first-party authorization from its own conversation with the human, so it should act directly rather than relay through a subagent a second time.", "phase": "12"},
+    {"decision": "Never read, generate, or pass a real secret/credential value as a CLI argument or print it; hand credential-touching verification steps to the human", "rationale": "during 12-01, an orchestrator-run `docker exec ... --password=X` leaked the raw Grafana admin password into `docker events`' logged command line and into the session transcript. Remediated by rotation (twice — once by the orchestrator, then the human independently via `pass`). Established going forward: read secrets from a container's own live env (never re-parse a VM's .env file, which may carry literal quote characters as part of the value), pipe values via stdin never argv, and default to asking the human to run any login/credential-verification step themselves.", "phase": "12"},
+    {"decision": "Loki schema_config.from and limits_config.reject_old_samples_max_age must be set safely before any container's on-disk log backlog, not the deploy date", "rationale": "12-02's first deploy hit two related bugs: a schema `from:` of 'today' turned every pre-deploy log line into a hard 500 that Promtail retried forever, blocking two Redpanda streams entirely; then even after backdating the schema, the default 7-day reject_old_samples_max_age caused whole-batch drops that took a third, genuinely-recent stream (kanban-nonprod-app) down as collateral damage. Fixed by setting both schema `from:` (2024-01-01) and reject_old_samples_max_age (720h) to match the actual 30-day retention policy. A third, distinct issue (a too_far_behind per-stream guard tied to max_chunk_age) also surfaced for a genuinely-idle container and was fixed by the executor with a one-off `docker restart` — documented in docs/INFRA_RUNBOOK.md.", "phase": "12"}
   ],
-  "uncommitted_files": [],
-  "next_action": "Start the DOCKER-USER iptables task (remaining task 8) via /gsd-quick. The empty chain is now drawn and dated, so populating it is unblocked. Plan must include: iptables rules, a systemd unit ordered After=docker.service and idempotent, an off-box negative test (throwaway published port must be UNREACHABLE), and the same-change update + re-render of the two artifacts that say 'empty as of 2026-09-05'.",
-  "context_notes": "Session was one full quick-task cycle (plan -> isolated executor -> my own verification -> user review -> fix round -> merge -> deploy) plus a forensics observation. main = 5b3142d, pushed, deployed green. Probes still running, expire ~04:47Z 2026-09-06: local ~/dev/kanban-net-forensics/probe.csv (819 rows, 1 failure), VM /var/tmp/net-forensics/samples.csv (903 rows). The key forensic lesson: the VM passive_opens counter barely moves while hundreds of probes succeed, because Docker DNAT terminates them in caddy's network namespace — the paired-probe design cannot deliver the direct proof it was built for. Kill probes by PID from pgrep -af, never pkill -f (the pattern matches the SSH command itself)."
+  "uncommitted_files": [
+    " M .gsd/dispatch-isolation-sentinel.json",
+    "?? .planning/debug/",
+    "?? .planning/milestone.lock",
+    "?? .planning/phases/11-migrate-database-from-neon-to-self-hosted-postgres/.gitkeep",
+    "?? .planning/research/.cache/",
+    "?? .planning/state.json"
+  ],
+  "next_action": "Run /gsd-execute-phase 12 to continue with Wave 3 (plan 12-03: cAdvisor + postgres_exporter). Re-check the .gsd/dispatch-isolation-sentinel.json state before dispatching — it drifts back to harness-worktree between waves and must be re-forced to none with `gsd_run query dispatch-isolation --raw --phase 12 --force-isolation none` as long as main stays ahead of origin/main.",
+  "context_notes": "Waves 1-2 of 6 done, both required real production VM deploys the orchestrator performed directly (with explicit human authorization each time, never via a relayed subagent message) over SSH to netcup-prod. Both plans surfaced and fixed real bugs during live verification rather than rubber-stamping static config checks — this phase's pattern so far is: deploy, verify end-to-end against real running state, fix what's actually broken, re-verify. Expect 12-03 (cAdvisor + postgres_exporter) to need the same VM-deploy authorization dance. No outstanding blockers or pending human actions — phase is in a clean, fully-committed state to resume from."
 }
