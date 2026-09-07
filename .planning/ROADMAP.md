@@ -109,10 +109,26 @@ Plans:
 **Plans:** 6 plans
 
 Plans:
+**Wave 1**
 
 - [ ] 12-01-PLAN.md — Tracer: node_exporter → Prometheus → Grafana → Caddy, proven end to end over public HTTPS (D-03, D-04, D-07)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 12-02-PLAN.md — Loki + Promtail: all six containers' logs queryable in Grafana, 30d retention (D-01, D-07, D-08)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 12-03-PLAN.md — cAdvisor, postgres_exporter, both Redpanda brokers, and the kanban-metrics cross-project network (D-04, D-05, D-06)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 12-04-PLAN.md — Grafana dashboards as committed JSON, rendering real data (D-04, D-05, D-06)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 12-05-PLAN.md — Restart-ladder measurement replacing all seven provisional mem_limits (D-04, D-05, D-06, D-07)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 12-06-PLAN.md — Caddy mem_limit, architecture doc + diagram correction, folded-todo closure (D-01, D-02)

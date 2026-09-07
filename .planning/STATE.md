@@ -1,17 +1,18 @@
 ---
 gsd_state_version: "1.0"
 milestone: v1.3
-current_phase: 11
+current_phase: 12
+current_phase_name: Self-hosted observability stack
 status: completed
 stopped_at: Phase 12 context gathered
-last_updated: "2026-09-07T09:22:41.853Z"
+last_updated: "2026-09-07T10:29:37.866Z"
 last_activity: 2026-09-06
 last_activity_desc: "Completed quick task 260906-feq: DOCKER-USER iptables rules on the VM"
-state_head: a17fccefaccedfa5f60327a952b5e5e69ce35a12
+state_head: 63ddc4c1415e471660a0e185b07c4d9be03eb2fd
 progress:
   total_phases: 2
   completed_phases: 1
-  total_plans: 8
+  total_plans: 14
   completed_plans: 8
 milestone_name: Nonprod Environment & CI Hardening
 ---
@@ -27,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 
 ## Current Position
 
-Phase: 11
+Phase: 12 (Self-hosted observability stack) — READY TO EXECUTE
 Plan: Not started
 Status: All phases complete
 Last activity: 2026-09-06 - Completed quick task 260906-feq: filled the previously-empty DOCKER-USER iptables chain with a version-controlled default-drop policy for Docker-published ports (80/443), reviewed three ways (Claude, Gemini, Codex) before execution, proved with an off-box before/after canary probe with packet-counter attribution, made self-reapplying via a systemd unit verified across a docker restart AND a full VM reboot, corrected the runbook/architecture-doc/diagram trio that described the chain as empty since 2026-09-05, and filed a new todo for the separately-scoped IPv6 gap
