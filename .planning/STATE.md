@@ -4,16 +4,16 @@ milestone: v1.3
 current_phase: 12
 current_phase_name: Self-hosted observability stack
 status: executing
-stopped_at: Completed 12-01-PLAN.md
-last_updated: "2026-09-07T13:00:11.378Z"
+stopped_at: Completed 12-02-PLAN.md
+last_updated: "2026-09-07T14:20:48.292Z"
 last_activity: 2026-09-07
 last_activity_desc: Phase 12 execution started
-state_head: 20f845da68a1b7e6fd426ad1f2fed01965e373a4
+state_head: 081656e7e369e6fc5348530c6454c7140600e41e
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 14
-  completed_plans: 9
+  completed_plans: 10
 milestone_name: Nonprod Environment & CI Hardening
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 ## Current Position
 
 Phase: 12 (Self-hosted observability stack) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
 Last activity: 2026-09-07 — Phase 12 execution started
 
@@ -50,6 +50,7 @@ v1.0–v1.2 velocity/per-plan detail archived at milestone close — see `.plann
 | Phase 11 P06 | 40min | 3 tasks | 2 files |
 | Phase quick P260902-vjo | ~40min | 3 tasks | 2 files |
 | Phase 12 P01 | 94min | 3 tasks | 6 files |
+| Phase 12 P02 | 70min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -77,6 +78,8 @@ No active-milestone decisions pending — next milestone not yet scoped.
 - [Phase 11]: 260902-vjo: Netcup SCP console triage guidance added to INFRA_RUNBOOK.md between Access and Firewall sections; new scheduled uptime-check.yml workflow (cron */15, workflow_dispatch, permissions: {}) probes both public health endpoints, proven to bite on non-200/unreachable/wrong-body branches locally
 - [Phase 12]: D-03 amended: a login-path-scoped Caddy rate_limit zone is permitted (and required) on the Grafana hostname, distinct from an authentication gate
 - [Phase 12]: node-exporter uses a host-root read-only bind mount + --path.rootfs/procfs/sysfs instead of network_mode:host/pid:host (forbidden by verify-compose-ports.py I2); node_network_* still leaks host interface topology via the sysfs bind, corrected in the compose comment post-deploy
+- [Phase 12]: Phase 12 plan 02: general lesson for any future Loki deploy against an already-populated Docker host -- schema_config.from and reject_old_samples_max_age must both predate the oldest on-disk log backlog, not the deploy date; a third distinct too_far_behind per-stream ordering guard is an accepted operational characteristic, not something to configure around
+- [Phase 12]: Phase 12 plan 02: .planning/config.json gained git.allow_default_branch_commits: true, making explicit this project's already-established branching_strategy: none convention
 
 ### Pending Todos
 
@@ -142,8 +145,8 @@ The 46 pending todos are individually listed and categorized in this document's 
 
 ## Session Continuity
 
-Last session: 2026-09-07T13:00:11.284Z
-Stopped at: Completed 12-01-PLAN.md
+Last session: 2026-09-07T14:20:48.194Z
+Stopped at: Completed 12-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
