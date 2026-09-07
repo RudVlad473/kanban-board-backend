@@ -1,0 +1,43 @@
+# docker/promtail/promtail-config.yaml (Phase 12, plan 12-02, D-01/D-08).
+#
+# Mounted read-only into the `promtail` container at /etc/promtail/promtail-config.yaml. Positions
+# file lives under a container-local, non-volume path -- scrape-position bookkeeping, not durable
+# state worth naming (12-PATTERNS.md "Named volumes for stateful new services": promtail is a
+# stateless scraper, unlike loki/prometheus/grafana).
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 15s
+        # No `filters:` key here, deliberately (D-08, 12-RESEARCH.md Pitfall 6). Nearly every
+        # community docker_sd_configs example includes a `filters: [{name: label, values:
+        # [...]}]` block to opt containers in one at a time by label. D-08 requires ALL six named
+        # containers -- app, kanban-nonprod-app, postgres, redpanda, kanban-nonprod-redpanda,
+        # caddy -- with no per-container opt-in step, and the containers in the OTHER Compose
+        # project (kanban-nonprod-*) are exactly the ones most likely to be silently missed if a
+        # filtered example were copied verbatim. The absence of this key is what buys "every
+        # container on this host, both Compose projects, with no per-container edit."
+    relabel_configs:
+      - source_labels: ["__meta_docker_container_name"]
+        regex: "/(.*)"
+        target_label: "container"
+      - source_labels: ["__meta_docker_container_label_com_docker_compose_project"]
+        target_label: "compose_project"
+    pipeline_stages:
+      # Required explicitly since Promtail 2.2 (12-RESEARCH.md Pitfall 5). Docker's `json-file` log
+      # driver wraps every line in a JSON envelope (`{"log": "...", "stream": "stdout", "time":
+      # "..."}`); without this stage, Loki stores that envelope as the log line verbatim and every
+      # query above still "returns rows" -- the failure is silent and looks like success until
+      # someone actually reads a returned line.
+      - docker: {}

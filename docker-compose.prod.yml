@@ -574,6 +574,90 @@ services:
       start_period: 30s
     logging: *default-logging
 
+  # Log aggregation, single-binary + filesystem-backed (Phase 12, plan 12-02 -- D-01/D-07). Stores
+  # what promtail below ships; queried by Grafana via the Loki datasource appended in
+  # docker/grafana/provisioning/datasources/datasources.yaml.
+  loki:
+    image: grafana/loki:3.7.7
+    hostname: loki
+    restart: unless-stopped
+    volumes:
+      - ./docker/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki-data:/loki
+    command:
+      - '-config.file=/etc/loki/loki-config.yaml'
+    networks:
+      # `default` must be listed explicitly -- once a service declares any `networks:` key it no
+      # longer implicitly joins the default network, and dropping it here would sever
+      # promtail -> loki and grafana -> loki.
+      - default
+    # PROVISIONAL Iteration-0 baseline (Plan 12-02, 2026-09-07) -- no measurement ladder has been
+    # run yet. Plan 12-05 owns the measured floor, the same way plan 11-01 set postgres's initial
+    # 512m baseline and 11-03 then descended it. Set high on purpose so the ladder has somewhere to
+    # descend from, not to justify a number.
+    mem_limit: 512m
+    # No `ports:` entry at all -- mirrors every other internal-only service in this file. Only
+    # promtail (push) and grafana (query, as a datasource client) reach this container.
+    # Mechanically enforced: scripts/verify-compose-ports.py fails CI if this service ever gains one.
+    # No healthcheck: this image ships no shell at all (confirmed live, 2026-09-07: `docker run
+    # --entrypoint sh grafana/loki:3.7.7 -c 'echo ok'` fails with "exec: sh: executable file not
+    # found in $PATH") -- there is no CMD-SHELL that could run inside this container to probe
+    # `/ready`. No service in this file declares `depends_on: loki`, so the absence of a health
+    # status here has no downstream effect.
+    logging: *default-logging
+
+  # Log shipping agent, discovers every container on the HOST via docker.sock -- both Compose
+  # projects, no per-container opt-in (Phase 12, plan 12-02 -- D-01/D-08). Formally EOL as of
+  # 2026-03-02 (12-RESEARCH.md "State of the Art"); named explicitly in D-01/D-08 as the chosen
+  # tool, so this is a locked user decision, not an unexamined one -- Grafana Alloy is the
+  # documented migration path if this is ever revisited. Recorded in docs/INFRA_RUNBOOK.md.
+  promtail:
+    image: grafana/promtail:3.6.11
+    hostname: promtail
+    restart: unless-stopped
+    volumes:
+      - ./docker/promtail/promtail-config.yaml:/etc/promtail/promtail-config.yaml:ro
+      # Grants effective host-root to anything that compromises this container: the Docker API's
+      # dangerous operations (creating a privileged container, mounting the host filesystem into
+      # one) are HTTP requests over this socket, not filesystem writes to it, so `:ro` removes one
+      # tampering class (this container cannot be made to write different bytes to the socket
+      # file itself) but does NOT remove that API-level privilege -- a read-only mount reads as a
+      # stronger control than it actually is, stated here rather than left implied. Same posture
+      # D-05 already accepts for cAdvisor's own docker.sock mount (plan 12-03). Mitigated only by
+      # this container having no inbound route and no published port.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command:
+      - '-config.file=/etc/promtail/promtail-config.yaml'
+    networks:
+      # `default` must be listed explicitly -- once a service declares any `networks:` key it no
+      # longer implicitly joins the default network, and dropping it here would sever
+      # promtail -> loki.
+      - default
+    # PROVISIONAL Iteration-0 baseline (Plan 12-02, 2026-09-07) -- no measurement ladder has been
+    # run yet. Plan 12-05 owns the measured floor, the same way plan 11-01 set postgres's initial
+    # 512m baseline and 11-03 then descended it. Set high on purpose so the ladder has somewhere to
+    # descend from, not to justify a number.
+    mem_limit: 256m
+    # No `ports:` entry at all -- mirrors every other internal-only service in this file. Nothing
+    # queries Promtail directly; it only pushes to loki.
+    # Mechanically enforced: scripts/verify-compose-ports.py fails CI if this service ever gains one.
+    healthcheck:
+      # Neither wget nor curl exists in this image (confirmed live, 2026-09-07: `docker run
+      # --entrypoint sh grafana/promtail:3.6.11 -c 'command -v wget curl'` returns nothing) --
+      # unlike every wget-based healthcheck elsewhere in this file. bash IS present, so this probes
+      # `/ready` using bash's own `/dev/tcp` pseudo-device, which needs no external HTTP client
+      # binary. The explicit `bash -c` wrapper is required because CMD-SHELL's default `/bin/sh` in
+      # this image is dash, which does NOT implement `/dev/tcp` (confirmed live: dash reports
+      # "cannot create /dev/tcp/...: Directory nonexistent" for the identical probe). Verified
+      # end-to-end against a running container before committing this, not assumed from a syntax
+      # reading.
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/9080 && printf \"GET /ready HTTP/1.0\\r\\n\\r\\n\" >&3 && head -n1 <&3 | grep -q 200'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    logging: *default-logging
+
 volumes:
   redpanda-data:
   caddy-data:
@@ -584,3 +668,6 @@ volumes:
   # them rather than starting cold.
   prometheus-data:
   grafana-data:
+  # Phase 12, plan 12-02: Loki's chunk store + compactor working directory (30-day retention,
+  # D-07) -- named so container recreation reuses it rather than starting cold and losing history.
+  loki-data:

@@ -9,3 +9,9 @@ datasources:
     access: proxy
     url: http://prometheus:9090
     isDefault: true
+  # Appended plan 12-02 (D-01/D-07/D-08): points at the loki service this same plan adds to
+  # docker-compose.prod.yml.
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100

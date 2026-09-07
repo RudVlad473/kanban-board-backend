@@ -1,0 +1,51 @@
+# docker/loki/loki-config.yaml (Phase 12, plan 12-02, D-01/D-07/D-08).
+#
+# Single-binary Loki, filesystem-backed: the documented mode for a single small host, no object
+# store and no ring beyond the trivial single-member `inmemory` one. Mounted read-only into the
+# `loki` container at /etc/loki/loki-config.yaml; all writable state lives under /loki, which is
+# the `loki-data` named volume declared in docker-compose.prod.yml.
+#
+# Retention: limits_config.retention_period below is 720h -- D-07's 30 days, expressed in the
+# hours unit Loki's own config uses -- sized against the 222 GB disk headroom measured 2026-09-07
+# (docs/INFRA_RUNBOOK.md), the same basis Prometheus's 30d retention (plan 12-01) used. Falsifiable:
+# if `df` headroom on this VM ever drops materially below that figure, this retention_period is the
+# value to revisit first, before anything else in this stack.
+#
+# Retention is enforced by compactor.retention_enabled + limits_config.retention_period (the
+# current mechanism) -- NOT table_manager/chunk_store_config, which Loki 2.x+ superseded. Loki 3.x
+# refuses to start with retention_enabled: true and no delete_request_store configured (a startup
+# failure, not a silent one, but confusing if unanticipated), so that key is set explicitly below.
+
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+
+common:
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2026-09-07
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  retention_period: 720h
+
+compactor:
+  working_directory: /loki/compactor
+  retention_enabled: true
+  delete_request_store: filesystem
