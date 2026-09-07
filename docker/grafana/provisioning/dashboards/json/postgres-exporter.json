@@ -193,7 +193,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "max(pg_replication_lag{instance=\"$Instance\"})",
+          "expr": "max(pg_replication_lag_seconds{instance=\"$Instance\"})",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
@@ -860,7 +860,7 @@
       "tableColumn": "",
       "targets": [
         {
-          "expr": "sum(pg_database_size{instance=\"$Instance\"})",
+          "expr": "sum(pg_database_size_bytes{instance=\"$Instance\"})",
           "refId": "A"
         }
       ],
@@ -2149,7 +2149,7 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "max(pg_replication_lag{instance=\"$Instance\"})",
+          "expr": "max(pg_replication_lag_seconds{instance=\"$Instance\"})",
           "instant": false,
           "intervalFactor": 1,
           "legendFormat": "lag ",
@@ -2377,10 +2377,10 @@
             "ymax": null,
             "ymin": null
           },
-          "tableColumn": "pg_database_size{datname=\"grafana\", instance=\"db01vp-nbg6a.obs.noris.net:9187\", job=\"postgres-exporter\", server=\"213.95.132.73:5432\"}",
+          "tableColumn": "pg_database_size_bytes{datname=\"grafana\", instance=\"db01vp-nbg6a.obs.noris.net:9187\", job=\"postgres-exporter\", server=\"213.95.132.73:5432\"}",
           "targets": [
             {
-              "expr": "pg_database_size{instance=\"$Instance\",datname=\"$Database\"}",
+              "expr": "pg_database_size_bytes{instance=\"$Instance\",datname=\"$Database\"}",
               "refId": "A"
             }
           ],
