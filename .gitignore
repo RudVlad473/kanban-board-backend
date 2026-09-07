@@ -58,4 +58,14 @@ out/
 __pycache__/
 *.pyc
 
+### GSD internal state -- regenerated per session, not reviewable content ###
+.gsd/
+.planning/milestone.lock
+.planning/state.json
+.planning/research/.cache/
+.planning/debug/*.tmp
+
+### Playwright MCP browser-automation artifacts -- throwaway, never committed ###
+.playwright-mcp/
+
 
