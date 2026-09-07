@@ -1,0 +1,20 @@
+# Grafana dashboard provisioning (Phase 12, plan 12-04). This provider reads a LOCAL path only --
+# it never fetches a dashboard by ID at runtime, unlike the datasource-provisioning file next to
+# this one which points at live services. The three JSON files under `json/` are pre-fetched from
+# grafana.com and committed to git (see each file's own `description` field for its dashboard ID,
+# revision and fetch date); a future reader adding a fourth dashboard must fetch and commit its
+# JSON here first -- there is no "provision by ID and let Grafana download it" path, and building
+# one would make container start depend on grafana.com being reachable (rejected as this plan's
+# design alternative C).
+#
+# `path` is inside the `docker/grafana/provisioning` bind mount plan 12-01 already established
+# (docker-compose.prod.yml), so this plan needs no Compose change -- it only adds files underneath
+# an existing mount.
+apiVersion: 1
+providers:
+  - name: default
+    type: file
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/provisioning/dashboards/json
+      foldersFromFilesStructure: false
