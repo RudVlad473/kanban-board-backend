@@ -3,17 +3,17 @@ gsd_state_version: "1.0"
 milestone: v1.3
 current_phase: 12
 current_phase_name: Self-hosted observability stack
-status: completed
-stopped_at: Phase 12 context gathered
-last_updated: "2026-09-07T11:23:32.226Z"
-last_activity: 2026-09-06
-last_activity_desc: "Completed quick task 260906-feq: DOCKER-USER iptables rules on the VM"
-state_head: "0b84386519dac47cbd06ca5de653bb01c7362569"
+status: executing
+stopped_at: Completed 12-01-PLAN.md
+last_updated: "2026-09-07T13:00:11.378Z"
+last_activity: 2026-09-07
+last_activity_desc: Phase 12 execution started
+state_head: 20f845da68a1b7e6fd426ad1f2fed01965e373a4
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 14
-  completed_plans: 8
+  completed_plans: 9
 milestone_name: Nonprod Environment & CI Hardening
 ---
 
@@ -24,14 +24,14 @@ milestone_name: Nonprod Environment & CI Hardening
 See: .planning/PROJECT.md (updated 2026-08-17)
 
 **Core value:** The backend is feature-complete against its own mock-ups and live in production; the differentiator now is proving the whole system — including a real frontend against a real deploy — is reliable.
-**Current focus:** Phase 11 — Migrate database from Neon to self-hosted Postgres
+**Current focus:** Phase 12 — Self-hosted observability stack
 
 ## Current Position
 
-Phase: 12 (Self-hosted observability stack) — READY TO EXECUTE
-Plan: Not started
-Status: All phases complete
-Last activity: 2026-09-06 - Completed quick task 260906-feq: filled the previously-empty DOCKER-USER iptables chain with a version-controlled default-drop policy for Docker-published ports (80/443), reviewed three ways (Claude, Gemini, Codex) before execution, proved with an off-box before/after canary probe with packet-counter attribution, made self-reapplying via a systemd unit verified across a docker restart AND a full VM reboot, corrected the runbook/architecture-doc/diagram trio that described the chain as empty since 2026-09-05, and filed a new todo for the separately-scoped IPv6 gap
+Phase: 12 (Self-hosted observability stack) — EXECUTING
+Plan: 2 of 6
+Status: Ready to execute
+Last activity: 2026-09-07 — Phase 12 execution started
 
 ## Performance Metrics
 
@@ -49,6 +49,7 @@ v1.0–v1.2 velocity/per-plan detail archived at milestone close — see `.plann
 | Phase 11 P05 | 41min | 3 tasks | 2 files |
 | Phase 11 P06 | 40min | 3 tasks | 2 files |
 | Phase quick P260902-vjo | ~40min | 3 tasks | 2 files |
+| Phase 12 P01 | 94min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -74,6 +75,8 @@ No active-milestone decisions pending — next milestone not yet scoped.
 - [Phase 11]: Phase 11 plan 05: gate-still-bites evidence gathered via a live VM-local reproduction against a disposable scratch database rather than a throwaway-branch CI push
 - [Phase 11]: 260829-ii3: ResetController's params-based two-route split (fullReset=true vs fullReset!=true) routed exactly as predicted; the plan's accepted-async-race assumption for activity_log/topic-offset assertions did not hold empirically and required bounding, not tightening
 - [Phase 11]: 260902-vjo: Netcup SCP console triage guidance added to INFRA_RUNBOOK.md between Access and Firewall sections; new scheduled uptime-check.yml workflow (cron */15, workflow_dispatch, permissions: {}) probes both public health endpoints, proven to bite on non-200/unreachable/wrong-body branches locally
+- [Phase 12]: D-03 amended: a login-path-scoped Caddy rate_limit zone is permitted (and required) on the Grafana hostname, distinct from an authentication gate
+- [Phase 12]: node-exporter uses a host-root read-only bind mount + --path.rootfs/procfs/sysfs instead of network_mode:host/pid:host (forbidden by verify-compose-ports.py I2); node_network_* still leaks host interface topology via the sysfs bind, corrected in the compose comment post-deploy
 
 ### Pending Todos
 
@@ -139,9 +142,9 @@ The 46 pending todos are individually listed and categorized in this document's 
 
 ## Session Continuity
 
-Last session: 2026-09-07T09:22:41.671Z
-Stopped at: Phase 12 context gathered
-Resume file: .planning/phases/12-self-hosted-observability-stack/12-CONTEXT.md
+Last session: 2026-09-07T13:00:11.284Z
+Stopped at: Completed 12-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
