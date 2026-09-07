@@ -445,10 +445,24 @@ services:
     #     reaches the host's real procfs through the same read-only bind and yields the same
     #     CPU/memory/load numbers without joining the host PID namespace, and this phase collects
     #     no per-process metrics that would need more.
-    # Disclosed cost of both omissions: without `network_mode: host`, `node_network_*` series
-    # describe THIS CONTAINER's own network namespace, not the VM's NIC -- host network throughput
-    # is deliberately NOT collected by this phase. An undisclosed gap in one metric family would
-    # read as coverage; this comment is that disclosure (see also 12-01-PLAN.md design_alternatives).
+    # CORRECTED (Plan 12-01 Task 3, live VM verification, 2026-09-07): this comment originally
+    # claimed `node_network_*` would describe THIS CONTAINER's own network namespace rather than
+    # the host's, as the disclosed cost of omitting `network_mode: host`. Live evidence on the VM
+    # proved that claim wrong. `node_network_up` reports the HOST's full interface set (eth0,
+    # docker0, every `br-*` bridge, every `veth*` pair for every container on the box) -- an exact
+    # match to `ip -o link show` run on the host -- while `docker exec` directly into this
+    # container's own netns shows only `eth0`/`lo`, confirming the CONTAINER's own namespace
+    # isolation is genuinely intact. Mechanism: `--path.sysfs=/host/sys` reads the host's live
+    # `/sys` through the read-only bind mount, and sysfs's network-class entries are pinned to
+    # whatever netns was active when that mount was created (the host's) rather than the netns of
+    # whoever later reads it through a bind -- so host network *link/interface* visibility leaks
+    # through even without `network_mode: host` or `pid: host`. This is NOT a namespace-isolation
+    # regression (the container's own capabilities are unaffected, verified separately) but it IS
+    # more host visibility than this comment previously disclosed. Residual risk is low -- this is
+    # link/interface names and byte counters, not traffic content, and it sits behind Grafana's own
+    # login gate (D-03) -- but the earlier "container-scoped, not collected" framing was simply
+    # incorrect and is corrected here rather than left standing. Traffic/throughput correlated to a
+    # specific OTHER host is still not obtainable this way; only this VM's own local topology is.
     volumes:
       # The host's own root filesystem, read-only, with `rslave` propagation so submounts of `/`
       # (the VM's real block devices) are visible inside rather than stopping at the top-level
