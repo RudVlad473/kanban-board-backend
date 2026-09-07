@@ -1042,7 +1042,8 @@
       "targets": [
         {
           "expr": "max(pg_settings_shared_buffers_bytes{instance=\"$Instance\"})",
-          "refId": "A"
+          "refId": "A",
+          "legendFormat": ""
         }
       ],
       "thresholds": "",
@@ -1131,7 +1132,8 @@
       "targets": [
         {
           "expr": "max(pg_settings_max_connections{instance=\"$Instance\"})",
-          "refId": "A"
+          "refId": "A",
+          "legendFormat": ""
         }
       ],
       "thresholds": "",
