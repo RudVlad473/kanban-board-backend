@@ -238,6 +238,7 @@ jobs:
       - name: Validate the committed Caddyfile against this build
         run: |
           docker run --rm -e APP_DOMAIN=example.test -e APP_DOMAIN_NONPROD=nonprod.example.test \
+            -e APP_DOMAIN_MONITORING=monitoring.example.test \
             -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" \
             "${{ steps.gate_and_derive_tag.outputs.caddy_image }}" \
             caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
