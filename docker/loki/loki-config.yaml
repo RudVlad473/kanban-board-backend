@@ -25,6 +25,16 @@
 # retries a failed (500) batch forever, which blocks that stream's newer entries from ever being
 # sent. Backdating costs nothing -- schema periods don't pre-allocate storage -- so `from:` should
 # always be set safely before any container's earliest possible log line, not the day of this change.
+#
+# limits_config.reject_old_samples_max_age is set to match retention_period below for the same
+# reason. Loki's own default (168h/7d) still rejected the pre-deploy backlog entries older than a
+# week as "too old" (a softer 400, not the 500 above) -- but Promtail batches MULTIPLE streams into
+# one push, and observed live: a rejected batch is dropped in its entirety
+# (promtail_dropped_entries_total{reason="ingester_error"}), taking down another, genuinely-recent
+# stream's valid entries as collateral damage when they happened to share a push with the stale
+# ones. Matching this to retention_period means nothing inside the 30-day window this stack actually
+# keeps is ever rejected as "too old" in the first place, so no valid entry can be dropped as
+# collateral from a batch containing an out-of-window one.
 
 auth_enabled: false
 
@@ -54,6 +64,7 @@ schema_config:
 
 limits_config:
   retention_period: 720h
+  reject_old_samples_max_age: 720h
 
 compactor:
   working_directory: /loki/compactor
