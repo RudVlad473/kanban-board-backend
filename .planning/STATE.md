@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-09-08)
 Phase: 12
 Plan: Not started
 Status: All phases complete
-Last activity: 2026-09-08 - Completed quick task 260908-r16: Restructure the Postgres Internals dashboard into five topic rows and rename cAdvisor's title again
+Last activity: 2026-09-08 - Completed quick task 260908-sj9: Fixed deploy.yml's SCP step to transfer all 4 previously-missing observability config mounts, gated by a new CI invariant
 
 ## Performance Metrics
 
@@ -132,6 +132,7 @@ confusion risk, `NVD_API_KEY` resolution failure) were resolved during Phases 8�
 | 260908-dl3 | Let POST /api/boards optionally accept a caller-supplied board id, validated against RandFlakeGenerator's real base36 format, uniqueness-checked before insert, and rejected 409 when taken; corrected `.claude/CLAUDE.md`'s stale ULID claim to the actual base36 scheme | 2026-09-08 | cb38532 | [260908-dl3-create-board-endpoint-optionally-accepts](./quick/260908-dl3-create-board-endpoint-optionally-accepts/) |
 | 260908-mtl | Rename the three phase-12 vendored Grafana dashboards to human-readable titles (VM Host Metrics, Per-Container Resource Usage, Postgres Internals) and re-scope the grooming todo to piece 2 only; plan fan-out-reviewed (Claude+agy+Codex) pre-execution, which caught and fixed a false claim about Grafana rewriting stale URL slugs (it doesn't — verified live) and a mis-citation of one of two precedent todos | 2026-09-08 | ba259cb | [260908-mtl-groom-the-three-phase-12-grafana-dashboa](./quick/260908-mtl-groom-the-three-phase-12-grafana-dashboa/) |
 | 260908-r16 | Restructure the Postgres Internals dashboard's 23 panels from one crammed "Global Statistics" row into five expanded topic rows (Health & Availability, Connections, Query Performance, Storage & I/O, Locks) via a reviewable Python codemod, rename cAdvisor's title again to "CPU/Memory & Network Usage - cAdvisor", and supersede the now-stale title claim on the originating todo; verified against a real disposable Grafana container plus a live browser screenshot confirming the visual fix | 2026-09-08 | ac12fc3 | [260908-r16-restructure-the-postgres-internals-grafa](./quick/260908-r16-restructure-the-postgres-internals-grafa/) |
+| 260908-sj9 | Discovered live (checking why a fresh public Grafana link showed stale content): deploy-to-netcup's SCP step never transferred 4 of 6 repo-relative bind mounts docker-compose.prod.yml declares (grafana provisioning, prometheus.yml, loki-config.yaml, promtail-config.yaml) — production had served Sep-7 hand-copied config behind 14 green deploys. Fixed the source list, added scripts/verify-deploy-scp-coverage.py (proven to fail against the pre-fix string, naming all four paths, and pass against the fix) wired into invariant-checks.yml, recorded the evidence in INFRA_RUNBOOK.md, and filed a todo for the separate remaining gap (3 of 4 consumers need a restart to apply transferred config, not just a copy) | 2026-09-08 | d433360 | [260908-sj9-fix-deploy-yml-add-docker-grafana-provis](./quick/260908-sj9-fix-deploy-yml-add-docker-grafana-provis/) |
 
 ## Deferred Items
 
