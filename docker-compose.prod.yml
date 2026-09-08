@@ -644,12 +644,17 @@ services:
     # three dashboards rendering throughout; peak RSS ~292MiB). 256m FAILED: the kernel OOM-killed
     # the process (RestartCount=9, confirmed via `dmesg`: "Memory cgroup out of memory: Killed
     # process ... (grafana)").
-    # Adopted: 384m, leaving ~91MiB headroom above the measured ~292MiB peak (~31% margin),
-    # independently re-verified from a fresh --force-recreate through a full workload+20s-settle
-    # cycle with RestartCount=0 sustained. Full rung-by-rung ladder and the failing rung's
-    # verbatim OOM evidence: docs/INFRA_RUNBOOK.md, "Observability stack resource measurement --
-    # Plan 12-05".
-    mem_limit: 384m
+    # CORRECTED (Plan 12 phase-close verification, 2026-09-08, same day): the 384m adopted value
+    # above proved insufficient under REAL sustained production usage -- confirmed via `dmesg` on
+    # netcup-prod: two separate OOM kills within an hour of deployment, the second at ~446MiB
+    # actual usage (254MiB anon-rss + 192MiB file-rss), nearly double the burst-ladder's measured
+    # peak. The short synthetic burst this ladder used did not capture Grafana's real growth under
+    # sustained dashboard/API usage across multiple concurrent sessions. Raised to 768m -- double
+    # the original adopted value, and double the previously-observed real-world peak -- as a
+    # deliberately conservative floor pending a longer-duration re-measurement. This is a same-day
+    # correction, not a new plan; full incident evidence: docs/INFRA_RUNBOOK.md, "Observability
+    # stack resource measurement -- Plan 12-05" addendum.
+    mem_limit: 768m
     # No `ports:` entry at all -- Caddy reaches this container over the internal `default` network
     # by service name (grafana:3000) only, mirroring how it already reaches `app`/`app-nonprod`.
     # Mechanically enforced: scripts/verify-compose-ports.py fails CI if this service ever gains one.
@@ -826,7 +831,16 @@ services:
     # cycle with RestartCount=0 sustained. Full rung-by-rung ladder and the failing rung's
     # verbatim OOM evidence: docs/INFRA_RUNBOOK.md, "Observability stack resource measurement --
     # Plan 12-05".
-    mem_limit: 64m
+    # CORRECTED (Plan 12 phase-close verification, 2026-09-08, same day): 64m proved insufficient
+    # under REAL sustained production usage -- confirmed via `dmesg` on netcup-prod: SIX separate
+    # OOM kills across ~40 minutes of real operation (watching all 13 live containers, not this
+    # ladder's short synthetic burst), each with anon-rss+file-rss creeping toward and past the
+    # cap before being killed. The "flat under the burst" ladder shape described above held for a
+    # short synthetic test but did not capture a slow real-world creep. Raised to 128m -- the
+    # already-proven-passing rung one step above 64m in this same ladder -- as a same-day
+    # correction pending a longer-duration re-measurement. Full incident evidence:
+    # docs/INFRA_RUNBOOK.md, "Observability stack resource measurement -- Plan 12-05" addendum.
+    mem_limit: 128m
     # No `ports:` entry at all -- mirrors every other internal-only service in this file. Only
     # Prometheus reaches this container, over the internal `default` network.
     # Mechanically enforced: scripts/verify-compose-ports.py fails CI if this service ever gains one.

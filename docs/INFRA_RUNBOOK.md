@@ -3928,6 +3928,50 @@ resolved.
 
 2026-09-08.
 
+### Addendum — same-day correction (2026-09-08, phase-close verification)
+
+The burst-ladder measurements above for `cadvisor` and `grafana` used a short synthetic workload
+cycle (burst + dashboard load + settle, each a few minutes at most). Real production usage — this
+phase's own goal-verification pass, running hours after deployment against all 13 live containers
+— found BOTH caps insufficient under sustained real conditions, discovered via `dmesg` on
+`netcup-prod`:
+
+- **`cadvisor` (adopted 64m):** SIX separate OOM kills across roughly 40 minutes of real
+  operation, each showing anon-rss climbing toward (and past) the cap before being killed —
+  a slow creep the short synthetic burst never ran long enough to observe. The "flat under the
+  burst, floor found at startup" characterization above held for that test but not for sustained
+  real usage.
+- **`grafana` (adopted 384m):** TWO separate OOM kills within roughly 30 minutes, the second at
+  ~446MiB actual usage (254MiB anon-rss + 192MiB file-rss) — nearly double the burst-ladder's
+  measured ~292MiB peak. Real concurrent dashboard/API usage exceeded what one synthetic burst
+  captured.
+
+**Corrective action, same day:** `cadvisor` raised to 128m (the already-proven-passing rung one
+step above 64m in the original ladder) and `grafana` raised to 768m (double both the original
+adopted value and the highest real-world peak observed before the second kill). Both applied live
+on `netcup-prod`, force-recreated, and confirmed stable — `RestartCount=0`, all 13 containers
+healthy, both public health endpoints 200, `free -m available: 5025MiB` — before being written
+back into this file and `docker-compose.prod.yml`. Neither `app`, `postgres`, `redpanda`, nor
+`caddy` was touched or disrupted by this correction.
+
+**What this addendum does NOT claim:** these are conservative corrective values, not a
+re-run ladder — a genuine restart-ladder descent against a LONGER observation window (real
+sustained usage, not a multi-minute burst) is the correct follow-up to find each service's actual
+measured floor at this scale, and is recorded as an open item rather than silently treated as
+already done. Filed as a follow-up: `.planning/todos/pending/2026-09-08-cadvisor-and-grafana-need-a-longer-observation-window-re-ladder.md`.
+
+**Process note, disclosed rather than glossed over:** during this same verification pass, the
+deployed `/opt/deploy/kanban-board-backend/docker-compose.prod.yml` working file on the VM (a
+hand-edited copy used to drive live restart-ladder testing, distinct from the git-committed
+source of truth CI deploys from) was found with EVERY service's `mem_limit` flattened to a
+uniform `32m` — including `postgres`, `prometheus`, `loki` and `promtail`, none of which this
+correction was investigating. The running containers were unaffected (each still bound to its
+last-good limit from its own last real recreate — confirmed via `docker inspect
+--format='{{.HostConfig.Memory}}'` against each one individually), so there was no live incident
+for those four services. Root cause could not be conclusively determined — no shell history was
+captured on the VM for the session that made the edit. The file was restored to the correct
+values for all eleven production services before any further recreate was attempted.
+
 ## Caddy resource measurement — Plan 12-06 (2026-09-08)
 
 `caddy`'s `mem_limit` — absent entirely before this plan — is set here using the same
