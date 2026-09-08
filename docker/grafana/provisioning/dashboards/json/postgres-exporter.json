@@ -3581,7 +3581,7 @@
     ]
   },
   "timezone": "",
-  "title": "PostgreSQL Exporter",
+  "title": "Postgres Internals",
   "uid": "v5ciIbUZz",
   "version": 2,
   "description": "postgres exporter Dashboard for display important postgreSQL metric (vendored from grafana.com dashboard ID 12485, revision 1, fetched 2026-09-07; datasource placeholder resolved to 'Prometheus')"
