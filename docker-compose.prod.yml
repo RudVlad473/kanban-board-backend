@@ -117,6 +117,39 @@ services:
       # week-long Let's Encrypt rate-limit ban (T-05-12).
       - caddy-data:/data
       - caddy-config:/config
+    # MEASURED BASIS (Plan 12-06, 2026-09-08) -- host: Netcup VPS Lite 2 G12s, 4 vCPU / 7.8GiB
+    # measured. This container's memory is influenced by UNAUTHENTICATED internet traffic: the
+    # rate limiter (Caddyfile) holds per-source-address state keyed on `{remote_host}`, and every
+    # TLS handshake allocates -- so this cap is a security bound on what an unauthenticated party
+    # can make this process consume, not only an OOM backstop, which is why the folded todo (D-02)
+    # existed. Workload: the repo's established 54-request burst against both environments, a full
+    # Grafana session (login + all three dashboards at the widest range) through the third site
+    # block, and an adversarial component -- repeated requests aimed at `/api/signin` via this
+    # repo's own pinned scripts/loadtest/run-rate-limit-verification.sh -- run from a single sandboxed
+    # session and therefore covering only ONE distinct source address. This does NOT exercise the
+    # limiter's true attacker-influenced memory driver, which grows only with DISTINCT
+    # `{remote_host}` keys; the true multi-attacker worst case is unmeasured by this ladder.
+    # Ladder descended from a 256m Iteration-0 starting point (against a recorded ~20MiB idle
+    # baseline, see the redpanda block's own comment below): 256m -> 128m -> 64m -> 32m -> 16m all
+    # PASSED (RestartCount=0 sustained across a full --force-recreate + workload + 20s-settle
+    # cycle at every rung; all three site blocks serving with valid certs; the rate limiter's auth
+    # zone still rejecting past its threshold, confirmed at 256m, 16m and 32m). 8m FAILED: the
+    # kernel OOM-killed the process within ~1s of startup and it crash-looped (RestartCount=5)
+    # before the descent was stopped immediately per this plan's certificate-safety rule (`dmesg`:
+    # "Memory cgroup out of memory: Killed process ... (caddy)").
+    # Adopted: 32m -- deliberately NOT the bare 16m passing floor (which cleared only ~41% margin
+    # and sits one rung above the failing 8m). The entire 32m->16m gap (~15.8MiB, ~98% margin
+    # above the measured ~16.17MiB peak RSS) is deliberate ATTACKER-INFLUENCE MARGIN, not
+    # additional ladder evidence: since the adversarial component above could only exercise one
+    # source address, this compensates for a coverage gap it could not close, rather than
+    # substituting for actually measuring the multi-attacker case. Independently re-verified from
+    # a fresh --force-recreate through a full workload+20s-settle cycle with RestartCount=0
+    # sustained. Falsifier: if the rate limiter's zones, keys or windows change, this measurement's
+    # adversarial component no longer matches the mechanism and this cap should be re-derived.
+    # Full rung-by-rung ladder, the failing rung's verbatim OOM evidence, and the certificate-safety
+    # stop-condition proof-of-mechanism: docs/INFRA_RUNBOOK.md, "Caddy resource measurement --
+    # Plan 12-06".
+    mem_limit: 32m
     logging: *default-logging
 
   postgres:
