@@ -93,13 +93,19 @@ rejected when it chose to commit pre-fetched JSON over fetching by ID at runtime
 
 ## Non-obvious trade-offs
 
-- **Dashboard identity survives, saved links keep working.** Grafana addresses a dashboard by
-  `uid`, and its URL is `/d/<uid>/<slug>` where the slug is *derived* from the title. Holding all
-  three `uid` values unchanged means: the provisioner updates the existing row rather than creating
-  a second dashboard beside the old one, and any previously-saved or starred URL still resolves —
-  Grafana matches on the uid segment and rewrites the stale slug. This is the single thing most
-  likely to be feared about a dashboard rename, and it is why `uid` is a must-have truth rather
-  than an assumption.
+- **Dashboard identity survives, saved links keep working — but the slug in an old URL does not
+  get rewritten.** Grafana addresses a dashboard by `uid`, and its URL is `/d/<uid>/<slug>` where
+  the slug is *derived* from the title at creation/update time. Holding all three `uid` values
+  unchanged means the provisioner updates the existing row rather than creating a second dashboard
+  beside the old one, and any previously-saved or starred URL still resolves: Grafana matches
+  purely on the `uid` segment and ignores whatever slug follows it. Confirmed by reproducing this
+  exact scenario live (fresh `grafana/grafana:13.2.1`, provisioned, renamed, waited past the 30s
+  poll) — requesting the pre-rename URL afterward returned `HTTP/1.1 200 OK` with zero redirects,
+  the stale slug still sitting in the address bar. So the functional guarantee (nothing breaks) is
+  real, but Grafana never actively rewrites an already-bookmarked URL to the new slug; only a fresh
+  navigation from within Grafana's own UI produces a link carrying the current one. This is the
+  single thing most likely to be feared about a dashboard rename, and it is why `uid` is a
+  must-have truth rather than an assumption.
 - **The `description` field is load-bearing provenance, not decoration.**
   `dashboards.yaml`'s header comment instructs a future maintainer to read each JSON's own
   `description` for that dashboard's grafana.com ID, revision and fetch date. It is the only record
@@ -212,10 +218,19 @@ would misrepresent the work as finished.
 
 Follow the precedent's structure exactly:
 
-- A `## Partial resolution` heading carrying its attribution, in the style the precedent files use
-  for a quick task — the two existing examples show both a phase form and a
-  `## Resolution (quick task <id>, <date>)` form; use the quick-task form with this task's id
-  (`260908-mtl`) and today's date (2026-09-08).
+- A `## Partial resolution` heading carrying its attribution. **Correction (verified against both
+  cited files, not assumed):** neither precedent actually demonstrates a
+  `## Resolution (quick task <id>, <date>)` heading — the first uses `## Partial resolution
+  (Phase 12)` (phase-attributed), and the second uses a bare `## Resolution` with no parenthetical
+  at all. The `(quick task <id>, <date>)` parenthetical form is real in this repo, but only under a
+  plain `## Resolution` heading on a fully-closed item:
+  `.planning/todos/completed/2026-08-11-audit-dto-and-controller-test-coverage-for-validation-bindin.md:69`
+  reads `## Resolution (quick task 260811-qru, 2026-08-11)`. No single existing file combines
+  "Partial resolution" (this todo's own state — piece 2 stays open) with a quick-task parenthetical,
+  so use `## Partial resolution (quick task 260908-mtl, 2026-09-08)` as a deliberate synthesis of
+  the two established patterns — the word from the first precedent (because this is genuinely
+  partial), the attribution shape from the completed-todo precedent (because a quick task, not a
+  phase, is doing this work) — not as a string already found verbatim in either cited file.
 - One bullet per piece of the original Solution section, each labelled with its state:
   - Piece 1, renaming — CLOSED. State the three old-to-new title mappings, and state that each
     dashboard's `description` (grafana.com ID, revision, fetch date) and `uid` were deliberately
