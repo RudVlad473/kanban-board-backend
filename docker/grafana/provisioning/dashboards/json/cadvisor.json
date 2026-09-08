@@ -774,7 +774,7 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "Per-Container Resource Usage",
+  "title": "CPU/Memory & Network Usage - cAdvisor",
   "uid": "pMEd7m0Mz",
   "version": 1,
   "description": "Simple exporter for cadvisor only (vendored from grafana.com dashboard ID 14282, revision 1, fetched 2026-09-07; datasource placeholder resolved to 'Prometheus')"
