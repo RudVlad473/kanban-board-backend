@@ -268,6 +268,76 @@ public class BoardCreationE2ETest extends AbstractAppE2ETest {
     }
 
     @Nested
+    class DuplicateId {
+        @Test
+        void shouldReturnConflictAndLeaveBoardsUnchanged_whenIdAlreadyUsedByAnotherBoard() {
+            // arrange: first board created under an explicit id
+            Pair<String, String> cookie = signin();
+            var explicitId = new RandFlakeGenerator().generateRandflake();
+            var firstBoardName = randomBoardName();
+            given().cookie(cookie.getFirst(), cookie.getSecond())
+                    .contentType(ContentType.JSON)
+                    .body(SaveBoardRequestDTO.builder().name(firstBoardName).id(explicitId).build())
+                    .when()
+                    .post(ApiPaths.BOARDS)
+                    .then()
+                    .statusCode(HttpStatus.CREATED.value());
+
+            var boardsAfterFirstCreate =
+                    given().cookie(cookie.getFirst(), cookie.getSecond())
+                            .when()
+                            .get(ApiPaths.BOARDS)
+                            .then()
+                            .extract()
+                            .as(BoardResponseDTO[].class);
+
+            // act: a second create names the same id, under a different name
+            var secondBoardName = randomBoardName();
+            var response =
+                    given().cookie(cookie.getFirst(), cookie.getSecond())
+                            .contentType(ContentType.JSON)
+                            .body(
+                                    SaveBoardRequestDTO.builder()
+                                            .name(secondBoardName)
+                                            .id(explicitId)
+                                            .build())
+                            .when()
+                            .post(ApiPaths.BOARDS)
+                            .then()
+                            .extract();
+
+            // assert: rejected three ways -- status, code, and the caller's board list unchanged
+            Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.CONFLICT.value());
+            Assertions.assertThat(response.body().jsonPath().getString("code"))
+                    .isEqualTo("DUPLICATE_RESOURCE");
+
+            var boardsAfterRejectedCreate =
+                    given().cookie(cookie.getFirst(), cookie.getSecond())
+                            .when()
+                            .get(ApiPaths.BOARDS)
+                            .then()
+                            .extract()
+                            .as(BoardResponseDTO[].class);
+            Assertions.assertThat(
+                            Arrays.stream(boardsAfterRejectedCreate)
+                                    .map(BoardResponseDTO::getId)
+                                    .toList())
+                    .containsExactlyInAnyOrderElementsOf(
+                            Arrays.stream(boardsAfterFirstCreate)
+                                    .map(BoardResponseDTO::getId)
+                                    .toList());
+
+            // assert: the pre-existing board holding that id keeps its own name
+            var originalBoard =
+                    Arrays.stream(boardsAfterRejectedCreate)
+                            .filter(b -> b.getId().equals(explicitId))
+                            .findFirst();
+            Assertions.assertThat(originalBoard).isPresent();
+            Assertions.assertThat(originalBoard.get().getName()).isEqualTo(firstBoardName);
+        }
+    }
+
+    @Nested
     class RenameBoard {
         @Test
         void

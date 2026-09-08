@@ -190,6 +190,34 @@ public class BoardService {
     @Transactional
     public BoardResponseDTO save(SaveBoardRequestDTO dto, UserEntity user) {
         var board = boardMapper.fromSaveBoardRequestDTO(dto);
+
+        // Compare-before-mutate ordering, matching updateById's "check before any other logic"
+        // precedent above: the uniqueness lookup runs before any field is written onto the
+        // entity, so a rejected create leaves it untouched. Runs only when the DTO supplied an
+        // id -- the generated path pays no extra lookup.
+        //
+        // Check-then-act window is deliberate, not an oversight: two concurrent creates naming
+        // the same id can both pass this lookup, and the loser hits the primary key directly.
+        // That failure surfaces through GlobalExceptionHandler's broader
+        // handleDataIntegrityViolation arm as a 409 carrying DATA_INTEGRITY_VIOLATION instead of
+        // this method's checked DUPLICATE_RESOURCE -- the same relationship the board-name
+        // uniqueness guard in UserService#addBoardByUserId already has with
+        // uk_boards_user_id_name. The database's primary key is the real guarantee; this check
+        // exists only to produce the friendlier, checked envelope for the common non-racing case.
+        //
+        // Decision record: caller-supplied ids must not be extended to columns, tasks or
+        // subtasks. BoardEntity.column, ColumnEntity.task and TaskEntity.subtasks all order by id
+        // ascending (@OrderBy("id")) as a creation-order proxy, and base36 string ordering does
+        // not preserve the numeric ordering that proxy depends on (a shorter string sorts before
+        // a longer one regardless of magnitude). Boards are safe only because no board collection
+        // carries that ordering. Extending this feature to those three resources without first
+        // replacing @OrderBy("id") with an explicit ordering column would silently corrupt their
+        // iteration order.
+        if (dto.getId() != null && boardRepository.existsById(dto.getId())) {
+            throw AppDuplicateResourceException.withMessage(
+                    "Board with id '" + dto.getId() + "' already exists");
+        }
+
         board.setUser(user);
 
         // Truncated to microseconds because the `created_at` column is timestamp(6) -- PostgreSQL
@@ -201,9 +229,9 @@ public class BoardService {
 
         // Assign the caller-supplied id only when one was sent; a null dto.getId() leaves the
         // entity's id null, so RandFlakeGenerator still supplies it exactly as it did before this
-        // field existed. Honoured by Hibernate only because
-        // RandFlakeGenerator#allowAssignedIdentifiers
-        // now returns true.
+        // field existed. Honoured by Hibernate only because both
+        // RandFlakeGenerator#allowAssignedIdentifiers and its 4-arg generate(...) override return
+        // the pre-set value instead of overwriting it.
         if (dto.getId() != null) {
             board.setId(dto.getId());
         }
