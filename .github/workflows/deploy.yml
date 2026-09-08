@@ -418,7 +418,7 @@ jobs:
         # `rm` is deliberately NOT set: the target directory also holds .env.prod
         # (plan 05-04's manual deploy, populated once, off-limits to this job's own
         # explicit prohibition), which must never be recreated or deleted here -- only
-        # the three named paths below are transferred.
+        # the seven named paths below are transferred.
         #
         # docker/postgres-init/01-create-databases-and-roles.sh added phase 11 (plan 11-01):
         # appleboy/scp-action preserves the relative path structure by default, so this lands at
@@ -428,13 +428,23 @@ jobs:
         # one-shot against a non-empty data directory (see the script's own dated comment), so a
         # routine deploy re-copying it on every push is a no-op by design, not a reprovisioning
         # risk.
+        #
+        # docker/grafana/provisioning, docker/prometheus/prometheus.yml, docker/loki/loki-config.yaml
+        # and docker/promtail/promtail-config.yaml added quick task 260908-sj9 (2026-09-08): these
+        # four repo-relative bind-mount sources were declared in docker-compose.prod.yml from
+        # Phase 12 onward but never added to this `source:` list, so production served
+        # configuration frozen at 2026-09-07 (hand-copied once) behind fourteen green deploys --
+        # only postgres-init above was ever kept in sync. scripts/verify-deploy-scp-coverage.py now
+        # holds this list and docker-compose.prod.yml's bind mounts to provable agreement per PR.
+        # Residual gap this fix does not close: `rm:` staying unset (required, see above) means a
+        # file DELETED from the repo is never removed from the VM -- copying is one-directional.
         uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345  # v1.0.0
         with:
           host: ${{ secrets.NETCUP_HOST }}
           username: ${{ secrets.NETCUP_DEPLOY_USER }}
           key: ${{ secrets.NETCUP_SSH_KEY }}
           fingerprint: ${{ secrets.NETCUP_HOST_FINGERPRINT }}
-          source: "docker-compose.prod.yml,Caddyfile,docker/postgres-init/01-create-databases-and-roles.sh"
+          source: "docker-compose.prod.yml,Caddyfile,docker/postgres-init/01-create-databases-and-roles.sh,docker/grafana/provisioning,docker/prometheus/prometheus.yml,docker/loki/loki-config.yaml,docker/promtail/promtail-config.yaml"
           target: "/opt/deploy/kanban-board-backend/"
 
       - name: Deploy via Docker Compose
