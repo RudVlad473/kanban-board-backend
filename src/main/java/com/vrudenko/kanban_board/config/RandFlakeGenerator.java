@@ -3,6 +3,7 @@ package com.vrudenko.kanban_board.config;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
+import org.hibernate.generator.EventType;
 import org.hibernate.id.IdentifierGenerator;
 
 // https://adileo.github.io/awesome-identifiers/
@@ -38,6 +39,43 @@ public class RandFlakeGenerator implements IdentifierGenerator {
     @Override
     public String generate(SharedSessionContractImplementor session, Object object) {
         return generateRandflake();
+    }
+
+    // Decision record, verified against hibernate-core-6.6.53.Final.jar on 2026-09-08 --
+    // TWO overrides are both required, not one, which is easy to get wrong (this task's own
+    // planning document assumed the first alone was sufficient, and a real e2e run proved it was
+    // not):
+    //
+    // 1. allowAssignedIdentifiers(): org.hibernate.generator.Generator's inherited default is
+    //    false. org.hibernate.event.internal.AbstractSaveEventListener#generateId reads it to
+    //    decide whether to pass the entity's already-set id (as `currentValue`) into
+    //    generate(...) at all -- false means `currentValue` is always null, so this alone
+    //    controls whether a pre-set id is even visible to the generator.
+    //
+    // 2. The 4-arg generate(session, owner, currentValue, eventType) override below:
+    // IdentifierGenerator's
+    //    OWN default implementation of that method ignores `currentValue` entirely and forwards
+    //    to the legacy 2-arg generate(session, object) above -- so making step 1 visible achieves
+    //    nothing unless this class also acts on it. AbstractSaveEventListener#saveWithGeneratedId
+    //    calls generate(...) unconditionally for every insert (Assigned-strategy generators
+    //    excepted, which this is not); this override is what turns "id already set" into
+    //    "keep it" instead of "generate over it".
+    //
+    // Both are inherited by every entity using this generator (User/Column/Task/Subtask, not just
+    // Board), but change behaviour only where an id is already assigned before persist -- today
+    // that is BoardService#save alone.
+    @Override
+    public boolean allowAssignedIdentifiers() {
+        return true;
+    }
+
+    @Override
+    public Object generate(
+            SharedSessionContractImplementor session,
+            Object owner,
+            Object currentValue,
+            EventType eventType) {
+        return currentValue != null ? currentValue : generateRandflake();
     }
 
     // Lock-free by construction, not by absence of state: packing (timestamp, sequence) into one

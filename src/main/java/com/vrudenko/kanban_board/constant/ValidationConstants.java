@@ -42,6 +42,19 @@ public final class ValidationConstants {
     public static final String COLUMN_COLOR_VALIDATION_MESSAGE =
             "Column color must be a #RRGGBB hex string";
 
+    // RandFlakeGenerator packs a Snowflake-shaped positive long (1 unused sign bit + 41 timestamp
+    // bits + 22 sequence bits) and renders it via Long.toString(payload, 36) -- lowercase base36
+    // digits only, always positive, so a leading '-' and any uppercase letter are values this
+    // application never issues. MAX_BOARD_ID_LENGTH is the generator's real ceiling
+    // (Long.toString(Long.MAX_VALUE, 36).length()), pinned by BoardIdTest so this constant and the
+    // generator cannot drift apart silently.
+    public static final int MAX_BOARD_ID_LENGTH = 13;
+    public static final String BOARD_ID_PATTERN = "^[0-9a-z]{1," + MAX_BOARD_ID_LENGTH + "}$";
+    public static final String BOARD_ID_VALIDATION_MESSAGE =
+            "Board id must be a lowercase alphanumeric string of at most "
+                    + ValidationConstants.MAX_BOARD_ID_LENGTH
+                    + " characters";
+
     public static final int MIN_TASK_TITLE_LENGTH = 3;
     public static final int MAX_TASK_TITLE_LENGTH = 32;
     public static final String TASK_TITLE_LENGTH_VALIDATION_MESSAGE =

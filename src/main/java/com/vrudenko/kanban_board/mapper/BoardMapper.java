@@ -23,6 +23,14 @@ public interface BoardMapper {
 
     List<BoardResponseDTO> toResponseDTOList(List<BoardEntity> dto);
 
+    // id is never auto-mapped here despite SaveBoardRequestDTO.id sharing a name with
+    // BoardEntity's primary key: BoardEntity uses plain Lombok @Builder (not @SuperBuilder), and
+    // that generated builder has no id(...) method for a field inherited from BaseEntity, so
+    // MapStruct's builder-based construction cannot reach it -- verified by attempting an explicit
+    // `@Mapping(target = "id", ignore = true)` here, which MapStruct itself rejected as an unknown
+    // target property. BoardService#save assigns the id explicitly, after this mapping, via
+    // BoardEntity's inherited setId (from BaseEntity's Lombok @Setter, a separate code path the
+    // builder does not use).
     BoardEntity fromSaveBoardRequestDTO(SaveBoardRequestDTO dto);
 
     SaveBoardRequestDTO toSaveBoardRequestDTO(BoardEntity dto);

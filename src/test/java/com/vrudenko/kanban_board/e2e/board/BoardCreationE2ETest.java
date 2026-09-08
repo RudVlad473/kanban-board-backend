@@ -8,6 +8,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.vrudenko.kanban_board.config.RandFlakeGenerator;
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.board_dto.BoardResponseDTO;
@@ -166,6 +167,65 @@ public class BoardCreationE2ETest extends AbstractAppE2ETest {
             Assertions.assertThat(response.body().jsonPath().getString("code"))
                     .isEqualTo("UNAUTHENTICATED");
             Assertions.assertThat(boardService.findAll().size()).isEqualTo(boardCountBefore);
+        }
+
+        @Test
+        void shouldPersistExactlyGivenId_whenExplicitWellFormedIdIsProvided() {
+            // arrange
+            Pair<String, String> cookie = signin();
+            var boardName = randomBoardName();
+            var explicitId = new RandFlakeGenerator().generateRandflake();
+            var dto = SaveBoardRequestDTO.builder().name(boardName).id(explicitId).build();
+
+            // act
+            var response =
+                    given().cookie(cookie.getFirst(), cookie.getSecond())
+                            .contentType(ContentType.JSON)
+                            .body(dto)
+                            .when()
+                            .post(ApiPaths.BOARDS)
+                            .then()
+                            .extract();
+
+            // assert: create response echoes the supplied id
+            Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.CREATED.value());
+            var body = response.as(BoardResponseDTO.class);
+            Assertions.assertThat(body.getId()).isEqualTo(explicitId);
+
+            // assert: a fresh read proves the database stored it under that exact id -- a create
+            // response echoing back the value it was handed proves less than the row actually
+            // being there
+            var boards =
+                    given().cookie(cookie.getFirst(), cookie.getSecond())
+                            .when()
+                            .get(ApiPaths.BOARDS)
+                            .then()
+                            .extract()
+                            .as(BoardResponseDTO[].class);
+            Assertions.assertThat(Arrays.stream(boards).anyMatch(b -> b.getId().equals(explicitId)))
+                    .isTrue();
+        }
+
+        @Test
+        void shouldReturnServerGeneratedIdMatchingBoardIdPattern_whenIdIsOmitted() {
+            // arrange
+            Pair<String, String> cookie = signin();
+            var dto = SaveBoardRequestDTO.builder().name(randomBoardName()).build();
+
+            // act
+            var response =
+                    given().cookie(cookie.getFirst(), cookie.getSecond())
+                            .contentType(ContentType.JSON)
+                            .body(dto)
+                            .when()
+                            .post(ApiPaths.BOARDS)
+                            .then()
+                            .extract();
+
+            // assert: the no-id path is byte-identical to today's server-generated behaviour
+            Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.CREATED.value());
+            var body = response.as(BoardResponseDTO.class);
+            Assertions.assertThat(body.getId()).matches(ValidationConstants.BOARD_ID_PATTERN);
         }
     }
 

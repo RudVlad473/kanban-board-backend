@@ -199,6 +199,15 @@ public class BoardService {
         var createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
         board.setCreatedAt(createdAt);
 
+        // Assign the caller-supplied id only when one was sent; a null dto.getId() leaves the
+        // entity's id null, so RandFlakeGenerator still supplies it exactly as it did before this
+        // field existed. Honoured by Hibernate only because
+        // RandFlakeGenerator#allowAssignedIdentifiers
+        // now returns true.
+        if (dto.getId() != null) {
+            board.setId(dto.getId());
+        }
+
         boardRepository.save(board);
 
         eventPublisher.publishEvent(
