@@ -20,10 +20,10 @@ milestone_name: Nonprod Environment & CI Hardening
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-08-17)
+See: .planning/PROJECT.md (updated 2026-09-08)
 
 **Core value:** The backend is feature-complete against its own mock-ups and live in production; the differentiator now is proving the whole system — including a real frontend against a real deploy — is reliable.
-**Current focus:** Phase 12 — Self-hosted observability stack
+**Current focus:** Next milestone not yet scoped — run `/gsd-new-milestone`
 
 ## Current Position
 
@@ -169,5 +169,5 @@ Resume file: None
 
 ## Operator Next Steps
 
-- Continue Phase 12 via `/gsd-execute-phase 12` (12-05: measured mem_limit floors; 12-06: phase close-out)
-- After Phase 12 closes: start the next milestone with /gsd-new-milestone
+- Phase 12 is complete and verified (21/21 must-haves, 6/6 plans). Start the next milestone with `/gsd-new-milestone`.
+- Three follow-up todos filed this session, worth triaging into the next milestone's scope or leaving pending: `.planning/todos/pending/2026-09-08-cadvisor-grafana-and-caddy-mem-limits-need-a-longer-observation-window-re-ladder.md`, `.planning/todos/pending/2026-09-08-grafana-admin-password-drift-from-env-prod.md`, and the `.env.prod.example` secret-guard false-positive noted mid-session (not yet filed as a todo per user's explicit "don't pick it up yet").
