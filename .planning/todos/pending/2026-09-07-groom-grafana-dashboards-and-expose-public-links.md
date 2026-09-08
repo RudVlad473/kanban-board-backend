@@ -62,3 +62,12 @@ This todo names two separable pieces of work. Quick task 260908-mtl closed one o
 
 This todo stays in `pending/` rather than moving to `completed/` — the remaining piece is real
 work, not a formality.
+
+## Superseded by quick task 260908-r16 (2026-09-08)
+
+- cAdvisor's display title was changed again, from "Per-Container Resource Usage" to
+  "CPU/Memory & Network Usage - cAdvisor"; the two other titles from piece 1 stand.
+- Postgres Internals' panel layout was restructured into five expanded topic rows
+  (Health & Availability, Connections, Query Performance, Storage & I/O, Locks), replacing the
+  single "Global Statistics" row; `uid`, `description` and every panel query were preserved.
+- Piece 2 (public dashboard links) remains open and unaffected; this todo stays in `pending/`.
