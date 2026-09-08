@@ -27,12 +27,36 @@ flowchart TB
             postgres["postgres 16<br/>(system of record, named volume,<br/>no host port published)"]
         end
 
+        subgraph obs_box["Observability stack — Phase 12, single shared instance for both environments"]
+            direction TB
+            prometheus["prometheus<br/>(scrapes exporters + this VM)"]
+            grafana["grafana<br/>(dashboards, sole login gate,<br/>monitoring hostname's site block)"]
+            loki["loki<br/>(30-day log store)"]
+            promtail["promtail<br/>[6] read-only docker.sock grant"]
+            cadvisor["cadvisor<br/>[6] read-only docker.sock grant"]
+            node_exp["node-exporter<br/>(read-only host-root bind)"]
+            pg_exp["postgres-exporter"]
+        end
+
         caddy -- "HTTP :8080<br/>[4] Compose-internal Docker network" --> app
+        caddy -- "HTTP :3000, third site block<br/>[4] Compose-internal Docker network" --> grafana
         app -- "Kafka wire protocol :19092<br/>[4] Compose-internal Docker network" --> redpanda
         app -- "Schema Registry HTTP :8081<br/>[4] Compose-internal Docker network" --> redpanda
         app -- "JDBC :5432, no TLS<br/>[5] kanban-db Docker network" --> postgres
+        prometheus -- "scrape<br/>[4] Compose-internal Docker network" --> node_exp
+        prometheus -- "scrape<br/>[4] Compose-internal Docker network" --> cadvisor
+        prometheus -- "scrape<br/>[4] Compose-internal Docker network" --> pg_exp
+        pg_exp -- "least-privilege monitoring role<br/>[5] kanban-db Docker network" --> postgres
+        promtail -- "ship logs<br/>[4] Compose-internal Docker network" --> loki
+        grafana -- "query<br/>[4] Compose-internal Docker network" --> prometheus
+        grafana -- "query<br/>[4] Compose-internal Docker network" --> loki
     end
 
+    subgraph nonprod_box["kanban-nonprod Compose project — SAME VM, different project"]
+        direction TB
+        redpanda_nonprod["redpanda-nonprod"]
+    end
+    prometheus -- "scrape nonprod broker metrics<br/>[7] kanban-metrics Docker network<br/>(crosses Compose-project boundary)" --> redpanda_nonprod
 
     client --> netcup_fw
     netcup_fw -- "HTTPS :443 via kanban-board-rud-vlad-473.duckdns.org<br/>(crosses VM boundary)" --> caddy

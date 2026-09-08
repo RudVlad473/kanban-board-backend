@@ -70,17 +70,56 @@ procedure that has been written but never executed, and the todo
 deliberately still open for the scheduled dump, off-host storage, retention policy and one proven
 test restore.
 
-**Numbered trust boundaries (added 2026-09-05):** the diagram's subgraph and edge labels now carry
-consistent numbers, `[1]` through `[5]`, so this diagram and the packet-path Scenario below can be
-read together against the same boundary set rather than two diagrams inventing their own vocabulary.
-`[1]` is deliberately marked `(external — not in this repo)` — the Netcup Cloud Firewall is a
-control-panel setting on Netcup's infrastructure, not a file in this repository, so it is reviewed
-in no pull request here and its actual ruleset cannot be confirmed from the code. `[2]`–`[5]` are
-boundaries this repository DOES define and version-control: the VM's own host network, Caddy's
-public TLS termination edge, the Compose-internal Docker network, and the `kanban-db` network. As of
-2026-09-06 (quick task 260906-feq), `[1]` is no longer the only layer governing traffic to a
-published container port: `DOCKER-USER`, inside `[2]`, now carries a version-controlled default-drop
-policy of its own — see the Scenario below for the ruleset and the evidence it works.
+**Numbered trust boundaries (added 2026-09-05, extended 2026-09-08 by Phase 12):** the diagram's
+subgraph and edge labels now carry consistent numbers, `[1]` through `[7]`, so this diagram and the
+packet-path Scenario below can be read together against the same boundary set rather than two
+diagrams inventing their own vocabulary. `[1]` is deliberately marked `(external — not in this
+repo)` — the Netcup Cloud Firewall is a control-panel setting on Netcup's infrastructure, not a
+file in this repository, so it is reviewed in no pull request here and its actual ruleset cannot be
+confirmed from the code. `[2]`–`[5]` are boundaries this repository DOES define and
+version-control: the VM's own host network, Caddy's public TLS termination edge, the
+Compose-internal Docker network, and the `kanban-db` network. As of 2026-09-06 (quick task
+260906-feq), `[1]` is no longer the only layer governing traffic to a published container port:
+`DOCKER-USER`, inside `[2]`, now carries a version-controlled default-drop policy of its own — see
+the Scenario below for the ruleset and the evidence it works. `[6]` and `[7]`, added by Phase 12
+(plan 12-06): `[6]` marks the read-only `docker.sock` grants held by `cadvisor` and `promtail` —
+API-level privilege exceeding what a read-only mount alone implies, a scoped and accepted
+exception rather than an oversight; `[7]` marks the `kanban-metrics` network edge from `prometheus`
+to `redpanda-nonprod`, the ONE edge in this diagram that crosses the Compose-project boundary
+between the production stack and the `kanban-nonprod` project running on this same VM.
+
+**The observability stack (Phase 12, D-01/D-04):** a single shared instance of Prometheus, Grafana,
+Loki and Promtail, plus three scrapers (`node-exporter`, `cadvisor`, `postgres-exporter`), monitors
+BOTH environments from inside the production Compose project — there is no separate nonprod
+monitoring stack. Grafana is the ONLY one of these seven publicly reachable, and only through
+Caddy's third site block; its own login is the sole AUTHENTICATION gate in front of every metric
+this stack collects, backed by a login-path-scoped rate limiter (D-03 as amended in plan 12-01) —
+distinct from an IP allowlist or `basic_auth`, which remain forbidden. `cadvisor` and `promtail`
+each hold a read-only `docker.sock` mount (`[6]` above): read-only removes the ability to write
+different bytes to the socket file, but the Docker API's dangerous operations (creating a
+privileged container, mounting the host filesystem into one) are HTTP requests over that socket,
+not filesystem writes — a real, accepted exception, not a control that fully closes the risk it
+sounds like it closes. `cadvisor`'s actual deployed mount set is a dated, disclosed amendment to
+D-05's literal list (plan 12-03; full reasoning in `docs/INFRA_RUNBOOK.md`'s "### cAdvisor mount
+posture"). `node-exporter` holds a read-only bind of the host's root filesystem
+(`/:/host:ro,rslave`) to reach real host CPU/memory/disk metrics without `network_mode: host` or
+`pid: host` (both forbidden or unneeded) — with one disclosed consequence: `node_network_*` series
+report the HOST's full interface set, not just this container's own namespace, because sysfs's
+network-class entries are pinned to whichever netns was active when the read-only bind was created
+(plan 12-01 Task 3, live-verified).
+
+**Host-wide container count — THIRTEEN, not eleven.** This VM runs two Compose projects
+simultaneously: the production project's eleven services (`caddy`, `postgres`, `app`, `redpanda`,
+`node-exporter`, `prometheus`, `grafana`, `loki`, `promtail`, `cadvisor`, `postgres-exporter`,
+confirmed via `docker compose ps` from `/opt/deploy/kanban-board-backend`) plus the
+`kanban-nonprod` project's two (`app-nonprod`, `redpanda-nonprod`). Confirmed host-wide via `docker
+ps` on the VM, not `docker compose ps`, which is scoped to whichever project's directory it runs
+from and would silently undercount by omitting the other project entirely. A Physical/Deployment
+view that counts one Compose project is not a physical view — that is precisely the distinction the
+4+1 model draws between the Development view (what a repository's own build produces) and this one
+(what actually runs on the hardware) — so this document states the host-wide figure and the
+per-project split explicitly rather than leaving a reader to assume the diagram's own subgraph
+boundary is also the host boundary.
 
 ## Scenario (+1) View — Delivery Path
 
@@ -237,6 +276,12 @@ project pin plus the `app`, `caddy` and `postgres` services' `image:` references
 facts changes — a job renamed or added, a build platform changed, or any of those
 `docker-compose.prod.yml` lines changed — update this document, and the diagrams it links to, in
 the same change: it is the single checked-in description of what actually runs where.
+
+**Also on this list, added 2026-09-08 (Phase 12, plan 12-06):** `docker/prometheus/prometheus.yml`,
+`docker/loki/loki-config.yaml`, `docker/promtail/promtail-config.yaml`,
+`docker/grafana/provisioning/**`, and the `kanban-metrics` network. These define what the
+observability stack scrapes, ships and provisions, and the cross-project network it uses to reach
+the nonprod broker — exactly the kind of fact this document has already gone stale on once.
 
 **Where the database lives is on that list deliberately, added 2026-09-03.** It was not, and that
 is how this document went on describing Neon as the system of record for the four months after
