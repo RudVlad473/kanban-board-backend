@@ -45,3 +45,20 @@ Two separable pieces of work:
 Not started; both pieces need a live Grafana session (the CLI/API path for public dashboards may
 also work — check current Grafana 13.x docs at execution time) and a decision on which of the
 three (likely all three, but confirm) get public links.
+
+## Partial resolution (quick task 260908-mtl, 2026-09-08)
+
+This todo names two separable pieces of work. Quick task 260908-mtl closed one of them:
+
+- **Piece 1, renaming — CLOSED.** All three dashboards were renamed to scannable display titles:
+  "Node Exporter Full" -> "VM Host Metrics", "Cadvisor exporter" -> "Per-Container Resource Usage",
+  "PostgreSQL Exporter" -> "Postgres Internals". Each dashboard's `description` (grafana.com ID,
+  revision, fetch date) and `uid` were deliberately left untouched, so provenance and dashboard
+  identity both survive the rename.
+- **Piece 2, public dashboard links — STILL OPEN.** This still needs a live Grafana session, a
+  per-dashboard panel review for real hostnames / internal IPs before publishing (because the
+  underlying data genuinely becomes public once published, not merely link-obscured), and a
+  decision on which of the three get links.
+
+This todo stays in `pending/` rather than moving to `completed/` — the remaining piece is real
+work, not a formality.
