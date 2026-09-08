@@ -263,7 +263,7 @@ A Spring Boot 3.5.16 / Java 21 REST API backend for a Kanban board application (
 - MapStruct for DTO-to-Entity mapping
 - Ownership-based access control (users can only modify their own boards)
 - Transactional cascade deletes (board → columns → tasks → subtasks)
-- ULID-based entity IDs (RandFlake implementation)
+- Base36-encoded Snowflake-shaped entity IDs (RandFlake implementation, not ULID)
 - Global exception handler for consistent error responses
 
 ## Layers
@@ -334,7 +334,7 @@ A Spring Boot 3.5.16 / Java 21 REST API backend for a Kanban board application (
 
 - Purpose: Common base class for all domain entities
 - Location: `src/main/java/com/vrudenko/kanban_board/entity/BaseEntity.java`
-- Provides: ULID-based id field via @RandFlakeId annotation (line 14)
+- Provides: base36-encoded id field via @RandFlakeId annotation (line 14), not ULID
 - Examples: UserEntity, BoardEntity, ColumnEntity, TaskEntity, SubtaskEntity
 - Purpose: Define common contracts for entities and DTOs
 - Location: `src/main/java/com/vrudenko/kanban_board/base/entity/`
@@ -342,7 +342,10 @@ A Spring Boot 3.5.16 / Java 21 REST API backend for a Kanban board application (
 - Benefit: Ensures DTOs match entity structure, enables polymorphic handling
 - Purpose: Generate distributed, sortable IDs without database round-trips
 - Location: `src/main/java/com/vrudenko/kanban_board/config/RandFlakeGenerator.java`
-- Type: ULID (Universally Unique Lexicographically Sortable Identifier)
+- Type: not ULID -- a Snowflake-shaped packed long (1 unused sign bit + 41 timestamp bits + 22
+  sequence bits), rendered via `Long.toString(payload, 36)`: lowercase base36 digits only, at most
+  13 characters, unique per-JVM (quick task 260908-dl3 correction; see
+  `RandFlakeGenerator`'s own Javadoc for the full layout and uniqueness-scope rationale)
 - Applied via @RandFlakeId annotation on id fields
 - Purpose: Decouple API contracts from entity structure
 - Location: `src/main/java/com/vrudenko/kanban_board/dto/` (organized by domain: board_dto, column_dto, task_dto, subtask_dto, user_dto)

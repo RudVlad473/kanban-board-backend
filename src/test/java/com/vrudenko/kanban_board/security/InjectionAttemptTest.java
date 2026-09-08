@@ -1,8 +1,10 @@
 package com.vrudenko.kanban_board.security;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
+import com.vrudenko.kanban_board.config.RandFlakeGenerator;
 import com.vrudenko.kanban_board.constant.ApiPaths;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.board_dto.BoardResponseDTO;
@@ -13,6 +15,7 @@ import com.vrudenko.kanban_board.dto.subtask_dto.SubtaskResponseDTO;
 import com.vrudenko.kanban_board.dto.subtask_dto.UpdateSubtaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO;
 import com.vrudenko.kanban_board.dto.task_dto.TaskResponseDTO;
+import com.vrudenko.kanban_board.service.BoardService;
 import com.vrudenko.kanban_board.support.fixtures.AbstractAppMockMvcTest;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -74,6 +77,8 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
     @Autowired private MockMvc mockMvc;
 
     @Autowired private ObjectMapper objectMapper;
+
+    @Autowired private BoardService boardService;
 
     private static final String BOARD_COLUMNS_URL =
             ApiPaths.BOARDS + ApiPaths.BOARD_ID + ApiPaths.COLUMNS;
@@ -917,6 +922,184 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
             var status = result.getResponse().getStatus();
             Assertions.assertThat(status)
                     .isIn(HttpStatus.BAD_REQUEST.value(), HttpStatus.NOT_FOUND.value());
+        }
+    }
+
+    @Nested
+    class MalformedBoardId {
+
+        // Quick task 260908-dl3: id follows this class's own D-16 shape -- reuses the file's
+        // existing XSS payload constants, and proves rejection on status, the VALIDATION_FAILED
+        // envelope, AND persistence, never on absence from the response body alone. Jackson
+        // silently drops an unrecognised JSON key, so a body-only proof would pass even against a
+        // build where the id field was never wired at all -- the same reasoning StoredXss's color
+        // case documents.
+        //
+        // Every length case below is derived from ValidationConstants.MAX_BOARD_ID_LENGTH rather
+        // than a literal, and tests both directions of the boundary, matching OversizedBoundary's
+        // convention above.
+
+        private String boardIdOfLength(int length) {
+            return "1".repeat(length);
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {XSS_SCRIPT_PAYLOAD, XSS_ATTRIBUTE_BREAKOUT_PAYLOAD})
+        void shouldReturnBadRequestAndPersistNothing_whenBoardIdIsXssPayload(String payload)
+                throws Exception {
+            // arrange
+            var cookie = signinCookie();
+            var priorBoardIds =
+                    boardService.findAllByUserId(getOwningUser().getId()).stream()
+                            .map(BoardResponseDTO::getId)
+                            .toList();
+
+            // act & assert: rejected with the field-error envelope
+            mockMvc.perform(
+                            post(ApiPaths.BOARDS)
+                                    .cookie(cookie)
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(
+                                            objectMapper.writeValueAsString(
+                                                    Map.of(
+                                                            "name",
+                                                            "xss id holder",
+                                                            "id",
+                                                            payload))))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.errors.id").exists());
+
+            // assert: no board was created at all
+            var afterAttempt =
+                    boardService.findAllByUserId(getOwningUser().getId()).stream()
+                            .map(BoardResponseDTO::getId)
+                            .toList();
+            Assertions.assertThat(afterAttempt).containsExactlyInAnyOrderElementsOf(priorBoardIds);
+        }
+
+        /**
+         * The generator emits lowercase base36 only -- an uppercase id is a value this application
+         * never issues, so a caller-supplied one must be rejected even though it is otherwise
+         * well-formed (correct charset per letter, correct length).
+         */
+        @Test
+        void shouldRejectWithValidationFailed_whenBoardIdIsUppercase() throws Exception {
+            // arrange: a real generator output, uppercased -- proves the charset check, not the
+            // length check
+            var cookie = signinCookie();
+            var uppercaseId = new RandFlakeGenerator().generateRandflake().toUpperCase(Locale.ROOT);
+
+            // act & assert
+            mockMvc.perform(
+                            post(ApiPaths.BOARDS)
+                                    .cookie(cookie)
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(
+                                            objectMapper.writeValueAsString(
+                                                    Map.of(
+                                                            "name",
+                                                            "uppercase id holder",
+                                                            "id",
+                                                            uppercaseId))))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.errors.id").exists());
+        }
+
+        /**
+         * The acceptance case at the bound is not optional padding -- it is what stops this whole
+         * group from passing against an implementation that rejects every id unconditionally.
+         */
+        @Test
+        void shouldAccept_whenBoardIdIsExactlyMaxLength() throws Exception {
+            // arrange
+            var cookie = signinCookie();
+            var id = boardIdOfLength(ValidationConstants.MAX_BOARD_ID_LENGTH);
+
+            // act & assert
+            mockMvc.perform(
+                            post(ApiPaths.BOARDS)
+                                    .cookie(cookie)
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(
+                                            objectMapper.writeValueAsString(
+                                                    Map.of(
+                                                            "name",
+                                                            "max length id holder",
+                                                            "id",
+                                                            id))))
+                    .andExpect(status().isCreated());
+        }
+
+        @Test
+        void shouldRejectWithValidationFailed_whenBoardIdExceedsMaxLengthByOne() throws Exception {
+            // arrange
+            var cookie = signinCookie();
+            var id = boardIdOfLength(ValidationConstants.MAX_BOARD_ID_LENGTH + 1);
+
+            // act & assert
+            mockMvc.perform(
+                            post(ApiPaths.BOARDS)
+                                    .cookie(cookie)
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(
+                                            objectMapper.writeValueAsString(
+                                                    Map.of(
+                                                            "name",
+                                                            "over length id holder",
+                                                            "id",
+                                                            id))))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.errors.id").exists());
+        }
+
+        @Test
+        void shouldRejectWithValidationFailed_whenBoardIdContainsPunctuation() throws Exception {
+            // arrange: well-formed length, one embedded hyphen -- proves the charset check
+            // independently of the length check above
+            var cookie = signinCookie();
+            var id = boardIdOfLength(ValidationConstants.MAX_BOARD_ID_LENGTH - 1) + "-";
+
+            // act & assert
+            mockMvc.perform(
+                            post(ApiPaths.BOARDS)
+                                    .cookie(cookie)
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(
+                                            objectMapper.writeValueAsString(
+                                                    Map.of(
+                                                            "name",
+                                                            "punctuation id holder",
+                                                            "id",
+                                                            id))))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.errors.id").exists());
+        }
+
+        @Test
+        void shouldRejectWithValidationFailed_whenBoardIdContainsWhitespace() throws Exception {
+            // arrange: well-formed length, one embedded space
+            var cookie = signinCookie();
+            var id = boardIdOfLength(ValidationConstants.MAX_BOARD_ID_LENGTH - 1) + " ";
+
+            // act & assert
+            mockMvc.perform(
+                            post(ApiPaths.BOARDS)
+                                    .cookie(cookie)
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(
+                                            objectMapper.writeValueAsString(
+                                                    Map.of(
+                                                            "name",
+                                                            "whitespace id holder",
+                                                            "id",
+                                                            id))))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                    .andExpect(jsonPath("$.errors.id").exists());
         }
     }
 }
