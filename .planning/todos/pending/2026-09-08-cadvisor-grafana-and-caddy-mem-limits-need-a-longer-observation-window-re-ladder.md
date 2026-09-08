@@ -1,6 +1,6 @@
 ---
 created: 2026-09-08T00:00:00.000Z
-title: "cadvisor and grafana mem_limit caps need a longer-observation-window re-ladder"
+title: "cadvisor, grafana and caddy mem_limit caps need a longer-observation-window re-ladder"
 area: infra
 severity: moderate
 files:
@@ -45,3 +45,20 @@ genuinely grows unboundedly over very long uptimes (a leak-shaped pattern) or re
 steady state above 64m but below 128m — the original ladder's "scales with container count, not
 workload" theory may need revision if a longer window shows continued growth rather than a
 plateau.
+
+## Also in scope: caddy's adopted 32m cap (added 2026-09-08, same-day phase-close verification)
+
+`caddy`'s plan-12-06 measurement adopted `mem_limit: 32m` with a KNOWN, already-disclosed coverage
+gap: its adversarial workload component (driving the rate limiter's per-source-address memory
+state) could only be run from a single sandboxed session — one distinct source address, not a
+realistic multi-attacker cardinality. The 32m/16m margin above the bare passing floor was stated
+explicitly as compensation for that gap, not a substitute for measuring it
+(`docs/INFRA_RUNBOOK.md`, "Caddy resource measurement — Plan 12-06"). Unlike `cadvisor`/`grafana`,
+caddy's adopted value has NOT shown live instability under real production traffic as of this
+todo's filing (confirmed stable, `RestartCount=0`, for 35+ minutes of real internet-facing traffic
+during the same verification pass that caught the cadvisor/grafana gaps) — so this is a
+disclosed-gap follow-up, not an active-incident correction like the other two. Given caddy is the
+sole production ingress and the highest-consequence of the three if its cap proves wrong, it
+should get the same longer-observation-window re-ladder treatment, plus — ideally — a genuinely
+multi-source-address adversarial test (e.g., from multiple different networks/proxies) rather than
+the single-address approximation the original ladder was limited to.
