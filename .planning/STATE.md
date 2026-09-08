@@ -4,16 +4,16 @@ milestone: v1.3
 current_phase: 12
 current_phase_name: Self-hosted observability stack
 status: executing
-stopped_at: Completed 12-04-PLAN.md
-last_updated: "2026-09-08T09:06:49.533Z"
-last_activity: 2026-09-07
+stopped_at: Completed 12-05-PLAN.md
+last_updated: "2026-09-08T10:19:11.824Z"
+last_activity: 2026-09-08
 last_activity_desc: Phase 12 execution resumed (wave continue)
-state_head: cb38532680b567ef9ba300f8c496782904c6af24
+state_head: 85958885386826edfbf259e081b3e137d01ed0d2
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 14
-  completed_plans: 12
+  completed_plans: 13
 milestone_name: Nonprod Environment & CI Hardening
 ---
 
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 ## Current Position
 
 Phase: 12 (Self-hosted observability stack) — EXECUTING
-Plan: 5 of 6
-Status: Executing Phase 12
-Last activity: 2026-09-07 — Phase 12 execution resumed (wave continue)
+Plan: 6 of 6
+Status: Ready to execute
+Last activity: 2026-09-08 — Phase 12 execution resumed (wave continue)
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ v1.0–v1.2 velocity/per-plan detail archived at milestone close — see `.plann
 | Phase 12 P02 | 70min | 3 tasks | 6 files |
 | Phase 12 P03 | 130min | 3 tasks | 5 files |
 | Phase 12 P04 | 123min | 2 tasks | 5 files |
+| Phase 12 P05 | 60min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -85,6 +86,11 @@ No active-milestone decisions pending — next milestone not yet scoped.
 - [Phase 12]: Phase 12 plan 04: two real bugs found in a vendored postgres-exporter Grafana dashboard by diffing its PromQL against the live exporter's own /metrics output and against 12-03's actual scrape job name -- two metric renames (pg_replication_lag/pg_database_size) and one template-variable job-label mismatch; reusable playbook for any future vendored dashboard
 - [Phase 12]: Phase 12 plan 04: 2 of 13 postgres-exporter dashboard panels (Max Connections, Shared Buffers) diagnosed as a Grafana 13.2.1 legacy singlestat panel-type rendering bug -- underlying data confirmed correct via direct /api/ds/query call -- accepted as a documented finding rather than fixed (would need a singlestat->stat panel-type migration, out of scope)
 - [Phase 12]: Phase 12 plan 04: fixed an unrelated CI gap found mid-plan -- .github/workflows/deploy.yml's Caddyfile validation step was missing APP_DOMAIN_MONITORING (needed by 12-01's third Caddyfile block), silently failing production deploys since 12-01 merged
+- [Phase 12]: Phase 12 plan 05: user explicitly authorized the agent to drive the restart-ladder memory
+
+measurement directly over SSH to netcup-prod, rather than a human operator running it manually — Matches a documented prior precedent in docs/INFRA_RUNBOOK.md of agent-driven SSH sessions
+authorized mid-session; the plan's own checkpoint:human-action was presented to the user as a
+decision before proceeding, not bypassed
 
 ### Pending Todos
 
@@ -151,9 +157,9 @@ The 46 pending todos are individually listed and categorized in this document's 
 
 ## Session Continuity
 
-Last session: 2026-09-07T17:04:21.000Z
-Stopped at: Session resumed, wrote 12-04-SUMMARY.md, proceeding to /gsd-execute-phase 12 for 12-05/12-06
-Resume file: None (.planning/HANDOFF.json and both .continue-here.md files consumed and can be cleared)
+Last session: 2026-09-08T10:19:06.366Z
+Stopped at: Completed 12-05-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
