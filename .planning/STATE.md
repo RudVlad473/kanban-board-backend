@@ -5,15 +5,15 @@ current_phase: 12
 current_phase_name: Self-hosted observability stack
 status: executing
 stopped_at: Completed 12-04-PLAN.md
-last_updated: "2026-09-07T17:04:21.000Z"
+last_updated: "2026-09-08T09:06:49.533Z"
 last_activity: 2026-09-07
-last_activity_desc: Completed 12-04-PLAN.md (Grafana dashboards), resuming toward 12-05
-state_head: f19115512215630e3b1da476812850a1506795ca
+last_activity_desc: Phase 12 execution resumed (wave continue)
+state_head: cb38532680b567ef9ba300f8c496782904c6af24
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 14
-  completed_plans: 11
+  completed_plans: 12
 milestone_name: Nonprod Environment & CI Hardening
 ---
 
@@ -30,8 +30,8 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 
 Phase: 12 (Self-hosted observability stack) — EXECUTING
 Plan: 5 of 6
-Status: Executing Phase 12 — 12-01..12-04 complete, 12-05/12-06 remaining
-Last activity: 2026-09-07 — Completed 12-04-PLAN.md (Grafana dashboards as committed JSON)
+Status: Executing Phase 12
+Last activity: 2026-09-07 — Phase 12 execution resumed (wave continue)
 
 ## Performance Metrics
 
@@ -117,6 +117,7 @@ confusion risk, `NVD_API_KEY` resolution failure) were resolved during Phases 8�
 | 260905-qxi | add a CI invariant (scripts/verify-compose-ports.py + self-test) that only caddy may publish host ports 80/443 in the two deployed compose files, wire it into invariant-checks.yml, and correct docs/INFRA_RUNBOOK.md's false "both layers enforce identical policy" firewall claim | 2026-09-05 | 566e725 | [260905-qxi-add-ci-invariant-that-only-caddy-may-pub](./quick/260905-qxi-add-ci-invariant-that-only-caddy-may-pub/) |
 | 260905-tw0 | Infra diagrams: pin a digest-pinned mermaid-cli renderer (scripts/render-diagrams.sh + render-manifest.tsv) and measure drift on all nine committed diagrams (7 pre-existing drift 6-11% in height, filed as a todo); add four flowchart layout rules with deciding tests to docs/DIAGRAM_CONVENTIONS.md; add an inbound packet-path Scenario to docs/INFRA_ARCHITECTURE.md with DOCKER-USER drawn empty and dated 2026-09-05; number trust boundaries [1]-[5] on the Physical view incl. the external Netcup Cloud Firewall; extend the Maintenance Note file list | 2026-09-05 | 2b0bd7b | [260905-tw0-infra-diagrams-pin-a-committed-mmd-png-r](./quick/260905-tw0-infra-diagrams-pin-a-committed-mmd-png-r/) |
 | 260906-feq | Fill the empty DOCKER-USER iptables chain with a version-controlled default-drop policy for Docker-published ports (infra/vm/docker-user-firewall.sh + systemd unit, PartOf=docker.service), reviewed three ways (Claude/Gemini/Codex) pre-execution which caught a checkpoint that silently defaulted to rebooting production and other real gaps, proved via off-box canary probe + packet-counter attribution + a genuine VM reboot, and corrected the runbook/architecture-doc/diagram that had described the chain as empty since 2026-09-05; IPv6 gap left open and filed as a new todo per operator decision | 2026-09-06 | f47f912 | [260906-feq-docker-user-iptables-rules-on-the-vm-sys](./quick/260906-feq-docker-user-iptables-rules-on-the-vm-sys/) |
+| 260908-dl3 | Let POST /api/boards optionally accept a caller-supplied board id, validated against RandFlakeGenerator's real base36 format, uniqueness-checked before insert, and rejected 409 when taken; corrected `.claude/CLAUDE.md`'s stale ULID claim to the actual base36 scheme | 2026-09-08 | cb38532 | [260908-dl3-create-board-endpoint-optionally-accepts](./quick/260908-dl3-create-board-endpoint-optionally-accepts/) |
 
 ## Deferred Items
 
