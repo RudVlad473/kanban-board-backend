@@ -3,17 +3,17 @@ gsd_state_version: "1.0"
 milestone: v1.3
 current_phase: 12
 current_phase_name: Self-hosted observability stack
-status: executing
-stopped_at: Completed 12-05-PLAN.md
-last_updated: "2026-09-08T10:19:11.824Z"
+status: verifying
+stopped_at: Completed 12-06-PLAN.md, phase 12 ready for verification
+last_updated: "2026-09-08T10:41:22.511Z"
 last_activity: 2026-09-08
 last_activity_desc: Phase 12 execution resumed (wave continue)
-state_head: 85958885386826edfbf259e081b3e137d01ed0d2
+state_head: aaeb537514f215124d17e1d360fa2f3ae2d2f695
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 14
-  completed_plans: 13
+  completed_plans: 14
 milestone_name: Nonprod Environment & CI Hardening
 ---
 
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 
 Phase: 12 (Self-hosted observability stack) — EXECUTING
 Plan: 6 of 6
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-09-08 — Phase 12 execution resumed (wave continue)
 
 ## Performance Metrics
@@ -54,6 +54,7 @@ v1.0–v1.2 velocity/per-plan detail archived at milestone close — see `.plann
 | Phase 12 P03 | 130min | 3 tasks | 5 files |
 | Phase 12 P04 | 123min | 2 tasks | 5 files |
 | Phase 12 P05 | 60min | 3 tasks | 2 files |
+| Phase 12 P06 | 55min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -91,6 +92,12 @@ No active-milestone decisions pending — next milestone not yet scoped.
 measurement directly over SSH to netcup-prod, rather than a human operator running it manually — Matches a documented prior precedent in docs/INFRA_RUNBOOK.md of agent-driven SSH sessions
 authorized mid-session; the plan's own checkpoint:human-action was presented to the user as a
 decision before proceeding, not bypassed
+
+- [Phase 12]: Phase 12 plan 06: user authorized the agent to drive the caddy restart-ladder measurement over
+
+SSH too, with explicit acknowledgment this ladder briefly interrupts live public production
+traffic on every rung -- a materially higher-stakes decision than plan 12-05's authorization — Presented as its own fresh checkpoint decision rather than assumed to extend 12-05's blanket
+authorization, given the real-traffic-interruption and Let's Encrypt cert-safety risk profile
 
 ### Pending Todos
 
@@ -157,8 +164,8 @@ The 46 pending todos are individually listed and categorized in this document's 
 
 ## Session Continuity
 
-Last session: 2026-09-08T10:19:06.366Z
-Stopped at: Completed 12-05-PLAN.md
+Last session: 2026-09-08T10:41:22.390Z
+Stopped at: Completed 12-06-PLAN.md, phase 12 ready for verification
 Resume file: None
 
 ## Operator Next Steps

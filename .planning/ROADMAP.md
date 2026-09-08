@@ -106,7 +106,7 @@ Plans:
 **Goal:** Metrics (CPU/memory/disk, per-container and host-level) and log aggregation are queryable without any paid SaaS — Prometheus + Grafana + Loki/Promtail + cAdvisor + node_exporter running as additional containers on the existing Netcup VPS, retention and `mem_limit`s sized against measured headroom (4.9 GiB RAM free of 7.8 GiB, CPU load avg 0.11/4 vCPU, 222 GB disk free — measured 2026-09-07), and the Grafana UI reachable only through Caddy (not publicly exposed) rather than a raw published port. Closes the metrics/log-shipping half of `.planning/todos/pending/2026-08-20-no-remote-log-shipping-structured-logging-or-alerting.md`; the alerting half is out of scope for this phase.
 **Requirements**: D-01 through D-08, the eight locked decisions in `12-CONTEXT.md` (no REQUIREMENTS.md for this not-yet-scoped milestone — those decisions are the acceptance surface instead)
 **Depends on:** Phase 11
-**Plans:** 5/6 plans executed
+**Plans:** 6/6 plans executed
 
 Plans:
 **Wave 1**
@@ -131,4 +131,4 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 12-06-PLAN.md — Caddy mem_limit, architecture doc + diagram correction, folded-todo closure (D-01, D-02)
+- [x] 12-06-PLAN.md — Caddy mem_limit, architecture doc + diagram correction, folded-todo closure (D-01, D-02)
