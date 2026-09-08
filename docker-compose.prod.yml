@@ -492,11 +492,24 @@ services:
       # longer implicitly joins the default network, and dropping it here would sever
       # prometheus -> node-exporter.
       - default
-    # PROVISIONAL Iteration-0 baseline (Plan 12-01, 2026-09-07) -- no measurement ladder has been
-    # run yet. Plan 12-05 owns the measured floor, the same way plan 11-01 set postgres's initial
-    # 512m baseline and 11-03 then descended it. Set high on purpose so the ladder has somewhere to
-    # descend from, not to justify a number.
-    mem_limit: 128m
+    # MEASURED BASIS (Plan 12-05, 2026-09-08) -- host: Netcup VPS Lite 2 G12s, 4 vCPU / 7.8GiB
+    # measured. Workload: the repo's established 54-request burst against both environments, a
+    # nonprod admin reset, all three Grafana dashboards loaded at the widest time range, and a
+    # wide-range Loki query -- the last two are Grafana's/Prometheus's/Loki's own real peak paths
+    # and an idle reading never touches either, so they were fired for every service measured
+    # this plan, not just the two that consume them directly.
+    # Ladder descended from the prior 128m Iteration-0 baseline: 128m -> 32m both PASSED
+    # (RestartCount=0 sustained across a full --force-recreate + workload + 20s-settle cycle at
+    # every rung; peak RSS held flat at ~15MiB regardless of cap). 16m FAILED: the kernel
+    # OOM-killed the process (confirmed via `dmesg`: "Memory cgroup out of memory: Killed
+    # process ... (node_exporter)").
+    # Adopted: 32m, leaving ~17MiB headroom above the measured ~15MiB peak (~113% margin) --
+    # deliberately not the bare passing rung, matching this box's own "cap with no headroom
+    # already broke startup once" lesson (redpanda, plan 05-04). Independently re-verified from a
+    # fresh --force-recreate through a full workload+20s-settle cycle with RestartCount=0
+    # sustained. Full rung-by-rung ladder and the failing rung's verbatim OOM evidence:
+    # docs/INFRA_RUNBOOK.md, "Observability stack resource measurement -- Plan 12-05".
+    mem_limit: 32m
     # No `ports:` entry at all -- mirrors postgres's/redpanda's own posture exactly. Only
     # Prometheus reaches this container, over the internal `default` network.
     # Mechanically enforced: scripts/verify-compose-ports.py fails CI if this service ever gains one.
@@ -535,11 +548,29 @@ services:
       # Plan 12-03: the ONLY route to the nonprod Redpanda broker's admin API (D-04). Joined by
       # nothing else in this file -- not grafana, not cadvisor, not app, not caddy.
       - kanban-metrics
-    # PROVISIONAL Iteration-0 baseline (Plan 12-01, 2026-09-07) -- no measurement ladder has been
-    # run yet. Plan 12-05 owns the measured floor, the same way plan 11-01 set postgres's initial
-    # 512m baseline and 11-03 then descended it. Set high on purpose so the ladder has somewhere to
-    # descend from, not to justify a number.
-    mem_limit: 1g
+    # MEASURED BASIS (Plan 12-05, 2026-09-08) -- host: Netcup VPS Lite 2 G12s, 4 vCPU / 7.8GiB
+    # measured. Workload: the repo's established 54-request burst against both environments, a
+    # nonprod admin reset, all three Grafana dashboards loaded at the widest time range, and a
+    # wide-range Loki query -- the middle two are Prometheus's own real peak paths (TSDB
+    # compaction + a wide range query) that an idle reading never touches.
+    # Ladder descended from the prior 1g Iteration-0 baseline: 1g -> 512m -> 256m -> 192m -> 128m
+    # -> 96m -> 80m all PASSED (RestartCount=0 sustained across a full --force-recreate + workload
+    # + 20s-settle cycle at every rung, all Prometheus targets staying `up` throughout; peak RSS
+    # ~108MiB). 64m FAILED: the kernel OOM-killed the process (RestartCount=3, confirmed via
+    # `dmesg`: "Memory cgroup out of memory: Killed process ... (prometheus)").
+    # Adopted: 256m -- NOT the bare 80m passing floor. Headroom above the measured ~108MiB peak
+    # is ~148MiB (~137% margin), independently re-verified from a fresh --force-recreate through a
+    # full workload+20s-settle cycle with RestartCount=0 sustained.
+    # DAY-ONE MEASUREMENT CAVEAT: this ladder ran against a nearly-empty TSDB (18,523 series /
+    # 56,568 chunks / 128.7MB on-disk at measurement time) under the 30-day retention window
+    # (D-07), which has not yet filled. Of the adopted 256m, roughly 80m is ladder-justified (the
+    # bare passing floor) and the remainder is deliberate GROWTH HEADROOM for the retention window
+    # filling, not additional ladder evidence -- the two are stated separately on purpose. If this
+    # container is OOM-killed weeks from now with no configuration change, this day-one basis is
+    # why, and the fix is a higher cap or a shorter retention window, not a re-run of this ladder.
+    # Full rung-by-rung ladder and the failing rung's verbatim OOM evidence:
+    # docs/INFRA_RUNBOOK.md, "Observability stack resource measurement -- Plan 12-05".
+    mem_limit: 256m
     # No `ports:` entry at all -- mirrors postgres's/redpanda's own posture exactly. Only Grafana
     # (as a datasource client) and this box's own operator (docker exec) reach this container.
     # Mechanically enforced: scripts/verify-compose-ports.py fails CI if this service ever gains one.
@@ -570,11 +601,22 @@ services:
       GF_AUTH_ANONYMOUS_ENABLED: "false"
     networks:
       - default
-    # PROVISIONAL Iteration-0 baseline (Plan 12-01, 2026-09-07) -- no measurement ladder has been
-    # run yet. Plan 12-05 owns the measured floor, the same way plan 11-01 set postgres's initial
-    # 512m baseline and 11-03 then descended it. Set high on purpose so the ladder has somewhere to
-    # descend from, not to justify a number.
-    mem_limit: 512m
+    # MEASURED BASIS (Plan 12-05, 2026-09-08) -- host: Netcup VPS Lite 2 G12s, 4 vCPU / 7.8GiB
+    # measured. Workload: the repo's established 54-request burst against both environments, a
+    # nonprod admin reset, all three dashboards loaded at once at the widest time range, and a
+    # wide-range Loki query -- the wide dashboard load is Grafana's own real peak path, invisible
+    # at idle.
+    # Ladder descended from the prior 512m Iteration-0 baseline: 512m -> 384m PASSED
+    # (RestartCount=0 sustained across a full --force-recreate + workload + 20s-settle cycle, all
+    # three dashboards rendering throughout; peak RSS ~292MiB). 256m FAILED: the kernel OOM-killed
+    # the process (RestartCount=9, confirmed via `dmesg`: "Memory cgroup out of memory: Killed
+    # process ... (grafana)").
+    # Adopted: 384m, leaving ~91MiB headroom above the measured ~292MiB peak (~31% margin),
+    # independently re-verified from a fresh --force-recreate through a full workload+20s-settle
+    # cycle with RestartCount=0 sustained. Full rung-by-rung ladder and the failing rung's
+    # verbatim OOM evidence: docs/INFRA_RUNBOOK.md, "Observability stack resource measurement --
+    # Plan 12-05".
+    mem_limit: 384m
     # No `ports:` entry at all -- Caddy reaches this container over the internal `default` network
     # by service name (grafana:3000) only, mirroring how it already reaches `app`/`app-nonprod`.
     # Mechanically enforced: scripts/verify-compose-ports.py fails CI if this service ever gains one.
@@ -603,11 +645,30 @@ services:
       # longer implicitly joins the default network, and dropping it here would sever
       # promtail -> loki and grafana -> loki.
       - default
-    # PROVISIONAL Iteration-0 baseline (Plan 12-02, 2026-09-07) -- no measurement ladder has been
-    # run yet. Plan 12-05 owns the measured floor, the same way plan 11-01 set postgres's initial
-    # 512m baseline and 11-03 then descended it. Set high on purpose so the ladder has somewhere to
-    # descend from, not to justify a number.
-    mem_limit: 512m
+    # MEASURED BASIS (Plan 12-05, 2026-09-08) -- host: Netcup VPS Lite 2 G12s, 4 vCPU / 7.8GiB
+    # measured. Workload: the repo's established 54-request burst against both environments, a
+    # nonprod admin reset, all three Grafana dashboards loaded at the widest time range, and a
+    # wide-range Loki query -- the wide query is Loki's own real peak path, invisible at idle.
+    # Ladder descended from the prior 512m Iteration-0 baseline: 512m -> 256m -> 128m -> 96m ->
+    # 64m all PASSED (RestartCount=0 sustained across a full --force-recreate + workload +
+    # 20s-settle cycle, the wide query returning lines throughout; peak RSS ~93MiB). 48m FAILED:
+    # the kernel OOM-killed the process and it crash-looped (RestartCount=12, confirmed via
+    # `dmesg`: "Memory cgroup out of memory: Killed process ... (loki)") -- the wide query itself
+    # also failed at this rung, matching this repo's own "a point-in-time check is not evidence"
+    # lesson from plan 08-03.
+    # Adopted: 256m -- NOT the bare 64m passing floor. Headroom above the measured ~93MiB peak is
+    # ~163MiB (~175% margin), independently re-verified from a fresh --force-recreate through a
+    # full workload+20s-settle cycle with RestartCount=0 sustained.
+    # DAY-ONE MEASUREMENT CAVEAT: this ladder ran against a nearly-empty chunk store (14 in-memory
+    # streams / 14 chunks / 12MB on-disk at measurement time) under the 30-day retention window
+    # (D-07), which has not yet filled. Of the adopted 256m, roughly 64m is ladder-justified (the
+    # bare passing floor) and the remainder is deliberate GROWTH HEADROOM for the retention window
+    # filling, not additional ladder evidence -- the two are stated separately on purpose. If this
+    # container is OOM-killed weeks from now with no configuration change, this day-one basis is
+    # why, and the fix is a higher cap or a shorter retention window, not a re-run of this ladder.
+    # Full rung-by-rung ladder and the failing rung's verbatim OOM evidence:
+    # docs/INFRA_RUNBOOK.md, "Observability stack resource measurement -- Plan 12-05".
+    mem_limit: 256m
     # No `ports:` entry at all -- mirrors every other internal-only service in this file. Only
     # promtail (push) and grafana (query, as a datasource client) reach this container.
     # Mechanically enforced: scripts/verify-compose-ports.py fails CI if this service ever gains one.
@@ -645,11 +706,21 @@ services:
       # longer implicitly joins the default network, and dropping it here would sever
       # promtail -> loki.
       - default
-    # PROVISIONAL Iteration-0 baseline (Plan 12-02, 2026-09-07) -- no measurement ladder has been
-    # run yet. Plan 12-05 owns the measured floor, the same way plan 11-01 set postgres's initial
-    # 512m baseline and 11-03 then descended it. Set high on purpose so the ladder has somewhere to
-    # descend from, not to justify a number.
-    mem_limit: 256m
+    # MEASURED BASIS (Plan 12-05, 2026-09-08) -- host: Netcup VPS Lite 2 G12s, 4 vCPU / 7.8GiB
+    # measured. Workload: the repo's established 54-request burst against both environments, a
+    # nonprod admin reset, all three Grafana dashboards loaded at the widest time range, and a
+    # wide-range Loki query -- the burst and reset are Promtail's own real peak paths (log-line
+    # volume), invisible at idle.
+    # Ladder descended from the prior 256m Iteration-0 baseline: 256m -> 64m both PASSED
+    # (RestartCount=0 sustained across a full --force-recreate + workload + 20s-settle cycle at
+    # every rung; peak RSS ~54MiB). 32m FAILED: the kernel OOM-killed the process (ExitCode 137,
+    # confirmed via `dmesg`: "Memory cgroup out of memory: Killed process ... (promtail)").
+    # Adopted: 64m, leaving ~10MiB headroom above the measured ~54MiB peak (~19% margin),
+    # independently re-verified from a fresh --force-recreate through a full workload+20s-settle
+    # cycle with RestartCount=0 sustained. Full rung-by-rung ladder and the failing rung's
+    # verbatim OOM evidence: docs/INFRA_RUNBOOK.md, "Observability stack resource measurement --
+    # Plan 12-05".
+    mem_limit: 64m
     # No `ports:` entry at all -- mirrors every other internal-only service in this file. Nothing
     # queries Promtail directly; it only pushes to loki.
     # Mechanically enforced: scripts/verify-compose-ports.py fails CI if this service ever gains one.
@@ -706,11 +777,23 @@ services:
     # Listens on 8080 -- does not collide with `app:8080` above; they are distinct containers on
     # the network and Compose's internal DNS + per-container port namespace keeps them separate.
     #
-    # PROVISIONAL Iteration-0 baseline (Plan 12-03, 2026-09-07) -- no measurement ladder has been
-    # run yet. Plan 12-05 owns the measured floor, the same way plan 11-01 set postgres's initial
-    # 512m baseline and 11-03 then descended it. Set high on purpose so the ladder has somewhere to
-    # descend from, not to justify a number.
-    mem_limit: 512m
+    # MEASURED BASIS (Plan 12-05, 2026-09-08) -- host: Netcup VPS Lite 2 G12s, 4 vCPU / 7.8GiB
+    # measured. Workload: the repo's established 54-request burst against both environments, a
+    # nonprod admin reset, all three Grafana dashboards loaded at the widest time range, and a
+    # wide-range Loki query. cAdvisor's memory scales with the number of containers it watches
+    # and its housekeeping interval, not with this workload -- its ladder was flat under the
+    # burst and found its floor at startup, a genuinely different shape from the other six.
+    # Ladder descended from the prior 512m Iteration-0 baseline: 512m -> 128m -> 64m all PASSED
+    # (RestartCount=0 sustained across a full --force-recreate + workload + 20s-settle cycle at
+    # every rung, its Prometheus target staying `up` throughout; peak RSS ~48MiB). 32m FAILED:
+    # the kernel OOM-killed the process twice (confirmed via `dmesg`, both instances: "Memory
+    # cgroup out of memory: Killed process ... (cadvisor)").
+    # Adopted: 64m, leaving ~16MiB headroom above the measured ~48MiB peak (~33% margin),
+    # independently re-verified from a fresh --force-recreate through a full workload+20s-settle
+    # cycle with RestartCount=0 sustained. Full rung-by-rung ladder and the failing rung's
+    # verbatim OOM evidence: docs/INFRA_RUNBOOK.md, "Observability stack resource measurement --
+    # Plan 12-05".
+    mem_limit: 64m
     # No `ports:` entry at all -- mirrors every other internal-only service in this file. Only
     # Prometheus reaches this container, over the internal `default` network.
     # Mechanically enforced: scripts/verify-compose-ports.py fails CI if this service ever gains one.
@@ -766,11 +849,21 @@ services:
       # longer implicitly joins the default network, and dropping it here would sever
       # prometheus -> postgres-exporter and postgres-exporter -> postgres.
       - default
-    # PROVISIONAL Iteration-0 baseline (Plan 12-03, 2026-09-07) -- no measurement ladder has been
-    # run yet. Plan 12-05 owns the measured floor, the same way plan 11-01 set postgres's initial
-    # 512m baseline and 11-03 then descended it. Set high on purpose so the ladder has somewhere to
-    # descend from, not to justify a number.
-    mem_limit: 128m
+    # MEASURED BASIS (Plan 12-05, 2026-09-08) -- host: Netcup VPS Lite 2 G12s, 4 vCPU / 7.8GiB
+    # measured. Workload: the repo's established 54-request burst against both environments, a
+    # nonprod admin reset, all three Grafana dashboards loaded at the widest time range, and a
+    # wide-range Loki query -- the burst and reset are this exporter's own real peak paths
+    # (Postgres query activity), invisible at idle.
+    # Ladder descended from the prior 128m Iteration-0 baseline: 128m -> 32m both PASSED
+    # (RestartCount=0 sustained across a full --force-recreate + workload + 20s-settle cycle at
+    # every rung; peak RSS ~12MiB). 16m FAILED: the kernel OOM-killed the process (confirmed via
+    # `dmesg`: "Memory cgroup out of memory: Killed process ... (postgres_exporter)").
+    # Adopted: 32m, leaving ~20MiB headroom above the measured ~12MiB peak (~167% margin),
+    # independently re-verified from a fresh --force-recreate through a full workload+20s-settle
+    # cycle with RestartCount=0 sustained. Full rung-by-rung ladder and the failing rung's
+    # verbatim OOM evidence: docs/INFRA_RUNBOOK.md, "Observability stack resource measurement --
+    # Plan 12-05".
+    mem_limit: 32m
     # No `ports:` entry at all -- mirrors every other internal-only service in this file. Only
     # Prometheus reaches this container, over the internal `default` network.
     # Mechanically enforced: scripts/verify-compose-ports.py fails CI if this service ever gains one.
