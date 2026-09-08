@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-09-08)
 Phase: 12
 Plan: Not started
 Status: All phases complete
-Last activity: 2026-09-08 — Phase 12 complete
+Last activity: 2026-09-08 - Completed quick task 260908-mtl: Rename the three phase-12 vendored Grafana dashboards to human-readable titles and re-scope the grooming todo
 
 ## Performance Metrics
 
@@ -130,6 +130,7 @@ confusion risk, `NVD_API_KEY` resolution failure) were resolved during Phases 8�
 | 260905-tw0 | Infra diagrams: pin a digest-pinned mermaid-cli renderer (scripts/render-diagrams.sh + render-manifest.tsv) and measure drift on all nine committed diagrams (7 pre-existing drift 6-11% in height, filed as a todo); add four flowchart layout rules with deciding tests to docs/DIAGRAM_CONVENTIONS.md; add an inbound packet-path Scenario to docs/INFRA_ARCHITECTURE.md with DOCKER-USER drawn empty and dated 2026-09-05; number trust boundaries [1]-[5] on the Physical view incl. the external Netcup Cloud Firewall; extend the Maintenance Note file list | 2026-09-05 | 2b0bd7b | [260905-tw0-infra-diagrams-pin-a-committed-mmd-png-r](./quick/260905-tw0-infra-diagrams-pin-a-committed-mmd-png-r/) |
 | 260906-feq | Fill the empty DOCKER-USER iptables chain with a version-controlled default-drop policy for Docker-published ports (infra/vm/docker-user-firewall.sh + systemd unit, PartOf=docker.service), reviewed three ways (Claude/Gemini/Codex) pre-execution which caught a checkpoint that silently defaulted to rebooting production and other real gaps, proved via off-box canary probe + packet-counter attribution + a genuine VM reboot, and corrected the runbook/architecture-doc/diagram that had described the chain as empty since 2026-09-05; IPv6 gap left open and filed as a new todo per operator decision | 2026-09-06 | f47f912 | [260906-feq-docker-user-iptables-rules-on-the-vm-sys](./quick/260906-feq-docker-user-iptables-rules-on-the-vm-sys/) |
 | 260908-dl3 | Let POST /api/boards optionally accept a caller-supplied board id, validated against RandFlakeGenerator's real base36 format, uniqueness-checked before insert, and rejected 409 when taken; corrected `.claude/CLAUDE.md`'s stale ULID claim to the actual base36 scheme | 2026-09-08 | cb38532 | [260908-dl3-create-board-endpoint-optionally-accepts](./quick/260908-dl3-create-board-endpoint-optionally-accepts/) |
+| 260908-mtl | Rename the three phase-12 vendored Grafana dashboards to human-readable titles (VM Host Metrics, Per-Container Resource Usage, Postgres Internals) and re-scope the grooming todo to piece 2 only; plan fan-out-reviewed (Claude+agy+Codex) pre-execution, which caught and fixed a false claim about Grafana rewriting stale URL slugs (it doesn't — verified live) and a mis-citation of one of two precedent todos | 2026-09-08 | ba259cb | [260908-mtl-groom-the-three-phase-12-grafana-dashboa](./quick/260908-mtl-groom-the-three-phase-12-grafana-dashboa/) |
 
 ## Deferred Items
 
