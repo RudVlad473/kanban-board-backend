@@ -118,14 +118,19 @@ signin. Child resources are created by `POST`ing to their parent.
 flowchart TB
     client["Browser / API client<br/>(external actor)"]
 
-    subgraph netcup["Netcup VPS Lite 2 G12s — x86_64<br/>Vienna, Austria — trust boundary"]
+    subgraph netcup_edge["[1] Netcup Cloud Firewall (external — not in this repo)"]
+        direction TB
+        netcup_fw["Netcup Cloud Firewall"]
+    end
+
+    subgraph netcup["Netcup VPS Lite 2 G12s — x86_64<br/>Vienna, Austria — [2] VM host network boundary"]
         direction TB
 
         netcup_spacer[" "]
         style netcup_spacer height:1px,fill:none,stroke:none
 
-        subgraph caddy_box["Docker container: caddy"]
-            caddy["caddy<br/>ports 80, 443"]
+        subgraph caddy_box["Docker container: caddy — [3] public TLS termination edge"]
+            caddy["caddy 2.11.4 + SHA-pinned<br/>rate-limit module (linux/amd64)<br/>ports 80, 443<br/>per-client-IP limit, production<br/>hostname's site block only:<br/>auth 20/5m, general 120/1m"]
         end
         netcup_spacer ~~~ caddy_box
         subgraph app_box["Docker container: app"]
@@ -134,39 +139,69 @@ flowchart TB
         subgraph redpanda_box["Docker container: redpanda"]
             redpanda["redpanda<br/>(Kafka broker + Schema Registry,<br/>no host port published)"]
         end
+        subgraph postgres_box["Docker container: postgres"]
+            postgres["postgres 16<br/>(system of record, named volume,<br/>no host port published)"]
+        end
 
-        caddy -- "HTTP :8080<br/>(internal Docker network)" --> app
-        app -- "Kafka wire protocol :19092<br/>(internal Docker network)" --> redpanda
-        app -- "Schema Registry HTTP :8081<br/>(internal Docker network)" --> redpanda
+        subgraph obs_box["Observability stack — Phase 12, single shared instance for both environments"]
+            direction TB
+            prometheus["prometheus<br/>(scrapes exporters + this VM)"]
+            grafana["grafana<br/>(dashboards, sole login gate,<br/>monitoring hostname's site block)"]
+            loki["loki<br/>(30-day log store)"]
+            promtail["promtail<br/>[6] read-only docker.sock grant"]
+            cadvisor["cadvisor<br/>[6] read-only docker.sock grant"]
+            node_exp["node-exporter<br/>(read-only host-root bind)"]
+            pg_exp["postgres-exporter"]
+        end
+
+        caddy -- "HTTP :8080<br/>[4] Compose-internal Docker network" --> app
+        caddy -- "HTTP :3000, third site block<br/>[4] Compose-internal Docker network" --> grafana
+        app -- "Kafka wire protocol :19092<br/>[4] Compose-internal Docker network" --> redpanda
+        app -- "Schema Registry HTTP :8081<br/>[4] Compose-internal Docker network" --> redpanda
+        app -- "JDBC :5432, no TLS<br/>[5] kanban-db Docker network" --> postgres
+        prometheus -- "scrape<br/>[4] Compose-internal Docker network" --> node_exp
+        prometheus -- "scrape<br/>[4] Compose-internal Docker network" --> cadvisor
+        prometheus -- "scrape<br/>[4] Compose-internal Docker network" --> pg_exp
+        pg_exp -- "least-privilege monitoring role<br/>[5] kanban-db Docker network" --> postgres
+        promtail -- "ship logs<br/>[4] Compose-internal Docker network" --> loki
+        grafana -- "query<br/>[4] Compose-internal Docker network" --> prometheus
+        grafana -- "query<br/>[4] Compose-internal Docker network" --> loki
     end
 
-    neon[("Neon serverless Postgres<br/>aws-eu-central-1, Frankfurt<br/>(external, managed)")]
+    subgraph nonprod_box["kanban-nonprod Compose project — SAME VM, different project"]
+        direction TB
+        redpanda_nonprod["redpanda-nonprod"]
+    end
+    prometheus -- "scrape nonprod broker metrics<br/>[7] kanban-metrics Docker network<br/>(crosses Compose-project boundary)" --> redpanda_nonprod
 
-    client -- "HTTPS :443 via kanban-board-rud-vlad-473.duckdns.org<br/>(crosses VM boundary)" --> caddy
-    app -- "JDBC over TLS :5432<br/>sslmode=require, channel_binding=require<br/>(crosses VM boundary, public internet)" --> neon
+    client --> netcup_fw
+    netcup_fw -- "HTTPS :443 via kanban-board-rud-vlad-473.duckdns.org<br/>(crosses VM boundary)" --> caddy
 ```
 
 <sub>Source: [docs/diagrams/infra-physical-deployment.mmd](docs/diagrams/infra-physical-deployment.mmd)
 — the Physical/Deployment view per [docs/DIAGRAM_CONVENTIONS.md](docs/DIAGRAM_CONVENTIONS.md). This
 is a rendering of that file; if the two ever disagree, the `.mmd` source is canonical.</sub>
 
-Production runs on a **Netcup VPS Lite 2 G12s** (Vienna, x86_64) via Docker Compose: `caddy`
-terminates public TLS with an automatically renewed Let's Encrypt certificate and is the only
-container with a published host port (80/443 — 80 exists solely for the ACME challenge and the
-HTTP→HTTPS redirect); `app` and a self-hosted, resource-capped `redpanda` broker (Kafka wire
-protocol plus its built-in Schema Registry) sit behind it with no host port of their own, reachable
-only on the internal Compose network. The database of record is **Neon serverless Postgres**
-(Frankfurt), reached over a second, independent TLS hop (`sslmode=require`,
-`channel_binding=require`) that has nothing to do with Caddy's certificate. This pivoted from the
-original target, Oracle Cloud's Always Free A1 Flex (ARM64) — that capacity proved structurally
-unavailable after 200+ provisioning attempts — see
-[docs/INFRA_RUNBOOK.md](docs/INFRA_RUNBOOK.md) for the full provider history and the VM's live
-firewall/DNS state.
+Production runs on a **Netcup VPS Lite 2 G12s** (Vienna, x86_64) via Docker Compose, behind the
+Netcup Cloud Firewall: `caddy` terminates public TLS with an automatically renewed Let's Encrypt
+certificate and is the only container with a published host port (80/443 — 80 exists solely for
+the ACME challenge and the HTTP→HTTPS redirect), and now also carries a SHA-pinned rate-limit
+module scoping login attempts on the production hostname. `app`, a self-hosted `redpanda` broker
+(Kafka wire protocol plus its built-in Schema Registry), and a self-hosted **Postgres 16** instance
+— the system of record since Phase 11 replaced Neon serverless Postgres — sit behind Caddy with no
+host port of their own, reachable only on the internal Compose network (Postgres specifically on
+its own `kanban-db` network). A single shared Prometheus/Grafana/Loki/Promtail stack (Phase 12)
+monitors both environments from inside this same Compose project, with Grafana as the only one of
+those four publicly reachable, gated by its own login on a separate Caddy site block. See
+[docs/INFRA_ARCHITECTURE.md](docs/INFRA_ARCHITECTURE.md) for the full numbered-trust-boundary
+breakdown and [docs/INFRA_RUNBOOK.md](docs/INFRA_RUNBOOK.md) for the provider pivot history (from
+Oracle Cloud's Always Free A1 Flex, ARM64 capacity that proved structurally unavailable) and the
+VM's live firewall/DNS state.
 
 **Nonprod** is a second, fully isolated deployment colocated on the same VM: its own Compose project
-(`kanban-board-nonprod`), its own schema-only Neon branch that has never held a production row, its
-own Redpanda broker with an independently-populated Avro Schema Registry, and its own publicly
-trusted HTTPS host
+(`kanban-board-nonprod`), its own database (`kanban_nonprod`) on that same shared self-hosted
+Postgres instance — never holding a production row — its own Redpanda broker with an
+independently-populated Avro Schema Registry, and its own publicly trusted HTTPS host
 (`kanban-board-rud-vlad-473-nonprod.duckdns.org`) — bridged to production by exactly one shared
 Docker network (`kanban-edge`) joining only the two edge pieces that must talk to each other. It
 exists so a change can be proven against a real broker, a real registry, and real TLS before it
@@ -182,10 +217,11 @@ is no other trigger, so nothing reaches production or nonprod without going thro
 unless it's green. From there the graph fans out and back in:
 
 - **In parallel:** the Docker image builds and pushes to Docker Hub (tagged by commit short SHA,
-  `linux/amd64` natively — the runner and the VM share the same architecture, no QEMU needed), a
-  Flyway migration-verification job applies this commit's migrations to production's real Neon
-  database (refusing to run against a pooled connection, since transaction-mode pooling doesn't
-  support DDL), and an identical Flyway job runs against nonprod's own Neon branch.
+  `linux/amd64` natively — the runner and the VM share the same architecture, no QEMU needed), and
+  a Flyway migration-verification job runs **on the VM itself** (the runner SCPs the migration
+  scripts over, then runs the pinned Flyway CLI over SSH against the self-hosted Postgres container
+  on the internal `kanban-db` network — not against a runner-side connection to a managed provider),
+  with an identical job verifying nonprod's own database on that same shared instance.
 - **Then:** `deploy-to-netcup` ships the new image to production over SSH (host key pinned by
   fingerprint) once the build and production's Flyway job both succeed; `deploy-to-nonprod` does the
   same for nonprod once the build and nonprod's Flyway job succeed — the two deploy jobs share no

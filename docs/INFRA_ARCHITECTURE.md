@@ -290,6 +290,15 @@ job that no longer runs where it said. The facts most worth listing here are the
 would never think to re-check, because they read as settled background rather than as
 configuration.
 
+**Also on this list, added 2026-09-11 (found while reviewing the README for resume-readiness):**
+`README.md`'s "Production deployment" section embeds its own copy of
+`docs/diagrams/infra-physical-deployment.mmd` plus a paragraph describing the same topology. Found
+stale (still describing the pre-Phase-11 Neon topology, no observability stack, no Netcup Cloud
+Firewall boundary) despite this document and the `.mmd` source already having been kept current —
+nothing on this list previously named the README copy, so it drifted silently exactly like the
+Neon case above. Update both the embedded diagram and its prose paragraph here whenever this
+document's own Physical/Deployment facts change.
+
 **Also on this list, added 2026-09-05 (quick task 260905-tw0):**
 
 - **`docs/diagrams/*.mmd` and the render pipeline.** Every diagram's PNG is regenerated from its
