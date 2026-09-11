@@ -88,7 +88,7 @@ services:
       - --smp
       - "1"
       - --memory
-      - 128M
+      - 512M
       - --schema-registry-addr
       - 0.0.0.0:8081
       - --kafka-addr
@@ -134,7 +134,21 @@ services:
     #   - Host coexistence: `free -m` `available` stayed >= 5.8GiB across every iteration in this
     #     session (never approached the plan's 1024MiB gate); production's health endpoint returned
     #     200 after every one of the ~15 restart cycles in this descent.
-    mem_limit: 300m
+    #
+    # SUPERSEDED 2026-09-11 (quick task 260911-gkz, incident found while unrelated to that task's
+    # own change): the 128M/300m floor above was measured against a near-empty broker on 2026-08-18
+    # and held for weeks, but crash-looped for real on this date (RestartCount climbing, ExitCode
+    # 139, `seastar - Failed to allocate 16 bytes` during raft_send, identical signature to the
+    # sub-floor rungs in the original ladder) -- NOT because traffic changed, but because
+    # `__consumer_offsets` (3.0G) and `_schemas` (1.0G) had grown far past what the original
+    # measurement's near-empty broker ever replayed on restart; the crash happens replaying/
+    # compacting that backlog, not from steady-state RSS. Bumped to 512M/900m live via SSH first
+    # (confirmed stable: RSS 290.6MiB, `Up 2 minutes (healthy)`, app-nonprod's Kafka consumer
+    # rediscovered the group coordinator), then mirrored here. This is a bump for the ballooned
+    # internal-topic backlog, not a re-run of the original ladder methodology -- if this keeps
+    # growing, the actual fix is a retention/compaction policy on `__consumer_offsets`/`_schemas`,
+    # not another memory bump.
+    mem_limit: 900m
     healthcheck:
       test: [ "CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1" ]
       interval: 5s
