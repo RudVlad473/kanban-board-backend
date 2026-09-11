@@ -236,6 +236,16 @@ services:
     # The profile stays conservative in D-11's sense: shared_buffers went DOWN (128MB -> 64MB,
     # now half the engine's own stock 128MB default), and work_mem/max_connections are untouched
     # by design -- not raised, not re-examined away.
+    #
+    # STALE AS OF quick task 260911-gkz: `shared_preload_libraries=pg_stat_statements` (added
+    # below) allocates its own additional shared-memory hash table (sized by
+    # `pg_stat_statements.max`, default 5000 entries) on top of `shared_buffers` -- not accounted
+    # for in the measurement above, which predates this extension. The prior worst-case
+    # measurement already used ~90% of this 256m cap under synthetic load (see the "Concurrent
+    # re-validation" note above), leaving thin headroom. Flagged rather than silently left
+    # standing; this is exactly why the extension's actual activation (a container restart) is
+    # deferred to a separate, explicitly-gated deploy rather than landed in this same session --
+    # re-run the restart ladder against this container once that restart happens.
     mem_limit: 256m
     environment:
       POSTGRES_USER: ${POSTGRES_SUPERUSER}
@@ -267,6 +277,17 @@ services:
     # a quarter of the mem_limit above and, together with max_connections x work_mem, fits within
     # 85% of that cap (the invariant stated and enforced above mem_limit). work_mem and
     # max_connections are unchanged by design; only shared_buffers moved, and it moved down.
+    # Added quick task 260911-gkz: `shared_preload_libraries=pg_stat_statements` is REQUIRED for
+    # the "Query rate"/"Average query runtime" dashboard tiles, which were confirmed live (empty
+    # `shared_preload_libraries`, `pg_stat_statements` absent from `pg_extension`) to be N/A for
+    # exactly this reason -- see FINDINGS.md Tiles 2-3. `shared_preload_libraries` is NOT
+    # settable at runtime, so this value only takes effect on this container's NEXT restart; it
+    # is committed here as config, verified locally against a disposable Postgres in this task,
+    # but the live production container has NOT been restarted by this change -- that restart,
+    # and the one-time `CREATE EXTENSION pg_stat_statements` on both `kanban_prod` and
+    # `kanban_nonprod` it still needs, is a separate, later, explicitly-gated deploy action (see
+    # SUMMARY.md's "Production deploy boundary" section), matching this project's standing
+    # practice of reviewing before merging/deploying to main.
     command:
       - postgres
       - -c
@@ -275,6 +296,8 @@ services:
       - work_mem=4MB
       - -c
       - max_connections=25
+      - -c
+      - shared_preload_libraries=pg_stat_statements
     networks:
       # `default` must be listed explicitly -- once a service declares any `networks:` key it no
       # longer implicitly joins the default network, and dropping it here would sever production's
@@ -866,6 +889,19 @@ services:
     restart: unless-stopped
     command:
       - '--auto-discover-databases'
+      # Added quick task 260911-gkz: both collectors are disabled by default in v0.20.1 and
+      # neither was previously enabled, which is why the "PostgreSQL Uptime", "Query rate" and
+      # "Average query runtime" dashboard tiles rendered N/A -- confirmed live (exporter's own
+      # /metrics carried zero series for either family) before adding these flags, not assumed.
+      # `--collector.postmaster` only needs Postgres's own always-available
+      # `pg_postmaster_start_time()` function -- no Postgres-side config change, no restart.
+      - '--collector.postmaster'
+      # `--collector.stat_statements` additionally requires the `pg_stat_statements` extension to
+      # be preloaded and created (see the `postgres` service's `command:` and the Task 3 SUMMARY
+      # for the deploy-time `CREATE EXTENSION` step this still needs) -- without that extension
+      # this collector silently emits nothing, exactly like today, so it is safe to enable now
+      # ahead of the extension landing on a future deploy.
+      - '--collector.stat_statements'
     environment:
       # This plan SUPERSEDES 12-RESEARCH.md's Code Examples, which show a single DATA_SOURCE_NAME
       # DSN URI with the password interpolated into it. Do NOT reinstate that: `@ : / ? # %` are
@@ -910,6 +946,13 @@ services:
     # cycle with RestartCount=0 sustained. Full rung-by-rung ladder and the failing rung's
     # verbatim OOM evidence: docs/INFRA_RUNBOOK.md, "Observability stack resource measurement --
     # Plan 12-05".
+    #
+    # STALE AS OF quick task 260911-gkz: this 12MiB peak measurement predates the
+    # `--collector.postmaster`/`--collector.stat_statements` flags added above. Both collectors
+    # widen the scrape's working set (an extra catalog read per scrape, plus per-query rows once
+    # `pg_stat_statements` is populated) -- the ~167% headroom margin is expected to absorb this,
+    # but it is not re-measured. Flagged rather than silently left standing; re-run the restart
+    # ladder against this container on the next opportunity to touch this service's resources.
     mem_limit: 32m
     # No `ports:` entry at all -- mirrors every other internal-only service in this file. Only
     # Prometheus reaches this container, over the internal `default` network.

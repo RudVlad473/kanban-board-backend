@@ -256,4 +256,46 @@ anywhere in this dataset.
 
 ## Task 2 decision record
 
-(populated once the user responds -- see the plan's Task 2 checkpoint)
+**Decision (recorded 2026-09-11): implement ALL FOUR approved fixes. No option was rejected.**
+
+1. **Uptime** -- add `--collector.postmaster` to the exporter. **APPROVED.**
+2. **Query rate / Average query runtime** -- preload `pg_stat_statements` + enable its collector.
+   **APPROVED**, with the cost explicitly acknowledged by the user: this requires a production
+   Postgres restart (serving both `kanban_prod` and `kanban_nonprod`) and exposes query
+   text/identifiers to every Grafana Viewer on the public hostname once deployed.
+3. **Max Connections / Shared Buffers** -- migrate the 2 affected panels from `singlestat` to
+   `stat` panel type. **APPROVED.**
+4. **Locks by state / Deadlocks by database (per-database row)** -- fix the
+   collapsed-row/repeat-directive defect across all 9 panels in that row sharing the defect, not
+   just the 2 originally reported. **APPROVED.**
+
+**Explicit scope boundary for item 2 (user-directed):** this decision authorizes landing item 2 as
+a repository/config change (`docker-compose.prod.yml`'s `shared_preload_libraries` +
+`--collector.stat_statements`), verified LOCALLY against a disposable exporter/Postgres. It does
+**NOT** authorize deploying to production or restarting the live production database as part of
+this task. `shared_preload_libraries` only takes effect on Postgres's next restart, so the
+production restart and its public query-text exposure remain deferred to a separate, later,
+explicitly-gated deploy action -- this project's standing practice of reviewing before
+merging/deploying to main. See `260911-gkz-SUMMARY.md`'s "Production deploy boundary" section.
+
+## Task 3: additional discovery during local verification
+
+Confirming item 2's fix against a REAL disposable Postgres+extension (not just reading docs)
+surfaced a second, independent defect the static plan text did not anticipate: postgres_exporter
+v0.20.1's `stat_statements` collector does not emit the metric names the dashboard's PromQL
+queries. The dashboard queried `pg_stat_statements_calls` and
+`pg_stat_statements_total_time_seconds`; the collector actually emits `pg_stat_statements_calls_total`
+and `pg_stat_statements_seconds_total` (confirmed against the exporter's own `# HELP` text: "Number
+of times executed" and "Total time spent in the statement, in seconds", respectively -- the exact
+semantics the dashboard's original names were trying to reference).
+
+EVIDENCE: a disposable `postgres:16` container with `shared_preload_libraries=pg_stat_statements` set, `CREATE EXTENSION pg_stat_statements` run, and a few queries fired to populate it, scraped by the pinned `prometheuscommunity/postgres-exporter:v0.20.1` image with `--auto-discover-databases --collector.postmaster --collector.stat_statements` -- the exact flags now committed. `grep '^pg_stat_statements' /metrics | sed 's/{.*//' | sort -u` returned `pg_stat_statements_calls_total`, `pg_stat_statements_seconds_total`, `pg_stat_statements_rows_total`, `pg_stat_statements_block_read_seconds_total`, `pg_stat_statements_block_write_seconds_total` -- no un-suffixed `pg_stat_statements_calls` or `pg_stat_statements_total_time_seconds` exists in this exporter version at all.
+
+Without this correction, enabling the collector alone would have left both tiles rendering "No
+data" indefinitely even after the production restart happens -- the same silent-failure shape
+WR-02 already warned about, just one layer further down the chain than that finding covered. Fixed
+under deviation Rule 1 (auto-fix bugs) as part of implementing the user-approved item 2: the two
+panels' `expr` fields now reference `pg_stat_statements_calls_total` and
+`pg_stat_statements_seconds_total`. This is the same class of defect Phase 12 plan 04 already found
+and fixed for `pg_replication_lag`/`pg_database_size` -- a third instance of "vendored dashboard
+PromQL predates this exporter version's actual metric names," not a one-off.
