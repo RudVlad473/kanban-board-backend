@@ -94,6 +94,19 @@ and dashboard-JSON changes, verified against disposable local containers only:
   production database, and query text/identifiers becoming visible to every Grafana Viewer on the
   public hostname once deployed) applies at THAT future deploy, not to anything done here.
 
+**Update 2026-09-11 (same day, separate explicit approval):** the user approved pushing `main`,
+which triggered `deploy.yml`. Production's `postgres-1` and `postgres-exporter-1` containers were
+recreated and restarted (confirmed via the run's logs: `Container ... Recreated` / `Started` /
+`Healthy`, ~6s downtime); `deploy-to-nonprod` failed independently on an unrelated
+`kanban-nonprod-redpanda` health-check failure (that job never touches these files). The
+outstanding `CREATE EXTENSION pg_stat_statements` step was then run against both `kanban_prod` and
+`kanban_nonprod` via the documented `docker exec ... psql --username kanban_admin` pattern (no
+credential involved — trust-authenticated local socket). Confirmed live on the exporter's
+`/metrics`: `pg_postmaster_start_time_seconds` present, and 240 `pg_stat_statements_*` series
+present including both `_calls_total` and `_seconds_total` families. All 7 originally-reported
+tiles should now render; not re-verified against the live Grafana dashboard itself as part of this
+task.
+
 ## Local verification performed
 
 - `python3 -m json.tool` on the dashboard JSON.
