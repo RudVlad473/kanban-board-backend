@@ -1,5 +1,5 @@
 ---
-status: verifying
+status: resolved
 trigger: "Public 'CPU/Memory & Network Usage - cAdvisor' Grafana dashboard (public link https://kanban-board-rud-vlad-473-monitoring.duckdns.org/public-dashboards/5a72e5df7fd54618ae28972cabcd8846) shows every panel empty. CPU Usage panel's warning icon tooltip literally reads 'Plugin graph not found'. Memory Usage, Memory Cached, Received Network Traffic, Sent Network Traffic panels show the same red warning icon with empty bodies. Screenshot provided by user."
 created: 2026-09-12T00:00:00Z
 updated: 2026-09-12T00:00:00Z
@@ -47,10 +47,11 @@ already uses modern panel types exclusively (timeseries/gauge/stat/bargauge, sch
 consistent with why THAT dashboard was reported as rendering (232/274 queries with data) while
 this one is not.
 
-next_action: live post-deploy verification — confirm the deploy actually re-provisioned Grafana
-(served public-dashboard JSON reports schemaVersion 42 and zero `graph`/`singlestat` panels, not
-the cached schemaVersion 27), then re-run the render + tooltip probes against both live public
-links and confirm 0 error icons with panels drawing series.
+next_action: none — resolved and verified live (commit bbbed20, deployed via CI run 34692214220).
+Both public dashboards render with zero plugin errors. Scratch harness deleted, no orphaned
+containers. Remaining optional follow-up, deliberately NOT done here to avoid expanding scope:
+Postgres Internals is still unlinked from README's Live section, and its "PostgreSQL Uptime" panel
+reads N/A for want of an exporter metric.
 
 reasoning_checkpoint:
   hypothesis: "Panels with type=graph/singlestat (Angular-era) cannot render at all — not 'no
@@ -210,6 +211,36 @@ reasoning_checkpoint:
     panel nested inside a row is still caught.
   implication: the guard demonstrably fails without the fix and passes with it. It would have
     caught this defect on the day PR #17 shipped.
+
+- timestamp: 2026-09-12T12:20Z
+  checked: LIVE post-deploy verification of commit bbbed20, after CI run 34692214220 (CI/CD with
+    Docker) completed with every job success. Four independent layers, because a green pipeline is
+    not evidence that Grafana re-read anything.
+  found:
+    1. SHIPPED — both migrated files are on the host at
+       `/opt/deploy/kanban-board-backend/docker/grafana/provisioning/dashboards/json/`, timestamped
+       with this deploy, both schemaVersion 42, and `grep -c` for `graph`/`singlestat` returns 0 on
+       all three deployed dashboards.
+    2. RE-PROVISIONED — the live public-dashboard API now serves schemaVersion 42 for both
+       (cAdvisor {row:4, timeseries:5, table:1}; Postgres {row:6, timeseries:17, stat:13, gauge:5}),
+       matching the working tree exactly, with zero legacy types across all three public dashboards.
+       The Grafana container reports "Up 3 days" — it was NOT restarted, so the pickup came from the
+       provider's own `updateIntervalSeconds: 30` file scan; grafana.db's mtime moved at deploy time,
+       confirming the re-read reached storage.
+    3. DATA PATH INTACT — all 41 live panel-query endpoints (6 cAdvisor + 35 Postgres) return HTTP
+       200 with real datapoints: 0 errored, 0 empty. Panel ids are unchanged from before the
+       migration, so the public endpoints still address the same panels.
+    4. RENDERS — real browser against both live public links: cAdvisor 0 error icons (was 5) and
+       6/6 panels drawing with live production series (app container CPU mean 0.613% / max 4.56%,
+       Memory 454 MiB / 863 MiB); Postgres Internals 0 error icons and 23/23 panels drawing
+       (Version 160015, Query rate 4.96, Average query runtime 299 µs, Total database size
+       50.65 MiB, Shared Buffer Hits 99.99%). Zero "Plugin ... not found" anywhere on either page.
+  implication: RESOLVED in production, verified at the layer the defect actually lived in. The
+    before/after on the SAME live URL is unambiguous: 5 error icons reading "Plugin graph not found"
+    with no drawing surface, to 0 error icons with computed legend values.
+  caveat recorded rather than glossed: Postgres Internals' "PostgreSQL Uptime" panel reads N/A on
+    live. Its plugin resolved and it drew its shell, so this is not the defect under investigation —
+    it is a missing exporter metric, pre-existing and out of scope here.
 
 ## Eliminated
 
