@@ -135,6 +135,63 @@ check("a surviving variable is rejected", len(v) == 1 and "node" in v[0], v)
 
 check("no variables passes", _gate.find_templating_violations(dashboard([panel()]), "d.json") == [])
 
+print("I5 -- every panel type is a plugin the pinned Grafana ships")
+
+v = _gate.find_panel_type_violations(dashboard([panel(type="graph")]), "d.json")
+check(
+    "legacy Angular 'graph' is rejected and names its replacement",
+    len(v) == 1 and "graph" in v[0] and "timeseries" in v[0],
+    v,
+)
+
+v = _gate.find_panel_type_violations(dashboard([panel(type="singlestat")]), "d.json")
+check(
+    "legacy Angular 'singlestat' is rejected and names its replacement",
+    len(v) == 1 and "singlestat" in v[0] and "stat" in v[0],
+    v,
+)
+
+v = _gate.find_panel_type_violations(dashboard([panel(type="grafana-piechart-panel")]), "d.json")
+check(
+    "an unshipped external plugin id is rejected",
+    len(v) == 1 and "not a panel plugin shipped" in v[0],
+    v,
+)
+
+v = _gate.find_panel_type_violations(
+    dashboard([panel(type="timeseries"), panel(type="stat"), panel(type="table")]), "d.json"
+)
+check("modern shipped types pass", v == [], v)
+
+# `row` has no plugin directory in the image, so an allowlist built from that listing alone would
+# reject every dashboard that groups its panels -- which is all three of them.
+v = _gate.find_panel_type_violations(dashboard([{"type": "row", "id": 99, "panels": []}]), "d.json")
+check("structural 'row' passes despite shipping no plugin", v == [], v)
+
+# The defect this gate missed the first time was inside collapsed rows as well as beside them.
+v = _gate.find_panel_type_violations(
+    dashboard([{"type": "row", "id": 99, "panels": [panel(type="graph")]}]), "d.json"
+)
+check("a legacy panel nested inside a row is still found", len(v) == 1 and "graph" in v[0], v)
+
+# A datasource ref carries type="prometheus"; a checker walking every dict instead of the panel
+# tree would report that as an unshipped panel plugin on a dashboard that is entirely fine.
+v = _gate.find_panel_type_violations(
+    dashboard([panel(type="timeseries", datasource={"type": "prometheus", "uid": "PBFA97CFB590B2093"})]),
+    "d.json",
+)
+check("a datasource ref's own 'type' is not mistaken for a panel type", v == [], v)
+
+print("I6 -- the plugin allowlist matches the image Compose pins")
+
+check(
+    "the pinned image passes",
+    _gate.find_grafana_version_drift("  grafana:\n    image: grafana/grafana:13.2.1\n") == [],
+)
+
+v = _gate.find_grafana_version_drift("  grafana:\n    image: grafana/grafana:14.0.0\n")
+check("a bumped image is rejected", len(v) == 1 and "14.0.0" in v[0], v)
+
 print("I4 -- every dashboard file is accounted for")
 
 v = _gate.find_uncovered_files({"a.json", "new.json"}, {"a.json": "u1"}, {})

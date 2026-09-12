@@ -24,6 +24,22 @@ Grafana logs nothing, Prometheus answers normally, the container stays healthy, 
 looks merely quiet. The dashboards are vendored from grafana.com, where template variables are the
 norm, so every future re-fetch reintroduces exactly this defect.
 
+A THIRD failure, measured 2026-09-12 after the two above were fixed and this gate went green
+(docs/INFRA_RUNBOOK.md, "Plugin graph not found"):
+
+  3. A panel whose `type` names a plugin the running Grafana does not ship renders nothing at all.
+     Grafana 13 removed Angular outright -- `graph` and `singlestat` are not disabled-by-default,
+     they are absent from the image, and `angular_support_enabled` no longer exists as a setting,
+     so no configuration can bring them back. The panel draws an error triangle whose tooltip
+     reads "Plugin graph not found" verbatim.
+
+Failure 3 is why I5 exists and why it is checked separately from I1-I3 rather than assumed away by
+them: the two earlier invariants are about the DATA path, and on the very dashboards that tripped
+this one the data path was provably healthy -- all six live public panel-query endpoints returned
+HTTP 200 with 793-803 datapoints each while every panel rendered blank. A gate that only proves
+queries are well-formed reports success on a dashboard no browser can draw. That is precisely what
+happened: this file passed, CI was green, and two of the three public dashboards were still broken.
+
 SCOPE: every *.json under docker/grafana/provisioning/dashboards/json/, split into two disjoint
 sets so a new dashboard cannot land ungated (I4): PUBLIC_DASHBOARDS, checked against every
 invariant, and DELIBERATELY_PRIVATE, documented and exempted from the public-only invariants. I1
@@ -54,6 +70,7 @@ import sys
 
 JSON_DIR = "docker/grafana/provisioning/dashboards/json"
 DATASOURCES = "docker/grafana/provisioning/datasources/datasources.yaml"
+COMPOSE = "docker-compose.prod.yml"
 
 # Shared through Grafana's public-dashboard feature, so subject to every invariant below.
 # Verified against GET /api/dashboards/public-dashboards on the VM, 2026-09-12.
@@ -78,6 +95,35 @@ QUERY_FIELDS = ("expr", "interval")
 
 BUILTIN_DATASOURCE_UIDS = {"grafana", "-- Grafana --", "-- Mixed --", "-- Dashboard --"}
 
+# The image tag docker-compose.prod.yml pins, and therefore the only version PANEL_PLUGINS below
+# describes. Checked against the Compose file at run time (I6) so a Grafana bump cannot silently
+# leave this allowlist describing a version nothing runs any more.
+PINNED_GRAFANA_IMAGE = "grafana/grafana:13.2.1"
+
+# Derived, not recalled: every directory under /usr/share/grafana/public/app/plugins/panel/ that
+# contains a plugin.json, read out of the pinned image itself on 2026-09-12. Exactly 30. The bare
+# directory listing has 32 entries -- `AGENTS.md` and `test-utils.ts` ship there too and are not
+# plugins, which is why the plugin.json filter is the definition rather than the listing.
+#
+# No GF_INSTALL_PLUGINS is set anywhere in docker-compose.prod.yml, so nothing widens this set at
+# run time. If an external panel plugin is ever installed, add it here WITH the install mechanism
+# named, or this gate will reject a dashboard that would in fact render.
+GRAFANA_PANEL_PLUGINS = {
+    "alertlist", "annolist", "barchart", "bargauge", "candlestick", "canvas", "dashlist", "debug",
+    "flamegraph", "gauge", "geomap", "gettingstarted", "heatmap", "histogram", "live", "logs",
+    "logstable", "news", "nodeGraph", "piechart", "stat", "state-timeline", "status-history",
+    "table", "text", "timeseries", "traces", "trend", "welcome", "xychart",
+}
+
+# `row` is structural -- Grafana core handles it directly and it has no plugin directory, so it is
+# legal despite being absent above.
+STRUCTURAL_PANEL_TYPES = {"row"}
+
+# Named so the failure message can say what to migrate TO. Everything not in GRAFANA_PANEL_PLUGINS
+# is rejected regardless; these two get a specific replacement because they are what the vendored
+# grafana.com dashboards actually carry.
+ANGULAR_REPLACEMENTS = {"graph": "timeseries", "singlestat": "stat"}
+
 
 def walk(node, fn):
     """Apply fn to every dict in the tree."""
@@ -88,6 +134,71 @@ def walk(node, fn):
     elif isinstance(node, list):
         for value in node:
             walk(value, fn)
+
+
+def iter_panels(dashboard):
+    """Yield every panel, descending into the `panels` a collapsed row nests its children in.
+
+    Deliberately NOT built on walk(): walk() visits every dict in the document, and `type` is a
+    common key on objects that are not panels at all (a datasource ref carries type="prometheus",
+    a field override carries its own type). Feeding those to a panel-plugin allowlist would report
+    a violation for "prometheus" on a perfectly good dashboard.
+    """
+
+    def descend(panels):
+        for panel in panels or []:
+            if not isinstance(panel, dict):
+                continue
+            yield panel
+            yield from descend(panel.get("panels"))
+
+    yield from descend(dashboard.get("panels"))
+
+
+def find_panel_type_violations(dashboard, filename):
+    """I5: every panel type names a plugin the pinned Grafana actually ships."""
+    violations = []
+    for panel in iter_panels(dashboard):
+        ptype = panel.get("type")
+        if ptype in GRAFANA_PANEL_PLUGINS or ptype in STRUCTURAL_PANEL_TYPES:
+            continue
+        where = f"panel id={panel.get('id')!r} ({panel.get('title') or 'untitled'!r})"
+        if ptype in ANGULAR_REPLACEMENTS:
+            violations.append(
+                f"{filename}: {where} has type {ptype!r}, an Angular-era panel REMOVED from "
+                f"{PINNED_GRAFANA_IMAGE}. It cannot render at all -- the panel shows an error "
+                f"triangle reading 'Plugin {ptype} not found' no matter how healthy its query is. "
+                f"Migrate to {ANGULAR_REPLACEMENTS[ptype]!r} (import the dashboard into a "
+                f"{PINNED_GRAFANA_IMAGE} instance and export it back, so Grafana's own "
+                "DashboardMigrator does the conversion rather than a hand edit)."
+            )
+        else:
+            violations.append(
+                f"{filename}: {where} has type {ptype!r}, which is not a panel plugin shipped by "
+                f"{PINNED_GRAFANA_IMAGE} and not a structural type. Shipped plugins: "
+                f"{sorted(GRAFANA_PANEL_PLUGINS)}."
+            )
+    return violations
+
+
+def find_grafana_version_drift(compose_text):
+    """I6: the allowlist above describes the image Compose actually pins, or this gate is fiction.
+
+    A panel-plugin allowlist is only true of one Grafana version. Bumping the image without
+    re-deriving it would leave I5 silently enforcing a former version's plugin set -- passing a
+    dashboard that no longer renders, or failing one that does.
+    """
+    if re.search(rf"image:\s*{re.escape(PINNED_GRAFANA_IMAGE)}\s*$", compose_text, re.MULTILINE):
+        return []
+    found = re.findall(r"image:\s*(grafana/grafana:\S+)", compose_text)
+    return [
+        f"GRAFANA_PANEL_PLUGINS in {os.path.basename(__file__)} was derived from "
+        f"{PINNED_GRAFANA_IMAGE}, but docker-compose.prod.yml pins {found or 'no grafana image'}. "
+        "Re-derive the allowlist from the new image "
+        "(`docker run --rm --entrypoint sh <image> -c 'cd /usr/share/grafana/public/app/plugins/"
+        "panel && for d in */; do [ -f \"$d/plugin.json\" ] && echo \"${d%/}\"; done'`) "
+        "and update PINNED_GRAFANA_IMAGE together with it."
+    ]
 
 
 def find_datasource_violations(dashboard, filename, known_uids):
@@ -214,10 +325,16 @@ def main():
     discovered = {os.path.basename(p) for p in glob.glob(os.path.join(JSON_DIR, "*.json"))}
     violations = find_uncovered_files(discovered, PUBLIC_DASHBOARDS, DELIBERATELY_PRIVATE)
 
+    with open(COMPOSE) as f:
+        violations.extend(find_grafana_version_drift(f.read()))
+
     for name in sorted(discovered):
         with open(os.path.join(JSON_DIR, name)) as f:
             dashboard = json.load(f)
         violations.extend(find_datasource_violations(dashboard, name, known_uids))
+        # I5 applies to private dashboards too: a missing panel plugin breaks the AUTHENTICATED
+        # renderer identically. Unlike I2/I3, nothing about it is public-path-specific.
+        violations.extend(find_panel_type_violations(dashboard, name))
         if name in PUBLIC_DASHBOARDS:
             violations.extend(find_uid_mismatches(dashboard, name, PUBLIC_DASHBOARDS[name]))
             violations.extend(find_variable_violations(dashboard, name))
@@ -233,8 +350,10 @@ def main():
     print(
         f"invariants OK -- {len(discovered)} dashboard(s) checked; "
         f"every datasource ref resolves to a uid declared in {DATASOURCES} "
-        f"({sorted(known_uids)}); public dashboards {sorted(PUBLIC_DASHBOARDS)} carry no template "
-        f"variables in {QUERY_FIELDS} and declare none"
+        f"({sorted(known_uids)}); every panel type is one of the "
+        f"{len(GRAFANA_PANEL_PLUGINS)} plugins {PINNED_GRAFANA_IMAGE} ships (or a structural "
+        f"{sorted(STRUCTURAL_PANEL_TYPES)}); public dashboards {sorted(PUBLIC_DASHBOARDS)} carry "
+        f"no template variables in {QUERY_FIELDS} and declare none"
     )
     return 0
 
