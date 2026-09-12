@@ -35,6 +35,17 @@
 # docker-compose.prod.yml bind mounts were absent from deploy-to-netcup's `source:` list from
 # Phase 12 onward, and nothing compared the two lists until this gate existed. See that script's
 # own docstring for the full argument and its KNOWN HOLES.
+#
+# Fourth job added 2026-09-12 (debug session grafana-datasource-not-found):
+# scripts/verify-public-dashboards.py checks that no publicly-shared Grafana dashboard contains a
+# construct the public renderer cannot resolve -- a datasource referenced by name or by a
+# `${ds_*}` variable, or a query holding a `$variable`. Same per-PR blocking rationale: a pure
+# function of the committed dashboard JSON and datasources.yaml, no network. Discovered live: all
+# three public dashboards had been serving "Datasource was not found" on every panel since they
+# were shared, and the second defect class this gate covers fails SILENTLY as HTTP 200 with an
+# empty result -- no log line, no unhealthy container, just quiet panels. These dashboards are
+# vendored from grafana.com, where template variables are the norm, so each re-fetch reintroduces
+# it. See that script's own docstring for the measurements and its KNOWN HOLES.
 name: Invariant Checks
 
 on:
@@ -112,3 +123,23 @@ jobs:
 
       - name: Verify deploy SCP coverage invariants
         run: python3 scripts/verify-deploy-scp-coverage.py
+
+  public-dashboards:
+    name: Public Grafana dashboards carry nothing the public renderer cannot resolve
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install the gate's one dependency
+        run: python3 -m pip install --disable-pip-version-check --quiet pyyaml
+
+      # Runs ahead of the gate, matching the two jobs above and for the identical reason: a gate
+      # edited into something that cannot fire must be reported as the failure here, not masked by
+      # a compliant tree. That mode is the whole reason this gate exists -- the defect it catches
+      # is already the kind that looks green from the outside.
+      - name: Verify the gate's invariants can fire
+        run: python3 scripts/verify-public-dashboards-selftest.py
+
+      - name: Verify public dashboard invariants
+        run: python3 scripts/verify-public-dashboards.py

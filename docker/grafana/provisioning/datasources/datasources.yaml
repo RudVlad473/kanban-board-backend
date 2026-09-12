@@ -2,9 +2,33 @@
 # created through the UI: a UI-created datasource lives only in the grafana-data volume and is
 # invisible in git, so a volume loss would silently lose the wiring, not just the dashboards.
 # Plan 12-02 appends the Loki datasource to this same file.
+#
+# Decisions ──────────────────────────────────────────────────────────────────────────────────
+# Both `uid` values are DELIBERATELY the opaque strings Grafana itself derived when these
+# datasources were first provisioned without one -- they are not arbitrary, and they must not be
+# changed to something readable like `prometheus`. Two facts, both measured 2026-09-12 against
+# grafana/grafana:13.2.1 (docs/INFRA_RUNBOOK.md, "Public Grafana dashboards rendered no data"):
+#
+#   1. Provisioning a DIFFERENT uid onto a datasource that already exists in the grafana-data
+#      volume aborts startup with exit 1 -- "Datasource provisioning error: data source not
+#      found". With `restart: unless-stopped` in docker-compose.prod.yml that is a crash loop
+#      taking the whole monitoring stack down, not a degraded start. Re-provisioning the SAME
+#      uid, as pinned here, starts cleanly. Falsifiable: boot this image on a volume that already
+#      holds these datasources with the uid line edited, and read the exit code.
+#   2. The uid is derived deterministically from the datasource name, so the value was stable
+#      before it was written down here. Pinning it does not change behaviour today; it makes the
+#      dashboards' hard-coded refs auditable in git rather than depending on that derivation
+#      staying the same across Grafana versions.
+#
+# The dashboards under dashboards/json/ reference this exact uid literally. Grafana's
+# public-dashboard query backend resolves datasources by uid ONLY -- it does not accept a
+# datasource name, and it does not interpolate a `${ds_*}` dashboard variable -- so changing the
+# uid here without updating all 182 refs there returns every public panel to HTTP 500.
+# ─────────────────────────────────────────────────────────────────────────────────────────────
 apiVersion: 1
 datasources:
   - name: Prometheus
+    uid: PBFA97CFB590B2093
     type: prometheus
     access: proxy
     url: http://prometheus:9090
@@ -12,6 +36,7 @@ datasources:
   # Appended plan 12-02 (D-01/D-07/D-08): points at the loki service this same plan adds to
   # docker-compose.prod.yml.
   - name: Loki
+    uid: P8E80F9AEF21F6940
     type: loki
     access: proxy
     url: http://loki:3100
