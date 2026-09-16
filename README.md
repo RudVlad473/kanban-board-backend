@@ -35,13 +35,19 @@ Detail and reasoning for each of these is in [docs/ARCHITECTURE.md](docs/ARCHITE
 
 ## Live
 
-<!-- TODO: replace with a short screen recording (GIF or embedded video) of the Grafana
-     dashboards under real/synthetic traffic -->
+<!--
+GitHub's README renderer strips a plain HTML <video src> tag and does not render a raw file
+path/URL as a player — the only inline-playing mechanism it honors is a `user-attachments/assets/
+<id>` URL, minted by dragging docs/demo/kanban-board-backend-dashboards-demo.mp4 into any
+comment/PR/issue text box on this repo. Paste that URL on its own line below (no markdown wrapper)
+to replace this placeholder link.
+-->
 
-_A short recording of the live Grafana dashboards is coming here._
+[**Watch the dashboards**](./docs/demo/kanban-board-backend-dashboards-demo.mp4) — a walkthrough
+of the live Grafana dashboards below, both public and reachable with no login.
 
-- [ ] [Network & OS](https://kanban-board-rud-vlad-473-monitoring.duckdns.org/public-dashboards/7db62007a2114c988c21c4cf6eac9776)
-- [ ] [CPU & Memory metrics](https://kanban-board-rud-vlad-473-monitoring.duckdns.org/public-dashboards/5a72e5df7fd54618ae28972cabcd8846)
+- [Network & OS](https://kanban-board-rud-vlad-473-monitoring.duckdns.org/public-dashboards/7db62007a2114c988c21c4cf6eac9776)
+- [CPU & Memory metrics](https://kanban-board-rud-vlad-473-monitoring.duckdns.org/public-dashboards/5a72e5df7fd54618ae28972cabcd8846)
 
 ## Local development
 
