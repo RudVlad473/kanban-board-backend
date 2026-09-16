@@ -4,6 +4,9 @@ REST API for a kanban board (`user → board → column → task → subtask`) w
 authentication and ownership-based access control: a user can only reach resources that chain back
 to their own account.
 
+
+https://github.com/user-attachments/assets/99f6e161-db89-4016-83ad-9ea921f9a757
+
 ## What this is
 
 A Spring Boot 3.5.16 / Java 21 backend that has been through two production infrastructure
