@@ -42,7 +42,7 @@ also [BeanConfiguration](../../src/main/java/com/vrudenko/kanban_board/config/Be
 | SEC-15 | CSRF protection disabled | Original reason not recorded; later argued safe because of `SameSite=Strict` |
 | SEC-16 | Credentialed CORS with an explicit origin list | The CORS spec forbids `*` with credentials |
 | SEC-17 | A separate entry point writes the 401 envelope | `GlobalExceptionHandler` cannot see filter-chain rejections |
-| SEC-18 | Logout clears the cookie, sends `Clear-Site-Data`, returns JSON | Fix of a logout that always failed (finding F3) |
+| SEC-18 | Logout is configured to clear the cookie, write `Clear-Site-Data` and return JSON. On a real socket, `POST /api/logout` does not reach `LogoutFilter` (500), and no `Clear-Site-Data` header goes out over plain HTTP | Fix of finding F3 (a `null` cookie name); F3 was reproducible only under MockMvc |
 | SEC-19 | A second, profile-gated, stateless filter chain for the nonprod reset route | Production chain stays byte-identical |
 | SEC-20 | Rate-limit signin/signup at the Caddy edge, not in the app | The app cannot see the real client IP; the edge can |
 | SEC-21 | Scan for secrets with gitleaks at commit and in CI | Stop a credential before it enters history |
@@ -94,10 +94,21 @@ at class level, as a second check (see [chapter 05](05-api-layer.md)).
 
 ### Why we chose it
 
-`SessionCreationPolicy.IF_REQUIRED` creates a session only when code asks for one. In this
-application only the signin and signup paths ask for one (the controller comment "only these
-authentication routes yield session cookie"). The reason for the other items is in the sections
-below.
+`SessionCreationPolicy.IF_REQUIRED` creates a session only when code asks for one. The controller
+comment says "only these authentication routes yield session cookie". That comment is false.
+An anonymous request to a protected route also gets a session. The reason for the other items is
+in the sections below.
+
+An anonymous `GET /api/boards` returns 401 AND `Set-Cookie: JSESSIONID=...; Max-Age=600`. Each
+such request gets a new id, and `spring_session` gets a new row with `principal_name IS NULL`.
+After 5 anonymous requests, the reviewer counted 14 rows with no principal in the table.
+`/api/actuator/health` sets no cookie. Confirmed by running on 2026-09-23.
+
+The probable mechanism was not confirmed by running. `ExceptionTranslationFilter` saves the
+rejected request through the default `HttpSessionRequestCache`, and that cache asks for a session.
+The project has no `requestCache` override (`rg -n -i requestCache src/main/java` finds nothing).
+So an unauthenticated client can write rows into `spring_session`. Only the Caddy `general` zone
+limits the rate (see [Rate limiting at the Caddy edge](#rate-limiting-at-the-caddy-edge)).
 
 ### How we test it
 
@@ -316,12 +327,14 @@ later reads `getUsername()` from this principal and gives it to controllers as `
 
 - **SEC-03.** Quick task
   [260803-m2z](../../.planning/quick/260803-m2z-wire-a-sessionauthenticationstrategy-int/260803-m2z-PLAN.md)
-  considered a move to `UsernamePasswordAuthenticationFilter` (option B). It rejected the move:
-  it "rewrites the authentication path for signin, signup AND logout's session handling", the
-  JSON contract would have to move into success/failure handlers, and "every existing E2E test's
-  signin helper becomes a regression surface at once". The plan calls option B "the right
-  long-term shape but not a quick task". Why the controller was custom in the first place is not
-  recorded.
+  considered a move to `UsernamePasswordAuthenticationFilter` (option B). It rejected the move
+  for three reasons:
+  - It "rewrites the authentication path for signin, signup AND logout's session handling".
+  - The JSON contract would have to move into success/failure handlers.
+  - "every existing E2E test's signin helper becomes a regression surface at once".
+
+  The plan calls option B "the right long-term shape but not a quick task". Why the controller
+  was custom in the first place is not recorded.
 - **SEC-04.** The `Authentication` object is what Spring Session serializes into
   `SPRING_SESSION_ATTRIBUTES`. The full `UserEntity` would put the password hash into the
   database (comment at L34-L39 of the provider).
@@ -406,7 +419,7 @@ The fix
 ### Why we chose it
 
 - **SEC-06.** Both branches now pay the same main cost. The hash comes from the encoder bean, not
-  from a literal, so its cost factor always follows the configured strength (decision D-01 in the
+  from a literal. So its cost factor always follows the configured strength (decision D-01 in the
   comment at L64-L70).
 - **SEC-07.** Quick task
   [260811-ixj](../../.planning/quick/260811-ixj-investigate-and-implement-test-suite-spe/260811-ixj-SUMMARY.md)
@@ -465,7 +478,9 @@ return new CompositeSessionAuthenticationStrategy(
    principal has. `SpringSessionBackedSessionRegistry` answers from the `SPRING_SESSION` table by
    principal name. At 2, it throws `SessionAuthenticationException`.
 2. `ChangeSessionIdAuthenticationStrategy` calls the servlet `changeSessionId()`. Spring Session
-   deletes the old row and saves the session under a new id.
+   updates the existing row to the new id. It does not delete the row. The SQL in
+   `JdbcIndexedSessionRepository` (spring-session-jdbc 3.5.7) is
+   `UPDATE ... SET SESSION_ID = ?, LAST_ACCESS_TIME = ?, ... WHERE SESSION_ID = ?`.
 
 The order is important: the ceiling runs first, so a refused signin does not rotate the caller's
 existing id (comment at L212-L217). The constant `MAX_CONCURRENT_SESSIONS = 2` feeds both the DSL
@@ -488,15 +503,17 @@ point that confuses most readers.
 
 ### Why we chose it
 
-- **SEC-08.** Quick task 260803-m2z decision D-01: "invoke the strategy explicitly from
-  AuthenticationController.authenticate rather than moving signin onto a real authentication
-  filter — smaller diff, same two files that already own authentication".
-- **SEC-09.** Decision R1 of the same task: the JDBC registry "reads live SPRING_SESSION rows
-  rather than in-memory bookkeeping that could go stale and permanently lock out a legitimate
-  user under maxSessionsPreventsLogin(true)". It is a local variable, not a `@Bean`. A
-  `SessionRegistry` bean would go to `ConcurrentSessionFilter`, which would then read the session
-  from JDBC on **every** authenticated request, for a code path that never runs when login is
-  prevented instead of expiring sessions (comment at L199-L204).
+- **SEC-08.** Quick task 260803-m2z recorded this as decision D-01: "invoke the strategy
+  explicitly from AuthenticationController.authenticate rather than moving signin onto a real
+  authentication filter". The reason it gives: "smaller diff, same two files that already own
+  authentication".
+- **SEC-09.** Decision R1 of the same task gives the reason for the JDBC registry. The registry
+  "reads live SPRING_SESSION rows rather than in-memory bookkeeping that could go stale and
+  permanently lock out a legitimate user under maxSessionsPreventsLogin(true)". It is a local
+  variable, not a `@Bean`. A `SessionRegistry` bean would go to `ConcurrentSessionFilter`. That
+  filter would then read the session from JDBC on **every** authenticated request. The code path
+  that uses this read never runs when login is prevented instead of expiring sessions (comment at
+  L199-L204).
 - **SEC-10.** The value 2 and `maxSessionsPreventsLogin(true)` come from the original author. The
   m2z plan calls them "deliberately configured by the original author". The reason for 2 is not
   recorded. The collapsed 401 is deliberate (see SEC-05).
@@ -626,10 +643,16 @@ CLAUDE.md say the values "differ by design", but no source gives the design reas
 
 ### Trade-offs and limits
 
-A client that signs in once and works for more than 10 minutes gets 401 `UNAUTHENTICATED`, while
-its server-side session is still alive for up to 180 minutes
+A client that signs in once and works for more than 10 minutes gets 401 `UNAUTHENTICATED`. At
+that time its server-side session is still alive for up to 180 minutes
 ([AUTH_FLOWS.md](../AUTH_FLOWS.md)). The orphan session still counts toward the ceiling of 2 until
 it expires. The sources do not discuss this interaction.
+
+The broken logout (see [Logout](#logout)) makes this worse. A user with 2 sessions cannot free a
+slot through `POST /api/logout`, because that request returns 500 and the row stays. The next
+signin with the correct password gets 401 `BAD_CREDENTIALS`. The 2 rows keep
+`max_inactive_interval = 10800`. So the user can stay locked out for up to 3 hours after both
+cookies expire. The reviewer observed this sequence on a live `bootRun`.
 
 ## Cookie attributes
 
@@ -705,7 +728,7 @@ must not change (Phase 07.1, D-10, D-11).
 - **SEC-15.** The original reason to disable CSRF is not recorded. The line is in the first
   security commit (`efbcc93`). Later work recorded why the risk is acceptable:
   - Phase 07.1 threat T-07.1-02-02 accepted it as "a pre-existing decision this plan neither
-    worsens nor addresses", and said "CORS is not a CSRF defence and is not claimed as one"
+    worsens nor addresses". It also said "CORS is not a CSRF defence and is not claimed as one"
     ([07.1-02-PLAN](../../.planning/milestones/v1.2-phases/07.1-address-hard-blockers-and-inconsistencies-from-the-frontend/07.1-02-PLAN.md)).
   - The OWASP audit
     [260820-giz](../../.planning/quick/260820-giz-audit-penetration-testing-and-security-c/260820-giz-SUMMARY.md)
@@ -723,8 +746,13 @@ must not change (Phase 07.1, D-10, D-11).
 - The CSRF argument depends on the browser. It gives no protection for an old browser that
   ignores `SameSite`.
 - [docker-compose.prod.yml](../../docker-compose.prod.yml) sets no `APP_CORS_ALLOWED_ORIGINS` for
-  the `app` service. [docker-compose.nonprod.yml](../../docker-compose.nonprod.yml) does. So
-  production uses the localhost defaults. The reason is not recorded.
+  the `app` service, and the service has no `env_file`.
+  [docker-compose.nonprod.yml](../../docker-compose.nonprod.yml#L214) does set it. So production
+  uses the localhost defaults. The reason is not recorded. With these defaults, a preflight from a
+  non-localhost origin gets 403 with no `Access-Control-Allow-Origin`. A preflight from
+  `http://localhost:5173` gets 200 with that origin and `Access-Control-Allow-Credentials: true`.
+  Confirmed by running on 2026-09-23. No production frontend on another origin is recorded, so no
+  current client is known to fail.
 
 ### How we test it
 
@@ -782,34 +810,65 @@ every route) and `CrossUserSweep.shouldReturnForbidden_whenForeignUserAccessesOw
 
 The logout configuration (L128-L137) adds three handlers:
 
-1. `HeaderWriterLogoutHandler` with `ClearSiteDataHeaderWriter(COOKIES)`: the response carries
-   `Clear-Site-Data: "cookies"`.
-2. `deleteCookies(sessionCookieName)`: the response sets `JSESSIONID` with `Max-Age=0`.
+1. `HeaderWriterLogoutHandler` with `ClearSiteDataHeaderWriter(COOKIES)`. This handler writes
+   `Clear-Site-Data: "cookies"` only for a secure request (`request.isSecure()`). The app hop
+   behind Caddy is plain HTTP, and no forwarded-header handling exists. So the header never goes
+   out (see below).
+2. `deleteCookies(sessionCookieName)`: the response sets `JSESSIONID` with `Max-Age=0` and
+   `Path=/api`. The session cookie has `Path=/`, so this header does not clear it. A second
+   `Set-Cookie` from Spring Session, with `Path=/`, clears the real cookie.
 3. [LogoutHandler](../../src/main/java/com/vrudenko/kanban_board/security/LogoutHandler.java#L15-L24)
    as the success handler: 200 with `{"message": "Successfully logged out"}`. The default would
    redirect, which is wrong for a JSON API.
 
 The default `LogoutFilter` behaviour also invalidates the session, which removes its row.
 
+**The real logout URL does not reach `LogoutFilter`.** `logout.logoutUrl(CONTEXT_PATH +
+ApiPaths.LOGOUT)` at
+[SecurityConfiguration L130](../../src/main/java/com/vrudenko/kanban_board/security/SecurityConfiguration.java#L130)
+registers `/api/logout`. The matcher compares the path after the context path. So on a real
+socket it matches only `/api/api/logout`. Observed results:
+
+| Request | Result |
+|---------|--------|
+| `POST /api/logout` | 500, `"No static resource logout."`, code `INTERNAL_ERROR` |
+| `GET /api/boards` with the same cookie | 200: the session is still valid |
+| `POST /api/api/logout` | 200, `{"message": "Successfully logged out"}`, cookie cleared, no `Clear-Site-Data` header |
+| `GET /api/boards` with the old cookie after that | 401 |
+
+Confirmed by running on 2026-09-23.
+
+Commit `c38ec45` (2025-05-19) introduced this. It changed `logoutUrl(ApiPaths.LOGOUT)` to
+`logoutUrl(CONTEXT_PATH + ApiPaths.LOGOUT)`.
+
 ### Why we chose it
 
 **SEC-18.** The cookie name comes from `@Value("${server.servlet.session.cookie.name}")` on
 `SecurityConfiguration` (L51-L59). This is the fix of finding F3 (Phase 07.1-09). Before, the name
 came from a `@Value` on a `public static` field of a plain class, `SecurityConstants`. Spring does
-not process that, so the field was always `null`. Every real `POST /api/logout` threw
+not process that, so the field was always `null`. A request that reached `LogoutFilter` threw
 `IllegalArgumentException` from `new Cookie(null, null)` and returned 500. `SecurityConstants` was
 deleted.
+
+The F3 record, and the Javadoc of the logout test, say that "every real `POST /api/logout`"
+failed this way. That is not correct. Since `c38ec45`, a real `POST /api/logout` never reached
+`LogoutFilter`, so it could not reach the `null` cookie name. F3 was reproducible only under
+MockMvc, where the context path is empty. This historical part is reasoned only: the old code was
+not rebuilt. The current behaviour is confirmed (see the table above). So the F3 fix is real, but
+real-socket logout still always fails.
 
 ### How we test it
 
 `AuthenticationTest.Logout.shouldClearSessionCookieAndReturnOk_whenLogoutSucceeds` expects 200 and
-a cleared cookie. Its Javadoc explains why an older test in `ThemePersistenceTest` missed F3: it
-posted to `/logout`, which never matched the filter under MockMvc.
+a cleared cookie. It uses MockMvc and posts to `CONTEXT_PATH + ApiPaths.LOGOUT`. Under MockMvc the
+context path is empty, so this path matches the filter. On a real socket the same path does not
+match. Its Javadoc explains why an older test in `ThemePersistenceTest` missed F3: it posted to
+`/logout`, which never matched the filter under MockMvc. No real-socket test covers logout.
 
 ### Trade-offs and limits
 
 See [Known gaps](#known-gaps-and-open-items): the logout URL includes the context path, unlike every
-other matcher, and no real-socket test covers logout.
+other matcher. Real-socket logout returns 500 and leaves the session valid.
 
 ## The nonprod reset chain
 
@@ -850,8 +909,8 @@ checks an `X-Reset-Token` header with `MessageDigest.isEqual`, a constant-time c
 
 **SEC-19.** In production the bean does not exist, so the production chain is byte-identical to
 before (Plan 08-02, D-02). Phase 8 decision D-01 chose a shared secret over session auth, an IP
-allow list, or hostname obscurity, "because it's cheap, doesn't touch user accounts, and works
-identically for a manual `curl` today and Playwright's `beforeEach` later"
+allow list, or hostname obscurity. The recorded reason: "because it's cheap, doesn't touch user
+accounts, and works identically for a manual `curl` today and Playwright's `beforeEach` later"
 ([08-CONTEXT](../../.planning/milestones/v1.3-phases/08-isolated-nonprod-environment-live-and-resettable/08-CONTEXT.md)).
 The profile and the token are two independent controls. The controller Javadoc says "Neither
 control is treated as sufficient alone."
@@ -902,7 +961,9 @@ decision D-1: "Limit at the Caddy edge, not app-level Bucket4j."
 - `server.forward-headers-strategy` is unset and Caddy has no `trusted_proxies`. So
   `request.getRemoteAddr()` in the app returns Caddy's container IP for every request. An
   app-level per-IP limiter "would bucket the entire internet into one key".
-- Each signin costs a BCrypt hash on a 2 GB VPS that also runs Redpanda.
+- Each signin costs a BCrypt hash on a VPS that also runs Redpanda. The 260903-dvp context calls
+  the VPS "2 GB". That figure is wrong: the VM has 7.8 GiB
+  ([INFRA_RUNBOOK.md L20](../INFRA_RUNBOOK.md#L20)).
 - No per-user quota is needed: there is no billing, no tenancy, and no expensive authenticated
   endpoint.
 
@@ -916,15 +977,15 @@ Other choices in the same task:
   one address (Caddyfile L96-L99).
 - `*` suffix on the paths: an exact list missed `/api/signin;x=1`. That form never reached BCrypt
   (Spring answers it 401), so the `*` is defence in depth (Caddyfile L70-L89).
-- Partitioned zones, a **reversed** decision: the zones first composed. A measurement showed a
-  429 from the auth zone still spent a general token, so 130 signin attempts locked one address
+- Partitioned zones, a **reversed** decision: the zones first composed. A measurement showed that a
+  429 from the auth zone still spent a general token. So 130 signin attempts locked one address
   out of the whole API for a minute (Caddyfile L44-L59).
 - The image is built in CI, not on the VPS (D-3). Its tag comes from its contents, not the commit,
   so an app deploy does not restart Caddy (D-5). See [chapter 10](10-infrastructure-and-deployment.md).
 
 **Why not Redis (Epic 4)?** The
-[Epic 4 plan](../plans/backend-modernization/04-redis.md) proposes rate-limiting signin/signup with
-Redis (Bucket4j on Redis, or `INCR` + `EXPIRE`) keyed by IP or email. Epic 4 is still deferred
+[Epic 4 plan](../plans/backend-modernization/04-redis.md) proposes a Redis rate limit for
+signin/signup, keyed by IP or email. It names Bucket4j on Redis, or `INCR` + `EXPIRE`. Epic 4 is still deferred
 ([STATUS.md](../plans/backend-modernization/STATUS.md), [PROJECT.md](../../.planning/PROJECT.md)).
 The 260903-dvp documents do not discuss Redis by name. The D-1 reason applies to it too: an
 app-side limiter keyed by IP gets the wrong IP today. A per-email key would not have that problem,
@@ -935,7 +996,7 @@ but D-1 put per-user quotas out of scope.
 | Alternative | Why rejected |
 |-------------|--------------|
 | App-level Bucket4j (the pending todo's proposal) | The app sees one IP for all clients (260903-dvp D-1) |
-| Compile the Caddy plugin on the VPS | 2 GB VM with an OOM history (D-3) |
+| Compile the Caddy plugin on the VPS | A VM with an OOM history (D-3; D-3 says "2 GB", but the VM has 7.8 GiB) |
 | Plugin by tag `v0.1.0` | `master` is 7 commits ahead with a metrics fix; pinned by SHA instead (D-2) |
 | A limiter on nonprod | E2E suites must not be throttled; its absence is the negative control |
 
@@ -952,8 +1013,8 @@ but D-1 put per-user quotas out of scope.
 
 ### How we test it
 
-260903-dvp verified the limiter locally in both directions: requests 1 to 10 passed and 11 to 12
-got 429 (before the change to 20), and the nonprod block gave zero 429s. Three review rounds
+260903-dvp verified the limiter locally in both directions. Requests 1 to 10 passed and 11 to 12
+got 429 (before the change to 20). The nonprod block gave zero 429s. Three review rounds
 (Claude, Gemini, Codex) found 11 issues. Task 7, the live check on the VPS, was a human checkpoint
 and is not recorded as done in the SUMMARY. There is no automated test in `src/test`.
 
@@ -980,13 +1041,19 @@ a path exemption. [Chapter 09](09-build-quality-and-ci.md) covers both gates in 
 
 ## Known gaps and open items
 
-- **Logout URL and the context path (suspected, not verified).** `logout.logoutUrl(CONTEXT_PATH +
+- **Logout URL and the context path (confirmed defect).** `logout.logoutUrl(CONTEXT_PATH +
   ApiPaths.LOGOUT)` registers `/api/logout`. All other matchers are relative to the context path
-  (`/signin`, `/actuator/health`). In Spring Security 6.5.11 the logout matcher is an
-  `AntPathRequestMatcher`, which compares the servlet path, and the servlet path excludes the
-  context path. So a real `POST /api/logout` may not match. The only logout test uses MockMvc,
-  where the context path is empty. No real-socket test covers logout. This conclusion comes from
-  reading the library source only. A real-socket test is necessary to confirm or reject it.
+  (`/signin`, `/actuator/health`). A real `POST /api/logout` returns 500
+  `"No static resource logout."` (`INTERNAL_ERROR`). The same cookie then gets 200 on
+  `GET /api/boards`, so the session stays valid. Only `POST /api/api/logout` reaches
+  `LogoutFilter` (200, cookie cleared). The only logout test uses MockMvc, where the context path
+  is empty. No real-socket test covers logout. Confirmed by running on 2026-09-23.
+- **No `Clear-Site-Data` on logout (confirmed).** The working logout (200) sends no
+  `Clear-Site-Data` header. `ClearSiteDataHeaderWriter` writes it only for secure requests, and
+  the app hop behind Caddy is plain HTTP. Confirmed by running on 2026-09-23.
+- **Anonymous requests create sessions (confirmed).** An anonymous `GET /api/boards` returns 401
+  AND `Set-Cookie: JSESSIONID=...; Max-Age=600`, and adds a row to `spring_session`. Confirmed by
+  running on 2026-09-23. See [The security filter chain](#the-security-filter-chain).
 - **Rate limiting todo still open.** [The pending todo](../../.planning/todos/pending/2026-08-20-add-rate-limiting-to-signin-to-bound-brute-force-volume.md)
   asks for app-level Bucket4j and for limits on authenticated business endpoints. The edge
   limiter now covers signin/signup, but the todo is not closed.
@@ -999,7 +1066,9 @@ a path exemption. [Chapter 09](09-build-quality-and-ci.md) covers both gates in 
   ([todo](../../.planning/todos/pending/2026-08-20-security-response-headers-csp-and-unreliable-hsts-behind.md)).
 - **CSRF defence not proven end to end** (see SEC-15).
 - **Two session-ceiling enforcers** with different registries (see SEC-09).
-- **Production CORS origins** are the localhost defaults (see SEC-16).
+- **Production CORS origins** are the localhost defaults (see SEC-16). The production `app`
+  service has no `APP_CORS_ALLOWED_ORIGINS`. A preflight from a non-localhost origin gets 403.
+  Confirmed by running on 2026-09-23.
 - **Reasons not recorded:** sessions over JWT (SEC-01), the original CSRF disable (SEC-15), the
   ceiling value 2 (SEC-10), the 180 min / 10 min lifetimes (SEC-13).
 
@@ -1044,7 +1113,7 @@ a path exemption. [Chapter 09](09-build-quality-and-ci.md) covers both gates in 
 6. How does signin stop timing-based user enumeration?
    <details><summary>Answer</summary>
    On an unknown email it runs one BCrypt `matches` against a hash made at startup from the same
-   encoder bean, so both branches pay one BCrypt cost. One indexed read still differs, so it is
+   encoder bean. So both branches pay one BCrypt cost. One indexed read still differs, so it is
    not constant-time.
    </details>
 

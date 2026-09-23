@@ -34,14 +34,14 @@ keys, entity mappings). Related: [03 — Optimistic locking](03-optimistic-locki
 | PERS-07 | Application-level cascade, children first: subtasks → tasks → columns → board → user | No JPA `cascade` and no `ON DELETE CASCADE` in the schema |
 | PERS-08 | Column rows stay on a derived delete (honors `@Version`); tasks/subtasks use bulk (bypass `@Version`) | Accepted, documented asymmetry |
 | PERS-09 | `GET /boards/{boardId}/full` uses one chained `LEFT JOIN FETCH` query | 3 statements for any graph size; lazy loading costs 1+1+N+M |
-| PERS-10 | Every collection in the fetch chain is a `Set` with identity `equals`/`hashCode` and `@OrderBy("id")` | Prevents `MultipleBagFetchException` and row-multiplication duplicates |
+| PERS-10 | Every collection in the fetch chain is a `Set` with identity `equals`/`hashCode` and `@OrderBy("id")` | Prevents `MultipleBagFetchException` and row-multiplication duplicates. Side effect: `/full` returns columns and tasks in id order, not position order (confirmed defect) |
 | PERS-11 | `/full` verifies ownership first, fetches by the verified id, maps inside the transaction | Nested response discloses more; no lazy association escapes the transaction |
 | PERS-12 | Query counts asserted with `getPrepareStatementCount()` through one helper, as small-vs-large invariance | `getQueryExecutionCount()` misses `findById()` |
 | PERS-13 | Test isolation by `@AfterEach` row deletion, not test-managed transaction rollback | Rollback hides `findById()` in the L1 cache and corrupts the metric |
 | PERS-14 | `jakarta.transaction.Transactional` on service methods; no `readOnly` anywhere | Reason not recorded (convention) |
 | PERS-15 | Position renumbering with one bulk `UPDATE ... SET position = position + :delta` per range | Constant statement count for a move |
 | PERS-16 | Activity feed: offset `Pageable`, server-forced sort `createdAt desc, id desc`, matching composite index, page size capped at 100 | Deterministic pages; keyset pagination deferred |
-| PERS-17 | `activity_log` rows are removed by an explicit bulk delete, because the table has no FK to cascade from | No FK by design (poison-message risk) |
+| PERS-17 | `activity_log` has no FK, so no delete cascade reaches it. Only the nonprod reset removes rows, with an explicit bulk delete. A board or account delete keeps them | No FK by design (poison-message risk) |
 
 ---
 
@@ -101,7 +101,7 @@ column. The code keeps positions contiguous from zero, so the sibling count is t
 ### Trade-offs and limits
 
 - The `ORDER BY` arrived later than the endpoints (commit `3cd5e99`, plan 06-04). Before that, the
-  flat reads had PostgreSQL's incidental row order, which the 06-05 work observed to change between
+  flat reads had PostgreSQL's incidental row order. The 06-05 work saw that order change between
   runs for the same data
   ([06-05-SUMMARY.md](../../.planning/milestones/v1.2-phases/06-mock-up-feature-gap-closure/06-05-SUMMARY.md),
   deviation 5).
@@ -276,8 +276,8 @@ select, 1 subtask bulk delete, 1 task bulk delete. This breakdown is reasoned, n
 - **PERS-06 (`flush()` + `clear()`).** A bulk JPQL statement bypasses the persistence context.
   Hibernate does not know that the deleted rows are gone. Managed entities for those rows stay in
   the session. A later auto-flush in the same transaction then tried to write them and failed. The
-  failure appeared only when many aggregates were deleted in one transaction, for example the
-  test suite's `deleteAll()` cleanup or account deletion
+  failure appeared only when one transaction deleted many aggregates. Two examples are the test
+  suite's `deleteAll()` cleanup and account deletion
   ([STATUS.md](../plans/backend-modernization/STATUS.md#notes--decisions-log);
   [`deleteAllByColumn` Javadoc](../../src/main/java/com/vrudenko/kanban_board/service/TaskService.java#L281-L290)).
   `flush()` sends pending changes first. `clear()` detaches every managed entity, so nothing stale
@@ -394,8 +394,13 @@ accepted tradeoff carried from research"
   raises an error if the step is missing, so the failure is loud.
 - `activity_log` has no FK to users or boards
   ([`ActivityLogEntity` Javadoc](../../src/main/java/com/vrudenko/kanban_board/entity/ActivityLogEntity.java#L21-L26)).
-  The cascade above therefore never reaches it (PERS-17). The nonprod reset removes those rows with
-  the explicit bulk `deleteAllByUserIdIn`. The test cleanup calls `activityLogRepository.deleteAll()`
+  The cascade above therefore never reaches it (PERS-17). Only the nonprod reset removes those rows,
+  with the explicit bulk `deleteAllByUserIdIn`. No other service uses `ActivityLogRepository` for a
+  delete. A normal `DELETE /boards/{boardId}` keeps the whole history of the board. The consumer
+  then adds one more `BOARD_DELETED` row
+  ([`ActivityLogConsumer`](../../src/main/java/com/vrudenko/kanban_board/activitylog/ActivityLogConsumer.java#L120-L121)).
+  A review run showed 5 rows before the delete and 6 rows after it. The API cannot read these rows
+  after the delete, because the ownership check returns 404. The test cleanup calls `activityLogRepository.deleteAll()`
   separately, guarded by
   [`ActivityLogCleanupIsolationTest`](../../src/test/java/com/vrudenko/kanban_board/activitylog/ActivityLogCleanupIsolationTest.java)
   ([STATUS.md, Epic 5 entry, D-02a](../plans/backend-modernization/STATUS.md#notes--decisions-log)).
@@ -485,8 +490,8 @@ One is the fetch join ([`BoardServiceTest` comment](../../src/test/java/com/vrud
 - **PERS-09.** The chained fetch join is "the only option that actually delivers the endpoint's
   reason for existing" ([06-05-PLAN.md, design rationale](../../.planning/milestones/v1.2-phases/06-mock-up-feature-gap-closure/06-05-PLAN.md#L105-L122)).
   Lazy loading would cost 1 + 1 + N + M statements: board, columns, one per column for tasks, one
-  per task for subtasks. When the developer swapped the fetch join for a plain `findById` by hand,
-  the count grew with the graph: **9 vs. 23** statements for the small and large test boards
+  per task for subtasks. The developer replaced the fetch join with a plain `findById` by hand.
+  The count then grew with the graph: **9 vs. 23** statements for the small and large test boards
   ([06-05-SUMMARY.md, coverage D4](../../.planning/milestones/v1.2-phases/06-mock-up-feature-gap-closure/06-05-SUMMARY.md)).
 - **PERS-10.** `MultipleBagFetchException` is a Hibernate error. Hibernate raises it when one
   query fetch-joins two or more "bags". A bag is an unordered `List` collection with no index
@@ -510,6 +515,7 @@ One is the fetch join ([`BoardServiceTest` comment](../../src/test/java/com/vrud
 - **PERS-10, fourth finding.** A plain `HashSet` has no iteration order. `@OrderBy("id")` on each
   collection gives a deterministic order
   ([`BoardEntity.column`](../../src/main/java/com/vrudenko/kanban_board/entity/BoardEntity.java#L35-L51)).
+  That order is id order, not position order. See "Trade-offs and limits" below.
 - **PERS-11.** The service verifies ownership first and fetches with `verifiedBoard.getId()`,
   never the raw path parameter. A nested response discloses more than a flat one, so the check
   matters more here ([`findFullById` Javadoc](../../src/main/java/com/vrudenko/kanban_board/service/BoardService.java#L102-L112)).
@@ -517,8 +523,9 @@ One is the fetch join ([`BoardServiceTest` comment](../../src/test/java/com/vrud
   transaction ends.
 - **PERS-11, the flat-DTO exception.** [PROJECT.md](../../.planning/PROJECT.md#L90) records that
   DTOs are flat to avoid `LazyInitializationException`, and that `/full` must justify a nested DTO.
-  The justification: the graph is fetched eagerly and explicitly, the mapping runs inside the
-  transaction, and the exception is scoped to one DTO family (`*FullResponseDTO`)
+  The justification has three parts. The query fetches the graph eagerly and explicitly. The
+  mapping runs inside the transaction. The exception applies to one DTO family only
+  (`*FullResponseDTO`)
   ([06-05-PLAN.md, `flat_dto_exception_justification`](../../.planning/milestones/v1.2-phases/06-mock-up-feature-gap-closure/06-05-PLAN.md#L82-L103)).
 
 ### Alternatives we rejected
@@ -544,10 +551,12 @@ multiplication.
 - **Memory.** The whole board graph sits in one heap-resident DTO tree. There is no pagination.
 - **Fragile shape.** The `BoardRepository` Javadoc warns: "If a fourth `List`-typed association
   is ever added anywhere in this query's fetch chain, both problems return."
-- **Order is by `id`, not `position`.** `@OrderBy("id")` sorts nested columns and tasks by id. The
-  flat endpoints now sort by `position, id` (PERS-02). After a reorder, the nested order and the
-  flat order can differ. The DTOs carry `position`, so a client can sort. This gap is visible in the
-  code; no planning document records it.
+- **Order is by `id`, not `position` (confirmed defect).** `@OrderBy("id")` sorts nested columns
+  and tasks by id. The flat endpoints sort by `position, id` (PERS-02). After a move or a reorder,
+  `/full` returns a different order from the flat reads. In one run, a column was moved to position
+  0 and a task to position 0. The flat reads showed them first. `/full` still showed them in id
+  order. The DTOs carry `position`, so a client can sort. No planning document records this gap.
+  Confirmed by running on 2026-09-23.
 - **`@OrderBy("id")` is a string sort.** Ids are base36 strings. The
   [`BoardService.save` decision record](../../src/main/java/com/vrudenko/kanban_board/service/BoardService.java#L208-L215)
   states that base36 string order does not keep numeric order when string lengths differ. For
@@ -626,8 +635,8 @@ No document compares it with Spring's annotation or discusses `readOnly`.
   available here.
 - `jakarta.transaction.Transactional` uses `rollbackOn`/`dontRollbackOn`, not Spring's
   `rollbackFor`. No method in this codebase sets either attribute.
-- Two package-private methods carry `@Transactional`: `TaskService.deleteAllByColumn` and
-  `SubtaskService.save`. The
+- Four package-private methods carry `@Transactional`: `TaskService.deleteAllByColumn`,
+  `SubtaskService.save`, `SubtaskService.findById` and `BoardService.deleteAll`. The
   [260813-euo PLAN, D-03 option C](../../.planning/quick/260813-euo-fix-wrong-dto-test-bugs-in-taskcontrolle/260813-euo-PLAN.md)
   states that Spring applies proxy-based `@Transactional` to public methods only. Spring Framework
   6 documentation states that class-based proxies also support package-visible methods. This
@@ -750,9 +759,9 @@ They do not assert an absolute number, except the ownership-chain test (`== 1`).
   The source records the falsification for the `/full` test (9 vs. 23 without the fetch join).
   A reason for choosing invariance over absolute counts in general is not recorded.
 - **PERS-13, no rollback isolation.** Tests clean up with plain `@AfterEach` deletion. Test-managed
-  `@Transactional` rollback was rejected for three reasons. One of them is this metric: a shared
-  persistence context across `@BeforeEach` and the act keeps fixtures in the L1 cache and hides
-  `findById()` calls ([`AbstractAppTest` Javadoc](../../src/test/java/com/vrudenko/kanban_board/support/fixtures/AbstractAppTest.java#L36-L48)).
+  `@Transactional` rollback was rejected for three reasons. One of them is this metric. A shared
+  persistence context across `@BeforeEach` and the act keeps fixtures in the L1 cache. The cache
+  then hides `findById()` calls ([`AbstractAppTest` Javadoc](../../src/test/java/com/vrudenko/kanban_board/support/fixtures/AbstractAppTest.java#L36-L48)).
   The other two: rollback never delivers `AFTER_COMMIT` events, and it gives no isolation to real
   cross-thread HTTP tests.
 
@@ -908,8 +917,10 @@ var page =
 
 ## Known gaps and open items
 
-1. **Nested order differs from flat order.** `/full` sorts by `id`; the flat endpoints sort by
-   `position, id`. After a reorder the two disagree. Not recorded in any planning document.
+1. **Nested order differs from flat order (confirmed defect).** `/full` sorts columns and tasks by
+   `id`; the flat endpoints sort by `position, id`. After a move or a reorder, `/full` returns the
+   items in id order, and the flat reads return them in position order. Not recorded in any
+   planning document. Confirmed by running on 2026-09-23.
 2. **Stale test comment.** The comment in
    `BoardFullReadTest.shouldContainSameElementsAsFlatEndpoints_andBeInternallyOrdered_forSameBoard`
    says neither flat repository has an `ORDER BY`. Both now have one (commit `3cd5e99`).
@@ -924,8 +935,11 @@ var page =
 7. **No index on the FK columns** `columns.board_id`, `tasks.column_id`, `subtasks.task_id`.
    PostgreSQL does not create these automatically. The sibling reads, the bulk deletes and the
    fetch join all filter or join on them. Observed in the migrations; not recorded anywhere.
-8. **Account deletion does not remove `activity_log` rows.** `UserService.deleteById` has no
-   activity cleanup. Only the nonprod reset does it. Observed in the code; not recorded.
+8. **Board and account deletes do not remove `activity_log` rows.** `BoardService.deleteById` and
+   `UserService.deleteById` have no activity cleanup. Only the nonprod reset does it. After a board
+   delete, the table keeps the history of the board and gets one more `BOARD_DELETED` row. The rows
+   keep the user id, and no retention policy removes them. Observed in the code and in a review run;
+   not recorded.
 9. **Keyset pagination** for the activity feed is deferred (PAGE-V2-01).
 
 ### Doc-vs-code contradictions found while writing this chapter
@@ -1008,7 +1022,8 @@ var page =
    First, a remaining `List` kept row-multiplication duplicates, because `DISTINCT` affects the
    root only. Second, field-based `equals`/`hashCode` on `SubtaskEntity` and `ColumnEntity` merged
    distinct siblings in the `HashSet`. The fixes were all-`Set` collections and identity equality.
-   `@OrderBy("id")` then restored a deterministic order.
+   `@OrderBy("id")` then restored a deterministic order. That order is id order, so `/full` does not
+   follow `position` after a move or a reorder. This defect was confirmed by running on 2026-09-23.
    </details>
 
 8. **The Epic 2 plan recommended `@BatchSize` or two queries for the full board. What shipped,

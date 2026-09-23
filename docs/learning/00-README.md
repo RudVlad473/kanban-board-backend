@@ -44,9 +44,14 @@ Chapter 05 uses the IDs API-01 … API-23. The planning requirements in
 Each chapter uses the same structure:
 
 1. **Summary of decisions.** This is a table with one row for each decision ID.
-2. **One section for each topic.** Each section has these parts: *What it is*, *How it works*,
-   *Why we chose it*, *Alternatives we rejected*, *Trade-offs and limits*, *How we test it*, and
-   *Where this is recorded*.
+2. **One section for each topic.** Each section has seven parts:
+   - *What it is*
+   - *How it works*
+   - *Why we chose it*
+   - *Alternatives we rejected*
+   - *Trade-offs and limits*
+   - *How we test it*
+   - *Where this is recorded*
 3. **Known gaps and open items.** This part includes the places where a document and the code
    disagree. In each case, the chapter follows the code.
 4. **Questions to check your knowledge.** Each question has a hidden answer. Try to answer the
@@ -93,21 +98,30 @@ Some topics appear in more than one chapter. Use this table to find all parts of
 | Memory caps on a small VPS | 10, 11 |
 | Rate limiting at the Caddy edge | 06, 09, 10 |
 
-## Suspected defects that the writers found
+## Confirmed defects in the application
 
-The chapter writers read the code. They did not run it. These items are *reasoned only*. The
-review of this guide checks them against the running system. Do not repeat them as facts until
-the review confirms them.
+The chapter writers found some of these items when they read the code. A three-way review on
+2026-09-23 found the others. The review ran each item against a live application and confirmed
+it. The guide describes each defect. The code does not fix any of them.
 
-| Item | Chapter |
-|------|---------|
-| Two truly parallel updates can fail inside `flush()` and give a 500, not a 409 | 03 |
-| `TaskService.deleteById` does not close the position gap, so a later task can get a duplicate position | 01, 04 |
-| `/boards/{id}/full` orders columns and tasks by id, but the flat reads order by position | 02, 04 |
-| A real `POST /api/logout` may not match the logout matcher because of the `/api` context path | 06 |
-| Production has no `APP_CORS_ALLOWED_ORIGINS`, so CORS falls back to the localhost defaults | 06 |
-| No workflow runs the tests on a pull request | 09 |
-| No workflow runs `verify-postgres-memory-invariant.py` | 09, 10 |
+| Defect | Observed result | Chapter |
+|--------|-----------------|---------|
+| Parallel updates with the same version | `200 500 500` in every round. The losers do not get 409. The 500 body names the entity class | 03, 05 |
+| A real `POST /api/logout` | 500 `No static resource logout.` The session stays valid | 06 |
+| Parallel renames to the same board name | Some losers get 500 with the SQL text in the body, and some get 409 | 01, 05 |
+| A board `PUT` with only `version` | 500 with a NOT NULL violation and the SQL text | 03, 05 |
+| An unknown route or a wrong HTTP method | 500 `INTERNAL_ERROR`, not 404 or 405 | 05 |
+| An anonymous request to a protected route | 401, plus a new stored session and a `JSESSIONID` cookie | 06 |
+| A task delete | The position gap stays, so the next task gets a duplicate position | 01, 04 |
+| `GET /boards/{id}/full` | Columns and tasks come in id order. The flat reads use position order | 02, 04 |
+| Pull requests | No workflow runs the Gradle tests on a pull request | 09 |
+| `verify-postgres-memory-invariant.py` | No workflow runs it | 09, 10 |
+| Production CORS | No `APP_CORS_ALLOWED_ORIGINS`, so the localhost defaults apply | 06 |
+
+Most of the 500 responses have one cause. `GlobalExceptionHandler` is a plain
+`@ControllerAdvice` with an `Exception.class` catch-all. Some exceptions reach it without a
+dedicated handler. Examples are the Hibernate exceptions from a direct `entityManager.flush()` call.
+Other examples are the Spring MVC exceptions for an unknown route or a wrong method. The catch-all turns each of these into a 500.
 
 ## Decision index
 
@@ -129,7 +143,7 @@ This index repeats the summary table of each chapter. Use it to find a decision 
 | DATA-10 | The ids are NOT ULIDs; the `ulid-creator` dependency is unused | Historical: the generator started with an unused ULID import |
 | DATA-11 | Ordering uses an `Integer position` column with renumber-on-insert, not fractional keys | Fractional keys are too complex for this scale |
 | DATA-12 | No database unique constraint on position; reads sort by `(position, id)` | A non-deferrable unique constraint collides during a bulk shift |
-| DATA-13 | Board names are unique per user: a service check, plus the `uk_boards_user_id_name` constraint as a backstop | A clear 409 for the common case; the database stops the race |
+| DATA-13 | Board names are unique per user: a service check, plus the `uk_boards_user_id_name` constraint as a backstop | A clear 409 for the common case; the database stops the race. A rename race loser can get 500, not 409 |
 | DATA-14 | Theme is a `LIGHT`/`DARK` enum on `users`, `NOT NULL DEFAULT 'LIGHT'`, no `@Version` | Only two states exist in the design; no null branch; last-write-wins is accepted |
 | DATA-15 | Column color is a nullable `varchar(7)` with no `CHECK` constraint; the DTO validates the format | A `CHECK` failure gives a 409 and leaks the constraint text |
 | DATA-16 | `boards.created_at` is backfilled once, then its default is dropped | The application stays the single writer of the column |
@@ -153,14 +167,14 @@ This index repeats the summary table of each chapter. Use it to find a decision 
 | PERS-07 | Application-level cascade, children first: subtasks → tasks → columns → board → user | No JPA `cascade` and no `ON DELETE CASCADE` in the schema |
 | PERS-08 | Column rows stay on a derived delete (honors `@Version`); tasks/subtasks use bulk (bypass `@Version`) | Accepted, documented asymmetry |
 | PERS-09 | `GET /boards/{boardId}/full` uses one chained `LEFT JOIN FETCH` query | 3 statements for any graph size; lazy loading costs 1+1+N+M |
-| PERS-10 | Every collection in the fetch chain is a `Set` with identity `equals`/`hashCode` and `@OrderBy("id")` | Prevents `MultipleBagFetchException` and row-multiplication duplicates |
+| PERS-10 | Every collection in the fetch chain is a `Set` with identity `equals`/`hashCode` and `@OrderBy("id")` | Prevents `MultipleBagFetchException` and row-multiplication duplicates. Side effect: `/full` returns columns and tasks in id order, not position order (confirmed defect) |
 | PERS-11 | `/full` verifies ownership first, fetches by the verified id, maps inside the transaction | Nested response discloses more; no lazy association escapes the transaction |
 | PERS-12 | Query counts asserted with `getPrepareStatementCount()` through one helper, as small-vs-large invariance | `getQueryExecutionCount()` misses `findById()` |
 | PERS-13 | Test isolation by `@AfterEach` row deletion, not test-managed transaction rollback | Rollback hides `findById()` in the L1 cache and corrupts the metric |
 | PERS-14 | `jakarta.transaction.Transactional` on service methods; no `readOnly` anywhere | Reason not recorded (convention) |
 | PERS-15 | Position renumbering with one bulk `UPDATE ... SET position = position + :delta` per range | Constant statement count for a move |
 | PERS-16 | Activity feed: offset `Pageable`, server-forced sort `createdAt desc, id desc`, matching composite index, page size capped at 100 | Deterministic pages; keyset pagination deferred |
-| PERS-17 | `activity_log` rows are removed by an explicit bulk delete, because the table has no FK to cascade from | No FK by design (poison-message risk) |
+| PERS-17 | `activity_log` has no FK, so no delete cascade reaches it. Only the nonprod reset removes rows, with an explicit bulk delete. A board or account delete keeps them | No FK by design (poison-message risk) |
 
 ### [03 — Optimistic locking](03-optimistic-locking.md)
 
@@ -172,7 +186,7 @@ This index repeats the summary table of each chapter. Use it to find a decision 
 | LOCK-04 | The service compares the client version with the loaded entity version before any mutation | Hibernate's own check cannot see a stale read from an earlier HTTP request |
 | LOCK-05 | Call `entityManager.flush()` before the response DTO is built | Hibernate increments the in-memory version only when the UPDATE runs |
 | LOCK-06 | Show `version` on every response DTO, flat and nested | A client never needs an extra GET to learn the current version |
-| LOCK-07 | Map `OptimisticLockingFailureException` to 409 with a `ProblemDetail` body and code `OPTIMISTIC_LOCK_CONFLICT` | 409 is the correct HTTP status for a retriable conflict (was 423); one error envelope for the whole API |
+| LOCK-07 | Map `OptimisticLockingFailureException` to 409 with a `ProblemDetail` body and code `OPTIMISTIC_LOCK_CONFLICT`. Only the explicit check throws this type; a truly parallel conflict gets 500 `INTERNAL_ERROR` (confirmed 2026-09-23) | 409 is the correct HTTP status for a retriable conflict (was 423); one error envelope for the whole API |
 | LOCK-08 | `UserEntity` has no version; the theme write is last-write-wins | A 409 on a user's own theme toggle is worse than applying it |
 | LOCK-09 | Bulk JPQL deletes bypass `@Version` (delete wins) | A per-row version check would bring back the N+1 cost the batch delete removes |
 | LOCK-10 | Reorder and move check the version before any position shift, and the bulk shift does not increment sibling versions | A client that edits a sibling must not get a 409 because another task moved |
@@ -187,7 +201,7 @@ This index repeats the summary table of each chapter. Use it to find a decision 
 | ID | Decision | Main reason |
 |---|---|---|
 | SVC-01 | Strict layers: controller → service → repository. Services return DTOs. | Controllers carry no logic; one place owns each rule |
-| SVC-02 | Field injection with `@Autowired`, no constructor injection | Existing convention; the recorded reason (avoid circular beans) does not match the code |
+| SVC-02 | Field injection with `@Autowired` in the domain services and resource controllers; five security and config classes use Lombok constructor injection | Existing convention; the recorded reason (avoid circular beans) does not match the code |
 | SVC-03 | One `OwnershipVerifierService` walks Subtask → Task → Column → Board → User | Answer "may this user touch this?" once, not per controller |
 | SVC-04 | Each verifier returns `Pair<UserEntity, X>` | The caller gets the verified entity and does not load it again |
 | SVC-05 | Domain services load only through their own `findById(userId, id)` and derive later ids from the verified entity | This rule is the whole access-control model; nothing else enforces it |
@@ -197,7 +211,7 @@ This index repeats the summary table of each chapter. Use it to find a decision 
 | SVC-09 | Clamp a too-large target position; `targetPosition` optional for a task move, mandatory for a column reorder | A drag to the end always succeeds; a reorder with no target asks for nothing |
 | SVC-10 | Task move and task reorder are one endpoint, on a separate flat controller | A drag-drop client reports one fact; Spring cannot add a flat route to a nested controller |
 | SVC-11 | Reject a cross-board move with 400, before the version check | A wrong-board target is a request-shape problem, independent of concurrency |
-| SVC-12 | Board names unique per user: service check → 409, database constraint as backstop | Friendly checked error in the common case; the constraint is the real guarantee |
+| SVC-12 | Board names unique per user: service check → 409, database constraint as backstop (a rename race can give 500) | Friendly checked error in the common case; the constraint is the real guarantee |
 | SVC-13 | Theme: identity from the session only, last-write-wins, no `@Version` | No IDOR surface; a 409 on your own preference toggle is a worse outcome |
 | SVC-14 | Delete cascades run in services, children first, batched per column; only the requested delete publishes an event | Foreign keys have no `ON DELETE CASCADE`; per-child events would bring back N+1 |
 | SVC-15 | Nonprod reset: profile gate + shared secret; truncate on a separate bean; check every id before any delete | Two independent controls; `@Transactional` self-invocation does not work; no existence oracle |
@@ -219,10 +233,10 @@ This index repeats the summary table of each chapter. Use it to find a decision 
 | API-08 | Composed constraint annotations (`@BoardName`, `@TaskTitle`, ...) with `@ReportAsSingleViolation`, bounds in `ValidationConstants` | One rule per field concept, one violation per bad input |
 | API-09 | `@OptionalNotBlank` composes `@Pattern`, not `@NotBlank` | `@NotBlank` rejects `null`, which would make an optional field mandatory |
 | API-10 | Every `@RestController` carries class-level `@Validated`, enforced by ArchUnit | The annotation decides which exception Spring throws, and so which error envelope the client gets |
-| API-11 | Every error uses Spring's RFC 7807 `ProblemDetail` from a plain `@ControllerAdvice` | Standard media type, no new dependency, small reviewable diff |
+| API-11 | Errors that reach `DispatcherServlet` use Spring's RFC 7807 `ProblemDetail` from a plain `@ControllerAdvice`; unmapped Spring MVC exceptions (unknown route, wrong method) fall to the `500 INTERNAL_ERROR` catch-all | Standard media type, no new dependency, small reviewable diff |
 | API-12 | A closed `ErrorCode` enum in the `code` property; generic `ENTITY_NOT_FOUND` for all 404s | The frontend branches on `code`; per-resource codes need message parsing |
 | API-13 | `401` only for "no session" (filter chain) and bad credentials; `403` for ownership failures | Before Phase 07.1, `401` meant two different things |
-| API-14 | Two `409` arms for duplicates: a checked service guard and a database-constraint backstop | The service check has a race window; the unique constraint closes it |
+| API-14 | Two `409` arms for duplicates: a checked service guard and a database-constraint backstop. The backstop gives `409` on create; on rename, a race loser can get `500` | The service check has a race window; the unique constraint keeps the data correct |
 | API-15 | Map `HttpMessageNotReadableException` to `400 MALFORMED_REQUEST_BODY` | An unknown enum value in a body gave `500` before |
 | API-16 | Document the error envelope with one global `ProblemDetailOpenApiCustomizer` bean | springdoc cannot see `@ControllerAdvice`; per-endpoint annotations must be remembered on every new method |
 | API-17 | Publish composed constraints with `ComposedConstraintPropertyCustomizer` (a `PropertyCustomizer` and a `GlobalOpenApiCustomizer`) | swagger-core never opens composed annotations; the production document had zero `pattern` keys |
@@ -254,7 +268,7 @@ This index repeats the summary table of each chapter. Use it to find a decision 
 | SEC-15 | CSRF protection disabled | Original reason not recorded; later argued safe because of `SameSite=Strict` |
 | SEC-16 | Credentialed CORS with an explicit origin list | The CORS spec forbids `*` with credentials |
 | SEC-17 | A separate entry point writes the 401 envelope | `GlobalExceptionHandler` cannot see filter-chain rejections |
-| SEC-18 | Logout clears the cookie, sends `Clear-Site-Data`, returns JSON | Fix of a logout that always failed (finding F3) |
+| SEC-18 | Logout is configured to clear the cookie, write `Clear-Site-Data` and return JSON. On a real socket, `POST /api/logout` does not reach `LogoutFilter` (500), and no `Clear-Site-Data` header goes out over plain HTTP | Fix of finding F3 (a `null` cookie name); F3 was reproducible only under MockMvc |
 | SEC-19 | A second, profile-gated, stateless filter chain for the nonprod reset route | Production chain stays byte-identical |
 | SEC-20 | Rate-limit signin/signup at the Caddy edge, not in the app | The app cannot see the real client IP; the edge can |
 | SEC-21 | Scan for secrets with gitleaks at commit and in CI | Stop a credential before it enters history |
@@ -275,7 +289,7 @@ This index repeats the summary table of each chapter. Use it to find a decision 
 | EVT-10 | The record key is the `eventId`, not the `boardId` | Reason not recorded; with one partition, the key has no effect on placement |
 | EVT-11 | An in-process `@KafkaListener` persists events into Postgres | A separate consumer service was explicitly deferred; reads come from Postgres, not from Kafka |
 | EVT-12 | Idempotent consumer: `existsByEventId` fast path plus a unique-constraint backstop, no declarative transaction | Redelivery is normal under at-least-once; a duplicate must never reach the retry path |
-| EVT-13 | Retry 3 times at 1 s, then dead-letter with the original bytes intact | A poison message must not block the feed, and the operator needs the exact bytes |
+| EVT-13 | Retry a listener failure 3 times at 1 s, then dead-letter with the original bytes intact; a decode failure goes to the DLT at once, with no retry | A poison message must not block the feed, and the operator needs the exact bytes |
 | EVT-14 | `activity_log` holds plain id columns (no foreign keys) and a JSON `detail` of ids only | A foreign key would turn a routine delete race into a poison message |
 | EVT-15 | `eventId` changed from a random UUID to a RandFlake string (V6) | Index locality on the unique constraint; reuse of the one existing id generator |
 | EVT-16 | Avro with a schema registry replaced JSON | Kafka enforces no schema; a rolling deploy could dead-letter valid messages |
@@ -345,7 +359,7 @@ This index repeats the summary table of each chapter. Use it to find a decision 
 | CI-24 | Production registers Avro schemas in a job after deploy; nonprod registers inside its deploy, before the app starts | Do not add a new production failure mode; make nonprod's guarantee literal |
 | CI-25 | Prune old Docker Hub tags after a good deploy; delete the new tag by digest after a failed deploy | Keep one active image per repository |
 | CI-26 | Build the Caddy image in CI with `load`, prove it, validate the Caddyfile, then push | A broken edge image must never reach the registry |
-| CI-27 | A separate `invariant-checks.yml` runs pure-function Python gates on every PR, each with a self-test where one exists | Make drift unmergeable, and prove each gate can still fire |
+| CI-27 | A separate `invariant-checks.yml` runs pure-function Python gates on pull requests, each with a self-test where one exists | Make drift fail on the PR, and prove each gate can still fire |
 | CI-28 | OWASP dependency-check is report-only, weekly, off every developer path | Its verdict drifts with NVD; it is the heaviest task in the build |
 | CI-29 | Uptime probe every 15 minutes; rate-limit verification on manual dispatch only | Date outages; do not spend bcrypt and IP budget on every deploy |
 | CI-30 | Dependabot: grouped Gradle PRs, GitHub Actions, Caddy base images; app base images excluded | Remediate advisories; one verification-metadata regeneration per batch |

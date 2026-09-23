@@ -31,7 +31,7 @@ The N+1 and fetch-join queries are in chapter 02. The activity-log events are in
 | DATA-10 | The ids are NOT ULIDs; the `ulid-creator` dependency is unused | Historical: the generator started with an unused ULID import |
 | DATA-11 | Ordering uses an `Integer position` column with renumber-on-insert, not fractional keys | Fractional keys are too complex for this scale |
 | DATA-12 | No database unique constraint on position; reads sort by `(position, id)` | A non-deferrable unique constraint collides during a bulk shift |
-| DATA-13 | Board names are unique per user: a service check, plus the `uk_boards_user_id_name` constraint as a backstop | A clear 409 for the common case; the database stops the race |
+| DATA-13 | Board names are unique per user: a service check, plus the `uk_boards_user_id_name` constraint as a backstop | A clear 409 for the common case; the database stops the race. A rename race loser can get 500, not 409 |
 | DATA-14 | Theme is a `LIGHT`/`DARK` enum on `users`, `NOT NULL DEFAULT 'LIGHT'`, no `@Version` | Only two states exist in the design; no null branch; last-write-wins is accepted |
 | DATA-15 | Column color is a nullable `varchar(7)` with no `CHECK` constraint; the DTO validates the format | A `CHECK` failure gives a 409 and leaks the constraint text |
 | DATA-16 | `boards.created_at` is backfilled once, then its default is dropped | The application stays the single writer of the column |
@@ -214,7 +214,7 @@ implement `BaseBoard`. Lombok `@Getter` generates the method that satisfies the 
 
 **DATA-02.** The Javadoc on
 [`BaseBoard`](../../src/main/java/com/vrudenko/kanban_board/base/entity/BaseBoard.java#L3-L7)
-gives the reason: Java cannot override a field, so a shared base class cannot put different
+gives the reason: Java cannot override a field. So a shared base class cannot put different
 Hibernate annotations on the same field in each subclass. An interface with getter methods
 avoids that problem. The project CLAUDE.md adds that the interfaces keep DTOs and entities
 aligned.
@@ -311,7 +311,7 @@ because both change after the object can already be in a hash-based collection
 Every entity id is a `String` that
 [`RandFlakeGenerator`](../../src/main/java/com/vrudenko/kanban_board/config/RandFlakeGenerator.java)
 makes inside the JVM. The id is a Snowflake-style value. A Snowflake id is a 64-bit integer that
-packs a timestamp in the high bits and a counter in the low bits, so ids sort by creation time.
+packs a timestamp in the high bits and a counter in the low bits. So ids sort by creation time.
 
 The layout is:
 
@@ -384,8 +384,8 @@ Quick task 260813-os9
 ([summary](../../.planning/quick/260813-os9-replace-randflakegenerator-s-random-23-l/260813-os9-SUMMARY.md),
 commit `4ddcb69`) replaced the random bits with the monotonic sequence. It cut the low field to
 22 bits, which reserves the sign bit and moves exhaustion to 2087-09-07. It also moved the epoch
-back to 2018-01-01. With the old epoch, the narrower low field would halve every new id, so new ids
-would sort *below* old ids until 2030-03-26 and invert every `@OrderBy("id")` collection. The new
+back to 2018-01-01. With the old epoch, the narrower low field would halve every new id. New ids
+would then sort *below* old ids until 2030-03-26 and invert every `@OrderBy("id")` collection. The new
 epoch keeps every new id above the largest id the old layout could make.
 
 An earlier quick task, 260802-tbj, removed a `synchronized` modifier from the old generator. At
@@ -492,7 +492,8 @@ Both are `integer NOT NULL DEFAULT 0`, added by V5. Subtasks and boards have no 
 
 ### How it works
 
-Positions stay contiguous from zero:
+Create, move, reorder and column delete keep positions contiguous from zero. Task delete does not
+(see "Known gaps"):
 
 - **Create.** The service sets `position` to the current sibling count, which is the next free
   slot ([`TaskService.save`](../../src/main/java/com/vrudenko/kanban_board/service/TaskService.java#L58-L66),
@@ -507,7 +508,7 @@ Positions stay contiguous from zero:
   `order by t.position asc, t.id asc`
   ([`TaskRepository.findAllByColumnId`](../../src/main/java/com/vrudenko/kanban_board/repository/TaskRepository.java#L13-L21)).
 
-The `= 0` initialiser on the entity fields exists only so that V5 could ship a `NOT NULL` column
+The `= 0` initialiser on the entity fields has one purpose. It let V5 ship a `NOT NULL` column
 before the services assigned a real value (comment in `TaskService.save`).
 
 ### Why we chose it
@@ -581,9 +582,19 @@ Two layers do the work:
    `GlobalExceptionHandler.handleAppDuplicateResource` returns HTTP 409 with code
    `DUPLICATE_RESOURCE`.
 2. **Database backstop.** V5 adds `CONSTRAINT uk_boards_user_id_name UNIQUE (user_id, name)`.
-   Two concurrent requests can both pass the service check. The loser then hits the constraint,
-   and `handleDataIntegrityViolation` returns HTTP 409 with code `DATA_INTEGRITY_VIOLATION`
-   ([`GlobalExceptionHandler`](../../src/main/java/com/vrudenko/kanban_board/handler/GlobalExceptionHandler.java#L161-L185)).
+   Two concurrent requests can both pass the service check. The loser then hits the constraint.
+   The HTTP response of the loser depends on the path:
+   - **Create.** `BoardService.save` does not flush, so the `INSERT` runs at commit. Spring
+     translates the error at commit into a `DataIntegrityViolationException`.
+     `handleDataIntegrityViolation` then returns HTTP 409 with code `DATA_INTEGRITY_VIOLATION`
+     ([`GlobalExceptionHandler.handleDataIntegrityViolation`](../../src/main/java/com/vrudenko/kanban_board/handler/GlobalExceptionHandler.java#L171-L185)).
+     A reviewer observed this 409. The dispatcher did not run the create race again.
+   - **Rename.** `BoardService.updateById` calls `entityManager.flush()` inside the service
+     ([`BoardService.updateById`](../../src/main/java/com/vrudenko/kanban_board/service/BoardService.java#L162-L168)).
+     The `UPDATE` fails there as a Hibernate `ConstraintViolationException`, which Spring does not
+     translate. The `Exception.class` catch-all
+     ([`GlobalExceptionHandler.handleGeneralException`](../../src/main/java/com/vrudenko/kanban_board/handler/GlobalExceptionHandler.java#L73-L80))
+     returns HTTP 500 with code `INTERNAL_ERROR`. The `detail` contains the raw SQL error text.
 
 The comparison is exact and case-sensitive in both layers. "Work" and "work" are two different
 names. The reason for case sensitivity is not recorded; Phase 6 left it to the planner.
@@ -591,14 +602,18 @@ names. The reason for case sensitivity is not recorded; Phase 6 left it to the p
 ### Why we chose it
 
 **DATA-13.** Phase 6 D-09 added the check to both create and rename. It resolved a long-standing
-`TODO` in `UserService.addBoardByUserId`. The check-then-act window is known and deliberate: the
-service check gives the clean `DUPLICATE_RESOURCE` response for the normal case, and the constraint
-is the real guarantee (comment in `BoardService.save`).
+`TODO` in `UserService.addBoardByUserId`. The check-then-act window is known and deliberate. The
+service check gives the clean `DUPLICATE_RESOURCE` response for the normal case. The constraint is
+the real guarantee of the data (comment in `BoardService.save`).
 
 ### Trade-offs and limits
 
-- Under a real race the client gets `DATA_INTEGRITY_VIOLATION`, not `DUPLICATE_RESOURCE`. Both are
-  409.
+- The constraint always keeps the data correct: only one board gets the name. The HTTP contract
+  holds only for create. On a create race, the loser gets 409 `DATA_INTEGRITY_VIOLATION`, not
+  `DUPLICATE_RESOURCE`.
+- On a rename race, some losers get HTTP 500 `INTERNAL_ERROR` with raw SQL in the body, not 409.
+  Eight boards renamed in parallel to one name gave `500 200 500 500 409 409 409 409`. The 409
+  responses came from the service check (`DUPLICATE_RESOURCE`). Confirmed by running on 2026-09-23.
 - Doc-vs-code: D-09 says "a service-layer check with no schema impact". The implementation added
   a schema constraint in V5. The code wins.
 
@@ -610,7 +625,8 @@ is the real guarantee (comment in `BoardService.save`).
   `RenameBoard.shouldReturnOk_whenRenamingBoardToItsOwnCurrentName`,
   `CrossUserIsolation.shouldAllowBothCreates_whenTwoDifferentUsersUseIdenticalBoardName`,
   `ConcurrentCreate.shouldPersistExactlyOneBoard_whenTwoRequestsCreateSameNameConcurrently`.
-  The concurrent test asserts the final row count, not which request won.
+  The concurrent test asserts the final row count, not which request won. No test covers a
+  concurrent rename.
 - [`FlywaySchemaProvenanceTest`](../../src/test/java/com/vrudenko/kanban_board/config/FlywaySchemaProvenanceTest.java#L194-L208),
   `shouldContainBoardsUserIdNameUniqueConstraintNamedByV5Migration_whenSchemaIsBuiltByFlyway`.
 - [`GlobalExceptionHandlerTest`](../../src/test/java/com/vrudenko/kanban_board/handler/GlobalExceptionHandlerTest.java),
@@ -650,8 +666,8 @@ writes null into a `NOT NULL` column on every signup
 
 **DATA-14.** Phase 6 D-10 to D-12
 ([`06-CONTEXT.md`](../../.planning/milestones/v1.2-phases/06-mock-up-feature-gap-closure/06-CONTEXT.md)):
-build server-side theme persistence now, use an enum because the mock-up shows exactly two
-states, and default to `LIGHT` so that no consumer needs a null branch. `UserEntity` has no
+build server-side theme persistence now. Use an enum, because the mock-up shows exactly two
+states. Default to `LIGHT`, so that no consumer needs a null branch. `UserEntity` has no
 `@Version`. The theme write is last-write-wins by design
 ([`UserService.updateTheme`](../../src/main/java/com/vrudenko/kanban_board/service/UserService.java#L122-L125)).
 
@@ -715,9 +731,10 @@ Each script told the operator to run it with `psql` against the real database *b
 because the main branch deployed on every push. For example, a missing `version` column would make
 every task or column request fail with an SQL error. Each script used `IF NOT EXISTS` so a second
 run did nothing. Each script also said that it was "NOT a replacement for Epic 3's Flyway migration
-tooling" and that its change must later enter migration history, "not silently re-applied or lost".
+tooling". Each script said that its change must later enter migration history, "not silently
+re-applied or lost".
 
-The test suite at that time ran on in-memory H2 with `ddl-auto=create-drop`, so the tests built the
+The test suite at that time ran on in-memory H2 with `ddl-auto=create-drop`. So the tests built the
 schema from the entities and never ran these scripts.
 
 ### Why we chose it
@@ -745,16 +762,17 @@ for Spring Boot 3.5.16) ([`build.gradle`](../../build.gradle#L151-L156)).
 | [V3](../../src/main/resources/db/migration/V3__add_activity_log.sql) | `activity_log` table, unique `event_id` (then `uuid`), index `(board_id, created_at DESC, id DESC)` | Port of bridge script 03; the index serves the paginated feed as an index scan, because the feed has no retention limit |
 | [V4](../../src/main/resources/db/migration/V4__add_password_hash_not_null.sql) | `users.password_hash SET NOT NULL`, guarded | Port of bridge script 04. A null hash is an account that can never sign in |
 | [V5](../../src/main/resources/db/migration/V5__add_position_subtask_version_theme_board_name_uniqueness.sql) | `tasks.position`, `columns.position`, `subtasks.version`, `users.theme`, guarded `uk_boards_user_id_name` | Phase 6 foundation: ordering, subtask locking, theme, board-name uniqueness. One file, so parallel plans did not fight over version numbers |
-| [V6](../../src/main/resources/db/migration/V6__change_activity_log_event_id_to_varchar.sql) | `activity_log.event_id` from `uuid` to `varchar(255)` with `USING event_id::varchar(255)`; drops and re-creates the unique constraint | Event ids now come from `RandFlakeGenerator` (GAP-07). PostgreSQL cannot cast `uuid` to text implicitly. Old rows keep the UUID text form |
+| [V6](../../src/main/resources/db/migration/V6__change_activity_log_event_id_to_varchar.sql) | `activity_log.event_id` from `uuid` to `varchar(255)` with `USING event_id::varchar(255)`; drops and re-creates the unique constraint | Event ids now come from `RandFlakeGenerator` (GAP-07). PostgreSQL cannot cast `uuid` to text implicitly. Old rows keep the UUID text form. The drop and re-create is not necessary (see "Doc-vs-code contradictions") |
 | [V7](../../src/main/resources/db/migration/V7__add_board_optimistic_locking_version_column.sql) | `boards.version bigint NOT NULL DEFAULT 0` | Phase 07.1 D-13: boards were the only level with no version column |
 | [V8](../../src/main/resources/db/migration/V8__add_boards_created_at.sql) | `boards.created_at`, then `DROP DEFAULT` | See DATA-16 |
 | [V9](../../src/main/resources/db/migration/V9__add_columns_color.sql) | `columns.color varchar(7)`, nullable | See DATA-15 |
 
 The V5 plan rejected two alternatives
 ([`06-01-PLAN.md`](../../.planning/milestones/v1.2-phases/06-mock-up-feature-gap-closure/06-01-PLAN.md)):
-one migration per feature (Flyway version numbers are a global namespace, so parallel plans
-collide), and a relaxed `ddl-auto` in tests (it deletes the guarantee that the schema test exists
-for).
+
+- One migration per feature. Flyway version numbers are a global namespace, so parallel plans
+  collide.
+- A relaxed `ddl-auto` in tests. It deletes the guarantee that the schema test exists for.
 
 **Guarded migrations (DATA-21).** V4 and V5 wrap the data-dependent step in a PL/pgSQL block:
 
@@ -790,8 +808,8 @@ with no table rewrite. `now()` is `STABLE`, so V8 also avoids a rewrite. (The V7
 
 **DATA-17.** Phase 04.1 D-01
 ([`04.1-CONTEXT.md`](../../.planning/milestones/v1.2-phases/04.1-flyway-database-migration-implementation/04.1-CONTEXT.md))
-chose an incremental history: V1 as the pre-Epic-2 schema, then one file per real change, "do not
-collapse into a single baseline". The Epic 3 plan
+chose an incremental history. V1 is the pre-Epic-2 schema, then one file follows per real change:
+"do not collapse into a single baseline". The Epic 3 plan
 ([`03-flyway-openapi.md`](../plans/backend-modernization/03-flyway-openapi.md)) wants the history
 to "tell the real story of the project's evolution". D-01 marks the choice as costly to reverse:
 applied files are checksummed and immutable.
@@ -849,13 +867,13 @@ plan calls this "the correct pattern" and names "why not let Hibernate auto-gene
 prod" as a likely interview question.
 
 The local compose file changed from `update` to `validate` in the same phase. An environment
-variable outranks `application.properties`, so the old `update` value would let Hibernate keep
-altering the local schema and hide exactly the mismatches that `validate` exists to find (comment
+variable outranks `application.properties`. So the old `update` value would let Hibernate keep
+altering the local schema. That hides exactly the mismatches that `validate` exists to find (comment
 in `docker-compose.yml`).
 
 The test profile sets `validate` explicitly. The comment in `application-test.properties`
-explains why omission is wrong: Hibernate applies `create-drop` by default only to an embedded
-database, so against a real PostgreSQL URL the value would silently become `none` and disable the
+explains why omission is wrong. Hibernate applies `create-drop` by default only to an embedded
+database. Against a real PostgreSQL URL, the value would silently become `none` and disable the
 check.
 
 **Reversed decision: H2 → Testcontainers.** Phase 04.1 D-04 first kept tests on H2 with
@@ -887,7 +905,7 @@ non-empty schema that has no `flyway_schema_history` table.
 **DATA-20.** The project never used a baseline. Every real database was empty when Flyway first
 ran against it:
 
-1. **Production at cutover.** The AWS EC2/RDS stack was deleted on 2026-08-03. 04.1 D-03 records
+1. **Production at cutover.** The AWS EC2/RDS stack was deleted on 2026-08-03. Phase 04.1 D-03 records
    that no live production database existed when Flyway landed on 2026-08-05.
 2. **Local Docker volume.** It held months of `ddl-auto=update` schema with no history table. The
    04.1 research found that Flyway would refuse it ("Found non-empty schema(s) ... but no schema
@@ -997,15 +1015,18 @@ and the idempotency path.
 
 ## Known gaps and open items
 
-1. **Task delete leaves a position gap.** `TaskService.deleteById` calls no `shiftPositions`
-   ([`TaskService`](../../src/main/java/com/vrudenko/kanban_board/service/TaskService.java#L259-L278)),
+1. **Task delete leaves a position gap, and the next create makes a duplicate position.**
+   `TaskService.deleteById` calls no `shiftPositions`
+   ([`TaskService.deleteById`](../../src/main/java/com/vrudenko/kanban_board/service/TaskService.java#L259-L278)),
    while column delete does. The comment in `TaskService.save` says positions stay contiguous "by
-   every mutation in this class". After a delete, `countByColumnId` can return a position that a
-   remaining task already holds. The `(position, id)` sort resolves the tie. I reasoned this from
-   the code and did not run it; no test covers task delete followed by create.
-2. **Nested read order differs from flat read order.** `GET /boards/{id}/full` orders collections by
-   `@OrderBy("id")`. The flat endpoints order by `(position, id)`. After a reorder, the two can
-   show different orders. `BoardFullReadTest` asserts only that the nested ids are sorted.
+   every mutation in this class". That comment is false. After a delete, `countByColumnId` returns
+   a position that a remaining task already holds. Observed result: positions `0, 1, 2`, delete the
+   task at 0, create one task, positions `1, 2, 2`. The `(position, id)` sort keeps the tie in a
+   stable order. No test covers task delete followed by create. Confirmed by running on 2026-09-23.
+2. **Nested read order differs from flat read order.** `GET /boards/{id}/full` orders columns and
+   tasks by `@OrderBy("id")`. The flat endpoints order by `(position, id)`. After a reorder, the
+   two reads show different orders. `BoardFullReadTest` asserts only that the nested ids are
+   sorted. Confirmed by running on 2026-09-23.
 3. **`FlywaySchemaProvenanceTest` stops at V6.** See its section.
 4. **Id width change in 2053.** String ordering of ids matches numeric order only while all ids
    have 12 characters (my calculation: until 2053-10-19).
@@ -1015,6 +1036,9 @@ and the idempotency path.
 7. **Unused dependency** `ulid-creator:5.2.0`.
 8. **Column color is create-only** (pending todo, linked above).
 9. **Board-name uniqueness is case-sensitive.** Reason not recorded.
+10. **A rename race returns 500, not 409.** Parallel renames to one name gave
+    `500 200 500 500 409 409 409 409`. The 500 body holds raw SQL for `uk_boards_user_id_name`.
+    See "Board-name uniqueness per user". Confirmed by running on 2026-09-23.
 
 ### Doc-vs-code contradictions (the code wins)
 
@@ -1034,6 +1058,7 @@ and the idempotency path.
 | `AbstractPostgresContainerTest` Javadoc | links `com.vrudenko.kanban_board.FlywaySchemaProvenanceTest` | The class is in `...kanban_board.config` |
 | 06-CONTEXT D-09 | board-name uniqueness has "no schema impact" | V5 adds `uk_boards_user_id_name` |
 | V7 header | catalog-only on "PostgreSQL 10+" | The feature exists from PostgreSQL 11 |
+| V6 header | "a type change cannot happen while the constraint that depends on the column is still in place" | PostgreSQL 16 runs `ALTER COLUMN ... TYPE varchar(64)` with `UNIQUE` in place, and the constraint stays. The drop and re-create in V6 is harmless but not necessary. Confirmed by running on 2026-09-23 |
 
 ### Missing reasons
 
@@ -1117,8 +1142,10 @@ old rows all sat at 0. The project sorts by `(position, id)` instead, so a tie i
 
 A service check (`existsByUserIdAndName`) returns 409 `DUPLICATE_RESOURCE` in the normal case.
 Two concurrent requests can both pass it. The V5 constraint `uk_boards_user_id_name` then rejects
-the second insert, which returns 409 `DATA_INTEGRITY_VIOLATION`. The concurrent E2E test asserts
-exactly one row.
+the second write, so only one board gets the name. On create, the loser gets 409
+`DATA_INTEGRITY_VIOLATION`. On rename, the service flushes early, the error is not translated, and
+some losers get 500 `INTERNAL_ERROR` with raw SQL. The concurrent E2E test covers create only and
+asserts exactly one row.
 </details>
 
 **9. Why is there no `CHECK` constraint on `columns.color`?**

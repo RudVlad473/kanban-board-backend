@@ -41,10 +41,10 @@ in this layer is a promise to a client.
 | API-08 | Composed constraint annotations (`@BoardName`, `@TaskTitle`, ...) with `@ReportAsSingleViolation`, bounds in `ValidationConstants` | One rule per field concept, one violation per bad input |
 | API-09 | `@OptionalNotBlank` composes `@Pattern`, not `@NotBlank` | `@NotBlank` rejects `null`, which would make an optional field mandatory |
 | API-10 | Every `@RestController` carries class-level `@Validated`, enforced by ArchUnit | The annotation decides which exception Spring throws, and so which error envelope the client gets |
-| API-11 | Every error uses Spring's RFC 7807 `ProblemDetail` from a plain `@ControllerAdvice` | Standard media type, no new dependency, small reviewable diff |
+| API-11 | Errors that reach `DispatcherServlet` use Spring's RFC 7807 `ProblemDetail` from a plain `@ControllerAdvice`; unmapped Spring MVC exceptions (unknown route, wrong method) fall to the `500 INTERNAL_ERROR` catch-all | Standard media type, no new dependency, small reviewable diff |
 | API-12 | A closed `ErrorCode` enum in the `code` property; generic `ENTITY_NOT_FOUND` for all 404s | The frontend branches on `code`; per-resource codes need message parsing |
 | API-13 | `401` only for "no session" (filter chain) and bad credentials; `403` for ownership failures | Before Phase 07.1, `401` meant two different things |
-| API-14 | Two `409` arms for duplicates: a checked service guard and a database-constraint backstop | The service check has a race window; the unique constraint closes it |
+| API-14 | Two `409` arms for duplicates: a checked service guard and a database-constraint backstop. The backstop gives `409` on create; on rename, a race loser can get `500` | The service check has a race window; the unique constraint keeps the data correct |
 | API-15 | Map `HttpMessageNotReadableException` to `400 MALFORMED_REQUEST_BODY` | An unknown enum value in a body gave `500` before |
 | API-16 | Document the error envelope with one global `ProblemDetailOpenApiCustomizer` bean | springdoc cannot see `@ControllerAdvice`; per-endpoint annotations must be remembered on every new method |
 | API-17 | Publish composed constraints with `ComposedConstraintPropertyCustomizer` (a `PropertyCustomizer` and a `GlobalOpenApiCustomizer`) | swagger-core never opens composed annotations; the production document had zero `pattern` keys |
@@ -59,8 +59,8 @@ in this layer is a promise to a client.
 
 ### What it is
 
-The API models the domain hierarchy as nested URLs: a user owns boards, a board owns columns, a
-column owns tasks, and a task owns subtasks. All route fragments are string constants in
+The API models the domain hierarchy as nested URLs. A user owns boards, and a board owns columns.
+A column owns tasks, and a task owns subtasks. All route fragments are string constants in
 [`ApiPaths`](../../src/main/java/com/vrudenko/kanban_board/constant/ApiPaths.java). The servlet
 container adds the context path `/api` in front of every route
 ([`application.properties`](../../src/main/resources/application.properties),
@@ -116,8 +116,8 @@ can separate API traffic from other paths by one prefix.
 
 **API-02.** The flat move route has its own controller. The
 [`TaskMoveController` Javadoc](../../src/main/java/com/vrudenko/kanban_board/controller/TaskMoveController.java#L21-L25)
-records the reason: Spring composes class-level and method-level `@RequestMapping` paths additively,
-so a route that is not nested cannot live on the nested `TaskController`. A task move also changes
+records the reason. Spring composes class-level and method-level `@RequestMapping` paths additively.
+Thus a route that is not nested cannot live on the nested `TaskController`. A task move also changes
 the column of the task, so a URL that names the old column would be misleading after the move.
 The column reorder route did not need a flat controller, because `ColumnController` is already
 board-nested ([`ColumnController.reorder`](../../src/main/java/com/vrudenko/kanban_board/controller/ColumnController.java#L71-L79)).
@@ -274,14 +274,14 @@ if (principal instanceof UserDetails user) {
 
 The "username" of the principal is the user id, not the email. The filter chain
 (`anyRequest().authenticated()` in `SecurityConfiguration`) rejects a request with no session before
-the resolver runs, so the resolver does not see an anonymous request on a protected route.
+the resolver runs. Thus the resolver does not see an anonymous request on a protected route.
 
 ### Why we chose it
 
 **API-03.** The session is the only source of identity. Plan 06-06 made the strongest statement of
-this when it added the theme routes. It chose `/users/me/theme` over `/users/{userId}/theme`
-because "a `me` segment resolved from the session means the route *cannot* express 'another user's
-theme', so the IDOR is closed by construction rather than by a check"
+this when it added the theme routes. It chose `/users/me/theme` over `/users/{userId}/theme`.
+The plan says that "a `me` segment resolved from the session means the route *cannot* express
+'another user's theme'". It adds: "the IDOR is closed by construction rather than by a check"
 ([`06-06-PLAN.md`](../../.planning/milestones/v1.2-phases/06-mock-up-feature-gap-closure/06-06-PLAN.md)).
 An IDOR (insecure direct object reference) is an attack where a client changes an id in a request
 to reach data it does not own.
@@ -297,8 +297,8 @@ From [`06-06-PLAN.md`](../../.planning/milestones/v1.2-phases/06-mock-up-feature
   deliberately unauthenticated controller. An authenticated route there would weaken that boundary.
 - **No dedicated route; return and accept the theme on other endpoints.** Rejected: no user-update
   endpoint existed to attach it to.
-- **A user id path variable.** Rejected: it would be the first route with a user id in the path,
-  and it would need an ownership check with nothing above it.
+- **A user id path variable.** Rejected. It would be the first route with a user id in the path.
+  It would also need an ownership check with nothing above it.
 
 ### Trade-offs and limits
 
@@ -396,10 +396,10 @@ in a dedicated block
 The alternative was four sequential HTTP round trips to render one board
 ([`MOCKUP_FEATURE_GAP.md` §1.4](../MOCKUP_FEATURE_GAP.md#1-features-in-the-mock-ups-but-missing-or-incomplete-in-the-backend)).
 
-**API-06.** `CODE_STYLE.md` rule 6 gives the reason: "omitting `@NotNull Long version` silently
-disables optimistic locking for that entity — the request still passes validation and the write
-still succeeds". One method name (`atLeastOneFieldPopulated`) on every DTO makes the check easy to
-find.
+**API-06.** `CODE_STYLE.md` rule 6 gives the reason. It says that "omitting `@NotNull Long version`
+silently disables optimistic locking for that entity". The rule adds: "the request still passes
+validation and the write still succeeds". One method name (`atLeastOneFieldPopulated`) on every
+DTO makes the check easy to find.
 
 Two DTOs break rule 6 on purpose, and each records why in its Javadoc:
 
@@ -411,21 +411,26 @@ Two DTOs break rule 6 on purpose, and each records why in its Javadoc:
   makes `name` mandatory (`@NotBlank`). `name` is its only mutable field, so a version-only update
   has no use case (quick task
   [`260811-ufu`](../../.planning/quick/260811-ufu-resolve-whitespace-only-validation-gap-t/)).
-  `UpdateBoardRequestDTO` keeps `name` optional, so a version-only board update is accepted.
+  `UpdateBoardRequestDTO` keeps `name` optional, so validation accepts a version-only board
+  update. The service does not accept it. `BoardService.updateById` sets `name` from the DTO with
+  no null check, and the flush fails on the `NOT NULL` column. A `PUT /api/boards/{id}` with the
+  body `{"version":0}` returns `500 INTERNAL_ERROR`, and `detail` holds the SQL text. Confirmed by
+  running on 2026-09-23.
 
-**API-20.** Plan 06 decision D-04 merged task move and task reorder into one request:
-`MoveTaskRequestDTO` has `targetColumnId`, `version` and a nullable `targetPosition`
+**API-20.** Plan 06 decision D-04 merged task move and task reorder into one request
 ([`06-CONTEXT.md`](../../.planning/milestones/v1.2-phases/06-mock-up-feature-gap-closure/06-CONTEXT.md)).
-"A single request covers 'move to column X at position N,' matching what a real drag-drop client
-would report as one fact." A `null` position appends to the end, which keeps the old behavior for
-old clients. `ReorderColumnRequestDTO` makes `targetPosition` mandatory, because a reorder with no
-position asks for nothing (its Javadoc).
+`MoveTaskRequestDTO` has `targetColumnId`, `version` and a nullable `targetPosition`.
+The decision says that "a single request covers 'move to column X at position N'". The request
+matches "what a real drag-drop client would report as one fact". A `null` position appends to
+the end, which keeps the old behavior for old clients. `ReorderColumnRequestDTO` makes
+`targetPosition` mandatory, because a reorder with no position asks for nothing (its Javadoc).
 
 **API-22.** `SaveBoardRequestDTO` has an optional `id`, validated by
 [`@BoardId`](../../src/main/java/com/vrudenko/kanban_board/dto/annotation/BoardId.java). Quick task
 [`260908-dl3`](../../.planning/quick/260908-dl3-create-board-endpoint-optionally-accepts/260908-dl3-PLAN.md)
-states the purpose: "allow a client to create a board under an id it already holds (offline-first /
-optimistic client-side creation) without opening the primary key to arbitrary untrusted strings".
+states the purpose. The client must be able to "create a board under an id it already holds
+(offline-first / optimistic client-side creation)". The task must do this "without opening the
+primary key to arbitrary untrusted strings".
 The pattern accepts only what `RandFlakeGenerator` can emit: lowercase base36, at most 13
 characters.
 
@@ -551,8 +556,8 @@ MapStruct reference documentation, not from an in-repo precedent.
 
 Jakarta Bean Validation checks the fields of a DTO against constraint annotations such as `@Size`,
 `@Pattern` and `@NotBlank`. This codebase wraps the rules for each domain field in a **composed
-constraint**: a custom annotation that carries other constraints as meta-annotations and has no
-validator class of its own.
+constraint**. A composed constraint is a custom annotation that carries other constraints as
+meta-annotations. It has no validator class of its own.
 
 | Annotation | Composes | Bounds |
 |------------|----------|--------|
@@ -607,7 +612,7 @@ before the method runs. A `@PathVariable @NotBlank String boardId` triggers meth
 annotation per domain concept, one violation per bad input. `@ReportAsSingleViolation` matters
 because `CODE_STYLE.md` rule 4 depends on "exactly one violation per invalid input". The
 `@ColumnColor` and `@BoardId` Javadocs use that rule to explain why they do not stack
-`@OptionalNotBlank`: their closed patterns already reject blank input, and a second annotation would
+`@OptionalNotBlank`. Their closed patterns already reject blank input. A second annotation would
 give two violations.
 
 **API-09.** [`@OptionalNotBlank`](../../src/main/java/com/vrudenko/kanban_board/dto/annotation/OptionalNotBlank.java)
@@ -700,7 +705,7 @@ read `$.errors.<field>` got nothing on four controllers. The same task found tha
 
 RFC 7807 ("Problem Details for HTTP APIs") defines a standard JSON error body with the media type
 `application/problem+json`. Spring 6 ships it as the `ProblemDetail` class. Every error response
-in this API is a `ProblemDetail` with two extra properties:
+from the two producers below is a `ProblemDetail` with two extra properties:
 
 - `code` — a member of the closed [`ErrorCode`](../../src/main/java/com/vrudenko/kanban_board/constant/ErrorCode.java) enum;
 - `errors` — a map from field name to message, only on `VALIDATION_FAILED`.
@@ -783,11 +788,28 @@ The full mapping:
 Spring picks the most specific matching arm. `AppDuplicateResourceException` extends
 `DataIntegrityViolationException`, so the specific arm wins for the checked path.
 
+The table has no row for the exceptions of Spring MVC itself. `GlobalExceptionHandler` does not
+extend `ResponseEntityExceptionHandler`, so these exceptions go to the `Exception` catch-all
+([`GlobalExceptionHandler.handleGeneralException`](../../src/main/java/com/vrudenko/kanban_board/handler/GlobalExceptionHandler.java#L73-L80)).
+The observed results are:
+
+| Request | Status | Body |
+|---------|--------|------|
+| `GET /api/nonexistent` (unknown route, `NoResourceFoundException`) | 500 | `ProblemDetail`, `code` `INTERNAL_ERROR`, `detail` `"No static resource nonexistent."` |
+| `DELETE /api/boards` (wrong method, `HttpRequestMethodNotSupportedException`) | 500 | `ProblemDetail`, `code` `INTERNAL_ERROR`, `detail` `"Request method 'DELETE' is not supported"` |
+
+Confirmed by running on 2026-09-23. The API does not give `404` for an unknown route, and it does
+not give `405` for a wrong method.
+
+A request that Spring Security's firewall or Tomcat rejects before `DispatcherServlet` does not get
+a `ProblemDetail`. A reviewer observed Spring Boot's default `/error` JSON for
+`GET /api/boards//columns/` (`400`, with `timestamp`, `status`, `error` and `path`, and no `code`).
+
 ### Why we chose it
 
 **API-11.** Phase 07.1 decision D-01 converged "every `GlobalExceptionHandler` branch onto Spring's
-built-in RFC 7807 `ProblemDetail` type", replacing "today's mix of bare-string bodies and the one
-`Map<String,String>` branch"
+built-in RFC 7807 `ProblemDetail` type". This replaced "today's mix of bare-string bodies and the
+one `Map<String,String>` branch"
 ([`07.1-CONTEXT.md`](../../.planning/milestones/v1.2-phases/07.1-address-hard-blockers-and-inconsistencies-from-the-frontend/07.1-CONTEXT.md)).
 D-02 put field errors under `errors`, inside the same envelope. Plan 07.1-01 chose a plain
 `@ControllerAdvice` that wraps every return in `ResponseEntity.status(...)`. Research recorded the
@@ -811,12 +833,29 @@ stays `401`. [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md#scenario--how-a-rejecte
 states the structural fact: the `401` path never reaches `DispatcherServlet`, and the `403`, `400`
 and `409` paths always do. The `409` path is in chapter 03.
 
+The `409 OPTIMISTIC_LOCK_CONFLICT` arm catches only the explicit version check in the service.
+A truly concurrent update passes that check in each request. The loser then fails at
+`entityManager.flush()` with an untranslated Hibernate exception, and the catch-all returns `500`.
+Three parallel `PUT /api/boards/{id}` requests with `version: 0`, repeated four times, gave
+`200 500 500` every time and never `409`. The `500` body holds "Row was updated or deleted by
+another transaction" and the entity class name `com.vrudenko.kanban_board.entity.BoardEntity`.
+The data stays correct. Confirmed by running on 2026-09-23.
+
 **API-14.** The duplicate-name path has two arms. Phase 06 decision D-09 added board-name uniqueness
 per user. A service guard (`existsByUserIdAndName`) throws `AppDuplicateResourceException` before
 the insert. A unique constraint (`uk_boards_user_id_name`) catches the race between the check and
 the insert, and that gives `DataIntegrityViolationException`. The comments in
 [`GlobalExceptionHandler`](../../src/main/java/com/vrudenko/kanban_board/handler/GlobalExceptionHandler.java#L161-L185)
 say the broad arm "must not be deleted as dead code".
+
+The backstop arm works only when Spring translates the exception. On create, the violation occurs
+at commit, and Spring translates it to `409 DATA_INTEGRITY_VIOLATION`. On rename,
+[`BoardService.updateById`](../../src/main/java/com/vrudenko/kanban_board/service/BoardService.java#L159-L168)
+calls `entityManager.flush()` inside the service. The violation then occurs as an untranslated
+Hibernate `ConstraintViolationException`, and the catch-all returns `500 INTERNAL_ERROR`. Eight
+parallel renames of eight boards to one name gave `500 200 500 500 409 409 409 409`. The `500`
+bodies hold the raw SQL text, and no rename loser got `409 DATA_INTEGRITY_VIOLATION`. The data
+stays correct: only one board gets the name. Confirmed by running on 2026-09-23.
 
 **API-15.** Plan 06-06 (theme persistence) added the `HttpMessageNotReadableException` arm. A theme
 value outside `LIGHT`/`DARK` fails during JSON parsing, before validation. Without the arm, it fell
@@ -841,8 +880,17 @@ From [`07.1-01-PLAN.md`](../../.planning/milestones/v1.2-phases/07.1-address-har
   The `409 DATA_INTEGRITY_VIOLATION` and `400 MALFORMED_REQUEST_BODY` arms also pass
   `ex.getMessage()`. The first can contain the SQL constraint text and the second contains the
   Jackson parser message. That todo names only the `500` arm.
+  These are observed examples from the `500` arm:
+  "No static resource logout.", a Hibernate message with the class name
+  `com.vrudenko.kanban_board.entity.BoardEntity`, and SQL text.
+  The SQL text came from a `NOT NULL` violation and from a unique violation.
+  Confirmed by running on 2026-09-23.
+- **Warning: some expected client errors return `500`, not `4xx`.** Five cases reach the catch-all.
+  They are an unknown route, a wrong method, a concurrent update, a rename race and a version-only
+  board `PUT`. A client cannot tell these from a real server fault by status alone.
 - A `404` code does not say which resource was missing. The client must read `detail`.
-- One `409` status has three causes. The client separates them with `code`.
+- One `409` status has three causes. The client separates them with `code`. The same race can
+  also give `500` (see API-13 and API-14 above).
 - The two producers do not share code. They agree on shape only because a test compares their key
   sets.
 
@@ -889,8 +937,9 @@ runs once on the finished document:
 
 1. It adds a hand-built `ProblemDetail` component schema.
 2. For every operation in every path, it adds `400`, `401`, `403`, `404`, `409` and `500`
-   responses that reference that schema, but only when the operation does not already have that
-   status. This keeps the generated `200`/`201` and allows a later, more specific override.
+   responses that reference that schema. It adds a status only when the operation does not
+   already have that status. This keeps the generated `200`/`201` and allows a later, more
+   specific override.
 
 The `code` property enum comes from `ErrorCode.values()` at build time, so the document and the
 enum cannot drift. The schema is built by hand, not by reflection over the `ProblemDetail` class.
@@ -934,7 +983,7 @@ The customizer has four correctness rules, each recorded in the code:
   flag, a capturing group or an unknown `(?` construct.
 - **Combine several patterns without breaking full-match clients.**
   [`applyPattern`](../../src/main/java/com/vrudenko/kanban_board/config/ComposedConstraintPropertyCustomizer.java#L553-L581)
-  turns every regex except the last into a lookahead `(?=^(?:R)$)` and lets the last one consume
+  turns every regex except the last into a lookahead `(?=^(?:R)$)`. The last regex consumes
   the string. An all-lookahead pattern matches only the empty string under a full match, so a
   generated client would reject every valid value.
 - **Publish `minLength` in code points.** `@Size` counts UTF-16 code units, and JSON Schema counts
@@ -964,15 +1013,15 @@ scope exception, although Phase 9 was a CI/deploy phase.
 
 **API-17.** Quick task
 [`260904-ss1`](../../.planning/quick/260904-ss1-publish-composed-constraint-patterns-in-/260904-ss1-PLAN.md)
-states the problem: "A client generated from the document cannot know that `color` must be
-`#RRGGBB`, that a board name rejects punctuation, or that a password has a shape — each rule is
-discoverable only as a runtime 400." On 2026-09-04 the production document had zero `pattern` keys
-and zero `example` keys. The root cause came from the swagger-core 2.2.30 source:
+states the problem. The plan lists what "a client generated from the document cannot know". The
+list is: "that `color` must be `#RRGGBB`, that a board name rejects punctuation, or that a
+password has a shape". It adds: "each rule is discoverable only as a runtime 400." On 2026-09-04
+the production document had zero `pattern` keys and zero `example` keys. The root cause came from the swagger-core 2.2.30 source:
 `ModelResolver.applyBeanValidatorAnnotations` builds a map from the direct annotations only. The
 user locked "one systemic bean, not per-field `@Schema`" (decision D-1 of that task).
 
-The bean is both a `PropertyCustomizer` and a `GlobalOpenApiCustomizer` because of a measured
-defect. swagger-core calls `applyBeanValidatorAnnotations` a second time after the
+The bean is both a `PropertyCustomizer` and a `GlobalOpenApiCustomizer`. A measured defect is
+the reason. swagger-core calls `applyBeanValidatorAnnotations` a second time after the
 `PropertyCustomizer`, and resets `minLength` to 1 for a direct `@NotBlank`. The class Javadoc
 records the proof: phase 1 set `minLength=3` for `SaveSubtaskRequestDTO.title`, but `GET /api/docs`
 served `1`. Only a `GlobalOpenApiCustomizer` runs after that second pass.
@@ -1073,6 +1122,9 @@ configuration.setAllowCredentials(true);
 The origins come from `app.cors.allowed-origins`, with the default
 `http://localhost:5173,http://localhost:3000` (Vite and create-react-app). Nonprod sets it through
 `APP_CORS_ALLOWED_ORIGINS` in [`docker-compose.nonprod.yml`](../../docker-compose.nonprod.yml).
+The production `app` service in [`docker-compose.prod.yml`](../../docker-compose.prod.yml) does
+not set it, so production uses the localhost defaults. A preflight from a non-localhost origin
+gets `403`. Confirmed by running on 2026-09-23.
 `SecurityConfiguration` calls `http.cors(Customizer.withDefaults())`, which finds the bean
 automatically.
 
@@ -1142,8 +1194,8 @@ takes a Spring Data `Pageable` and returns `Page<ActivityLogResponseDTO>`.
 
 ### Why we chose it
 
-**API-19.** For the theme, plan 06-06 chose `PUT` over `PATCH`: "The resource is a single scalar;
-a PUT replaces it wholly, and there is no partial-update semantic to express."
+**API-19.** For the theme, plan 06-06 chose `PUT` over `PATCH`. The plan says: "The resource is a
+single scalar; a PUT replaces it wholly". It adds: "there is no partial-update semantic to express".
 For move and reorder, `PATCH` follows the move endpoint of v1.1 Phase 2
 ([`PROJECT.md`](../../.planning/PROJECT.md)), and Phase 06 research copied it for reorder. For the
 field updates, the use of `PUT` with partial bodies predates the planning system. **Reason not
@@ -1261,6 +1313,11 @@ without breaking clients.
 | Direct `@Pattern` bypasses the regex translation | [todo](../../.planning/todos/pending/2026-09-07-fix-direct-pattern-bypass-and-utf-16-length-oracle-blind-spo.md) |
 | `ecmaEquivalentOf` does not fail closed on Java-only constructs | [todo](../../.planning/todos/pending/2026-09-05-ecmaequivalentof-does-not-fail-closed-on-java-only-regex-constructs.md) |
 | No explicit `Content-Type` validation | [todo](../../.planning/todos/pending/2026-08-20-no-content-type-validation-on-rest-endpoints.md) |
+| Unknown route and wrong method return `500 INTERNAL_ERROR`, not `404`/`405`. Confirmed by running on 2026-09-23 | [`GlobalExceptionHandler.handleGeneralException`](../../src/main/java/com/vrudenko/kanban_board/handler/GlobalExceptionHandler.java#L73-L80); no todo found |
+| A truly concurrent update returns `500`, not `409` (three parallel board `PUT`s gave `200 500 500`). Confirmed by running on 2026-09-23 | [`BoardService.updateById`](../../src/main/java/com/vrudenko/kanban_board/service/BoardService.java#L159-L168), chapter 03 |
+| A rename race loser can get `500` with raw SQL, not `409 DATA_INTEGRITY_VIOLATION`. Confirmed by running on 2026-09-23 | [`BoardService.updateById`](../../src/main/java/com/vrudenko/kanban_board/service/BoardService.java#L159-L168), chapter 01 |
+| A version-only board `PUT` (`{"version":0}`) returns `500` with a `NOT NULL` violation, although the DTO accepts it. Confirmed by running on 2026-09-23 | [`UpdateBoardRequestDTO`](../../src/main/java/com/vrudenko/kanban_board/dto/board_dto/UpdateBoardRequestDTO.java), chapter 03 |
+| Production sets no `APP_CORS_ALLOWED_ORIGINS`, so only the localhost defaults apply, and a preflight from another origin gets `403` | [`docker-compose.prod.yml`](../../docker-compose.prod.yml), chapter 06 |
 | Per-operation error overrides (move `400`, signup `409`, board `PUT` `409`) not implemented | [`PROJECT.md`](../../.planning/PROJECT.md), spikes 001 and 002 |
 | Epic 3 OpenAPI polish (`@Operation` summaries, `@OpenAPIDefinition`, a session security scheme) still open | [`03-flyway-openapi.md`](../plans/backend-modernization/03-flyway-openapi.md) |
 | Composed annotations report "... cannot be empty" for a too-long value (`@ReportAsSingleViolation`) | [`SubtaskTitleMessageTest`](../../src/test/java/com/vrudenko/kanban_board/dto/SubtaskTitleMessageTest.java); no todo found |
@@ -1282,9 +1339,9 @@ without breaking clients.
   D-03 gives `BOARD_NOT_FOUND` as an example. The code has only `ENTITY_NOT_FOUND`.
 - **`CODE_STYLE.md` rule 6 example.** The "preferred" `UpdateTaskRequestDTO` in rule 6 shows
   `@TaskTitle private String title`. The real class also carries `@OptionalNotBlank`.
-- **Injection style.** The project `CLAUDE.md` says "No constructor injection used".
-  `ProblemDetailAuthenticationEntryPoint` uses constructor injection through
-  `@RequiredArgsConstructor`.
+- **Injection style.** The project `CLAUDE.md` says "No constructor injection used". Five classes
+  in `src/main/java` use constructor injection through `@RequiredArgsConstructor`. Two of them are
+  `ProblemDetailAuthenticationEntryPoint` and `AuthenticationController`.
 
 ## Questions to check your knowledge
 
@@ -1364,7 +1421,9 @@ without breaking clients.
    The service checks `existsByUserIdAndName` first and throws `AppDuplicateResourceException`. Two
    concurrent requests can both pass that check. The unique constraint `uk_boards_user_id_name`
    then rejects the second insert with `DataIntegrityViolationException`, which the broader arm
-   maps to `409`.
+   maps to `409`. This holds on create only. On rename, the service flushes, the violation is not
+   translated, and a loser can get `500 INTERNAL_ERROR` with raw SQL. Confirmed by running on
+   2026-09-23.
    </details>
 
 10. springdoc generates the document from the code. Why did the error responses need a custom bean?

@@ -1,8 +1,10 @@
 # 03 — Optimistic locking
 
-This layer detects two conflicting writes to the same board, column, task or subtask and rejects
-the second write with HTTP 409. Without it, the second writer silently overwrites the first
-writer's change, and neither client knows that a change was lost.
+This layer detects two conflicting writes to the same board, column, task or subtask. It rejects
+a write that carries a stale version with HTTP 409. Two writes that run truly in parallel get HTTP
+500 for the losers, not 409 (see [Known gaps](#known-gaps-and-open-items)). Without this layer, the
+second writer silently overwrites the first writer's change, and neither client knows that a
+change was lost.
 
 **Read first:** [01 — Domain model and schema](01-domain-model-and-schema.md),
 [02 — Persistence and queries](02-persistence-and-queries.md)
@@ -33,7 +35,7 @@ writer's change, and neither client knows that a change was lost.
 | LOCK-04 | The service compares the client version with the loaded entity version before any mutation | Hibernate's own check cannot see a stale read from an earlier HTTP request |
 | LOCK-05 | Call `entityManager.flush()` before the response DTO is built | Hibernate increments the in-memory version only when the UPDATE runs |
 | LOCK-06 | Show `version` on every response DTO, flat and nested | A client never needs an extra GET to learn the current version |
-| LOCK-07 | Map `OptimisticLockingFailureException` to 409 with a `ProblemDetail` body and code `OPTIMISTIC_LOCK_CONFLICT` | 409 is the correct HTTP status for a retriable conflict (was 423); one error envelope for the whole API |
+| LOCK-07 | Map `OptimisticLockingFailureException` to 409 with a `ProblemDetail` body and code `OPTIMISTIC_LOCK_CONFLICT`. Only the explicit check throws this type; a truly parallel conflict gets 500 `INTERNAL_ERROR` (confirmed 2026-09-23) | 409 is the correct HTTP status for a retriable conflict (was 423); one error envelope for the whole API |
 | LOCK-08 | `UserEntity` has no version; the theme write is last-write-wins | A 409 on a user's own theme toggle is worse than applying it |
 | LOCK-09 | Bulk JPQL deletes bypass `@Version` (delete wins) | A per-row version check would bring back the N+1 cost the batch delete removes |
 | LOCK-10 | Reorder and move check the version before any position shift, and the bulk shift does not increment sibling versions | A client that edits a sibling must not get a 409 because another task moved |
@@ -48,7 +50,7 @@ writer's change, and neither client knows that a change was lost.
 ### What it is
 
 A lost update occurs when two clients read the same row, both change it, and the second write
-replaces the first. The epic spec gives the concrete case: two clients drag the same task at the
+replaces the first. The epic spec gives the concrete case. Two clients drag the same task at the
 same time, and one move silently overwrites the other
 ([02-n-plus-one-optimistic-locking.md, task 5](../plans/backend-modernization/02-n-plus-one-optimistic-locking.md)).
 
@@ -78,14 +80,14 @@ reason not recorded beyond the spec.
 The facts of the system support the choice:
 
 1. A pessimistic lock lasts only for one transaction. Here, the read (GET) and the write (PUT) are
-   two separate HTTP requests, so a database lock cannot span the time a user looks at the board.
+   two separate HTTP requests. Thus a database lock cannot span the time a user looks at the board.
 2. The realistic concurrency is low. One user has at most two concurrent sessions
-   (`maximumSessions(2)`), and the planning documents repeatedly describe the exposure as "one user
+   (`maximumSessions(2)`). The planning documents repeatedly describe the exposure as "one user
    racing themselves across their two permitted concurrent sessions"
    ([06-04-PLAN.md](../../.planning/milestones/v1.2-phases/06-mock-up-feature-gap-closure/06-04-PLAN.md)).
 3. Where a pessimistic lock was proposed for a nearby problem, the plans rejected it. The
-   board-name uniqueness plan says: "Deliberately no pessimistic lock and no serializable isolation
-   — both would be new concepts in a codebase that has neither, to protect a name field"
+   board-name uniqueness plan says "Deliberately no pessimistic lock and no serializable isolation".
+   Its reason: "both would be new concepts in a codebase that has neither, to protect a name field"
    ([06-02-PLAN.md](../../.planning/milestones/v1.2-phases/06-mock-up-feature-gap-closure/06-02-PLAN.md)).
 
 ### Alternatives we rejected
@@ -142,7 +144,7 @@ throws a stale-state exception.
 
 ### Why we chose it
 
-**LOCK-02.** The phase context says: `@Version` goes directly on `TaskEntity`/`ColumnEntity`,
+**LOCK-02.** The phase context puts `@Version` directly on `TaskEntity`/`ColumnEntity`. It says:
 "NOT on `BaseEntity` (would unscope the change to `UserEntity`/`BoardEntity`/`SubtaskEntity` too)"
 ([01-CONTEXT.md, Established Patterns](../../.planning/milestones/v1.0-phases/01-optimistic-locking/01-CONTEXT.md)).
 Subtask and Board received their own field later (**LOCK-12**). `UserEntity` still has none
@@ -221,9 +223,9 @@ A typical session:
 ### Why we chose it
 
 **LOCK-03.** The body field is the mechanism that lets a client say which version it read. Plan
-07.1-05 compared it with `ETag`/`If-Match` headers for Board and rejected the headers: "Boards
-would be the only resource in the API using a header-based scheme while Columns, Tasks and
-Subtasks use a body field", and a frontend would need "two mental models"
+07.1-05 compared it with `ETag`/`If-Match` headers for Board and rejected the headers. Its reason:
+"Boards would be the only resource in the API using a header-based scheme". Columns, Tasks and
+Subtasks use a body field. A frontend would then need "two mental models"
 ([07.1-05-PLAN.md, alternatives](../../.planning/milestones/v1.2-phases/07.1-address-hard-blockers-and-inconsistencies-from-the-frontend/07.1-05-PLAN.md)).
 [docs/CODE_STYLE.md rule 6](../CODE_STYLE.md) makes the field mandatory on every
 `Update*RequestDTO`. The rule's reason: "omitting `@NotNull Long version` silently disables
@@ -232,8 +234,8 @@ succeeds".
 
 **LOCK-06.** Decision D-01 in
 [01-CONTEXT.md](../../.planning/milestones/v1.0-phases/01-optimistic-locking/01-CONTEXT.md) shows
-the version "on ALL response paths (single-item GET, list endpoints, create/update responses)" so
-that "a client never needs an extra GET just to learn the current version". For Board, decision
+the version "on ALL response paths (single-item GET, list endpoints, create/update responses)".
+The reason: "a client never needs an extra GET just to learn the current version". For Board, decision
 D-15 in [07.1-CONTEXT.md](../../.planning/milestones/v1.2-phases/07.1-address-hard-blockers-and-inconsistencies-from-the-frontend/07.1-CONTEXT.md)
 added the board's own version to `BoardFullResponseDTO`. Plan 07.1-05 also added it to the flat
 `BoardResponseDTO`. Without it, "a client doing sequential renames must call `GET /boards/{id}/full`
@@ -255,11 +257,13 @@ reachable/testable through the API rather than only defensively present".
 ### Trade-offs and limits
 
 - A required `version` is a breaking change for any caller written before it. Decision D-13 in
-  07.1-CONTEXT.md calls the Board field "one-way — once boards ship with a required `version`
-  field, removing it later breaks any frontend already built against it."
+  07.1-CONTEXT.md calls the Board field "one-way". Its words: "once boards ship with a required
+  `version` field, removing it later breaks any frontend already built against it."
 - `UpdateColumnRequestDTO.name` is mandatory, but `UpdateBoardRequestDTO.name` is optional. A
   pending todo records that no test or use case supports a version-only board update
   ([todo](../../.planning/todos/pending/2026-08-11-updateboardrequestdto-name-optionality-rests-on-same-unex.md)).
+  A version-only board update fails with 500. See item 4 in
+  [Known gaps](#known-gaps-and-open-items).
 
 ### How we test it
 
@@ -350,8 +354,8 @@ flush time, inside one transaction. In this codebase, each PUT loads the row fre
 the same transaction. In the diagram, Client B's request loads version 4, so Hibernate's check
 passes, and B would overwrite A's change. Only the client knows that it read version 3. Decision
 D-02 in [01-CONTEXT.md](../../.planning/milestones/v1.0-phases/01-optimistic-locking/01-CONTEXT.md)
-records this: "relying on Hibernate's automatic per-transaction `@Version` check alone would NOT
-catch it, since this codebase's update flow loads-then-saves fresh within one transaction." The
+records this. It says that Hibernate's automatic `@Version` check "alone would NOT catch it". The
+reason: "this codebase's update flow loads-then-saves fresh within one transaction." The
 same decision marks it "costly" to reverse. Without the check, "the feature stops actually
 protecting against stale-read conflicts, even though `@Version` is still present."
 
@@ -365,16 +369,17 @@ test ([01-01-SUMMARY.md, deviation 2](../../.planning/milestones/v1.0-phases/01-
 1. `findById(userId, ...)` verifies ownership first. A user who sends a wrong version for another
    user's subtask gets 403, not 409. A 409 would confirm that the row exists.
 2. `TaskService.moveToColumn` rejects a target column on another board with 400 before the version
-   check. Its Javadoc says that a wrong-board target "is a request-shape problem independent of
-   concurrency, so 400 is the more specific signal to return first"
+   check. Its Javadoc calls a wrong-board target "a request-shape problem independent of
+   concurrency". It adds: "400 is the more specific signal to return first"
    ([TaskService.moveToColumn](../../src/main/java/com/vrudenko/kanban_board/service/TaskService.java#L157-L251)).
 3. `BoardService.updateById` compares the version before the duplicate-name check, "matching
    `ColumnService`'s 'compare before any other logic' ordering".
 
 ### Alternatives we rejected
 
-- **Rely on Hibernate's implicit check only (no DTO field).** Offered in the v1.0 discussion as
-  "Simpler, but doesn't really solve the stated concurrent-edit problem"
+- **Rely on Hibernate's implicit check only (no DTO field).** The v1.0 discussion offered this
+  option. It called the option "Simpler, but doesn't really solve the stated concurrent-edit
+  problem"
   ([01-DISCUSSION-LOG.md](../../.planning/milestones/v1.0-phases/01-optimistic-locking/01-DISCUSSION-LOG.md)).
   Rejected again for Board as approach B in 07.1-05-PLAN.md: "it looks like locking without
   providing it."
@@ -385,7 +390,8 @@ test ([01-01-SUMMARY.md, deviation 2](../../.planning/milestones/v1.0-phases/01-
 
 - The explicit check and the UPDATE are two steps. Two requests that both load version N before
   either one flushes both pass the explicit check. Hibernate's versioned UPDATE then protects the
-  row: the second UPDATE matches zero rows. See "Known gaps" for the HTTP status of that path.
+  row: the second UPDATE matches zero rows. That request gets 500, not 409. See item 1 in
+  [Known gaps](#known-gaps-and-open-items).
 - The comparison `task.getVersion().equals(dto.getVersion())` dereferences the entity version
   directly. WR-03 in [01-REVIEW.md](../../.planning/milestones/v1.0-phases/01-optimistic-locking/01-REVIEW.md)
   flagged a possible NPE (500) if a row ever had a `NULL` version. The column is `NOT NULL`, so this
@@ -415,6 +421,8 @@ test ([01-01-SUMMARY.md, deviation 2](../../.planning/milestones/v1.0-phases/01-
 
 All of these tests send the two requests one after the other with the same stale version. They
 test the explicit check. No test runs two requests in parallel against the Hibernate-level race.
+A manual parallel run on 2026-09-23 showed that this race returns 500 (item 1 in
+[Known gaps](#known-gaps-and-open-items)).
 
 ### Where this is recorded
 
@@ -465,9 +473,9 @@ for the full error envelope.
 ### Why we chose it
 
 **LOCK-07.** Before v1.0, this handler already existed but returned 423 Locked. The research found
-this bug, and commit `1b496c5` changed it to 409. The code review agreed that 409 "matches HTTP
-semantics for a client-retriable conflict"
-([01-REVIEW.md](../../.planning/milestones/v1.0-phases/01-optimistic-locking/01-REVIEW.md)). 423 is
+this bug, and commit `1b496c5` changed it to 409. The code review agreed with the change. It says
+that 409 "matches HTTP semantics for a client-retriable conflict"
+([01-REVIEW.md](../../.planning/milestones/v1.0-phases/01-optimistic-locking/01-REVIEW.md)). The status 423 is
 a WebDAV status for a locked resource, and no lock exists here.
 
 The body shape is a reversed decision:
@@ -478,8 +486,8 @@ The body shape is a reversed decision:
    update id isn't changed" ([01-DISCUSSION-LOG.md](../../.planning/milestones/v1.0-phases/01-optimistic-locking/01-DISCUSSION-LOG.md)).
 2. v1.2 Phase 07.1, decisions D-01 and D-03 in
    [07.1-CONTEXT.md](../../.planning/milestones/v1.2-phases/07.1-address-hard-blockers-and-inconsistencies-from-the-frontend/07.1-CONTEXT.md):
-   every handler moves to `ProblemDetail`, with a stable `code` "so the frontend can branch on more
-   than just HTTP status". `OPTIMISTIC_LOCK_CONFLICT` is named there as an example. Commit
+   every handler moves to `ProblemDetail`, with a stable `code`. The reason: "so the frontend can
+   branch on more than just HTTP status". `OPTIMISTIC_LOCK_CONFLICT` is named there as an example. Commit
    `63536a0` made the change.
 
 The message text itself did not change between the two versions.
@@ -497,6 +505,12 @@ The message text itself did not change between the two versions.
   breaking change" ([ErrorCode](../../src/main/java/com/vrudenko/kanban_board/constant/ErrorCode.java)).
 - A board-name conflict also returns 409, with a different code (`DUPLICATE_RESOURCE`). A client
   must branch on `code`, not only on the status.
+- This handler catches only `OptimisticLockingFailureException`. The stale-state exception from a
+  truly parallel race is a different type, so the `Exception.class` catch-all answers it with 500
+  `INTERNAL_ERROR`. See item 1 in [Known gaps](#known-gaps-and-open-items).
+- The duplicate-name check has the same race. Eight parallel renames of eight boards to one name
+  gave `500 200 500 500 409 409 409 409`. Some losers get 500 with raw SQL in the body, not 409.
+  Confirmed by running on 2026-09-23.
 
 ### How we test it
 
@@ -525,9 +539,9 @@ has one field, `theme`, and no `version`.
 
 ### Why we chose it
 
-**LOCK-08.** The DTO Javadoc gives the reason: "a theme write is last-write-wins by design, since
-rejecting a user's own preference toggle with a 409 because they changed it on another session
-first would be a worse outcome than simply applying it". This refers to threat model entry T-06-29
+**LOCK-08.** The DTO Javadoc gives the reason. It says that "a theme write is last-write-wins by
+design". A 409 on "a user's own preference toggle" from another session "would be a worse outcome
+than simply applying it". This refers to threat model entry T-06-29
 of Phase 6 plan 06-06. In Phase 07.1, a frontend-readiness audit flagged the Board asymmetry.
 Decision D-14 in
 [07.1-CONTEXT.md](../../.planning/milestones/v1.2-phases/07.1-address-hard-blockers-and-inconsistencies-from-the-frontend/07.1-CONTEXT.md)
@@ -587,8 +601,9 @@ stale.
 
 **LOCK-10.** The version check runs before any shift. The `reorder` Javadoc says: "a rejected
 reorder leaves the board's column sequence completely untouched". The siblings keep their versions
-on purpose. The `moveToColumn` Javadoc says: "a client editing a sibling task should not be 409'd
-just because someone else reordered a different task in the same column."
+on purpose. The `moveToColumn` Javadoc says: "a client editing a sibling task should not be
+409'd". The cause in that sentence is that "someone else reordered a different task in the same
+column."
 
 Plan 06-04 compared three shift mechanisms
 ([06-04-PLAN.md](../../.planning/milestones/v1.2-phases/06-mock-up-feature-gap-closure/06-04-PLAN.md)):
@@ -726,15 +741,17 @@ The history has three stages:
 
 **LOCK-12.** Decision D-06 in
 [01-CONTEXT.md](../../.planning/milestones/v1.0-phases/01-optimistic-locking/01-CONTEXT.md) marks
-the DDL as one-way: `master` auto-deploys on every push, so "any request touching Task/Column would
-then hit a missing-column SQL error". This is a reversed first instinct. The owner first wanted to
-defer the DDL to Epic 3 (Flyway). The assistant flagged that production would break between the
-merge and Epic 3, and the owner chose to run the manual script before the merge (D-07,
+the DDL as one-way. The reason is that `master` auto-deploys on every push. Without the column,
+"any request touching Task/Column would then hit a missing-column SQL error". This is a reversed
+first instinct. The owner first wanted to defer the DDL to Epic 3 (Flyway). The assistant flagged
+that production would break between the merge and Epic 3. The owner then chose to run the manual script before the merge (D-07,
 [01-DISCUSSION-LOG.md](../../.planning/milestones/v1.0-phases/01-optimistic-locking/01-DISCUSSION-LOG.md)).
 
 `DEFAULT 0` gives every existing row a concrete version, so `@Column(nullable = false)` never fails
-on old data. The V7 header and plan 07.1-05 state the performance reason: a constant, non-volatile
-default makes the change "catalog-only" on PostgreSQL 10+, with no full table rewrite.
+on old data. The V7 header and plan 07.1-05 state the performance reason. A constant, non-volatile
+default makes the change "catalog-only", with no full table rewrite. Both files say "PostgreSQL
+10+", but PostgreSQL added this feature in version 11. The project runs PostgreSQL 16, so the
+claim holds for this project.
 
 ### Alternatives we rejected
 
@@ -745,9 +762,10 @@ default makes the change "catalog-only" on PostgreSQL 10+, with no full table re
 
 ### Trade-offs and limits
 
-- The manual step depended on a person. The v1.0 retrospective records the lesson: when `ddl-auto`
-  is unset, "any new `@Version`/column addition needs an explicit manual migration step called out
-  loudly ... easy to silently forget since local H2 test runs won't reveal the gap"
+- The manual step depended on a person. The v1.0 retrospective records the lesson for an unset
+  `ddl-auto`. It says that "any new `@Version`/column addition needs an explicit manual migration
+  step called out loudly". It adds that the step is "easy to silently forget since local H2 test
+  runs won't reveal the gap"
   ([RETROSPECTIVE.md](../../.planning/RETROSPECTIVE.md)).
 - Two later reversals removed that risk: H2 → Testcontainers PostgreSQL (Phase 04.2), and manual
   DDL → Flyway. Now the test profile also runs Flyway with `ddl-auto=validate`
@@ -791,8 +809,8 @@ The first version (`TaskLockingE2ETest`, 2026-08-01) used RestAssured on a real 
 
 ### Why we chose it
 
-The v1.0 requirement LOCK-03 asked for the conflict to be asserted "at the E2E/HTTP-status-code
-level (409), not just as a service-level exception type"
+The v1.0 requirement LOCK-03 asked for a test of the conflict "at the E2E/HTTP-status-code level
+(409)". The requirement adds: "not just as a service-level exception type"
 ([v1.0-REQUIREMENTS.md](../../.planning/milestones/v1.0-REQUIREMENTS.md)).
 
 The first real-HTTP test also found an unrelated bug. The signin path stored a bare `userId`
@@ -812,28 +830,39 @@ The review then found that the fix put the password hash into the session table,
 
 ## Known gaps and open items
 
-1. **The real concurrent race may return 500, not 409.** This is reasoned from the code only; no
-   test runs it. Two requests can both load version N and both pass the explicit check. The second
-   request's `entityManager.flush()` then runs `UPDATE ... WHERE version = N` and matches zero rows.
-   The service calls `flush()` on the `EntityManager` directly, not through a Spring repository, so
-   Spring's persistence exception translation does not apply. The exception is then most likely
-   `jakarta.persistence.OptimisticLockException`, which is not an `OptimisticLockingFailureException`.
-   `GlobalExceptionHandler` would send it to the `Exception.class` catch-all (500 `INTERNAL_ERROR`).
-   The data stays safe in both cases, because the second UPDATE changes nothing. To confirm, write a
-   test that runs two transactions in parallel with a latch between load and flush.
+1. **The real concurrent race returns 500, not 409.** Three parallel `PUT /api/boards/{id}`
+   requests with `version: 0` gave `200 500 500`. The run was repeated four times, with the same
+   result each time, and never a 409. All three requests load version 0 and pass the explicit
+   check. The second request's `entityManager.flush()` then runs `UPDATE ... WHERE version = 0` and
+   matches zero rows. The service calls `flush()` on the `EntityManager` directly, not through a
+   Spring repository. Thus Spring's persistence exception translation does not apply, and the
+   exception is not an `OptimisticLockingFailureException`.
+   [GlobalExceptionHandler.handleGeneralException](../../src/main/java/com/vrudenko/kanban_board/handler/GlobalExceptionHandler.java#L73-L79)
+   answers it with 500 `INTERNAL_ERROR`. The 500 body has this `detail` text: "Row was updated or
+   deleted by another transaction ... [com.vrudenko.kanban_board.entity.BoardEntity#id]". Thus
+   the body also shows the entity class name and the row id. The data stays correct, because the
+   second UPDATE changes nothing. No automated test covers this path.
+   Confirmed by running on 2026-09-23.
 2. **No-op updates do not increment the version** (WR-02 in
    [01-REVIEW.md](../../.planning/milestones/v1.0-phases/01-optimistic-locking/01-REVIEW.md)). Still
    open; no `OptimisticLockType` or `@DynamicUpdate` exists in `src/main`.
 3. **Null-unsafe version comparison** (WR-03). Still `entity.getVersion().equals(...)`, not
    `Objects.equals(...)`.
-4. **`UpdateBoardRequestDTO.name` is optional** with no proven version-only use case
+4. **A version-only board update fails with 500.** `UpdateBoardRequestDTO.name` is optional with
+   no proven version-only use case
    ([pending todo](../../.planning/todos/pending/2026-08-11-updateboardrequestdto-name-optionality-rests-on-same-unex.md)).
-   The code in `BoardService.updateById` sets `name` from the DTO without a null check. The effect
-   of a version-only PUT is not tested.
+   The comment on
+   [UpdateBoardRequestDTO.version](../../src/main/java/com/vrudenko/kanban_board/dto/board_dto/UpdateBoardRequestDTO.java#L24-L31)
+   says that "a version-only board update is accepted". The code does not do this.
+   [BoardService.updateById](../../src/main/java/com/vrudenko/kanban_board/service/BoardService.java#L159)
+   sets `name` from the DTO without a null check. `PUT /api/boards/{id}` with the body
+   `{"version":0}` returns 500 `INTERNAL_ERROR`. The body has a NOT NULL violation on
+   `boards.name` and the SQL text. No test covers this path.
+   Confirmed by running on 2026-09-23.
 5. **Position race** on concurrent inserts is accepted (T-06-19, **LOCK-11**).
 6. **Bulk-delete asymmetry** is documented but not tested (**LOCK-09**).
 7. **Doc drift:** ARCHITECTURE.md says "real HTTP" for the locking tests (they use `MockMvc`).
-   The v1.0 DDL script mentions an H2 test profile and an EC2 host; both no longer exist, and the
+   The v1.0 DDL script mentions an H2 test profile and an EC2 host. Both no longer exist. The
    script carries `SUPERSEDED` and dated annotations.
 
 ## Questions to check your knowledge
@@ -841,7 +870,7 @@ The review then found that the fix put the password hash into the session table,
 1. **Why is `@Version` alone not enough in this codebase?**
    <details><summary>Answer</summary>
    Each PUT loads the row fresh and saves it in one transaction. Hibernate compares the version at
-   load time with the version at flush time, so a client that read an old version in an earlier
+   load time with the version at flush time. Thus a client that read an old version in an earlier
    request still passes. Only the client knows which version it read, so the service must compare
    `dto.getVersion()` with the loaded version (LOCK-04, D-02).
    </details>
@@ -857,20 +886,21 @@ The review then found that the fix put the password hash into the session table,
    <details><summary>Answer</summary>
    As a required `@NotNull Long version` field in the JSON body of every update, reorder and move
    request. Plan 07.1-05 rejected `ETag`/`If-Match` because Board would be the only resource with a
-   header scheme, and a frontend would need two mental models (LOCK-03).
+   header scheme. A frontend would then need two mental models (LOCK-03).
    </details>
 
 4. **What does a stale write return, and what did it return before v1.0?**
    <details><summary>Answer</summary>
    HTTP 409 with an `application/problem+json` body and `code: OPTIMISTIC_LOCK_CONFLICT`. Before
    v1.0, the handler returned 423 Locked. In v1.0 the body was a plain string; Phase 07.1 moved all
-   errors to `ProblemDetail` (LOCK-07).
+   errors to `ProblemDetail` (LOCK-07). This applies to a request with a stale version. A truly
+   parallel conflict returns 500 instead (Known gaps, item 1).
    </details>
 
 5. **Why does `UserEntity` have no version?**
    <details><summary>Answer</summary>
    Its only mutable field is the theme preference. A 409 on a user's own theme toggle from another
-   session is worse than applying it, so the write is last-write-wins by design (LOCK-08, D-14,
+   session is worse than applying it. Thus the write is last-write-wins by design (LOCK-08, D-14,
    T-06-29).
    </details>
 
@@ -922,8 +952,8 @@ The review then found that the fix put the password hash into the session table,
 12. **Why `NOT NULL DEFAULT 0` and not a nullable column?**
     <details><summary>Answer</summary>
     Existing rows get a concrete version, so the `nullable = false` mapping and the version
-    comparison never see `NULL`. A constant default on PostgreSQL 10+ is a catalog-only change, so
-    the migration does not rewrite the table.
+    comparison never see `NULL`. A constant default on PostgreSQL 11 and later is a catalog-only
+    change, so the migration does not rewrite the table. The V7 header says "10+", which is wrong.
     </details>
 
 13. **Why must `version` stay out of `equals`/`hashCode`?**
@@ -936,7 +966,8 @@ The review then found that the fix put the password hash into the session table,
 14. **What happens if two requests load the same version at exactly the same time?**
     <details><summary>Answer</summary>
     Both pass the explicit check. Hibernate's versioned UPDATE lets only the first one change the
-    row; the second matches zero rows. The data stays safe. From reading the code, the second
-    request probably returns 500, not 409, because the exception from a direct
-    `entityManager.flush()` is not translated to Spring's type. No test covers this path.
+    row; the second matches zero rows. The data stays correct. The second request returns 500
+    `INTERNAL_ERROR`, not 409. The exception from a direct `entityManager.flush()` is not translated
+    to Spring's type. Three parallel PUTs gave `200 500 500` in four runs. No automated test covers
+    this path. Confirmed by running on 2026-09-23.
     </details>

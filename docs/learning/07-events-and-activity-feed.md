@@ -1,15 +1,17 @@
 # 07 — Events and the activity feed
 
-Every mutation on a board, column, task or subtask publishes a domain event to Kafka, and a consumer
-in the same application turns each event into one row of a per-board activity log. This layer
-matters because it is the project's only asynchronous, distributed path: it carries the
-delivery-semantics, idempotency, schema-evolution and failure-isolation decisions that an
+Every mutation on a board, column, task or subtask publishes a domain event to Kafka. A consumer
+in the same application turns each event into one row of the activity log of the board. This layer
+matters because it is the only asynchronous, distributed path in the project. It carries the
+decisions about delivery semantics, idempotency, schema evolution and failure isolation, which an
 interviewer will ask about first.
 
-**Read first:** [04 — Service layer and access control](04-service-layer-and-access-control.md)
-(the `@Transactional` service methods that publish events and the ownership chain that the read
-API reuses), [08 — Testing strategy](08-testing-strategy.md) (Testcontainers, the `kafka` tag,
-`fastTest`).
+**Read first:**
+
+- [04 — Service layer and access control](04-service-layer-and-access-control.md): the
+  `@Transactional` service methods that publish events, and the ownership chain that the read API
+  reuses.
+- [08 — Testing strategy](08-testing-strategy.md): Testcontainers, the `kafka` tag, `fastTest`.
 
 **Main code:**
 
@@ -51,7 +53,7 @@ API reuses), [08 — Testing strategy](08-testing-strategy.md) (Testcontainers, 
 | EVT-10 | The record key is the `eventId`, not the `boardId` | Reason not recorded; with one partition, the key has no effect on placement |
 | EVT-11 | An in-process `@KafkaListener` persists events into Postgres | A separate consumer service was explicitly deferred; reads come from Postgres, not from Kafka |
 | EVT-12 | Idempotent consumer: `existsByEventId` fast path plus a unique-constraint backstop, no declarative transaction | Redelivery is normal under at-least-once; a duplicate must never reach the retry path |
-| EVT-13 | Retry 3 times at 1 s, then dead-letter with the original bytes intact | A poison message must not block the feed, and the operator needs the exact bytes |
+| EVT-13 | Retry a listener failure 3 times at 1 s, then dead-letter with the original bytes intact; a decode failure goes to the DLT at once, with no retry | A poison message must not block the feed, and the operator needs the exact bytes |
 | EVT-14 | `activity_log` holds plain id columns (no foreign keys) and a JSON `detail` of ids only | A foreign key would turn a routine delete race into a poison message |
 | EVT-15 | `eventId` changed from a random UUID to a RandFlake string (V6) | Index locality on the unique constraint; reuse of the one existing id generator |
 | EVT-16 | Avro with a schema registry replaced JSON | Kafka enforces no schema; a rolling deploy could dead-letter valid messages |
@@ -102,8 +104,8 @@ The project also keeps rendered process-view diagrams in
 
 ### What it is
 
-A domain event is an immutable record that states a fact about a completed mutation, for example
-"task X moved from column A to column B". The project has 14 event types. All of them implement
+A domain event is an immutable record that states a fact about a completed mutation. An example
+is "task X moved from column A to column B". The project has 14 event types. All of them implement
 the sealed interface
 [`ActivityEvent`](../../src/main/java/com/vrudenko/kanban_board/event/ActivityEvent.java#L19-L41).
 A sealed interface lists every permitted implementation, so the compiler knows the complete set of
@@ -183,8 +185,8 @@ Account deletion therefore emits one `BoardDeletedEvent` per board.
   plan calls text in an event "an information-disclosure path, not a formatting choice" (threat
   T-S5E-01 in
   [260811-s5e-PLAN.md](../../.planning/quick/260811-s5e-expand-kafka-events-to-cover-all-mutatin/260811-s5e-PLAN.md)).
-- The sealed interface makes a new event type a compile error in every exhaustive `switch` that
-  handles it: the consumer, the Avro mapper and the test reconstructor. A forgotten type then
+- A new event type is a compile error in every exhaustive `switch` over the sealed
+  interface. Three such switches exist: the consumer, the Avro mapper and the test reconstructor. A forgotten type then
   fails the build instead of draining silently into the dead-letter topic
   ([03-01-PLAN.md, Decision A](../../.planning/milestones/v1.1-phases/03-activity-log-consumer-reliability-read-api/03-01-PLAN.md)).
 - **EVT-08.** Fork D-D of the s5e plan chose option D1 (one event for the requested delete only).
@@ -200,8 +202,8 @@ Account deletion therefore emits one `BoardDeletedEvent` per board.
 - **Separate "internal" and "wire" event classes.** Phase 2 research found no reason for two
   parallel hierarchies. One record serves as the Spring application event and, since Phase 4,
   maps 1:1 to one Avro record.
-- **One `@KafkaHandler` method per type.** Rejected because a missing handler is a runtime failure
-  that the error handler dead-letters, not a build failure (03-01-PLAN.md, Decision A).
+- **One `@KafkaHandler` method per type.** Rejected because a missing handler is a runtime failure, not a
+  build failure. The error handler dead-letters the record (03-01-PLAN.md, Decision A).
 - **Fan-out events for cascaded deletes (fork D-D option D2).** Rejected for the N+1 and queue
   reasons above.
 
@@ -289,20 +291,23 @@ The producer timeouts are 2000 ms in
 
 ### Why we chose it
 
-- **EVT-01.** The epic frames the feed as "a real kanban feature (Trello/Jira both have this),
-  implemented as an event-driven side effect instead of a synchronous write". It also gives a
-  prepared answer to "why does a kanban board need Kafka?": decoupling from a slower, optional side
-  effect, replay and audit value, and a place to fan out later to notifications without touching
-  `TaskService` again ([01-kafka-activity-feed.md](../plans/backend-modernization/01-kafka-activity-feed.md)).
-- **EVT-02.** Phase 2 research confirmed that `@TransactionalEventListener(AFTER_COMMIT)` is the
-  mechanism that satisfies D-01/D-02 "without a dual-write gap" for ghosts, and that the listener
-  itself is where `KafkaTemplate.send()` lives, with "no separate relay/outbox component"
+- **EVT-01.** The epic calls the feed "a real kanban feature (Trello/Jira both have this)". It is
+  "implemented as an event-driven side effect instead of a synchronous write". The epic also
+  prepares an answer to "why does a kanban board need Kafka?"
+  ([01-kafka-activity-feed.md](../plans/backend-modernization/01-kafka-activity-feed.md)):
+  - decoupling from a slower, optional side effect
+  - replay and audit value
+  - a place to add notifications later without a change to `TaskService`
+- **EVT-02.** Phase 2 research confirmed that `@TransactionalEventListener(AFTER_COMMIT)` satisfies
+  D-01/D-02 "without a dual-write gap" for ghosts. The research also puts `KafkaTemplate.send()` in
+  the listener itself, with "no separate relay/outbox component"
   ([02-RESEARCH.md](../../.planning/milestones/v1.1-phases/02-kafka-foundation-domain-events-move-endpoint/02-RESEARCH.md)).
   The services stay free of Kafka API calls. `KafkaEventPublisher` is the only class in `src/main`
   that touches the Kafka producer API.
-- **EVT-03.** v1.1 Phase 2 decision D-01: "Task/Board/Column mutations always succeed at the HTTP
-  level even if the Kafka broker is unreachable at publish time — the activity log falls behind,
-  the primary write path is never blocked." D-02: a failed publish is logged, never swallowed
+- **EVT-03.** This is v1.1 Phase 2 decision D-01. It states: "Task/Board/Column mutations always
+  succeed at the HTTP level even if the Kafka broker is unreachable at publish time". It continues:
+  "the activity log falls behind, the primary write path is never blocked". D-02: a failed publish
+  is logged, never swallowed
   ([02-CONTEXT.md](../../.planning/milestones/v1.1-phases/02-kafka-foundation-domain-events-move-endpoint/02-CONTEXT.md)).
   The context file marks D-01 as costly to reverse.
 - **EVT-04.** `@Async` was not in the original plan. It is a fix, commit `40948c8`. Even with a
@@ -312,9 +317,9 @@ The producer timeouts are 2000 ms in
   test environment, this compounded into a 20–25 minute full-suite hang. After the fix, the suite
   took about 1 min 5 s
   ([02-02-SUMMARY.md](../../.planning/milestones/v1.1-phases/02-kafka-foundation-domain-events-move-endpoint/02-02-SUMMARY.md)).
-- **EVT-05.** Kafka's default `max.block.ms` is 60000 ms. The test profile uses 50 ms because
-  2000 ms still compounded into a 20+ minute hang, and ordinary tests verify publication at the
-  Spring-event level, not through a real broker (comment in `application-test.properties`).
+- **EVT-05.** Kafka's default `max.block.ms` is 60000 ms. The test profile uses 50 ms, because 2000 ms still compounded into
+  a 20+ minute hang. Also, ordinary tests verify publication at the Spring-event level, not through
+  a real broker (comment in `application-test.properties`).
 
 ### Alternatives we rejected
 
@@ -356,8 +361,7 @@ The producer timeouts are 2000 ms in
 ### What it is
 
 A delivery guarantee states how many times a message can arrive: at most once, at least once or
-exactly once. A transactional outbox is a pattern that writes the event into a database table in
-the same transaction as the mutation; a separate relay then copies the table to Kafka. The outbox
+exactly once. A transactional outbox is a pattern that writes the event into a database table in the same transaction as the mutation. A separate relay then copies the table to Kafka. The outbox
 gives at-least-once publishing. This project does not have one.
 
 ### How it works
@@ -381,10 +385,10 @@ The project sets no `ack-mode`, so the default container behavior of Spring Kafk
 
 ### Why we chose it
 
-- **EVT-06.** The Phase 2 threat model accepts the loss (threat T-02-05, disposition "accept"):
-  "the activity log is supplementary and Postgres remains the system of record, so a lost event is
-  under-logging, not corruption. A transactional outbox is explicitly out of scope for this
-  milestone" ([02-01-PLAN.md](../../.planning/milestones/v1.1-phases/02-kafka-foundation-domain-events-move-endpoint/02-01-PLAN.md)).
+- **EVT-06.** The Phase 2 threat model accepts the loss as threat T-02-05, with the disposition
+  "accept". The plan gives the reason: "the activity log is supplementary and Postgres remains the
+  system of record, so a lost event is under-logging, not corruption". It adds: "A transactional
+  outbox is explicitly out of scope for this milestone" ([02-01-PLAN.md](../../.planning/milestones/v1.1-phases/02-kafka-foundation-domain-events-move-endpoint/02-01-PLAN.md)).
 
 ### Alternatives we rejected
 
@@ -445,9 +449,9 @@ The ordering facts are these:
 
 ### Why we chose it
 
-- **EVT-09.** v1.1 Phase 3 D-07: explicit `NewTopic` beans, not broker auto-create, so "a typo'd
-  topic name fails loudly … instead of silently auto-creating a stray topic with default
-  settings". D-08: exactly 1 partition, "matching the actual topology (single-broker KRaft, single
+- **EVT-09.** v1.1 Phase 3 D-07 chose explicit `NewTopic` beans, not broker auto-create. With
+  them, "a typo'd topic name fails loudly … instead of silently auto-creating a stray topic with
+  default settings". D-08: exactly 1 partition, "matching the actual topology (single-broker KRaft, single
   consumer instance, no parallelism benefit from more partitions)"
   ([03-CONTEXT.md](../../.planning/milestones/v1.1-phases/03-activity-log-consumer-reliability-read-api/03-CONTEXT.md)).
 - **EVT-10.** Reason not recorded. The Phase 2 plan states that per-board ordering "is a Phase 3
@@ -510,11 +514,16 @@ A serialization failure throws `IllegalStateException`, so the record goes to th
 - **EVT-11.** A separate deployable consumer service is out of scope: "the in-process
   `@KafkaListener` already demonstrates the event-driven pattern"
   ([v1.1-REQUIREMENTS.md](../../.planning/milestones/v1.1-REQUIREMENTS.md)).
-  The Phase 3 context records that the user discussed why the consumer persists into Postgres
-  rather than serving reads from Kafka directly, and why an in-process consumer is not an
-  anti-pattern at this scale. The file does not record the detailed arguments.
-- v1.1 Phase 3 D-01 to D-03 fix the storage format: raw identifiers only, a fixed `action` enum,
-  and one JSON `detail` column instead of many nullable id columns
+  The Phase 3 context records that the user discussed two questions. The first is why the
+  consumer persists into Postgres rather than serving reads from Kafka directly. The second is why
+  an in-process consumer is not an anti-pattern at this scale. The
+  [Phase 3 discussion log](../../.planning/milestones/v1.1-phases/03-activity-log-consumer-reliability-read-api/03-DISCUSSION-LOG.md#L40)
+  records three arguments:
+  - A separate microservice was already an explicit decision to defer.
+  - The listener runs on its own background thread and blocks on `poll()`. It does not busy-loop.
+  - The only shared resource is the database connection pool, and that is not a problem at this scale.
+- v1.1 Phase 3 D-01 to D-03 fix the storage format. Rows hold raw identifiers only and a fixed
+  `action` enum. One JSON `detail` column replaces many nullable id columns
   ([03-CONTEXT.md](../../.planning/milestones/v1.1-phases/03-activity-log-consumer-reliability-read-api/03-CONTEXT.md)).
   The consumer cannot resolve names, because it has no security context. Human-readable text
   ("Jane moved Task X to Done") is a frontend job.
@@ -662,8 +671,14 @@ past them. Here the DLT is `kanban.activity.dlt`.
 [`KafkaConsumerConfig.activityErrorHandler`](../../src/main/java/com/vrudenko/kanban_board/config/KafkaConsumerConfig.java#L170-L203)
 builds a `DefaultErrorHandler` with `FixedBackOff(1000L, 3L)`: one first attempt, then 3 retries
 at 1 s intervals. After that, a `DeadLetterPublishingRecoverer` writes the record to partition 0 of
-the DLT and logs one `ERROR` line with the source topic, partition, offset and cause. Spring Boot
+the DLT. It also logs one `ERROR` line with the source topic, partition, offset and cause. Spring Boot
 attaches the single `CommonErrorHandler` bean to the default listener container factory.
+
+The back-off applies only to retryable exceptions, for example a database failure in the listener.
+`DefaultErrorHandler` classifies `DeserializationException` as not retryable. A record that cannot
+be decoded therefore goes to the DLT at once, with no retry. A poison record produced with `rpk`
+reached the DLT 536 ms after the produce, with its raw bytes intact. Confirmed by running on
+2026-09-23.
 
 Three details make this work:
 
@@ -690,16 +705,20 @@ therefore declares an explicit `@Primary` `kafkaTemplate`
 
 ### Why we chose it
 
-- **EVT-13.** v1.1 Phase 3 D-04: "retries a failing message 3 times with a short fixed backoff
-  (~1s …) before routing it to the dead-letter topic"
+- **EVT-13.** v1.1 Phase 3 D-04 says that the consumer "retries a failing message 3 times with a
+  short fixed backoff (~1s …)". After that, it routes the message "to the dead-letter topic"
   ([03-CONTEXT.md](../../.planning/milestones/v1.1-phases/03-activity-log-consumer-reliability-read-api/03-CONTEXT.md)).
   The research table "Don't Hand-Roll" chose `DefaultErrorHandler` because it already handles
   non-retryable exception types and offset headers that a custom loop would miss
   ([03-RESEARCH.md](../../.planning/milestones/v1.1-phases/03-activity-log-consumer-reliability-read-api/03-RESEARCH.md)).
+  The same research records that `DefaultErrorHandler` treats `DeserializationException` as
+  non-retryable by default. D-04 itself says that Spring Kafka "already special-cases
+  deserialization failures as effectively non-retryable". The 3 × 1 s retry therefore never applies
+  to a poison message.
 - D-06: the poison test uses genuinely unparseable bytes, not a test-only failure hook.
 - After the Avro change, the DLT path stayed untouched on purpose. An Avro-aware recoverer would
-  try to encode a payload that just failed to decode, throw inside the recovery path, and destroy
-  the audit trail ([`ActivityLogAvroDeadLetterE2ETest` Javadoc](../../src/test/java/com/vrudenko/kanban_board/activitylog/ActivityLogAvroDeadLetterE2ETest.java#L34-L55)).
+  try to encode a payload that just failed to decode. It would then throw inside the recovery path
+  and destroy the audit trail ([`ActivityLogAvroDeadLetterE2ETest` Javadoc](../../src/test/java/com/vrudenko/kanban_board/activitylog/ActivityLogAvroDeadLetterE2ETest.java#L34-L55)).
 
 ### Alternatives we rejected
 
@@ -712,6 +731,9 @@ therefore declares an explicit `@Primary` `kafkaTemplate`
 - A failure caused by a down database also exhausts the retries in about 3 s and goes to the DLT.
   Nothing replays DLT records.
 - Only one `ERROR` log line signals a dead-lettering. No metric or alert exists for it.
+- The `ERROR` line always says "after exhausting retries". For a decode failure, no retry
+  happened, so the text is misleading for that path
+  ([`KafkaConsumerConfig.activityErrorHandler`](../../src/main/java/com/vrudenko/kanban_board/config/KafkaConsumerConfig.java#L170-L203)).
 
 ### How we test it
 
@@ -759,24 +781,30 @@ CREATE INDEX idx_activity_log_board_created_id
 ```
 
 [`V6__change_activity_log_event_id_to_varchar.sql`](../../src/main/resources/db/migration/V6__change_activity_log_event_id_to_varchar.sql)
-changes `event_id` to `varchar(255)`. PostgreSQL cannot change the type while the unique
-constraint depends on the column, so the migration drops the constraint, runs
+changes `event_id` to `varchar(255)`. The migration drops the unique constraint, runs
 `ALTER COLUMN … TYPE varchar(255) USING event_id::varchar(255)`, and adds the constraint again
-under the same name. Old rows keep their UUID text. New rows hold a Base36 RandFlake string.
+under the same name. The `USING` cast is necessary, because PostgreSQL has no implicit cast from
+`uuid` to a character type. Old rows keep their UUID text. New rows hold a Base36 RandFlake string.
+
+The V6 comment says that a type change cannot happen while the constraint is in place. That rule is
+false. PostgreSQL 16 changes the column type with the unique constraint in place, and the
+constraint survives because PostgreSQL rebuilds its index. The drop and the re-create in V6 are
+harmless, but not necessary. Confirmed by running on 2026-09-23.
 
 The entity has no `@Version`, because rows never change. The table was first applied by hand from
 a DDL script; V3 now reproduces it through Flyway.
 
 ### Why we chose it
 
-- **EVT-14.** `board_id` and `user_id` are plain columns, not foreign keys. "A foreign key would
-  make persistence fail whenever the referenced board or user has already been deleted, turning a
-  routine race into a poison message"
+- **EVT-14.** `board_id` and `user_id` are plain columns, not foreign keys. The entity Javadoc
+  gives the reason: "A foreign key would make persistence fail whenever the referenced board or user
+  has already been deleted". It would turn "a routine race into a poison message"
   ([`ActivityLogEntity` Javadoc](../../src/main/java/com/vrudenko/kanban_board/entity/ActivityLogEntity.java#L17-L43)).
 - The index matches the read query exactly, so a page read is an index scan, not a sort of the
   whole board history. The V3 comment says this matters because the table has no retention policy.
-- **EVT-15.** GAP-07 in v1.2 Phase 6: a random UUID "costs index locality on the eventId unique
-  constraint and gives no free ordering signal for debugging/tracing event sequences"
+- **EVT-15.** GAP-07 in v1.2 Phase 6 names two costs of a random UUID. It "costs index locality on
+  the eventId unique constraint". It also "gives no free ordering signal for debugging/tracing event
+  sequences"
   ([use-snowflake-id-generator todo](../../.planning/todos/completed/2026-08-02-use-snowflake-id-generator-for-activity-log-events.md)).
   The fix reuses the existing `RandFlakeGenerator` through a thin injectable wrapper,
   [`EventIdGenerator`](../../src/main/java/com/vrudenko/kanban_board/config/EventIdGenerator.java).
@@ -852,18 +880,24 @@ front of the Avro bytes. The consumer uses the id to fetch the writer's schema.
   and then sets the mode. It derives the schema from `getClassSchema()` of the generated class and
   the subject from `schema.getFullName()`.
 - Three callers run the registrar: the `registerSchemas` Gradle task, the static initializer of
-  the test harness `AbstractKafkaContainerTest`, and the CI jobs
-  `register-schemas-production`/nonprod in
-  [`deploy.yml`](../../.github/workflows/deploy.yml#L530-L580), which run after the deploy.
+  the test harness `AbstractKafkaContainerTest`, and CI. In CI, production and nonprod use
+  different orders. The `register-schemas-production` job runs after `deploy-to-netcup`
+  ([`deploy.yml`](../../.github/workflows/deploy.yml#L547-L581)). Nonprod has no separate job. A
+  step inside `deploy-to-nonprod` registers the schemas after `up -d redpanda-nonprod` and before
+  `up -d app-nonprod` ([`deploy.yml`](../../.github/workflows/deploy.yml#L671-L676)).
+- The local registry starts empty. Run `./gradlew registerSchemas` after `docker compose up`, before
+  the first mutation ([`docker-compose.yml`](../../docker-compose.yml#L86-L90)). Until then, each
+  local mutation logs an `ERROR` "Subject '…' not found", and the feed stays empty. The reason is
+  `auto.register.schemas=false`.
 
 ### Why we chose it
 
-- **EVT-16.** SEED-001: "vanilla Apache Kafka enforces no schema at all". A field rename during a
-  rolling deploy, with old-shape messages still unconsumed, "can dead-letter valid (non-poison)
-  messages", and a second consumer would make convention-based JSON agreement insufficient
+- **EVT-16.** SEED-001: "vanilla Apache Kafka enforces no schema at all". Assume a field rename during a rolling deploy, with old-shape
+  messages still unconsumed. That rename "can dead-letter valid (non-poison) messages". A second
+  consumer would also make convention-based JSON agreement insufficient
   ([SEED-001](../../.planning/seeds/SEED-001-add-a-confluent-schema-registry-avro-protobuf-in-front-of-th.md)).
-  Protobuf was "a legitimate alternative, not a wrong choice, but Avro is the pragmatic default
-  given Confluent/Redpanda's Avro-first tooling maturity"
+  The requirements call Protobuf "a legitimate alternative, not a wrong choice". They add: "Avro is
+  the pragmatic default given Confluent/Redpanda's Avro-first tooling maturity"
   ([v1.2-REQUIREMENTS.md](../../.planning/milestones/v1.2-REQUIREMENTS.md) "Out of Scope").
 - **EVT-18.** v1.2 Phase 4 D-03: one schema per event type, 1:1 with the Java records; a new type
   is one new file. The default `TopicNameStrategy` (subject = topic name) would force all types
@@ -959,8 +993,8 @@ and the Confluent serializers only.
 - **EVT-17.** This is a reversed decision. v1.1 used `apache/kafka-native:4.3.1` (a KRaft,
   GraalVM-native image with no JVM, which forced a TCP `/dev/tcp` healthcheck). Phase 4 needed a
   registry. The research chose one Redpanda container for broker and registry over a standalone
-  `confluentinc/cp-schema-registry` container: a second container adds wiring "for zero benefit",
-  and production would then run a different registry implementation than the one tested
+  `confluentinc/cp-schema-registry` container. A second container adds wiring "for zero benefit". Production would then also run a
+  different registry implementation than the one tested
   ([04-RESEARCH.md](../../.planning/milestones/v1.2-phases/04-schema-registry/04-RESEARCH.md)).
   The v1.2 requirements also reject a separate Confluent registry because it would be "a second
   service on an already resource-constrained VM"
@@ -968,9 +1002,8 @@ and the Confluent serializers only.
 - The shared test harness moved to Redpanda in place, instead of a second Avro-only harness. The
   three older E2E classes passed unchanged because Redpanda is a protocol superset of what they
   used ([`AbstractKafkaContainerTest` Javadoc](../../src/test/java/com/vrudenko/kanban_board/support/containers/AbstractKafkaContainerTest.java#L22-L33)).
-- Nonprod runs a second Redpanda instance, not prefixed topics on the production broker. Under
-  `RecordNameStrategy`, subjects are keyed by class name, so a shared registry would let a nonprod
-  schema test change production's compatibility history
+- Nonprod runs a second Redpanda instance, not prefixed topics on the production broker. Under `RecordNameStrategy`, the class name is the subject key. A shared registry would therefore
+  let a nonprod schema test change the compatibility history of production
   ([PROJECT.md key decisions](../../.planning/PROJECT.md)).
 
 ### Alternatives we rejected
@@ -992,8 +1025,7 @@ and the Confluent serializers only.
 Every `kafka`-tagged class extends
 [`AbstractKafkaContainerTest`](../../src/test/java/com/vrudenko/kanban_board/support/containers/AbstractKafkaContainerTest.java).
 It starts one container in a static initializer and registers all 14 schemas there. The Javadoc
-explains why the JUnit `@Container` singleton did not hold across sibling classes on Windows with
-Docker Desktop: Spring kept beans bound to a stale port. See
+explains why the JUnit `@Container` singleton did not hold across sibling classes on Windows with Docker Desktop. Spring kept beans bound to a stale port. See
 [08 — Testing strategy](08-testing-strategy.md) for the harness in detail.
 
 ### Where this is recorded
@@ -1011,8 +1043,8 @@ cannot find the schema id.
 
 ### How it works
 
-- **EVT-21.** v1.2 Phase 4 D-01 extends the broker-down policy: the HTTP mutation always succeeds,
-  the failure is logged, and the caller is never blocked
+- **EVT-21.** v1.2 Phase 4 D-01 extends the broker-down policy to the registry. The HTTP mutation
+  always succeeds, the application logs the failure, and the caller is never blocked
   ([04-CONTEXT.md](../../.planning/milestones/v1.2-phases/04-schema-registry/04-CONTEXT.md)). The
   user chose one policy for the whole publish path over "treat schema rejection differently"
   ([04-DISCUSSION-LOG.md](../../.planning/milestones/v1.2-phases/04-schema-registry/04-DISCUSSION-LOG.md)).
@@ -1020,8 +1052,8 @@ cannot find the schema id.
   registry lookup happens inside serialization, which `KafkaProducer.doSend` runs synchronously on
   the calling thread. `KafkaTemplate.send()` therefore throws `SerializationException` directly,
   and the `whenComplete` callback never runs. Spring's default `SimpleAsyncUncaughtExceptionHandler`
-  catches the throw at the `@Async` boundary and logs it at `ERROR`, but without the `eventId` or
-  `boardId` ([`SchemaRegistryOutageE2ETest` Javadoc](../../src/test/java/com/vrudenko/kanban_board/activitylog/SchemaRegistryOutageE2ETest.java#L36-L94);
+  catches the throw at the `@Async` boundary and logs it at `ERROR`. The log line does not name the
+  `eventId` or `boardId` ([`SchemaRegistryOutageE2ETest` Javadoc](../../src/test/java/com/vrudenko/kanban_board/activitylog/SchemaRegistryOutageE2ETest.java#L36-L94);
   [04-VERIFICATION.md](../../.planning/milestones/v1.2-phases/04-schema-registry/04-VERIFICATION.md)
   row 7).
 - The Confluent registry client has its own retries and timeouts, separate from the producer
@@ -1039,9 +1071,14 @@ cannot find the schema id.
 ### How we test it
 
 [`SchemaRegistryOutageE2ETest.shouldReturnAndPersist_butNeverPublish_whenSchemaRegistryIsUnreachable`](../../src/test/java/com/vrudenko/kanban_board/activitylog/SchemaRegistryOutageE2ETest.java#L174)
-points only the producer at port 1 (connection refused) while the broker stays up. It asserts:
-the call returns without an exception, the board row exists, no `activity_log` row appears after
-a wait, and an `ERROR` log line names `onActivityEvent`. The registry-down, broker-up asymmetry is
+points only the producer at port 1 (connection refused) while the broker stays up. It asserts these results:
+
+- The call returns without an exception.
+- The board row exists.
+- No `activity_log` row appears after a wait.
+- An `ERROR` log line names `onActivityEvent`.
+
+The registry-down, broker-up asymmetry is
 the point of the test: with both down, it would only repeat the v1.1 broker-down proof.
 
 ### Where this is recorded
@@ -1080,8 +1117,8 @@ has a row, and the recorder is idempotent.
 ### Why we chose it
 
 - **EVT-24.** SCHEMA-06 in [v1.2-REQUIREMENTS.md](../../.planning/milestones/v1.2-REQUIREMENTS.md).
-  The research chose the Postgres table over a topic replay because the table is the durable
-  record; the local topic has no retention guarantee
+  The research chose the Postgres table over a topic replay, because the table is the durable record. The local topic has no retention
+  guarantee
   ([04-RESEARCH.md](../../.planning/milestones/v1.2-phases/04-schema-registry/04-RESEARCH.md)).
 - The reconstructor never substitutes a default for a missing `detail` key. A default would hide
   exactly the finding the rehearsal exists to reveal.
@@ -1090,9 +1127,8 @@ has a row, and the recorder is idempotent.
 
 - The first execution could not reach real data: a native Windows PostgreSQL service held port
   5432 ([04-04-SUMMARY.md](../../.planning/milestones/v1.2-phases/04-schema-registry/04-04-SUMMARY.md)).
-  Quick task 260804-nd3 moved the compose Postgres to host port 5433. The verification later ran
-  it live: "2880 historical row(s) across 5 of 5 ActivityAction value(s)", 308 rows sampled, zero
-  errors, none dead-lettered
+  Quick task 260804-nd3 moved the compose Postgres to host port 5433. The verification later ran it live and found "2880 historical row(s) across 5 of 5 ActivityAction
+  value(s)". It sampled 308 rows, with zero errors and none dead-lettered
   ([04-VERIFICATION.md](../../.planning/milestones/v1.2-phases/04-schema-registry/04-VERIFICATION.md)).
 - Every one of those rows was created after the Avro cutover. No pre-cutover data survived,
   because the old production database was deleted. The rehearsal proves the mechanism, not
@@ -1199,8 +1235,11 @@ D-09, D-10; PAGE-V2-01 in [v1.1-REQUIREMENTS.md](../../.planning/milestones/v1.1
 
 ## Known gaps and open items
 
-1. **No outbox.** A crash after the commit, a broker outage longer than 2 s, a registry outage or a
-   full publish queue loses the event permanently (EVT-06).
+1. **No outbox.** These cases lose the event permanently (EVT-06):
+   - a crash after the commit
+   - a broker outage longer than 2 s
+   - a registry outage
+   - a full publish queue
 2. **BACKWARD is not transitive.** The "replay from zero" reason for D-02 does not hold
    ([todo](../../.planning/todos/pending/2026-08-06-d-02-backward-non-transitive-vs-replay-from-zero.md)).
 3. **No producer authentication on the broker.** Any client that reaches the broker can write
@@ -1210,9 +1249,9 @@ D-09, D-10; PAGE-V2-01 in [v1.1-REQUIREMENTS.md](../../.planning/milestones/v1.1
 5. **`TaskMovedEvent` has no position**
    ([todo](../../.planning/todos/pending/2026-08-11-taskmovedevent-position-asymmetry-not-fixed-in-s5e-fork-d-e.md)).
 6. **No pre-merge compatibility check** (SCHEMA-V2-01) and no DLT replay tool.
-7. **Test coverage gaps:** `ActivityLogConsumerE2ETest` covers 9 of 14 event types end to end
-   (`BoardDeleted`, `ColumnUpdated`, `ColumnReordered`, `SubtaskUpdated` and `SubtaskDeleted` are
-   covered only by the in-memory mapper test). No test covers a full `kafkaPublishExecutor` queue.
+7. **Test coverage gaps:** `ActivityLogConsumerE2ETest` covers 9 of 14 event types end to end. Only the in-memory mapper
+   test covers `BoardDeleted`, `ColumnUpdated`, `ColumnReordered`, `SubtaskUpdated` and
+   `SubtaskDeleted`. No test covers a full `kafkaPublishExecutor` queue.
 8. **Registry-down log lines** do not name the event.
 9. **Stale comments in code** (the code wins in each case):
    - The [`KafkaEventPublisher`](../../src/main/java/com/vrudenko/kanban_board/config/KafkaEventPublisher.java#L32-L37)
@@ -1232,6 +1271,14 @@ D-09, D-10; PAGE-V2-01 in [v1.1-REQUIREMENTS.md](../../.planning/milestones/v1.1
    - The [`AvroSchemaRegistrar`](../../src/main/java/com/vrudenko/kanban_board/config/AvroSchemaRegistrar.java#L33-L36)
      Javadoc links `com.vrudenko.kanban_board.activitylog.AbstractKafkaContainerTest`. The class
      now lives in `support.containers`.
+   - The [`V6` migration comment](../../src/main/resources/db/migration/V6__change_activity_log_event_id_to_varchar.sql#L5-L7)
+     says that a type change cannot happen while the unique constraint is in place.
+     `ALTER COLUMN e TYPE varchar(64)` succeeds with `UNIQUE(e)` in place, and the constraint
+     survives. Confirmed by running on 2026-09-23.
+10. **A decode failure gets no retry.** The 3 × 1 s back-off of EVT-13 applies only to retryable
+    exceptions. `DefaultErrorHandler` does not retry a `DeserializationException`, so a poison
+    record goes to the DLT at once (measured: 536 ms). The `ERROR` line still says "after
+    exhausting retries". Confirmed by running on 2026-09-23.
 
 ## Questions to check your knowledge
 
@@ -1305,9 +1352,11 @@ the violation, so the commit would throw and the duplicate would reach the DLT a
 <details><summary>Answer</summary>
 
 `ErrorHandlingDeserializer` converts the decode failure into a record-level error instead of a
-poll-loop failure. `DefaultErrorHandler` retries 3 times at 1 s, then `DeadLetterPublishingRecoverer`
-writes the raw bytes to `kanban.activity.dlt` through a byte-preserving template. The consumer then
-continues with the next record.
+poll-loop failure. `DefaultErrorHandler` classifies the `DeserializationException` as not
+retryable, so it does not retry. `DeadLetterPublishingRecoverer` writes the raw bytes to
+`kanban.activity.dlt` at once, through a byte-preserving template. A measured run took 536 ms from
+produce to DLT. The consumer then continues with the next record. The 3 × 1 s retry applies only to
+retryable failures, for example a database error.
 
 </details>
 
@@ -1371,8 +1420,8 @@ behavior with the registry down and the broker up.
 <details><summary>Answer</summary>
 
 Phase 4 needed a schema registry. One Redpanda container provides a Kafka-protocol broker and a
-Confluent-compatible registry, so there is no second container to run on a memory-constrained VM,
-and tests use the same registry implementation as production. The application code uses only the
+Confluent-compatible registry. There is then no second container to run on a memory-constrained
+VM. Tests also use the same registry implementation as production. The application code uses only the
 Kafka client and Confluent serializers, so the change needed no code change.
 
 </details>
@@ -1384,7 +1433,8 @@ Kafka client and Confluent serializers, so the change needed no code change.
 Random UUIDs scatter inserts across the unique-constraint B-tree and carry no time order. GAP-07
 reused the existing `RandFlakeGenerator` through `EventIdGenerator`. V6 dropped the unique
 constraint, changed the column type with `USING event_id::varchar(255)`, and added the constraint
-again. Old rows keep UUID text; the key is compared for equality only.
+again. The drop was not necessary: PostgreSQL changes the type with the constraint in place. Old
+rows keep UUID text; the key is compared for equality only.
 
 </details>
 
@@ -1392,9 +1442,8 @@ again. Old rows keep UUID text; the key is compared for equality only.
 
 <details><summary>Answer</summary>
 
-The service forces `createdAt DESC, id DESC`. The second key makes the order total, so rows with
-the same timestamp keep a fixed position across page requests and no row shows on two pages or on
-none. A caller sort could remove that guarantee. The order also matches the index
+The service forces `createdAt DESC, id DESC`. The second key makes the order total. Rows with the same timestamp then keep a fixed position
+across page requests. No row shows on two pages or on none. A caller sort could remove that guarantee. The order also matches the index
 `idx_activity_log_board_created_id`.
 
 </details>

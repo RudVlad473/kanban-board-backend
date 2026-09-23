@@ -48,7 +48,7 @@ the pipeline side.
 | CI-24 | Production registers Avro schemas in a job after deploy; nonprod registers inside its deploy, before the app starts | Do not add a new production failure mode; make nonprod's guarantee literal |
 | CI-25 | Prune old Docker Hub tags after a good deploy; delete the new tag by digest after a failed deploy | Keep one active image per repository |
 | CI-26 | Build the Caddy image in CI with `load`, prove it, validate the Caddyfile, then push | A broken edge image must never reach the registry |
-| CI-27 | A separate `invariant-checks.yml` runs pure-function Python gates on every PR, each with a self-test where one exists | Make drift unmergeable, and prove each gate can still fire |
+| CI-27 | A separate `invariant-checks.yml` runs pure-function Python gates on pull requests, each with a self-test where one exists | Make drift fail on the PR, and prove each gate can still fire |
 | CI-28 | OWASP dependency-check is report-only, weekly, off every developer path | Its verdict drifts with NVD; it is the heaviest task in the build |
 | CI-29 | Uptime probe every 15 minutes; rate-limit verification on manual dispatch only | Date outages; do not spend bcrypt and IP budget on every deploy |
 | CI-30 | Dependabot: grouped Gradle PRs, GitHub Actions, Caddy base images; app base images excluded | Remediate advisories; one verification-metadata regeneration per batch |
@@ -81,7 +81,7 @@ dependency-check. The comment in
 **CI-01.** A new CVE in a transitive dependency is not something the committer wrote. If the scan
 blocked the deploy, an advisory published on Monday would block an unrelated fix on Tuesday
 ([`security-scan.yml` header](../../.github/workflows/security-scan.yml#L1-L15)). The same argument
-gives gitleaks its hard gate: the scanner version is pinned and the config is committed, so its
+gives gitleaks its hard gate. The scanner version is pinned and the config is committed. So its
 verdict is a pure function of the commit
 ([`secret-scan.yml` header](../../.github/workflows/secret-scan.yml#L8-L18)).
 
@@ -134,9 +134,9 @@ The regeneration command is recorded in
   first ([`deploy.yml`](../../.github/workflows/deploy.yml#L63-L68)). The Gradle wrapper integrity
   todo was folded into Phase 10
   ([10-CONTEXT.md, "Folded Todos"](../../.planning/milestones/v1.3-phases/10-ci-deploy-hardening/10-CONTEXT.md)).
-- **CI-03.** Tool versions are exact. The Error Prone comment gives the reason: "a floating version
-  means an upstream release with zero local code changes could add a new ERROR-severity check and
-  red CI/the Docker build on its own" ([`build.gradle`](../../build.gradle#L684-L688)). JaCoCo
+- **CI-03.** Tool versions are exact. The Error Prone comment gives the reason. A floating version lets
+  an upstream release with no local code change add a new ERROR-severity check. That new check
+  can then fail CI and the Docker build "on its own" ([`build.gradle`](../../build.gradle#L684-L688)). JaCoCo
   (`0.8.12`) and the Avro plugin (`1.9.1`) follow the same rule. Spring-managed artifacts
   (Flyway, the PostgreSQL driver, `spring-kafka`, Testcontainers) stay unversioned, so that a
   Spring Boot bump moves them together ([`build.gradle`](../../build.gradle#L151-L156)).
@@ -227,8 +227,8 @@ source or bytecode. At runtime no reflection is needed for them. This has two ef
   - `io.swagger.core.v3:swagger-annotations` (pre-Jakarta 2.1.10). It shares a package with
     `swagger-annotations-jakarta` 2.2.30. The JVM loaded the older `Parameter` class, which lacks
     `validationGroups()`, and every `GET /api/docs` returned 500 with `NoSuchMethodError`.
-- The Avro plugin is pinned to 1.9.1 because it is the final release of an archived project, and
-  it does all the `.avsc` codegen this project needs ([`build.gradle`](../../build.gradle#L16-L21)).
+- The Avro plugin is pinned to 1.9.1 because it is the final release of an archived project. It
+  does all the `.avsc` codegen this project needs ([`build.gradle`](../../build.gradle#L16-L21)).
 
 ### Alternatives we rejected
 
@@ -269,9 +269,12 @@ rejected three options:
 
 ### What it is
 
-Four build-level gates run on every compile or test: Spotless (formatting), Error Prone
-(compile-time bug patterns), JaCoCo (coverage ratchet) and ArchUnit (architecture rules, see the
-next section).
+Four build-level gates run on every compile or test:
+
+- Spotless (formatting)
+- Error Prone (compile-time bug patterns)
+- JaCoCo (coverage ratchet)
+- ArchUnit (architecture rules, see the next section)
 
 ### How it works
 
@@ -309,8 +312,8 @@ The `test` task has `finalizedBy jacocoTestCoverageVerification`
 ### Why we chose it
 
 - **CI-08.** Formatting is mechanical, so the build enforces it. The reason for the import-group
-  order is recorded in [`docs/CODE_STYLE.md` rule 10](../CODE_STYLE.md#L435-L441): first-party
-  imports sit third on purpose, and the rule text exists so that nobody "corrects" it toward the
+  order is recorded in [`docs/CODE_STYLE.md` rule 10](../CODE_STYLE.md#L435-L441). First-party
+  imports sit third on purpose. The rule text exists so that nobody "corrects" it toward the
   more common first-party-last order.
 - **CI-09.** Error Prone finds bug classes that formatting cannot: null dereferences, ignored return
   values, misused APIs. Its gate strength came from a measured run. Quick task 260802-qr8 found 5
@@ -393,7 +396,7 @@ The main rules, with their reasons from the file:
 **CI-11.** The file says an unwritten convention "silently reopens every few sessions"
 ([rule 13](../CODE_STYLE.md#L607-L616)). Where a rule can be checked by structure, an ArchUnit rule
 holds it; where it needs judgement, the prose and its example hold it. Rule 8 is the rule that the
-build decisions in this chapter cite most: the hooks-path bootstrap, the gitleaks Docker image and
+build decisions in this chapter cite most. The hooks-path bootstrap, the gitleaks Docker image and
 the rejection of detect-secrets all refer to it.
 
 ### Trade-offs and limits
@@ -464,7 +467,7 @@ common parent exists. The hook then pipes `git diff --cached` into `gitleaks std
   instruction and never rewrites a staged file. This is a reversed decision.
 - **CI-13.** The secret scan runs first because `spotlessCheck` and `fastTest` take about four minutes
   together. A staged credential must be refused in seconds. A scanner that cannot run refuses the
-  commit, because a gate that silently skips "is worse than no gate, because it is believed"
+  commit. The reason: a gate that silently skips "is worse than no gate, because it is believed"
   ([260816-hn1-PLAN.md, Decision 2](../../.planning/quick/260816-hn1-wire-up-secret-scanning-gitleaks-truffle/260816-hn1-PLAN.md)).
 - **`< /dev/null`.** Without it, Gradle blocked for more than 80 minutes with flat CPU when the hook
   started it. A direct run finished in 17 seconds (commit `199300f`,
@@ -516,7 +519,7 @@ only if it truly needs Kafka or a real socket (Phase 7.1 commit `0c7a86e` replac
 | Task | 1 fork (avg) | 2 forks (avg) | 4 forks |
 |------|--------------|---------------|---------|
 | `test` | 370.5 s | 276.5 s | not adopted |
-| `fastTest` | 285.0 s | 242.5 s | 277 s, 267 s (not adopted) |
+| `fastTest` | 285.0 s | 242.5 s | 267.0 s average of 277 s and 257 s (not adopted) |
 
 Both 2-fork results beat the documented run-to-run variance of about 18 seconds. The 4-fork runs did
 not clear it consistently ([`build.gradle`](../../build.gradle#L299-L310)).
@@ -566,12 +569,12 @@ report as an artifact.
    file suppresses that one fingerprint (commit, file, line) in the CI job only
    ([`.gitleaks.toml`](../../.gitleaks.toml#L55-L72)).
 
-**TruffleHog.** The job resolves `--since-commit` from the event: the PR base SHA, the push
-`before` SHA, or `HEAD~1` for a new branch or a manual run
+**TruffleHog.** The job resolves `--since-commit` from the event. It uses the PR base SHA, the
+push `before` SHA, or `HEAD~1` (for a new branch or a manual run)
 ([`secret-scan.yml`](../../.github/workflows/secret-scan.yml#L164-L197)). It runs
 `--results=verified --json --no-update`. Exit 183 means a verified credential. The raw output holds
-the credential value, so the step keeps only named fields with `jq` and deletes the raw file in the
-same step ([`secret-scan.yml`](../../.github/workflows/secret-scan.yml#L212-L261)):
+the credential value. So the step keeps only named fields with `jq`, and deletes the raw file in
+the same step ([`secret-scan.yml`](../../.github/workflows/secret-scan.yml#L212-L261)):
 
 ```sh
 jq -c '{SourceMetadata: .SourceMetadata, DetectorName: .DetectorName, DetectorDescription: .DetectorDescription, DecoderName: .DecoderName, Verified: .Verified, VerificationFromCache: .VerificationFromCache}' \
@@ -587,11 +590,11 @@ rm -f .trufflehog-reports/raw-findings.jsonl
   re-reads 647 commits to validate a three-line change. CI scans full history, because a secret that
   entered history earlier is invisible to the hook
   ([260816-hn1-PLAN.md, Decisions 1-3](../../.planning/quick/260816-hn1-wire-up-secret-scanning-gitleaks-truffle/260816-hn1-PLAN.md)).
-  CI calls the image directly, not the vendor's `gitleaks-action`, because that action needs a
-  licence key for organization use, and a direct call keeps the CI command identical to the hook's.
+  CI calls the image directly, not the vendor's `gitleaks-action`. That action needs a licence
+  key for organization use. A direct call also keeps the CI command identical to the hook's.
 - **CI-16.** A blanket path exemption for `.planning/` "converts this work into security theatre".
   The 93 KB `STATE.md` was the file that started the task. The baseline and the allowlist are
-  different tools: an allowlist hides a finding under every invocation; a baseline hides one
+  different tools. An allowlist hides a finding under every invocation. A baseline hides one
   fingerprint in one workflow, and any new finding still fails.
 - **CI-17.** TruffleHog answers a second question: "is this credential live now?" Each candidate
   costs an authentication call to a third-party provider. From a developer's machine at commit time
@@ -602,8 +605,8 @@ rm -f .trufflehog-reports/raw-findings.jsonl
 
 ### Alternatives we rejected
 
-- **TruffleHog as the primary scanner.** At commit time "you want to block on suspicion, not confirm
-  exploitation." It became a CI-only second pass in Phase 10.
+- **TruffleHog as the primary scanner.** The recorded reason: at commit time "you want to block on
+  suspicion, not confirm exploitation". It became a CI-only second pass in Phase 10.
 - **detect-secrets (Yelp).** It needs a Python runtime on every clone, which rule 8 forbids.
 - **A Gradle task that downloads a native gitleaks binary.** About 60 lines of per-OS logic for no
   benefit on a machine that already runs Docker.
@@ -611,8 +614,8 @@ rm -f .trufflehog-reports/raw-findings.jsonl
   therefore worse than no gate.
 - **A `del(...)` denylist for the TruffleHog report.** A new value-bearing field in a future
   TruffleHog version would leak. The allowlist drops unknown fields by default.
-- **Passing `--branch` to TruffleHog.** The runner's checkout is a detached HEAD, so the branch
-  name has no local ref and the scan would fail on every push.
+- **Passing `--branch` to TruffleHog.** The runner's checkout is a detached HEAD. So the branch
+  name has no local ref, and the scan would fail on every push.
 
 ### Trade-offs and limits
 
@@ -625,8 +628,8 @@ rm -f .trufflehog-reports/raw-findings.jsonl
 - The first real CI run, before the baseline existed, failed as predicted
   ([`secret-scan.yml`](../../.github/workflows/secret-scan.yml#L68-L70)).
 - [260816-hn1-MEASUREMENTS.md](../../.planning/quick/260816-hn1-wire-up-secret-scanning-gitleaks-truffle/260816-hn1-MEASUREMENTS.md):
-  full-history scan 13.6-19.5 s locally for about 620 commits; `gitleaks dir` does not respect
-  `.gitignore`; `--redact` masks values inside the JSON report too.
+  a full-history scan takes 13.6-19.5 s locally for about 620 commits. Also, `gitleaks dir` does
+  not respect `.gitignore`. And `--redact` masks values inside the JSON report too.
 
 ### Where this is recorded
 
@@ -699,9 +702,9 @@ VM ([`deploy.yml`](../../.github/workflows/deploy.yml#L401-L412)).
   removed when the target moved from Oracle A1 Flex to Netcup (a reversed decision,
   [`deploy.yml`](../../.github/workflows/deploy.yml#L114-L119)).
 - **CI-20.** The runner has no route to the self-hosted `postgres` service, because it publishes no
-  host port. So the job runs Flyway on the VM, over SSH. An ephemeral database in CI was rejected:
-  it "would only prove migrations apply to an empty database, blind to the migration drift this
-  gate exists to catch" ([`deploy.yml`](../../.github/workflows/deploy.yml#L249-L266)). A
+  host port. So the job runs Flyway on the VM, over SSH. The project rejected an ephemeral database
+  in CI. Such a database "would only prove migrations apply to an empty database". It is "blind to
+  the migration drift this gate exists to catch" ([`deploy.yml`](../../.github/workflows/deploy.yml#L249-L266)). A
   `pg_isready` probe runs first, so a network failure shows as a named error. `DB_HOST` and
   `DB_NAME` moved from secrets to variables, so that the log shows the real database name. GitHub
   masks any log line that contains a secret value, which would hide a wrong-environment mistake.
@@ -712,8 +715,9 @@ VM ([`deploy.yml`](../../.github/workflows/deploy.yml#L401-L412)).
   traffic" is literally true there ([`deploy.yml`](../../.github/workflows/deploy.yml#L531-L546),
   [`deploy.yml`](../../.github/workflows/deploy.yml#L623-L634)).
 - **Health poll as a separate job.** Inside `deploy-to-nonprod` it would hold the concurrency lock
-  for up to 300 s. The bound is 30 x 10 s: `start_period` 30 s plus 10 s x 5 retries is 80 s, plus
-  image pull, Flyway, DNS and TLS time ([`deploy.yml`](../../.github/workflows/deploy.yml#L678-L705)).
+  for up to 300 s. The bound is 30 x 10 s. The healthcheck needs 80 s
+  (`start_period` 30 s plus 10 s x 5 retries). Image pull, Flyway, DNS and TLS time come on top
+  ([`deploy.yml`](../../.github/workflows/deploy.yml#L678-L705)).
 
 ### Trade-offs and limits
 
@@ -769,14 +773,14 @@ eight hardening items (HARDEN-01 to HARDEN-08) and three folded supply-chain ite
 ### Why we chose it
 
 - **CI-21.** GitHub Environments scope which secret values a job can read. They do not limit what a
-  shared SSH credential can do on the VM: "a shared credential still grants full shell access to
-  production's directory regardless of which job reads it"
+  shared SSH credential can do on the VM. The recorded reason: "a shared credential still grants
+  full shell access to production's directory regardless of which job reads it"
   ([09-CONTEXT.md, D-01](../../.planning/milestones/v1.3-phases/09-nonprod-continuous-deploy-scoped-ci-credentials/09-CONTEXT.md)).
   Hence a second Linux user. The environments have no reviewer or wait timer (D-04). They exist for
   secret scoping, not as a release gate.
 - **CI-22.** The two `appleboy/*` actions run with real SSH keys to the VM. That is a higher
   publisher-compromise risk than GitHub's and Docker's own actions. A digest pin costs a two-step
-  lookup and edit on every bump, so the project pays that cost only where the risk is highest
+  lookup and edit on every bump. So the project pays that cost only where the risk is highest
   ([10-CONTEXT.md, D-05](../../.planning/milestones/v1.3-phases/10-ci-deploy-hardening/10-CONTEXT.md)).
   Dependabot's `github-actions` entry updates the SHA and the version comment together (D-07).
 - **CI-23.** `appleboy/ssh-action` v1.2.5 runs `script:` as plain shell with no `set -e`. A first fix
@@ -868,9 +872,12 @@ current tag must stay pullable for a cold VM restart.
 
 ### Why we chose it
 
-**CI-26.** The VM has 2 GB of RAM and a documented OOM history, so the from-source `xcaddy` compile
-runs on the runner. The VM only pulls. "A green `xcaddy build` is not evidence the module was linked
-in", so step 3 proves the artifact. The build and the push are separate, so a broken image never
+**CI-26.** The from-source `xcaddy` compile runs on the runner, and the VM only pulls. The recorded
+reason is that "the VM is a 2GB box with a documented OOM history"
+([`deploy.yml`](../../.github/workflows/deploy.yml#L157-L162)). That premise is stale. The comment
+dates from the earlier host. The current Netcup VM has 7.8 GiB of RAM
+([`INFRA_RUNBOOK.md`](../INFRA_RUNBOOK.md#L20)). Step 3 proves the artifact, because "a green
+`xcaddy build` is not evidence the module was linked in". The build and the push are separate, so a broken image never
 reaches the registry.
 
 ### Where this is recorded
@@ -914,6 +921,11 @@ workflow was "written to make the claim true rather than to soften the claim"
 ([`invariant-checks.yml`](../../.github/workflows/invariant-checks.yml#L1-L16)). Each gate is a pure
 function of the commit, so it may block a PR (**CI-01**). The self-test runs first, because a gate
 edited into one that cannot fire looks green against a compliant file.
+
+The word "block" has a limit. `main` has no branch protection and no ruleset: `gh api
+repos/{owner}/{repo}/branches/main/protection` returns 404 "Branch not protected", and the
+rulesets list is empty. A failed gate therefore marks the PR red, but GitHub still lets the owner
+merge it. Confirmed by running on 2026-09-23.
 
 ### Trade-offs and limits
 
@@ -979,8 +991,10 @@ eight Python scripts exited 0 on the current tree when this chapter was written.
   GitHub's scheduled runs can start late ([`uptime-check.yml`](../../.github/workflows/uptime-check.yml#L21-L28)).
 - **CI-29 (rate limit).** The limiter keys on the TCP peer address. A run spends 20 signin attempts
   from the runner's address and rate-limits it for 5 minutes. From a laptop that would lock the
-  developer out. Each run costs about 20 bcrypt hashes on a 2 GB VPS, so it does not run on every
-  deploy ([`verify-rate-limit.yml`](../../.github/workflows/verify-rate-limit.yml#L1-L21)).
+  developer out. Each run also costs about 20 bcrypt hashes on the VPS, so it does not run on every
+  deploy ([`verify-rate-limit.yml`](../../.github/workflows/verify-rate-limit.yml#L1-L21)). The
+  workflow comment calls the VPS "a 2 GB VPS". That premise is stale: the current VM has 7.8 GiB
+  of RAM ([`INFRA_RUNBOOK.md`](../INFRA_RUNBOOK.md#L20)).
 
 ### Alternatives we rejected
 
@@ -1042,8 +1056,9 @@ ecosystems. Security alerts are a separate repository setting, confirmed on.
 
 ### Trade-offs and limits
 
-- Gradle and Caddy bump PRs fail until a human adds the matching change (metadata file, or the
-  Compose image literal).
+- A Caddy bump PR fails `invariant-checks.yml` until a human updates the Compose image literal.
+- A Gradle bump PR does not fail on the PR, because no workflow runs Gradle on a pull request. A
+  missing verification-metadata change shows only after merge, when `run-tests` fails on `main`.
 - The app base images and the plugin SHA need manual bumps.
 
 ## Docker image build
@@ -1084,8 +1099,9 @@ ENTRYPOINT ["java", "-jar", "app.jar"]
 
 **CI-31.** The runtime base was `openjdk:21-jdk-slim`. That tag stopped resolving on Docker Hub,
 which broke both local `docker compose up` and the deploy pipeline. Commit `79ba149` moved to
-`eclipse-temurin:21-jre-jammy`, "the official actively-maintained Adoptium image; JRE (not JDK) is
-sufficient since the runtime stage only runs a prebuilt jar." This is a reversed decision. The
+`eclipse-temurin:21-jre-jammy`, "the official actively-maintained Adoptium image". The commit
+also says a "JRE (not JDK) is sufficient since the runtime stage only runs a prebuilt jar". This
+is a reversed decision. The
 `.dockerignore` is a denylist so that a new directory the build needs is included by default. It
 excludes `.claude` and `.planning` because a live Gradle lock file there once broke `docker build`.
 
@@ -1112,9 +1128,14 @@ excludes `.claude` and `.planning` because a live Gradle lock file there once br
    Dependabot PR still runs deploy.yml's run-tests job". The code contradicts this: `deploy.yml` has
    no `pull_request` trigger, and Dependabot pushes to its own branches, not `main`. The same applies
    to the claim that a Gradle bump PR fails on verification metadata: nothing runs Gradle on that PR.
+   The `on:` blocks of all six workflows show it: only `deploy.yml` runs `./gradlew test`
+   ([`deploy.yml`](../../.github/workflows/deploy.yml#L92)), and it runs only on a push to `main`.
+   Confirmed by running on 2026-09-23.
 2. **`verify-postgres-memory-invariant.py` runs in no workflow.** [`.planning/PROJECT.md`](../../.planning/PROJECT.md)
    says the invariant is "now enforced by a committed script". The script is committed and correct,
-   but only a manual run enforces it. It has no self-test.
+   but only a manual run enforces it. It has no self-test. No workflow and no hook calls the
+   script. A manual run on 2026-09-23 passed (exit 0, worst case 164 MB, 64.1% of the cap).
+   So the gap is an unguarded invariant, not a current violation. Confirmed by running on 2026-09-23.
 3. **`verify-caddy-image-tag.py` has no self-test**, unlike the three newer gates.
 4. **OWASP dependency-check is still report-only** (`failBuildOnCVSS = 11`). The ratchet waits for a
    triaged baseline.
@@ -1131,7 +1152,7 @@ excludes `.claude` and `.planning` because a live Gradle lock file there once br
    <details><summary>Answer</summary>
 
    gitleaks runs a pinned version against a committed config, so its verdict is a pure function of
-   the commit. dependency-check's verdict changes when NVD publishes a new advisory, with no code
+   the commit. The verdict of dependency-check changes when NVD publishes a new advisory, with no code
    change. A blocking gate of that kind would stop unrelated deploys (CI-01, CI-28).
    </details>
 
@@ -1208,8 +1229,8 @@ excludes `.claude` and `.planning` because a live Gradle lock file there once br
     <details><summary>Answer</summary>
 
     They run with real SSH keys to the VM, a higher compromise risk. A digest pin costs a lookup and
-    an edit on every bump, so the project pays it only there and records the risk acceptance for
-    first-party actions in the workflow (CI-22).
+    an edit on every bump, so the project pays it only there. The workflow records the risk
+    acceptance for first-party actions (CI-22).
     </details>
 
 11. What went wrong with `script_stop: true`, and what is the fix?
@@ -1235,7 +1256,8 @@ excludes `.claude` and `.planning` because a live Gradle lock file there once br
     <details><summary>Answer</summary>
 
     `deploy.yml` runs only on push to `main`, so the check fired after merge and could only leave
-    `main` undeployed. `invariant-checks.yml` runs on PRs, which makes drift unmergeable (CI-27).
+    `main` undeployed. `invariant-checks.yml` runs on PRs, so drift now fails on the PR (CI-27). `main` has no branch
+    protection, so the red check does not stop a merge.
     </details>
 
 14. Why does each invariant gate run a self-test first?

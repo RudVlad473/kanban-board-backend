@@ -1,9 +1,8 @@
 # 08 — Testing strategy
 
-The test suite proves the behavior of every layer against a real PostgreSQL 16 database, a real
-Spring context and, where needed, a real Kafka-protocol broker. This matters because the main
-risks of this project (a skipped ownership check, an N+1 query, a lost Kafka event) are invisible
-to mocks and to an in-memory database.
+The test suite proves the behavior of every layer against real infrastructure. It uses a real
+PostgreSQL 16 database, a real Spring context and, where needed, a real Kafka-protocol broker. The main risks of this project are a skipped ownership check, an N+1 query and a lost Kafka
+event. Mocks and an in-memory database cannot see these risks.
 
 **Read first:** [02 — Persistence and queries](02-persistence-and-queries.md) (Flyway, N+1 work,
 optimistic locking), [07 — Events and activity feed](07-events-and-activity-feed.md) (Kafka,
@@ -56,7 +55,8 @@ Avro, dead-letter topic). **Read next:** [09 — Build quality and CI](09-build-
 
 The suite has 65 Java files under `src/test`. On 2026-09-23 they held 483 `@Test`/
 `@ParameterizedTest` methods and 5 `@ArchTest` rules (counted with
-`rg -c "^\s*@(Test|ParameterizedTest)" src/test`). The tiers, from cheapest to most expensive:
+`rg -c "^\s*@(Test|ParameterizedTest)\b" src/test`). Without the `\b`, the same command gives
+487, because it also counts `@TestPropertySource` and `@TestConfiguration`. The tiers, from cheapest to most expensive:
 
 | Tier | Base class | Spring context | Transport | Examples |
 |---|---|---|---|---|
@@ -169,8 +169,10 @@ the controller test's real job.
 
 [`LayeringArchTest`](../../src/test/java/com/vrudenko/kanban_board/architecture/LayeringArchTest.java)
 and [`TestPlacementArchTest`](../../src/test/java/com/vrudenko/kanban_board/architecture/TestPlacementArchTest.java)
-enforce part of the structure (see TEST-16). No rule forbids a Mockito import; the absence of the
-Mockito dependency in [`build.gradle`](../../build.gradle) is the practical guard.
+enforce part of the structure (see TEST-16). No rule forbids a Mockito import. Mockito is on the test
+classpath: `spring-boot-starter-test` in [`build.gradle`](../../build.gradle#L138) brings
+`mockito-core` 5.17.0 and `mockito-junit-jupiter` 5.17.0. The build does not exclude them.
+TEST-01 is a convention only. No build rule or ArchUnit rule enforces it.
 
 ### Where this is recorded
 
@@ -204,9 +206,11 @@ The datasource comes from `@ServiceConnection` on the container (TEST-06).
 
 [`FlywaySchemaProvenanceTest`](../../src/test/java/com/vrudenko/kanban_board/config/FlywaySchemaProvenanceTest.java)
 is the standing proof that the schema comes from Flyway and not from Hibernate. It queries the
-live catalog. For example, it checks that the schema has zero Hibernate-generated constraint
-names, that a foreign key carries the name V1 gave it, and that Spring Session's tables coexist
-with `flyway_schema_history`.
+live catalog. For example, it checks these facts:
+
+- The schema has zero Hibernate-generated constraint names.
+- A foreign key carries the name that V1 gave it.
+- The tables of Spring Session coexist with `flyway_schema_history`.
 
 ### Why we chose it
 
@@ -262,8 +266,8 @@ The measured cost was negative. On one machine in one session
 | PostgreSQL container | 4m 51s | 210 |
 
 The container run was 19 s (6.1%) faster than the like-for-like H2 run. The summary gives a
-hypothesis, not a proven cause: H2 rebuilt the schema on each of about 30 Spring context starts,
-while Flyway migrates once per JVM.
+hypothesis, not a proven cause. H2 rebuilt the schema on each of about 30 Spring context starts.
+Flyway migrates once per JVM.
 
 The real costs are elsewhere. The pre-commit gate now needs Docker (decision D-03). The Docker
 Engine 29.x incompatibility (testcontainers-java#11212) needed the `api.version=1.44` pin (see
@@ -458,7 +462,7 @@ is the reference for that pattern (CODE_STYLE rule 4).
 
 ### Why we chose it
 
-**TEST-08.** Milestone phase 07 started from a todo: setup classes sat mixed with 44 test classes
+**TEST-08.** Milestone phase 07 started from a todo. Setup classes sat mixed with 44 test classes
 at inconsistent depths, which was "not clear at a glance". Decision D-01 of
 [`07-CONTEXT.md`](../../.planning/milestones/v1.2-phases/07-restructure-test-folder-separate-setup-from-tests-evaluate-n/07-CONTEXT.md)
 put all infrastructure in one `support/` package, split by concern.
@@ -538,8 +542,8 @@ void cleanup() {
    records why this is safe: the recorder has no `@Async`, so every event is already recorded
    when `@AfterEach` runs.
 
-The Javadoc tells a future author to extend this one method for a new table without a foreign
-key, "not add a second isolation mechanism alongside it".
+The Javadoc gives an instruction for a new table without a foreign key. A future author must
+extend this one method, and "not add a second isolation mechanism alongside it".
 
 The eleven `AbstractKafkaContainerTest` subclasses do not run this hook. They write real
 `activity_log` rows and do not delete them. Tests that share the database with them assert on a
@@ -596,7 +600,7 @@ call failed exactly 1 of the 2 methods.
 
 ### What it is
 
-A **query-count test** proves that an operation issues a fixed number of SQL statements, so that an
+A **query-count test** proves that an operation issues a fixed number of SQL statements. Thus an
 **N+1 problem** (one extra query per child row) cannot return unseen. Chapter
 [02](02-persistence-and-queries.md) explains the fetch strategies these tests guard.
 
@@ -620,7 +624,7 @@ Two assertion styles exist:
   asserts that the subtask-to-user ownership chain costs one statement.
 - **Invariance.** [`BoardServiceTest.FindFullByIdQueryCountTest.queryCountDoesNotScaleWithGraphSize`](../../src/test/java/com/vrudenko/kanban_board/service/BoardServiceTest.java#L410-L499)
   builds a 2×2×2 board graph and a 4×4×4 graph and asserts equal counts. The comment records the
-  falsification: with the fetch join both cost 3 statements; with a plain `findById` the counts
+  falsification. With the fetch join, both cost 3 statements. With a plain `findById`, the counts
   were 9 and 23, and the test failed.
 
 Other users: [`TaskServiceTest.MoveToColumnQueryCountTest`](../../src/test/java/com/vrudenko/kanban_board/service/TaskServiceTest.java#L30-L89)
@@ -702,7 +706,7 @@ The existing Kafka tests "compile and pass unchanged against Redpanda purely bec
 Kafka-protocol superset". One container gives both broker and registry (Javadoc of the class).
 
 The Kafka base does not extend `AbstractAppTest` on purpose. Its fixtures create about twenty
-entities through real services, and each one publishes an event "into the very broker under
+entities through real services. Each one publishes an event "into the very broker under
 test, turning every test method into a race against unrelated traffic".
 
 **TEST-12.** The other 40-plus Spring classes have no broker. The test profile makes their
@@ -750,7 +754,7 @@ through a real delivery.
 
 | Task | Includes | Excludes | Used by |
 |---|---|---|---|
-| `test` | everything | `@Tag("rehearsal")` | CI (`deploy.yml`), developers |
+| `test` | everything | `@Tag("rehearsal")` | CI (`deploy.yml`, on a push to `main` only), developers |
 | `fastTest` | everything | `@Tag("kafka")`, `@Tag("realSocket")` | `.githooks/pre-commit` |
 | `rehearseHistoricalSchemas` | `@Tag("rehearsal")` only | — | a build step against a real historical database |
 
@@ -801,10 +805,10 @@ on every run or, with a weaker gate, pass "vacuously" (comment above `tasks.name
 
 ### Alternatives we rejected
 
-- **JUnit 5 in-JVM parallel execution.** Five blockers, each enough alone: the global
-  `deleteAll()`, the global Hibernate statistics, the mutable `producerSchemaRegistryUrlOverride`,
-  the shared Kafka topic and consumer group, and positional assertions such as
-  `findAll().getFirst()`. `@ResourceLock` on the database would serialize the 188.4 s it tried to
+- **JUnit 5 in-JVM parallel execution.** Five blockers exist, and each one is enough alone. They are the global
+  `deleteAll()`, the global Hibernate statistics and the mutable `producerSchemaRegistryUrlOverride`.
+  The shared Kafka topic and consumer group, and positional assertions such as
+  `findAll().getFirst()`, are the other two. `@ResourceLock` on the database would serialize the 188.4 s it tried to
   save.
 - **Per-tier Gradle tasks.** `--parallel` runs tasks of different subprojects. This is one
   project, so the tier tasks would run one after another and each pay its own JVM and container
@@ -955,10 +959,14 @@ Rule 3: write `Assertions.assertThat(...)` fully qualified, and capture an excep
 `Assertions.catchException(...)`, never `assertThrows`. This lets one test assert on the exception
 and then on the state after it.
 
-The project does **not** use a `when..._then...` naming style. On 2026-09-23 no test method
-matched `void when[A-Z]\w*_then`. One file,
-[`ResetServiceE2ETest`](../../src/test/java/com/vrudenko/kanban_board/e2e/reset/ResetServiceE2ETest.java#L269),
-uses the variant `should_x_when_y`.
+Most tests do not use a `when..._then...` naming style, but one file does. On 2026-09-23,
+`rg -c 'void when[A-Z]\w*_then' src/test` found 8 methods, all in
+[`SignupRequestDTOTest`](../../src/test/java/com/vrudenko/kanban_board/dto/SignupRequestDTOTest.java).
+Three files use the variant `should_x_when_y`:
+
+- [`ResetServiceE2ETest`](../../src/test/java/com/vrudenko/kanban_board/e2e/reset/ResetServiceE2ETest.java#L269)
+- [`ResetControllerE2ETest`](../../src/test/java/com/vrudenko/kanban_board/e2e/reset/ResetControllerE2ETest.java)
+- [`ResetEndpointProfileGatingTest`](../../src/test/java/com/vrudenko/kanban_board/security/ResetEndpointProfileGatingTest.java)
 
 **TEST-19.** [DataFactory](https://mvnrepository.com/artifact/org.fluttercode.datafactory/datafactory)
 0.8 gives random words and text for fixtures (`dataFactory.getRandomWord(...)`,
@@ -1052,7 +1060,7 @@ The table above links each record.
 
 ### What it is
 
-**TEST-21.** The owner's standing rule: every bug fix gets a test, and the test must be seen to
+**TEST-21.** The owner has a standing rule: every bug fix gets a test. The test must be seen to
 FAIL on the unfixed code and PASS on the fix. A test that passes both ways covers something next
 to the bug, not the bug.
 
@@ -1142,7 +1150,7 @@ broken limiter.
 - **Spoof the source with `X-Forwarded-For`.** Rejected: honoring that header would let an
   attacker choose their own bucket key.
 - **Run after every deploy with `workflow_run`.** Rejected: each run costs about 20 BCrypt hashes
-  on a 2 GB VPS and locks the runner's address, for a control that changes only with the
+  on the VPS and locks the runner's address. The control changes only with the
   Caddyfile.
 - **Load-test `/api/signup`.** Forbidden: each allowed request would create a real user row.
 
@@ -1170,6 +1178,13 @@ broken limiter.
   A deploy-time override of `security.bcrypt.strength` in production is not detected.
 - **ArchUnit rules are floors.** A downstream call that uses the raw path id, or a test in the
   wrong subpackage, still passes.
+- **TEST-01 has no mechanical guard.** Mockito 5.17.0 is on the test classpath through
+  `spring-boot-starter-test`. No build rule or ArchUnit rule refuses a Mockito import. Only code
+  review keeps mocks out.
+- **No workflow runs the Gradle tests on a pull request.** [`deploy.yml`](../../.github/workflows/deploy.yml)
+  runs `./gradlew test` only on a push to `main`. A pull request gets the secret scan and the
+  invariant checks, but not the test suite. Confirmed by running on 2026-09-23. See chapter
+  [09](09-build-quality-and-ci.md).
 - **Tags are opt-in.** Nothing checks that a class extending `AbstractKafkaContainerTest` carries
   `@Tag("kafka")`. One class missed it until commit `4ffa736`.
 - **`ActivityLogRecorder` silently drops an event on an `eventId` collision.** Collisions are now
@@ -1213,6 +1228,10 @@ The code wins in each case:
     cites commits `294ba11`, `4cec7fb` and `8e5de77`. These hashes do not exist in the current
     history. The matching commits are `948e1b1`, `7c68a47` and `d9cf4a8` (same messages). This
     chapter cites the real hashes.
+12. The header of [`verify-rate-limit.yml`](../../.github/workflows/verify-rate-limit.yml) and the
+    [260903-dvp context](../../.planning/quick/260903-dvp-caddy-edge-rate-limiting/260903-dvp-CONTEXT.md)
+    call the VPS "2 GB". The VM has 7.8 GiB of RAM
+    ([`docs/INFRA_RUNBOOK.md`](../INFRA_RUNBOOK.md)).
 
 ## Questions to check your knowledge
 
@@ -1221,7 +1240,7 @@ The code wins in each case:
    The Flyway migrations that production runs had never run in CI, and a production database
    cutover was next. Under H2, Hibernate built the schema, so the migrations were untested. A
    fallback profile would give two schema paths that drift apart (04.2 decision D-05, CODE_STYLE
-   rule 8) and would lose the main benefit: the migrations run on every test run.
+   rule 8). It would also lose the main benefit: the migrations run on every test run.
    </details>
 
 2. Name a real problem that H2 hid.
@@ -1249,9 +1268,11 @@ The code wins in each case:
 
 5. Why not isolate tests with `@Transactional` rollback?
    <details><summary>Answer</summary>
-   Three reasons: AFTER_COMMIT event listeners never fire on rollback; the shared persistence
-   context hides `findById()` calls and corrupts query counts; and real-socket tests run the
-   request on another thread, outside the test transaction.
+   There are three reasons:
+
+   - AFTER_COMMIT event listeners never fire on rollback.
+   - The shared persistence context hides `findById()` calls and corrupts query counts.
+   - Real-socket tests run the request on another thread, outside the test transaction.
    </details>
 
 6. Why does `countQueries()` use `getPrepareStatementCount()`?
@@ -1270,9 +1291,12 @@ The code wins in each case:
 
 8. Why is Testcontainers reuse off?
    <details><summary>Answer</summary>
-   It would save about 2.3 s of a 230 s run (about 1%, less than the variance), the container
-   already starts once per JVM, the opt-in is a manual host file that rule 8 forbids, and a reused
-   container would keep `spring_session` rows and make the suite non-deterministic.
+   There are four reasons:
+
+   - It would save about 2.3 s of a 230 s run (about 1%, less than the variance).
+   - The container already starts once per JVM.
+   - The opt-in is a manual host file that rule 8 forbids.
+   - A reused container would keep `spring_session` rows and make the suite non-deterministic.
    </details>
 
 9. What is Ryuk, and what did the project observe about it?
@@ -1294,7 +1318,7 @@ The code wins in each case:
     <details><summary>Answer</summary>
     Two forks were measured fastest (276.5 s against 370.5 s for `test`); four were slower. Forks
     are separate JVMs with separate containers. In-JVM parallelism shares one database and one
-    context, and breaks the global `deleteAll()`, global Hibernate statistics, a mutable static
+    context. It breaks the global `deleteAll()`, global Hibernate statistics, a mutable static
     override, the shared Kafka consumer group and positional assertions.
     </details>
 
@@ -1322,8 +1346,8 @@ The code wins in each case:
 
 15. Why does the rate-limit check need a nonprod half, and why is it not run after every deploy?
     <details><summary>Answer</summary>
-    Both hostnames use the same Caddy container and Caddyfile, so only the nonprod negative control
+    Both hostnames use the same Caddy container and Caddyfile. Only the nonprod negative control
     can tell a correctly scoped limiter from one that throttles everything. It is manual because
-    each run costs about 20 BCrypt hashes on a 2 GB VPS and locks the runner's address for 5
-    minutes, for a control that changes only with the Caddyfile.
+    each run costs about 20 BCrypt hashes on the VPS and locks the runner's address for 5
+    minutes. The control changes only with the Caddyfile.
     </details>

@@ -5,7 +5,7 @@ uniqueness rules, delete cascades and domain-event publication. It matters becau
 place where access control exists; no annotation, database policy or type check does this work.
 
 **Read first:** [02 — Persistence and queries](02-persistence-and-queries.md),
-[03 — Optimistic locking](03-optimistic-locking.md)
+[03 — Optimistic locking](03-optimistic-locking.md).
 **Related:** [05 — API layer](05-api-layer.md), [06 — Security and sessions](06-security-and-sessions.md),
 [07 — Events and activity feed](07-events-and-activity-feed.md)
 **Main code:**
@@ -20,7 +20,7 @@ place where access control exists; no annotation, database policy or type check 
 | ID | Decision | Main reason |
 |----|----------|-------------|
 | SVC-01 | Strict layers: controller → service → repository. Services return DTOs. | Controllers carry no logic; one place owns each rule |
-| SVC-02 | Field injection with `@Autowired`, no constructor injection | Existing convention; the recorded reason (avoid circular beans) does not match the code |
+| SVC-02 | Field injection with `@Autowired` in the domain services and resource controllers; five security and config classes use Lombok constructor injection | Existing convention; the recorded reason (avoid circular beans) does not match the code |
 | SVC-03 | One `OwnershipVerifierService` walks Subtask → Task → Column → Board → User | Answer "may this user touch this?" once, not per controller |
 | SVC-04 | Each verifier returns `Pair<UserEntity, X>` | The caller gets the verified entity and does not load it again |
 | SVC-05 | Domain services load only through their own `findById(userId, id)` and derive later ids from the verified entity | This rule is the whole access-control model; nothing else enforces it |
@@ -30,7 +30,7 @@ place where access control exists; no annotation, database policy or type check 
 | SVC-09 | Clamp a too-large target position; `targetPosition` optional for a task move, mandatory for a column reorder | A drag to the end always succeeds; a reorder with no target asks for nothing |
 | SVC-10 | Task move and task reorder are one endpoint, on a separate flat controller | A drag-drop client reports one fact; Spring cannot add a flat route to a nested controller |
 | SVC-11 | Reject a cross-board move with 400, before the version check | A wrong-board target is a request-shape problem, independent of concurrency |
-| SVC-12 | Board names unique per user: service check → 409, database constraint as backstop | Friendly checked error in the common case; the constraint is the real guarantee |
+| SVC-12 | Board names unique per user: service check → 409, database constraint as backstop (a rename race can give 500) | Friendly checked error in the common case; the constraint is the real guarantee |
 | SVC-13 | Theme: identity from the session only, last-write-wins, no `@Version` | No IDOR surface; a 409 on your own preference toggle is a worse outcome |
 | SVC-14 | Delete cascades run in services, children first, batched per column; only the requested delete publishes an event | Foreign keys have no `ON DELETE CASCADE`; per-child events would bring back N+1 |
 | SVC-15 | Nonprod reset: profile gate + shared secret; truncate on a separate bean; check every id before any delete | Two independent controls; `@Transactional` self-invocation does not work; no existence oracle |
@@ -105,7 +105,7 @@ points at the same unfinished idea.
 ### Why we chose it
 
 **SVC-01.** [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) states the rule: "Controllers carry no
-business logic", exceptions go to one `GlobalExceptionHandler`, and the layering is "enforced by a
+business logic". Exceptions go to one `GlobalExceptionHandler`. The layering is "enforced by a
 build-failing ArchUnit rule rather than by convention". Services return response DTOs, not
 entities, so no lazy association is touched outside a transaction
 ([`.planning/PROJECT.md`](../../.planning/PROJECT.md), "DTOs are flat ... to avoid
@@ -130,8 +130,20 @@ entities, so no lazy association is touched outside a transaction
 
 ### What it is
 
-Every service and controller receives its dependencies through `@Autowired private` fields. No
-class in the project uses constructor injection.
+Every domain service and every resource controller receives its dependencies through
+`@Autowired private` fields. Five classes use constructor injection instead. They carry Lombok
+`@RequiredArgsConstructor` with `private final` fields:
+
+- [`AuthenticationController`](../../src/main/java/com/vrudenko/kanban_board/security/AuthenticationController.java#L38), a `@RestController`
+- [`SecurityConfiguration`](../../src/main/java/com/vrudenko/kanban_board/security/SecurityConfiguration.java#L34)
+- [`UserAuthenticationProvider`](../../src/main/java/com/vrudenko/kanban_board/security/UserAuthenticationProvider.java#L17)
+- [`ProblemDetailAuthenticationEntryPoint`](../../src/main/java/com/vrudenko/kanban_board/security/ProblemDetailAuthenticationEntryPoint.java#L33)
+- [`BeanConfiguration`](../../src/main/java/com/vrudenko/kanban_board/config/BeanConfiguration.java#L17)
+
+The command `rg -n 'RequiredArgsConstructor' src/main/java` lists them. So the project has two
+injection styles: field injection in the domain layer, constructor injection in the security and
+config classes. The project `CLAUDE.md` says "No constructor injection used in current codebase".
+The code shows that this statement is false.
 
 ### How it works
 
@@ -171,10 +183,12 @@ docs kept it for consistency.
 
 ### Alternatives we rejected
 
-Constructor injection (for example Lombok `@RequiredArgsConstructor` with `final` fields).
+Constructor injection for the domain services (for example Lombok `@RequiredArgsConstructor`
+with `final` fields). The security and config classes already use this style.
 [`.planning/codebase/CONCERNS.md`](../../.planning/codebase/CONCERNS.md) recommends it: "Spring
 will fail to start if there are circular dependencies", and dependencies become explicit. No
-planning document records a decision to reject it. The project kept the existing convention.
+planning document records a decision to reject it for the services. The services kept the
+existing convention.
 
 ### Trade-offs and limits
 
@@ -262,12 +276,12 @@ transaction and one persistence context.
 ### Why we chose it
 
 **SVC-03.** [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md): "`OwnershipVerifierService` walks
-subtask → task → column → board → user in one place, so 'may this user touch this resource?' is
-answered once instead of being re-implemented per controller."
+subtask → task → column → board → user in one place". So the question "may this user touch this
+resource?" is "answered once instead of being re-implemented per controller."
 
 The chain was suspected to be an N+1 problem (one query per level). Measurement showed 1 query.
-The team kept the code, added a regression test, and deleted two stale "TODO: optimize" comments
-(`STATUS.md`, "Finding 1 ... turned out to be a non-issue on measurement").
+The team kept the code and added a regression test. It also deleted two stale "TODO: optimize"
+comments (`STATUS.md`, "Finding 1 ... turned out to be a non-issue on measurement").
 
 ### Alternatives we rejected
 
@@ -385,9 +399,10 @@ Only two classes may call `repository.findById` directly:
 
 ### Why we chose it
 
-**SVC-05.** [`docs/CODE_STYLE.md`](../CODE_STYLE.md) rule 2: "this is the entire access-control
-model of the application, and nothing in the type system enforces it — a direct repository load
-compiles cleanly, passes a naive test, and silently removes the ownership check". Using the
+**SVC-05.** [`docs/CODE_STYLE.md`](../CODE_STYLE.md) rule 2 says: "this is the entire
+access-control model of the application, and nothing in the type system enforces it". It also
+says that "a direct repository load compiles cleanly, passes a naive test, and silently removes
+the ownership check". Using the
 verified entity's id "guarantees that the id which was actually authorised is the id that gets
 used."
 
@@ -447,8 +462,9 @@ because "a wrong password is authentication, not authorization" (commit `63536a0
 from [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md): "401 means unauthenticated, 403 means
 forbidden — no overlap."
 
-**This is a reversed decision.** From the first exception handler (commit `d332fa2`) until
-`63536a0` on 2026-08-09, `AccessDeniedException` returned `HttpStatus.UNAUTHORIZED`. A frontend
+**This is a reversed decision.** The first exception handler (commit `d332fa2`, 2024-12-27) had
+no `AccessDeniedException` arm. Commit `3611331` (2025-04-28) added that arm with
+`HttpStatus.UNAUTHORIZED`. It stayed 401 until `63536a0` on 2026-08-09. A frontend
 client could not tell "sign in again" from "this is not yours".
 
 ### Alternatives we rejected
@@ -475,7 +491,17 @@ it. Its plan says:
 "The id namespace is global, so a 409 is a cross-user existence oracle ... Accepted and recorded"
 ([`260908-dl3-PLAN.md`](../../.planning/quick/260908-dl3-create-board-endpoint-optionally-accepts/260908-dl3-PLAN.md)).
 The nonprod reset, by contrast, was built to avoid an existence oracle (see
-[SVC-15](#nonprod-reset-service)). For the general 403/404 split there is no recorded decision.
+[SVC-15](#nonprod-reset-service)).
+
+The general 403/404 split also has a recorded decision. Quick task 260813-os9 removed the random
+bits from the id generator. Its threat register holds threat `T-os9-01` (information disclosure,
+severity low, disposition "accept")
+([`260813-os9-PLAN.md`](../../.planning/quick/260813-os9-replace-randflakegenerator-s-random-23-l/260813-os9-PLAN.md#L339)).
+It says: "Removing the 23 random bits makes ids enumerable and leaks creation *order and volume*".
+The reason for acceptance: "no path treats an id as a capability". So a guess of "a neighbouring
+id yields 403, not data." So the project accepts the oracle on purpose. The threat also says that the
+decision is "Recorded in the class comment". The current `RandFlakeGenerator` comments do not
+contain that text.
 
 ### How we test it
 
@@ -554,18 +580,19 @@ The id breaks ties, so two reads of the same data always give the same order.
 
 ### Why we chose it
 
-- **SVC-07.** Phase 6 D-02: "a simple `Integer position` column with renumber-on-insert ... not
-  fractional/gap-based keys (LexoRank-style) ... fractional keys were explicitly rejected as
-  disproportionate complexity for this project's scale." D-01 built ordering "fully" although the
+- **SVC-07.** Phase 6 D-02 picks "a simple `Integer position` column with renumber-on-insert".
+  It rejects "fractional/gap-based keys (LexoRank-style)". The reason: "fractional keys were
+  explicitly rejected as disproportionate complexity for this project's scale." D-01 built ordering "fully" although the
   mock-up draws no drag handle. D-03 covers both tasks and columns
   ([`06-CONTEXT.md`](../../.planning/milestones/v1.2-phases/06-mock-up-feature-gap-closure/06-CONTEXT.md)).
-- **SVC-08.** The 06-04 plan picked "one bulk statement" over a per-row loop: "Statement count is
-  constant regardless of sibling count" and "The race window is the width of one statement"
-  ([`06-04-PLAN.md`](../../.planning/milestones/v1.2-phases/06-mock-up-feature-gap-closure/06-04-PLAN.md),
+- **SVC-08.** The 06-04 plan picked "one bulk statement" over a per-row loop. First, "Statement
+  count is constant regardless of sibling count". Second, "The race window is the width of one
+  statement" ([`06-04-PLAN.md`](../../.planning/milestones/v1.2-phases/06-mock-up-feature-gap-closure/06-04-PLAN.md),
   approach table). Bulk JPQL bypasses the persistence context. So every range excludes the moved
   row's own position, and the moved entity, which is still managed, never goes stale. A second
-  effect is deliberate: shifted siblings do not get a `@Version` increment. "A client editing a
-  sibling task should not be 409'd just because someone else reordered a different task"
+  effect is deliberate: shifted siblings do not get a `@Version` increment. The Javadoc says:
+  "A client editing a sibling task should not be 409'd". The cause would be only that "someone
+  else reordered a different task"
   ([`TaskService.moveToColumn` Javadoc](../../src/main/java/com/vrudenko/kanban_board/service/TaskService.java#L157-L176)).
 - **SVC-09.** A too-large target is clamped, "so the natural drag-to-end gesture always succeeds".
   A negative target is rejected with 400 by `@Min(0)` on the DTO.
@@ -591,14 +618,18 @@ The id breaks ties, so two reads of the same data always give the same order.
   gap, but [`TaskService.deleteById`](../../src/main/java/com/vrudenko/kanban_board/service/TaskService.java#L259-L279)
   has no `shiftPositions` call. The 06-04 plan added gap-closing to column delete only. So after
   tasks 0, 1, 2 lose task 1, the column holds 0 and 2. The next create gets position
-  `count = 2`, a duplicate. The 06-04 SUMMARY says positions stay contiguous "on
-  create/move/reorder/delete" for "both entities". The code does not do that for tasks. (Found by
-  reading the code; no test covers a task delete followed by a read of positions.)
+  `count = 2`, a duplicate. Two reviewers ran this against the live app. One deleted task 1 and
+  got positions 0, 2, 2. The other deleted task 0 and got positions 1, 2, 2. The 06-04 SUMMARY
+  says positions stay contiguous "on create/move/reorder/delete" for "both entities". The code
+  does not do that for tasks. No test covers a task delete followed by a read of positions.
+  Confirmed by running on 2026-09-23.
 - **The nested `/full` read does not use `position`.** `BoardEntity.column`, `ColumnEntity.task`
   and `TaskEntity.subtasks` carry `@OrderBy("id")`. So `GET /boards/{id}/full` lists columns and
   tasks in id order, not position order. After a reorder, a client must sort by the `position`
   field that the nested DTOs carry. `BoardFullReadTest` compares the nested and flat reads
-  order-agnostically, so it does not catch this.
+  order-agnostically, so it does not catch this. Two reviewers reordered columns and tasks on the
+  live app. The flat reads showed the new position order. `/full` showed the id order.
+  Confirmed by running on 2026-09-23.
 - The `TaskRepository.findAllByColumnId` comment points at "TaskService#moveToColumn's Javadoc on
   the accepted concurrent-insert race". That Javadoc contains no such text.
 
@@ -673,20 +704,20 @@ flowchart LR
 
 ### Why we chose it
 
-- **SVC-10.** Phase 6 D-04: "Task move and task reorder are one endpoint, not two ... matching what
-  a real drag-drop client would report as one fact, not two separate calls"
+- **SVC-10.** Phase 6 D-04: "Task move and task reorder are one endpoint, not two". This
+  matches "what a real drag-drop client would report as one fact, not two separate calls"
   ([`06-CONTEXT.md`](../../.planning/milestones/v1.2-phases/06-mock-up-feature-gap-closure/06-CONTEXT.md)).
-  The route lives on its own controller because `TaskController`'s class-level mapping is nested
-  under boards and columns, and "Spring composes class- and method-level `@RequestMapping` paths
-  additively, so a flat route structurally cannot be added there"
-  (`TaskMoveController` Javadoc).
+  The route lives on its own controller. The class-level mapping of `TaskController` is nested
+  under boards and columns. The `TaskMoveController` Javadoc says: "Spring composes class- and
+  method-level `@RequestMapping` paths additively". So "a flat route structurally cannot be added
+  there".
 - **SVC-11.** MOVE-03 requires the service to reject a cross-board move
   ([`v1.1-REQUIREMENTS.md`](../../.planning/milestones/v1.1-REQUIREMENTS.md)). The `moveToColumn`
   Javadoc explains the order: "a wrong-board target is a request-shape problem independent of
-  concurrency, so 400 is the more specific signal to return first." MOVE-02 requires reuse of the
+  concurrency". So "400 is the more specific signal to return first." MOVE-02 requires reuse of the
   existing check-before-mutate version convention (chapter 03).
 - **SVC-18 (reversed decision).** Phase 2 D-04 said the move endpoint "only reassigns the task's
-  column — no position/order concept", and D-05 said a moved task "lands with no defined position"
+  column — no position/order concept". D-05 said a moved task "lands with no defined position"
   ([`02-CONTEXT.md`](../../.planning/milestones/v1.1-phases/02-kafka-foundation-domain-events-move-endpoint/02-CONTEXT.md)).
   The user deferred ordering to a later milestone. Phase 6 (GAP-03) then extended the same DTO
   with a nullable `targetPosition`, so old clients that never send it keep the append behavior.
@@ -760,15 +791,15 @@ constraint violation (`DATA_INTEGRITY_VIOLATION`). Spring picks the most specifi
 
 ### Why we chose it
 
-**SVC-12.** Phase 6 D-09 added the check to both create and rename "for consistency" and resolved
-an old TODO in `UserService`
+**SVC-12.** Phase 6 D-09 added the check to both create and rename "for consistency". It also
+resolved an old TODO in `UserService`
 ([`06-CONTEXT.md`](../../.planning/milestones/v1.2-phases/06-mock-up-feature-gap-closure/06-CONTEXT.md)).
 409 was "Approach A": it matches the handler's "state-conflict-vs-malformed-request distinction
 (400 reserved for IllegalArgumentException-style problems)"
 ([`06-02-SUMMARY.md`](../../.planning/milestones/v1.2-phases/06-mock-up-feature-gap-closure/06-02-SUMMARY.md)).
 The `BoardService.save` comment gives the layering: "The database's primary key is the real
-guarantee; this check exists only to produce the friendlier, checked envelope for the common
-non-racing case."
+guarantee". The service check "exists only to produce the friendlier, checked envelope for the
+common non-racing case."
 
 ### Alternatives we rejected
 
@@ -778,8 +809,16 @@ non-racing case."
 
 ### Trade-offs and limits
 
-- **Check-then-act window.** Two concurrent creates can both pass `existsByUserIdAndName`. The
-  loser hits the constraint and gets 409 with a different `code`. This is accepted.
+- **Check-then-act window.** Two concurrent requests can both pass `existsByUserIdAndName`. The
+  loser hits the constraint. The response depends on the operation:
+  - **Create:** the violation occurs at commit, and Spring translates it. The loser gets 409 with
+    the code `DATA_INTEGRITY_VIOLATION`, not `DUPLICATE_RESOURCE`.
+  - **Rename:** `BoardService.updateById` calls `entityManager.flush()` inside the service. The
+    violation occurs there as an untranslated Hibernate exception, so it goes to the catch-all
+    handler. Eight parallel renames of eight boards to one name gave
+    `500 200 500 500 409 409 409 409`. The 500 body has code `INTERNAL_ERROR` and the raw SQL
+    error text. The data stays correct: only one board gets the name.
+    Confirmed by running on 2026-09-23.
 - **Case-sensitive.** "Work" and "work" are different names, in both the JPA check and the
   PostgreSQL constraint. The case-sensitivity choice was left to the planner (06-CONTEXT); the
   reason for the final choice is not recorded.
@@ -819,12 +858,11 @@ loads the user with `findById`, sets the theme and saves. There is no version co
 
 **SVC-13.** Phase 6 D-10..D-12: full server-side persistence, a two-value enum, default `LIGHT`
 (not null) ([`06-CONTEXT.md`](../../.planning/milestones/v1.2-phases/06-mock-up-feature-gap-closure/06-CONTEXT.md)).
-The `UserController` Javadoc calls the session-only identity "the whole IDOR mitigation for this
-controller": there is "no place in the route to put another user's id". The
+The `UserController` Javadoc calls the session-only identity "the whole IDOR mitigation". The
+reason: there is "no place in the route to put another user's id". The
 [`UpdateThemeRequestDTO`](../../src/main/java/com/vrudenko/kanban_board/dto/user_dto/UpdateThemeRequestDTO.java)
-Javadoc explains why there is no `@Version`: "rejecting a user's own preference toggle with a 409
-because they changed it on another session first would be a worse outcome than simply applying
-it."
+Javadoc explains why there is no `@Version`. A 409 on "a user's own preference toggle" from
+another session "would be a worse outcome than simply applying it."
 
 ### Trade-offs and limits
 
@@ -893,8 +931,9 @@ has three callers:
 ([`260811-s5e-FINDINGS.md`](../../.planning/quick/260811-s5e-expand-kafka-events-to-cover-all-mutatin/260811-s5e-FINDINGS.md)):
 only the directly requested delete publishes. The
 [`ColumnService.deleteAllByBoardId`](../../src/main/java/com/vrudenko/kanban_board/service/ColumnService.java#L47-L81)
-Javadoc says per-child events "would mean loading every child purely to publish, reintroducing the
-N+1 ... and could emit hundreds of events from one request into a bounded publish queue." The
+Javadoc gives two costs of per-child events. They "would mean loading every child purely to
+publish, reintroducing the N+1". They also "could emit hundreds of events from one request into a
+bounded publish queue". The
 reason for service-side cascades instead of `ON DELETE CASCADE` or JPA `cascade = REMOVE` is not
 recorded.
 
@@ -902,7 +941,7 @@ recorded.
 
 - **Two delete paths treat `@Version` differently, on purpose.** The task and subtask bulk
   deletes ignore `@Version` ("delete-wins"). The column delete is a Spring Data derived delete
-  (fetch, then `remove()` per entity), so it honors `@Version` and can throw
+  (fetch, then `remove()` per entity). So it honors `@Version`, and it can throw
   `OptimisticLockingFailureException` in the middle of a batch. Both Javadocs record this as an
   accepted asymmetry (chapter 03).
 - `BoardService.deleteAllByUserId` re-verifies ownership for each board, and each board loops over
@@ -1018,11 +1057,11 @@ Every mutating service method publishes one domain event through Spring's
    publishes nothing" (`BoardService.updateById`).
 2. Take event ids from the verified entity, never from a path variable (rule 2).
 3. `save` methods carry their own `@Transactional`, although their callers already have one.
-   `@TransactionalEventListener` "silently skips delivery when no transaction is active", so a
+   `@TransactionalEventListener` "silently skips delivery when no transaction is active". So a
    future direct call would lose the event "with no error and no log line"
    ([`TaskService.save`](../../src/main/java/com/vrudenko/kanban_board/service/TaskService.java#L48-L80) Javadoc).
 
-`SubtaskUpdatedEvent` reads `isCompleted` from the saved entity, not from the DTO, so a title-only
+`SubtaskUpdatedEvent` reads `isCompleted` from the saved entity, not from the DTO. So a title-only
 update still reports the real state (fork D-B, resolved B2, in `SubtaskService.updateById`).
 
 ### How we test it
@@ -1109,15 +1148,20 @@ The rules are tests. `./gradlew test` runs `LayeringArchTest` with the rest of t
 1. **Same-user chain confusion.** Nested URL segments are not compared with the leaf's real
    parents. Open todo, severity `moderate`
    ([link](../../.planning/todos/pending/2026-08-20-idor-same-user-chain-consistency-boardid-columnid-not-c.md)).
-2. **403/404 existence oracle.** Any signed-in user can learn whether an id exists. No decision is
-   recorded for the general API.
-3. **Task delete leaves a position hole**, and the next create can duplicate a position.
-   `06-04-SUMMARY.md` claims contiguity on delete for both entities; the code does it for columns
-   only.
+2. **403/404 existence oracle.** Any signed-in user can learn whether an id exists. Threat
+   `T-os9-01` in
+   [`260813-os9-PLAN.md`](../../.planning/quick/260813-os9-replace-randflakegenerator-s-random-23-l/260813-os9-PLAN.md#L339)
+   records this disclosure and accepts it. The threat says the class comment records it, but
+   `RandFlakeGenerator` has no such comment.
+3. **Task delete leaves a position hole**, and the next create duplicates a position. Positions
+   0, 1, 2 became 1, 2, 2 after a delete of task 0 and one create. `06-04-SUMMARY.md` claims
+   contiguity on delete for both entities; the code does it for columns only.
+   Confirmed by running on 2026-09-23.
 4. **No unique constraint on `(parent_id, position)`.** Concurrent creates can duplicate a
    position.
 5. **`/full` orders by id, flat reads order by position.** The nested read does not show the
-   reorder result in list order.
+   reorder result in list order. After a reorder, the flat reads showed the new order and `/full`
+   showed the id order. Confirmed by running on 2026-09-23.
 6. **Cross-board move 400** uses the generic `ILLEGAL_ARGUMENT` code (spike 002, Finding 3).
 7. **`TaskMovedEvent` has no positions** (open todo).
 8. **`activity_log` rows survive `UserService.deleteById`** outside the nonprod targeted reset.
@@ -1125,10 +1169,11 @@ The rules are tests. `./gradlew test` runs `LayeringArchTest` with the rest of t
    stays on `TaskService.findById`.
 10. **Stated reason for field injection is not true** (no cycle exists; Boot forbids cycles by
     default). The project `CLAUDE.md` also calls field injection "lazy initialization", which is
-    wrong.
-11. **Small code defects:** `SubtaskService.deleteAllByTaskId(userId, subtaskId)` takes a task id;
-    the `TaskRepository.findAllByColumnId` comment points at a Javadoc paragraph that does not
-    exist; the `BoardFullMapper` Javadoc calls `BoardEntity.column` a `List`, but it is a `Set`.
+    wrong. It also says that no class uses constructor injection, but five security and config
+    classes do.
+11. **Small code defects:** `SubtaskService.deleteAllByTaskId(userId, subtaskId)` takes a task id.
+    The `TaskRepository.findAllByColumnId` comment points at a Javadoc paragraph that does not
+    exist. The `BoardFullMapper` Javadoc calls `BoardEntity.column` a `List`, but it is a `Set`.
 12. **`docs/ARCHITECTURE.md` says ArchUnit has two rules**; it has four.
 
 ## Questions to check your knowledge
@@ -1165,8 +1210,8 @@ The rules are tests. `./gradlew test` runs `LayeringArchTest` with the rest of t
    <details><summary>Answer</summary>
 
    401 means "no valid session"; the security entry point returns it before a controller runs.
-   403 means "valid session, not your resource". Until phase 07.1 (D-05, commit `63536a0`),
-   `AccessDeniedException` returned 401, so a client could not tell "sign in again" from
+   403 means "valid session, not your resource". From commit `3611331` until phase 07.1 (D-05,
+   commit `63536a0`), `AccessDeniedException` returned 401, so a client could not tell "sign in again" from
    "forbidden".
    </details>
 
@@ -1175,7 +1220,8 @@ The rules are tests. `./gradlew test` runs `LayeringArchTest` with the rest of t
 
    Yes. A foreign existing id gives 403; a missing id gives 404. To close it, throw
    `AppEntityNotFoundException` (404) on an ownership mismatch too. The cost is that clients and
-   tests can no longer tell "forbidden" from "not found". No decision is recorded for this.
+   tests can no longer tell "forbidden" from "not found". Threat `T-os9-01` (quick task
+   260813-os9) records the disclosure and accepts it, because no id acts as a capability.
    </details>
 
 6. Why does the field-injection rationale in `PROJECT.md` not hold?
@@ -1184,6 +1230,7 @@ The rules are tests. `./gradlew test` runs `LayeringArchTest` with the rest of t
    The service graph has no cycle: User → Board → Column → Task → Subtask → Verifier. Also,
    Spring Boot 2.6+ prohibits circular references by default for all injection styles, and this
    project does not change that setting. The convention exists because the original code used it.
+   The convention is not universal: five security and config classes use constructor injection.
    </details>
 
 7. Explain the renumbering for moving a column from position 3 to position 1.
@@ -1217,8 +1264,10 @@ The rules are tests. `./gradlew test` runs `LayeringArchTest` with the rest of t
 
     A service check (`existsByUserIdAndName`) throws `AppDuplicateResourceException` → 409
     `DUPLICATE_RESOURCE`. The database constraint `uk_boards_user_id_name` is the real guarantee.
-    In a race, the loser hits the constraint and gets 409 `DATA_INTEGRITY_VIOLATION`. A rename to
-    the same name skips the check.
+    In a create race, the loser hits the constraint at commit and gets 409
+    `DATA_INTEGRITY_VIOLATION`. In a rename race, the service flushes, and the untranslated
+    exception goes to the catch-all. Some losers get 500 `INTERNAL_ERROR` with raw SQL in the body.
+    A rename to the same name skips the check.
     </details>
 
 11. Why does the theme endpoint have no version field?
@@ -1232,9 +1281,9 @@ The rules are tests. `./gradlew test` runs `LayeringArchTest` with the rest of t
 12. Why do cascade deletes publish only one event?
     <details><summary>Answer</summary>
 
-    Fork D-D, resolution D1: per-child events would require loading every child only to publish,
-    which brings back the N+1 that the batch delete removed, and could put hundreds of events into
-    a bounded publish queue.
+    Fork D-D, resolution D1. Per-child events would require loading every child only to publish.
+    That brings back the N+1 that the batch delete removed. It could also put hundreds of events
+    into a bounded publish queue.
     </details>
 
 13. Why is `ResetTruncateService` a separate bean?
@@ -1256,8 +1305,8 @@ The rules are tests. `./gradlew test` runs `LayeringArchTest` with the rest of t
 15. What does a green `LayeringArchTest` prove, and what does it not prove?
     <details><summary>Answer</summary>
 
-    It proves: no controller touches a repository; no domain service except the two roots calls a
-    project repository's `findById`; every `@RestController` has `@Validated`; every mutating
-    handler binds `*RequestDTO` with `@RequestBody @Valid`. It does not prove that ownership is
+    It proves four things. No controller touches a repository. No domain service except the two
+    roots calls a project repository's `findById`. Every `@RestController` has `@Validated`. Every
+    mutating handler binds `*RequestDTO` with `@RequestBody @Valid`. It does not prove that ownership is
     fully enforced. It is "a floor, not a ceiling".
     </details>

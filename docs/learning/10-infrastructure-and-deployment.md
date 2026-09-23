@@ -1,10 +1,10 @@
 # 10 — Infrastructure and deployment
 
-This layer is the physical deployment: one Netcup VPS that runs two isolated environments,
-a self-hosted PostgreSQL 16 database, two Redpanda brokers, and a Caddy edge proxy, all in Docker
+This layer is the physical deployment. One Netcup VPS runs two isolated environments, a
+self-hosted PostgreSQL 16 database, two Redpanda brokers, and a Caddy edge proxy, all in Docker
 Compose. It matters because every guarantee in the other chapters (sessions, optimistic locking,
-the activity log) runs on this box, and the box has no managed backups, no second node, and a
-fixed 7.8 GiB of memory.
+the activity log) runs on this box. The box has no managed backups, no second node, and a fixed
+7.8 GiB of memory.
 
 **Read first:** [09 — Build, quality and CI](09-build-quality-and-ci.md) (the pipeline that calls
 this layer), [11 — Observability](11-observability.md) (the seven monitoring containers on the
@@ -59,7 +59,7 @@ same VM).
 ### What it is
 
 Production runs on one Netcup "VPS Lite 2 G12s" in Vienna. The runbook records the measured
-shape: 4 vCPU, 7.8 GiB RAM, a 251 GB disk, Debian 13, public IPv4 `159.195.114.230`
+shape. It has 4 vCPU, 7.8 GiB RAM, a 251 GB disk, Debian 13, and the public IPv4 `159.195.114.230`
 ([INFRA_RUNBOOK.md, "Provider and host"](../INFRA_RUNBOOK.md)). Both environments, the database,
 both brokers and the monitoring stack share this one machine. A host-wide `docker ps` shows 13
 containers: 11 in the production project and 2 in the nonprod project.
@@ -80,14 +80,14 @@ on the host ([INFRA_RUNBOOK.md, "DNS — DuckDNS"](../INFRA_RUNBOOK.md)).
 
 **INFRA-01.** The chain of decisions has three steps:
 
-1. On 2026-08-03 the operator deleted the AWS EC2 instance and its RDS database "due to
-   unpredictable pricing risk" ([PROJECT.md, Context](../../.planning/PROJECT.md)).
+1. On 2026-08-03 the operator deleted the AWS EC2 instance and its RDS database because of
+   "unpredictable pricing risk" ([PROJECT.md, Context](../../.planning/PROJECT.md)).
 2. The replacement plan was Oracle Cloud Always Free (A1 Flex, ARM64) in `eu-zurich-1`
    ([05-CONTEXT.md](../../.planning/milestones/v1.2-phases/05-infra-migration/05-CONTEXT.md)).
    More than 200 automated provisioning attempts over more than 10 hours all failed. The region
    has one availability domain and no capacity date.
-3. The team screened alternatives against the same constraints (free or near-free, self-hosted,
-   no metered billing) and picked Netcup: 4 vCPU / 8 GB / 160 GB, hourly billing
+3. The team screened alternatives against the same constraints: free or near-free, self-hosted,
+   and no metered billing. It picked Netcup, with 4 vCPU / 8 GB / 160 GB and hourly billing
    ([05-03-SUMMARY.md](../../.planning/milestones/v1.2-phases/05-infra-migration/05-03-SUMMARY.md)).
 
 The operator also decided earlier to use a self-managed VM and not a PaaS (Railway, Render,
@@ -156,8 +156,8 @@ failure, not "connection refused", so it is slow to diagnose. The container-inte
 
 ### Why we chose it
 
-**INFRA-02.** The prod file header says the files differ in shape (production adds `caddy` and
-the monitoring services), so an overlay would not fit
+**INFRA-02.** The prod file header says that the files differ in shape. Production adds `caddy`
+and the monitoring services, so an overlay would not fit
 ([`docker-compose.prod.yml` L6-L14](../../docker-compose.prod.yml#L6-L14)). Nonprod has a second
 reason, described under INFRA-18: one file can carry only one project name.
 
@@ -166,7 +166,7 @@ reason, described under INFRA-18: one file can carry only one project name.
 directory. A `docker compose up` created a second, unrelated project with fresh, empty volumes.
 The cutover lost the 14 registered Avro schemas (they were still in the orphaned
 `root_redpanda-data` volume) and forced a new Let's Encrypt certificate. The operator copied the
-old Redpanda volume into the new one with a one-off `alpine` container, and all 14 subjects came
+old Redpanda volume into the new one with a one-off `alpine` container. All 14 subjects came
 back ([INFRA_RUNBOOK.md, "Deviation found and fixed: Compose project name was directory-derived"](../INFRA_RUNBOOK.md)).
 The fix is the `name:` pin (`5eea749`). The nonprod file copies the same pin.
 
@@ -191,7 +191,7 @@ Only the `caddy` container publishes host ports, and only 80 and 443. Every othe
 app on 8080, Kafka on 19092, the Schema Registry on 8081, Postgres on 5432) is reachable only on a
 Docker network.
 
-The VM has four Docker networks that matter here:
+The VM has five Docker networks that matter here:
 
 | Network | Kind | Members |
 |---------|------|---------|
@@ -242,7 +242,7 @@ Traffic passes three filter layers
 The first two rules must come before the `DROP`. Without them, container egress (image pulls, ACME
 renewals) hangs, because the outbound SYN leaves but the reply is dropped. `--ctorigdstport`
 matches the host port before DNAT. Today the mappings are identity (80→80, 443→443), so a wrong
-`--dport` rule would pass every test; the script uses the conntrack form so a future `8443:443`
+`--dport` rule would pass every test. The script uses the conntrack form, so a future `8443:443`
 mapping stays correct.
 
 The systemd unit [`docker-user-firewall.service`](../../infra/vm/docker-user-firewall.service)
@@ -251,20 +251,27 @@ uses `PartOf=docker.service`. So the policy applies again after every Docker sta
 
 ### Why we chose it
 
-**INFRA-04.** The production file header and the app service comment give the reason: publishing
+**INFRA-04.** The production file header and the app service comment give the reason. To publish
 8080 would offer the whole API over plain HTTP and skip Caddy's TLS
 ([`docker-compose.prod.yml` L389-L392](../../docker-compose.prod.yml#L389-L392)). Kafka and the
-registry "must never be internet-facing". Quick task 260905-qxi turned the rule into a gate:
-[`scripts/verify-compose-ports.py`](../../scripts/verify-compose-ports.py) fails CI if any service
-other than `caddy` in the prod file gets a `ports:` key, if any nonprod service gets one, if
-`caddy` publishes more than 80/443, or if `network_mode: host` appears. It runs in
-[`invariant-checks.yml`](../../.github/workflows/invariant-checks.yml) on every pull request.
+registry "must never be internet-facing". Quick task 260905-qxi turned the rule into a gate,
+[`scripts/verify-compose-ports.py`](../../scripts/verify-compose-ports.py). It fails CI in four
+cases:
+
+- A service other than `caddy` in the prod file gets a `ports:` key.
+- A nonprod service gets a `ports:` key.
+- `caddy` publishes more than 80/443.
+- `network_mode: host` appears.
+
+The gate runs in
+[`invariant-checks.yml`](../../.github/workflows/invariant-checks.yml) on pull requests. The
+workflow skips a pull request that changes only `docs/**`, `**/*.md` or `.planning/**`.
 
 **INFRA-05.** On 2026-09-05 quick task 260905-qxi found that `DOCKER-USER` was empty, so no layer
 inside the VM filtered traffic to a published container port. The fix (quick task 260906-feq,
 commit `65c8409`) made the chain a reviewed file. The script header records why the team rejected
-`netfilter-persistent save`: `iptables-save` captures the whole filter table, which freezes a
-stale copy of Docker's own chains, and its boot-time restore runs before Docker rebuilds them.
+`netfilter-persistent save`. `iptables-save` captures the whole filter table, which freezes a
+stale copy of Docker's own chains. Its boot-time restore also runs before Docker rebuilds them.
 
 The team also decided not to apply the firewall from `deploy.yml`
 ([infra/vm/README.md](../../infra/vm/README.md)):
@@ -294,7 +301,7 @@ The team also decided not to apply the firewall from `deploy.yml`
 
 - `verify-compose-ports.py` plus its self-test `verify-compose-ports-selftest.py`, which proves
   the gate can fail. Both run in CI.
-- The live proof for `DOCKER-USER` was manual and off-box: a canary container on host port 49999
+- The live proof for `DOCKER-USER` was manual and off-box. A canary container on host port 49999
   answered `200` before the rules and timed out (`curl` exit 28) after. The `DROP` counter rose
   by exactly the 7 SYNs of the probe. The policy survived `systemctl restart docker` and a full
   reboot ([INFRA_RUNBOOK.md, "Layer 3"](../INFRA_RUNBOOK.md)).
@@ -394,12 +401,12 @@ public suffix, so a wildcard would match other DuckDNS tenants (Phase 8 decision
 - 20 per 5 minutes, not 10: the key is an IP, and an office or CGNAT pool shares one bucket. A
   human chose 20.
 - 120 per minute sits above the reference board-setup burst (56 calls, 55 in the `general` zone).
-- Nonprod has no limit: its end-to-end suites are chatty, and it is the negative control that
-  proves the production limit does not leak into other blocks.
+- Nonprod has no limit. Its end-to-end suites send many requests. It is also the negative
+  control that proves the production limit does not leak into other blocks.
 
 **INFRA-09.** A bind-mounted file's content is not part of Compose's config hash. So `up -d` does
 nothing to `caddy` when its image tag has not changed, and before this fix no Caddyfile edit ever
-reached production. The reload must run after `up -d`: on the first deploy of the custom image,
+reached production. The reload must run after `up -d`. On the first deploy of the custom image,
 the old stock container had no `rate_limit` module and would reject the new file. The readback
 uses `127.0.0.1`, not `localhost`: the admin API binds IPv4 only, and BusyBox `wget` tries the
 `::1` record and does not fall back. That mistake would make every deploy red after `up -d` had
@@ -495,8 +502,8 @@ moved the database onto the VM on 2026-08-26.
 [11-CONTEXT.md](../../.planning/phases/11-migrate-database-from-neon-to-self-hosted-postgres/11-CONTEXT.md)
 chose one shared instance. The trade-off table in
 [11-01-PLAN.md](../../.planning/phases/11-migrate-database-from-neon-to-self-hosted-postgres/11-01-PLAN.md)
-gives the reason: the memory budget binds (about 5.15 GiB of 7.8 GiB was already committed), and
-Neon's failure (a shared per-project quota) has no self-hosted equivalent. A second container would
+gives the reason. The memory budget binds: about 5.15 GiB of 7.8 GiB was already committed.
+Also, Neon's failure (a shared per-project quota) has no self-hosted equivalent. A second container would
 buy isolation against a failure that cannot happen here.
 
 The `REVOKE CONNECT ... FROM PUBLIC` lines are the whole isolation mechanism. PostgreSQL grants
@@ -584,8 +591,9 @@ The team uses one method, a **restart ladder**:
 5. Adopt a value with headroom above the lowest passing rung, then re-verify it from a fresh
    recreate.
 
-The standard workload is a 54-request burst through the public HTTPS API: signup, a board, 6
-columns, 24 tasks, 24 subtasks. The Postgres ladder added a nonprod reset and an app recreate that
+The standard workload is a 54-request burst through the public HTTPS API. It runs after a signup
+and a board create, and it makes 6 columns, 24 tasks and 24 subtasks. With the two setup calls,
+the total is 56 HTTP calls. The Postgres ladder added a nonprod reset and an app recreate that
 re-runs Flyway, because those paths set its peak.
 
 ### Why we chose it
@@ -593,8 +601,8 @@ re-runs Flyway, because those paths set its peak.
 **INFRA-15.** Arithmetic and short tests proved wrong several times, so each cap carries its own
 measured basis in a comment. Examples from the compose files:
 
-- **Postgres, first pass (plan 11-03):** 512m down to 40m all passed; 32m failed with three OOM
-  kills in about 30 seconds and real HTTP 500s on the public API. The team adopted 64m, not 40m,
+- **Postgres, first pass (plan 11-03):** 512m down to 40m all passed. The 32m rung failed with three
+  OOM kills in about 30 seconds and real HTTP 500s on the public API. The team adopted 64m, not 40m,
   because 40m left only about 10 MiB above the 29.7 MiB peak.
 - **Nonprod Redpanda (plan 08-03):** 128M passed; 96M looked healthy at first but crash-looped
   under sustained load (`RestartCount=22`, exit code 139, Seastar allocation failure). A single
@@ -604,8 +612,8 @@ measured basis in a comment. Examples from the compose files:
   test could exercise from only one source address.
 
 **INFRA-14.** The 64m Postgres cap was wrong in a way the ladder could not see. The engine ran
-with `shared_buffers=128MB`, twice the cap. The test dataset had about 55 rows, and the kernel
-charges a page to the cgroup only when something touches it, so the flat 29-30 MiB peak described
+with `shared_buffers=128MB`, twice the cap. The test dataset had about 55 rows. The kernel
+charges a page to the cgroup only when something touches it. So the flat 29-30 MiB peak described
 the dataset, not the cap. Plan 11-08 fixed the pair
 ([`docker-compose.prod.yml` L192-L249](../../docker-compose.prod.yml#L192-L249)) and wrote the
 rule into [`scripts/verify-postgres-memory-invariant.py`](../../scripts/verify-postgres-memory-invariant.py):
@@ -617,7 +625,7 @@ rule into [`scripts/verify-postgres-memory-invariant.py`](../../scripts/verify-p
 Both rules fail on the old pair (64m with 128MB). The team re-validated with a 127 MB `pgbench`
 dataset and 24 concurrent backends. The irreclaimable memory (anon plus shmem) held at about
 84 MB, 32.8% of the cap. The team also reproduced the old pair live, and the kernel killed a
-Postgres backend. The engine profile stays conservative on purpose (decision D-11): the box is a
+Postgres backend. The engine profile stays conservative on purpose (decision D-11). The box is a
 shared VPS, not a dedicated database server, so the common "25% of RAM" rule does not apply.
 
 **INFRA-16.** Redpanda runs with `--overprovisioned --smp 1 --memory 2G`, not the local
@@ -646,8 +654,8 @@ exercise ([`docker-compose.prod.yml` L334-L362](../../docker-compose.prod.yml#L3
 
 The Netcup "Screen" console keeps old kernel lines forever, with timestamps in seconds since boot.
 On 2026-09-02 a screenshot of the 2026-08-26 kills was reported as an outage. The runbook now has
-a triage order: curl both health endpoints first, then `docker inspect`, then `dmesg -T`, and
-convert the time zones (`dmesg -T` shows CEST, `docker inspect` shows UTC)
+a triage order. Curl both health endpoints first, then run `docker inspect`, then `dmesg -T`.
+Convert the time zones, because `dmesg -T` shows CEST and `docker inspect` shows UTC
 ([INFRA_RUNBOOK.md, "Triage — dating what the Netcup SCP Screen console shows"](../INFRA_RUNBOOK.md)).
 
 ### Trade-offs and limits
@@ -655,8 +663,8 @@ convert the time zones (`dmesg -T` shows CEST, `docker inspect` shows UTC)
 - The caps now sum to more than the host has. Production: 32 + 256 + 3072 + 2200 + 32 + 256 + 768
   + 256 + 64 + 128 + 32 = 7096 MiB. Nonprod: 1024 + 900 = 1924 MiB. Total 9020 MiB against a
   7945 MiB host with no swap. The runbook's "about 6.4 GiB" sum (plan 12-05) left out nonprod and
-  predates the 768m Grafana and 900m Redpanda caps. The measured `free -m` "available" value was
-  about 5 GiB, so real use is far below the caps, but the caps no longer guarantee that all
+  predates the 768m Grafana and 900m Redpanda caps. The measured `free -m` "available" values in
+  the runbook are between 5110 and 6069 MiB, so real use is far below the caps. But the caps no longer guarantee that all
   containers fit at their limits together.
 - `pg_stat_statements` (quick task 260911-gkz) adds shared memory that the 256m measurement did
   not include. The compose comment marks the measurement as stale.
@@ -668,11 +676,13 @@ convert the time zones (`dmesg -T` shows CEST, `docker inspect` shows UTC)
 ### How we test it
 
 - `python3 scripts/verify-postgres-memory-invariant.py` prints `invariants OK: mem_limit=256MB
-  shared_buffers=64MB work_mem=4MB max_connections=25 worst-case=164MB (64.1% of cap)`. No CI
-  workflow runs it; see "Known gaps".
-- Each ladder is recorded rung by rung in the runbook sections "Nonprod resource measurement —
-  Plan 08-03", "Self-hosted Postgres resource measurement — Plan 11-03", "Postgres memory profile
-  correction — Plan 11-08" and "Caddy resource measurement — Plan 12-06".
+  shared_buffers=64MB work_mem=4MB max_connections=25 worst-case=164MB (64.1% of cap)` and exits 0.
+  No CI workflow runs it; see "Known gaps".
+- The runbook records each ladder rung by rung. The sections are:
+  - "Nonprod resource measurement — Plan 08-03"
+  - "Self-hosted Postgres resource measurement — Plan 11-03"
+  - "Postgres memory profile correction — Plan 11-08"
+  - "Caddy resource measurement — Plan 12-06"
 
 ### Where this is recorded
 
@@ -686,8 +696,8 @@ convert the time zones (`dmesg -T` shows CEST, `docker inspect` shows UTC)
 
 Nonprod is a second, isolated copy of the backend on the same VM, at
 `kanban-board-rud-vlad-473-nonprod.duckdns.org`. It has its own Compose project, its own Redpanda
-broker and Schema Registry, its own database in the shared Postgres instance, and its own Docker
-Hub repository (`kanban-board-backend-nonprod`). It exists so that end-to-end suites (for example,
+broker and Schema Registry, and its own database in the shared Postgres instance. It also has its
+own Docker Hub repository (`kanban-board-backend-nonprod`). It exists so that end-to-end suites (for example,
 the frontend's) can run against a real deploy and reset it to empty
 ([Phase 8 folder](../../.planning/milestones/v1.3-phases/08-isolated-nonprod-environment-live-and-resettable/)).
 
@@ -723,15 +733,16 @@ The reset endpoint is `POST /api/admin/reset` with an `X-Reset-Token` header
    at the nonprod database. A separate file makes that impossible by structure, not by operator
    care.
 
-Colocation on the same VM was conditional. Phase 8 decision D-07 said: if the Redpanda memory
-measurement shows the VM cannot hold both, stop and ask before buying a second VPS (about
-€4/month), because that is a recurring cost. The measurement showed that the VM could hold both.
+Colocation on the same VM was conditional. Phase 8 decision D-07 set a rule for the Redpanda memory
+measurement. If it shows that the VM cannot hold both, stop and ask before you buy a second VPS.
+A second VPS (about €4/month) is a recurring cost. The measurement showed that the VM could hold both.
 
 **INFRA-19.** Phase 8 decisions D-01 and D-02
 ([08-CONTEXT.md](../../.planning/milestones/v1.3-phases/08-isolated-nonprod-environment-live-and-resettable/08-CONTEXT.md)):
-a shared-secret header, and a profile gate so that the endpoint cannot exist in a production
-build. The controller Javadoc says neither control is enough alone: if a deploy ever set the
-`nonprod` profile in production by mistake, the token still protects the endpoint. D-03 chose a
+a shared-secret header and a profile gate. The gate makes sure that the endpoint cannot exist
+in a production build. The controller Javadoc says that neither control is enough alone. If a
+deploy ever set the `nonprod` profile in production by mistake, the token still protects the
+endpoint. D-03 chose a
 truly empty reset target, with no seed data. Each test creates its own fixtures.
 
 ### Alternatives we rejected
@@ -755,8 +766,8 @@ truly empty reset target, with no seed data. Each test creates its own fixtures.
   `should_registerNoResetSecurityChain_when_nonprodProfileIsInactive`.
 - [`ResetControllerE2ETest`](../../src/test/java/com/vrudenko/kanban_board/e2e/reset/ResetControllerE2ETest.java)
   and [`ResetServiceE2ETest`](../../src/test/java/com/vrudenko/kanban_board/e2e/reset/ResetServiceE2ETest.java).
-- Live proof on 2026-08-18: after the reset, 8 tables went to 0 rows, `flyway_schema_history`
-  stayed at 7, and the same call against production answered `401 UNAUTHENTICATED` because the bean
+- Live proof on 2026-08-18. After the reset, 8 tables went to 0 rows and `flyway_schema_history`
+  stayed at 7. The same call against production answered `401 UNAUTHENTICATED`, because the bean
   does not exist there ([INFRA_RUNBOOK.md, "Nonprod reset endpoint — Plan 08-02"](../INFRA_RUNBOOK.md)).
 - After a deploy, CI job `health-check-nonprod` polls the nonprod health endpoint (see chapter 09).
 
@@ -835,8 +846,8 @@ On shutdown, the app uses `server.shutdown=graceful` with an 8-second phase time
 
 **INFRA-20.** The app image is pulled by tag "because the VM has no source checkout to build
 from" ([`docker-compose.prod.yml` L329-L332](../../docker-compose.prod.yml#L329-L332)). Phase 5
-decision D-03 first proved the stack by hand on the VM, and only then automated it, so a failure
-could be traced to the stack or the pipeline, not both. The `set -e` line exists because
+decision D-03 first proved the stack by hand on the VM, and only then automated it. So the team
+could trace a failure to the stack or to the pipeline, not to both. The `set -e` line exists because
 `appleboy/ssh-action` v1.2.5 has no fail-fast input. An earlier fix used a `script_stop: true` key
 that the action ignored, and a failed schema registration let `up -d` run anyway.
 
@@ -854,8 +865,8 @@ one-off container on the VM over SSH. The runbook records the option set
 The same plan moved `DB_HOST` and `DB_NAME` from secrets to variables. GitHub masks any log line
 that contains a secret value, so a wrong-environment mistake would have stayed hidden in the log.
 
-**INFRA-22.** The `postgres` health dependency is "not cosmetic": the app runs Flyway during
-startup, so a start before the database accepts connections turns a cold boot into a restart
+**INFRA-22.** The `postgres` health dependency is "not cosmetic". The app runs Flyway during
+startup. So a start before the database accepts connections turns a cold boot into a restart
 loop ([`docker-compose.prod.yml` L366-L370](../../docker-compose.prod.yml#L366-L370)). The
 healthcheck uses `pg_isready -h 127.0.0.1`. During initialization, the image runs a temporary
 server with no TCP listener, so a socket-based check could report ready while the init script
@@ -869,8 +880,8 @@ compose file. Nonprod has its own group, `deploy-to-nonprod-vm`.
 only three entries. Production served hand-copied config files, frozen at 2026-09-07, behind 14
 green deploys. The file timestamps on the VM showed the difference. Quick task 260908-sj9 extended
 the list to seven and added
-[`scripts/verify-deploy-scp-coverage.py`](../../scripts/verify-deploy-scp-coverage.py), which
-fails a pull request if a repo-relative bind mount is missing from the SCP list
+[`scripts/verify-deploy-scp-coverage.py`](../../scripts/verify-deploy-scp-coverage.py). The script
+fails a pull request if the SCP list does not include a repo-relative bind mount
 ([INFRA_RUNBOOK.md, "Deploy SCP coverage gap"](../INFRA_RUNBOOK.md)).
 
 **INFRA-25.** All services share the `x-logging` anchor: `json-file`, `max-size: "10m"`,
@@ -880,8 +891,8 @@ case is 30 MB per container. One anchor, not per-service copies, so a new servic
 ### Trade-offs and limits
 
 - **Schema first, code second.** `flyway-verify` applies migrations to the real production
-  database before the new image reaches the VM. The delivery diagram says it directly: "Schema
-  change and the code that consumes it are not deployed atomically." Every migration must work
+  database before the new image reaches the VM. The delivery diagram says it directly.
+  It says: "Schema change and the code that consumes it are not deployed atomically." Every migration must work
   with the currently running code.
 - A green deploy does not prove a healthy app. `up -d` returns when the container starts, not when
   it is healthy. Production has no post-deploy health gate; nonprod has one.
@@ -912,8 +923,8 @@ case is 30 MB per container. One anchor, not per-service copies, so a new servic
 
 ### What it is
 
-There is no backup of either database. The runbook says: "A container loss or a volume loss on the
-Netcup VM means total, unrecoverable data loss of everything in `kanban_prod` and `kanban_nonprod`"
+There is no backup of either database. A container loss or a volume loss on the Netcup VM loses
+all data. The runbook calls it "total, unrecoverable data loss of everything in `kanban_prod` and `kanban_nonprod`"
 ([INFRA_RUNBOOK.md, "Backups and restore"](../INFRA_RUNBOOK.md)).
 
 ### Why we chose it
@@ -945,8 +956,8 @@ and the Netcup ticket is still open.
   `192.0.2.1:443`, an RFC 5737 address that is never routed. It gave up after 134.71 seconds. So
   the real failure was the client kernel abandoning a SYN that was never answered, not a
   configured timeout.
-- **The host was healthy.** `TcpExtListenOverflows` was 0 (a full accept queue would drop SYNs
-  silently), `eth0` RX errors and drops were 0, and conntrack held 9 of 262144 entries. There was
+- **The host was healthy.** `TcpExtListenOverflows` was 0. A full accept queue would drop SYNs
+  silently. The `eth0` RX errors and drops were 0, and conntrack held 9 of 262144 entries. There was
   no reboot, no OOM kill, and no container event in the windows.
 - **Two unrelated client networks failed** (GitHub-hosted runners and a residential line), so one
   client or one route is unlikely.
@@ -966,8 +977,9 @@ prober that curls the nonprod health endpoint every 15 seconds.
 - On 2026-09-06 frontend CI failed twice with `ECONNREFUSED` on the same host and port. That is an
   active refusal, which is a different signature. The README records it as possibly a second
   failure mode.
-- The ticket asks Netcup whether the Cloud Firewall sync fault of 2026-08-14 (more than 7 minutes
-  unreachable after the first policy assignment) could return in a milder form. Netcup has not
+- The ticket asks Netcup about the Cloud Firewall sync fault of 2026-08-14. The VM was unreachable
+  for more than 7 minutes after the first policy assignment. The question is whether the fault
+  could return in a milder form. Netcup has not
   answered.
 
 ### Where this is recorded
@@ -1000,9 +1012,15 @@ path.
 3. **The Netcup Cloud Firewall is not in version control.** Its policy is known only from the panel.
 4. **Two checks are not in CI.** `verify-postgres-memory-invariant.py` and
    `verify-postgres-init-quoting.sh` are committed and re-runnable, but no workflow calls them.
-   The compose comment says the memory invariant is "mechanically enforced"; in practice a person
-   must run it.
-5. **Memory caps overcommit the host** (9020 MiB of caps on 7945 MiB, no swap). Several caps come
+   No file under `.github/` or `.githooks/` names either script. The pull-request workflow
+   `invariant-checks.yml` runs the Caddy tag, Compose port, SCP coverage and public dashboard
+   checks only. The memory invariant passes today (exit 0, worst case 164 MB, 64.1% of the cap).
+   So the gap is an invariant that nothing guards, not a current violation. The compose comment
+   says the memory invariant is "mechanically enforced"; in practice a person must run it.
+   Confirmed by running on 2026-09-23.
+5. **Memory caps overcommit the host** (9020 MiB of caps on 7945 MiB, no swap). The resolved
+   Compose models give 7096 MiB for production and 1924 MiB for nonprod. Confirmed by running on
+   2026-09-23. Several caps come
    from short bursts, and the Postgres cap predates `pg_stat_statements`.
 6. **Nonprod Redpanda internal topics grow** without a retention policy (3.0G and 1.0G on
    2026-09-11).
@@ -1062,9 +1080,9 @@ path.
 4. Why is there no TLS between the app and Postgres, and when would that decision change?
    <details><summary>Answer</summary>
    The JDBC hop is a Docker bridge on the same VM, the same as the Caddy→app hop. The container has
-   no TLS listener, and a client that demands SSL from a plaintext listener fails. If a TLS
-   listener or a pooler is placed in front of the database, or the database moves off the VM, the
-   decision must be revisited.
+   no TLS listener, and a client that demands SSL from a plaintext listener fails. Revisit the
+   decision if a TLS listener or a pooler goes in front of the database. Also revisit it if the
+   database moves off the VM.
    </details>
 
 5. The host `iptables INPUT` chain drops everything except 22, 80 and 443. Why was that not enough?
@@ -1083,7 +1101,8 @@ path.
 
 7. Why did the team split the rate limit into two partitioned zones?
    <details><summary>Answer</summary>
-   With composed zones, a signin request that the auth zone rejected still spent a general token.
+   With composed zones, the auth zone could reject a signin request. That request still spent a
+   general token.
    130 signin attempts used all 120 general events, and the client got `429` on every endpoint.
    Partitioning costs a higher ceiling (140 per minute) but keeps the bcrypt bound at 20 per 5
    minutes.
@@ -1092,7 +1111,7 @@ path.
 8. A Caddyfile change merges and deploys green. Why might production still run the old config, and
    what prevents that?
    <details><summary>Answer</summary>
-   The Caddyfile is a bind mount, and its content is not in Compose's config hash, so `up -d` does
+   The Caddyfile is a bind mount, and its content is not in Compose's config hash. So `up -d` does
    not recreate `caddy` when its image tag is unchanged. The deploy runs `caddy reload` after
    `up -d` and reads the running config from the admin API on `127.0.0.1:2019`.
    </details>
@@ -1114,9 +1133,9 @@ path.
 
 11. Why is nonprod a separate Compose project and not a profile in the production file?
     <details><summary>Answer</summary>
-    One file carries one project name. An `up -d` with the nonprod env file against the production
-    project would re-resolve production's `app` with nonprod's `DB_*` values and point live
-    production at the nonprod database. A separate project makes that impossible.
+    One file carries one project name. Consider an `up -d` with the nonprod env file against the
+    production project. It would re-resolve production's `app` with nonprod's `DB_*` values. Live
+    production would then point at the nonprod database. A separate project makes that impossible.
     </details>
 
 12. Why does CI verify Flyway migrations on the VM over SSH instead of against a throwaway database
@@ -1136,8 +1155,8 @@ path.
 14. On 2026-09-05 connections to nonprod hung for 134.8 seconds. How did the team show that the
     server was not the cause?
     <details><summary>Answer</summary>
-    A connection to the unrouted RFC 5737 address `192.0.2.1` gave up after 134.71 s, so 134.8 s is
-    the client kernel abandoning unanswered SYNs. On the host, listen overflows, NIC drops and
+    A connection to the unrouted RFC 5737 address `192.0.2.1` gave up after 134.71 s. So 134.8 s is
+    the time after which the client kernel abandons unanswered SYNs. On the host, listen overflows, NIC drops and
     conntrack use were all near zero, with no restarts or OOM kills. Failures came from two
     unrelated networks, so the loss was most likely upstream at Netcup.
     </details>

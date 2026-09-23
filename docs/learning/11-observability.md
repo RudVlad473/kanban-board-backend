@@ -141,9 +141,10 @@ validation query to an unauthenticated caller. The uptime workflow records the c
 can name the endpoint and its status, but never the failed subsystem.
 
 **OBS-02.** The original plan,
-[Epic 6](../plans/backend-modernization/06-observability.md), asked for
-`micrometer-registry-prometheus`, `/actuator/metrics`, `/actuator/prometheus`, a request-rate and
-p95-latency dashboard, Hibernate metrics, a Kafka publish counter and a consumer-lag gauge. None
+[Epic 6](../plans/backend-modernization/06-observability.md), asked for these items:
+`micrometer-registry-prometheus`, `/actuator/metrics` and `/actuator/prometheus`. It also asked for
+a request-rate and p95-latency dashboard, Hibernate metrics, a Kafka publish counter and a
+consumer-lag gauge. None
 of this exists in the code. `rg micrometer` over `src/main` and `build.gradle` finds nothing.
 [STATUS.md](../plans/backend-modernization/STATUS.md) still shows Epic 6 unchecked, and
 [PROJECT.md](../../.planning/PROJECT.md) lists it as deferred. The build.gradle comment says
@@ -199,8 +200,8 @@ metrics on an HTTP `/metrics` page.
 
 - Prometheus pulls ("scrapes") every target every 15 seconds
   ([`prometheus.yml`](../../docker/prometheus/prometheus.yml#L6-L8)).
-- Six scrape jobs exist: `node`, `cadvisor`, `postgres`, `redpanda` (two targets) and `prometheus`
-  itself.
+- Five scrape jobs exist: `node`, `cadvisor`, `postgres`, `redpanda` and `prometheus` itself.
+  The `redpanda` job has two targets, so Prometheus scrapes six targets in total.
 - Every target carries an `env` label: `prod`, `nonprod`, or `shared` for the one Postgres
   instance that holds both databases ([`prometheus.yml`](../../docker/prometheus/prometheus.yml#L26-L32)).
 - Promtail pushes logs to Loki. Grafana queries both Prometheus and Loki.
@@ -213,7 +214,7 @@ metrics on an HTTP `/metrics` page.
 ### Why we chose it
 
 **OBS-03.** The phase goal is "queryable without any paid SaaS". Live headroom on 2026-09-07 was
-4.9 GiB RAM free of 7.8 GiB, CPU load 0.11 of 4 vCPU and 222 GB disk free. The context file calls
+4.9 GiB RAM free of 7.8 GiB and 222 GB disk free. The CPU load was 0.11 of 4 vCPU. The context file calls
 "just add more containers" an easy decision with those numbers
 ([12-CONTEXT.md](../../.planning/phases/12-self-hosted-observability-stack/12-CONTEXT.md)).
 
@@ -623,9 +624,9 @@ fetch date.
 - A downloaded dashboard references `${DS_PROMETHEUS}`. Only Grafana's import flow resolves that
   placeholder; file provisioning does not. Plan 12-04 predicted this failure. The first commit
   resolved it to the datasource *name*, which later broke the public dashboards (next section).
-- The Node Exporter dashboard is built for bare metal. 42 of its 274 queries return nothing,
-  because 24 metrics (`node_hwmon_*`, `node_systemd_*` and others) come from collectors that are
-  off by default or hardware a VPS does not have.
+- The Node Exporter dashboard is built for bare metal. 42 of its 274 queries return nothing.
+  The cause is 24 metrics (`node_hwmon_*`, `node_systemd_*` and others). These come from collectors
+  that are off by default, or from hardware that a VPS does not have.
 
 ### How we test it
 
@@ -748,7 +749,7 @@ triangle with the tooltip "Plugin graph not found".
 
 ### How it works
 
-The vendored JSON carried Angular-era panel types: cAdvisor had 5 `graph` panels; Postgres
+The vendored JSON carried Angular-era panel types. cAdvisor had 5 `graph` panels. Postgres
 Internals had 17 `graph` and 11 `singlestat` panels, 10 of them inside collapsed rows. Grafana 13
 removed Angular completely. `graph` and `singlestat` are not in the image, and the
 `angular_support_enabled` setting no longer exists. The public-dashboard API serves the stored
@@ -787,9 +788,12 @@ version that nothing runs.
 
 The commit records the gate at exit 1 with 33 violations on the old JSON and exit 0 after, with a
 self-test of 26 cases. The render check on 13.2.1 showed 5 error icons before and 0 after. After
-deploy, commit `8baca52` verified four layers in production: files on the host, the live API
-serving `schemaVersion` 42 with no legacy panel types, 41 panel-query endpoints with data, and a
-real browser with 0 error icons.
+deploy, commit `8baca52` verified four layers in production:
+
+- the files on the host
+- the live API, which serves `schemaVersion` 42 with no legacy panel types
+- 41 panel-query endpoints with data
+- a real browser with 0 error icons
 
 ### Where this is recorded
 
@@ -811,8 +815,8 @@ a restart ladder, the same method used for Redpanda (05-04, 08-03) and Postgres 
 
 1. Set the cap one rung lower (about half).
 2. Recreate the container with `--force-recreate`.
-3. Run the workload: the 54-request API burst against both environments, a nonprod admin reset,
-   all three dashboards at the widest range, and a wide Loki query.
+3. Run the workload. Send the 54-request API burst against both environments, and do a nonprod
+   admin reset. Open all three dashboards at the widest range, and run a wide Loki query.
 4. Wait at least 20 seconds.
 5. Pass only if `RestartCount=0` holds for the whole cycle and the service still works.
 6. Stop one rung after the first failure. Confirm the failure in `dmesg`
@@ -832,14 +836,19 @@ The adopted values, as in [`docker-compose.prod.yml`](../../docker-compose.prod.
 | `caddy` | 8m | ~16 MiB | 32m | Plan 12-06 |
 
 With all 13 containers running after a workload, `free -m` showed 5110 MiB available of 7945 MiB.
-The sum of all caps is about 6.4 GiB, under the 7.8 GiB total.
+The caps in [`docker-compose.prod.yml`](../../docker-compose.prod.yml) add up to 7096 MiB. The
+nonprod caps in [`docker-compose.nonprod.yml`](../../docker-compose.nonprod.yml) add 1924 MiB
+(`app-nonprod` 1g, `redpanda-nonprod` 900m). The total is 9020 MiB, which is more than the 7945 MiB
+host, and the host has no swap. The caps are ceilings, not measured use, so the `free -m` reading is
+the primary evidence. The runbook's "about 6.4 GiB" sum (plan 12-05) is stale. It leaves out
+nonprod and was written before the 768m Grafana cap. Confirmed by running on 2026-09-23.
 
 ### Why we chose it
 
 **OBS-20.** The compose comments give the reason: a cap with no headroom "already broke startup
 once" (Redpanda, plan 05-04). Each adopted value is above the passing floor and states its
-headroom as a number. For Prometheus and Loki, the ladder ran against a nearly empty store (18,523
-series and 128.7 MB for Prometheus; 14 streams and 12 MB for Loki). The comments separate the
+headroom as a number. For Prometheus and Loki, the ladder ran against a nearly empty store. Prometheus
+held 18,523 series and 128.7 MB. Loki held 14 streams and 12 MB. The comments separate the
 ladder-justified part from the growth headroom for the 30-day window.
 
 The same-day correction is a reversed decision. The short synthetic burst did not show cAdvisor's
@@ -900,8 +909,8 @@ the public health endpoint of production and nonprod.
 
 **OBS-22.** Quick task 260902-vjo added it after a false alarm. A frozen screenshot of the Netcup
 "Screen" console looked like an outage but showed week-old output. The workflow gives dated
-evidence of "was the service answering" that does not depend on the VPS (header comment and
-[INFRA_RUNBOOK.md, "Triage — dating what the Netcup SCP 'Screen' console shows"](../INFRA_RUNBOOK.md)).
+evidence of "was the service answering". This evidence does not depend on the VPS (header comment
+and [INFRA_RUNBOOK.md, "Triage — dating what the Netcup SCP 'Screen' console shows"](../INFRA_RUNBOOK.md)).
 The interval is 15 minutes, not 5: GitHub queues scheduled runs late, so `*/5` gives little real
 gain for three times the runs.
 
@@ -1037,8 +1046,8 @@ video in addition to the links: not recorded. Commit `72f5d35` added it.
    <details><summary>Answer</summary>
    The panel type `graph` (or `singlestat`) is an Angular plugin that Grafana 13 removed. The
    dashboards were migrated with Grafana's own migrator. Gate invariant I5 checks every panel type
-   against the 30 plugins in the pinned image, and I6 fails if the image tag changes without a new
-   allowlist.
+   against the 30 plugins in the pinned image. Invariant I6 fails if the image tag changes without
+   a new allowlist.
    </details>
 
 9. Why is Loki's `schema_config.from` set to 2024-01-01 and not the deploy date?
@@ -1065,10 +1074,10 @@ video in addition to the links: not recorded. Commit `72f5d35` added it.
 
 12. How were the `mem_limit` values chosen, and which ones were wrong?
     <details><summary>Answer</summary>
-    A restart ladder: lower the cap by rungs, run a fixed workload, require `RestartCount=0`, stop
-    after a `dmesg`-confirmed OOM kill, and adopt a value above the floor with stated headroom.
-    cAdvisor (64m) and Grafana (384m) OOM-killed under real use the same day and went to 128m and
-    768m. The short burst missed slow growth.
+    A restart ladder. Lower the cap by rungs, run a fixed workload and require `RestartCount=0`.
+    Stop after a `dmesg`-confirmed OOM kill. Adopt a value above the floor with stated headroom.
+    The kernel OOM-killed cAdvisor (64m) and Grafana (384m) under real use the same day. Their
+    caps went to 128m and 768m. The short burst missed slow growth.
     </details>
 
 13. Why does `postgres_exporter` get three credential variables instead of one DSN?
@@ -1080,13 +1089,13 @@ video in addition to the links: not recorded. Commit `72f5d35` added it.
 
 14. What are the limits of the uptime check?
     <details><summary>Answer</summary>
-    GitHub cron can run late; GitHub disables schedules after 60 days without repository
-    activity; a red run pages nobody; and the health body cannot name the failed subsystem.
+    GitHub cron can run late. GitHub disables schedules after 60 days without repository
+    activity. A red run pages nobody. The health body cannot name the failed subsystem.
     </details>
 
 15. What is not monitored at all?
     <details><summary>Answer</summary>
-    Application metrics (requests, latency, JVM, Hikari, Kafka lag), alerting, structured
-    application logs, security events, Redpanda and Loki dashboards, cAdvisor OOM events, and the
-    observability data itself has no backup.
+    Application metrics (requests, latency, JVM, Hikari, Kafka lag) are not monitored. Alerting,
+    structured application logs, security events, Redpanda and Loki dashboards and cAdvisor OOM
+    events do not exist. The observability data itself has no backup.
     </details>
