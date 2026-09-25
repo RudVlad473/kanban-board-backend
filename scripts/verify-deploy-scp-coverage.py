@@ -17,13 +17,17 @@ Phase 12 onward. Confirmed live on the VM via `find -printf`: those four paths s
 deploys never caught it, because nothing compared the two lists. This gate makes that comparison a
 pure function of the commit, checkable per pull request.
 
-SCOPE: two (compose file, deploy job) pairs, declared in DEPLOY_SCP_PAIRS below so a third
+SCOPE: one (compose file, deploy job) pair, declared in DEPLOY_SCP_PAIRS below so a second
 deploy path cannot be added without touching this list:
   - docker-compose.prod.yml <-> deploy-to-netcup
-  - docker-compose.nonprod.yml <-> deploy-to-nonprod (its expected repo-relative set is EMPTY --
-    that file has zero host bind mounts of any kind, confirmed by reading it; this pairing exists
-    so a FUTURE nonprod bind mount cannot land ungated, mirroring
-    scripts/verify-compose-ports.py's own I7 "every file accounted for" reasoning)
+
+REMOVED Plan 13-05 (D-14, D-15): the docker-compose.nonprod.yml <-> deploy-to-nonprod pairing
+that used to sit here is gone along with the job itself -- nonprod no longer deploys over SSH via
+a Compose SCP step; Flux + image automation deploys it from k8s/overlays/nonprod instead. There is
+no longer an SCP step for this gate to check nonprod's bind mounts (of which it had none) against.
+If nonprod ever gains a k8s-native equivalent of this coverage question (e.g. a ConfigMap/Secret
+whose committed content must match what the cluster actually runs), that is a different gate,
+not a reason to resurrect this pairing.
 Each job's SCP step is located by its `uses:` containing `scp-action`, never by step name or
 position -- a renamed step still resolves, a renamed or removed scp-action step fails closed (I3).
 
@@ -78,7 +82,6 @@ import sys
 
 DEPLOY_SCP_PAIRS = [
     {"compose": "docker-compose.prod.yml", "job": "deploy-to-netcup"},
-    {"compose": "docker-compose.nonprod.yml", "job": "deploy-to-nonprod"},
 ]
 
 

@@ -148,8 +148,18 @@
 # e2e suites that must not be throttled, and its lack of a limit is also the negative control that
 # proves the production block's directive is actually scoped to that block and not leaking global
 # state -- see Task 2's local verification for the observed proof.
+#
+# Upstream changed Plan 13-05 (2026-09-25), interim until 13-06: nonprod now runs on k3s, not the
+# Compose app-nonprod container this block used to proxy to. 172.17.0.1 is the docker0 bridge
+# gateway address -- the one address a Caddy container (still running under Docker Compose) can
+# reach a k3s NodePort through, since k3s's ServiceLB stays disabled for the whole interim window
+# (docs/INFRA_RUNBOOK.md's "k3s install and interim bridge" section) and nothing in the cluster
+# claims a host port. Port 30080 is Traefik's fixed interim NodePort (k8s/platform/traefik/
+# helmchartconfig.yaml), which routes by Host header to the IngressRoute app in kanban-nonprod
+# (k8s/overlays/nonprod/ingressroute.yaml) -- so this line still needs the request's Host header
+# to reach the right pod, exactly as it did when proxying to the Compose container by name.
 {$APP_DOMAIN_NONPROD} {
-	reverse_proxy app-nonprod:8080
+	reverse_proxy 172.17.0.1:30080
 }
 
 # Third site block, added plan 12-01 (v1.4, Phase 12). {$APP_DOMAIN_MONITORING} is supplied by

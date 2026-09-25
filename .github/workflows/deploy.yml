@@ -36,9 +36,11 @@ env:
 
 # Risk-acceptance (Phase 10, HARDEN-03, D-05): actions/checkout, actions/setup-java,
 # docker/setup-buildx-action, docker/build-push-action, actions/cache and actions/upload-artifact
-# remain trusted by tag, not digest. Digest-pinning was scoped deliberately to only the two
-# appleboy/* actions below (deploy-to-netcup, register-schemas-production, deploy-to-nonprod),
-# which run with real SSH keys against production/staging VMs -- a materially higher
+# remain trusted by tag, not digest. Digest-pinning was scoped deliberately to only the
+# appleboy/* actions below (deploy-to-netcup, register-schemas-production, flyway-verify,
+# flyway-verify-nonprod -- deploy-to-nonprod itself removed Plan 13-05, D-14/D-15: nonprod now
+# deploys via Flux, not SSH), which run with real SSH keys against production/staging VMs -- a
+# materially higher
 # publisher-compromise risk tier than these first-party GitHub/Docker actions. A digest pin needs
 # a two-step lookup-then-edit on every future version bump instead of a one-line tag edit; that
 # recurring maintenance cost is deliberately not paid for the first-party actions listed above.
@@ -590,142 +592,6 @@ jobs:
               -Dloader.main=com.vrudenko.kanban_board.config.AvroSchemaRegistrar \
               -cp app.jar org.springframework.boot.loader.launch.PropertiesLauncher http://redpanda:8081
 
-  # Nonprod twin of deploy-to-netcup (Phase 9, plan 09-01, part E). Every identity axis
-  # differs: target directory (/opt/deploy/kanban-board-nonprod/ vs
-  # /opt/deploy/kanban-board-backend/), Compose project/manifest (docker-compose.nonprod.yml,
-  # its own `name:` pin), container names (kanban-nonprod-* vs kanban-board-backend-*), image
-  # repository (kanban-board-backend-nonprod), SSH identity (deploy-nonprod, a distinct
-  # keypair -- see docs/INFRA_RUNBOOK.md's "Nonprod CI deploy identity" section), and
-  # concurrency group (deploy-to-nonprod-vm). `needs:` deliberately references only nonprod
-  # nodes (flyway-verify-nonprod, never flyway-verify) so neither deploy path ever waits on,
-  # gates, or is failed by the other.
-  deploy-to-nonprod:
-    needs: [ build-and-push-docker-image, flyway-verify-nonprod ]
-    runs-on: ubuntu-latest
-    if: success()
-    # Phase 9, plan 09-01, part E: resolves secrets.NETCUP_*/DOCKERHUB_TOKEN through the
-    # `staging` environment -- the deploy-nonprod SSH identity, never production's.
-    environment: staging
-    # Distinct concurrency group from deploy-to-netcup-vm -- sharing it would silently
-    # reintroduce cross-environment queueing between two otherwise-independent deploy paths.
-    # cancel-in-progress: false for the same reason production keeps it: cancelling mid-SCP
-    # would leave a half-copied manifest on the VM.
-    concurrency:
-      group: deploy-to-nonprod-vm
-      cancel-in-progress: false
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: Copy Compose manifest to the VM
-        # `rm` is deliberately NOT set: the target directory also holds .env.nonprod, which
-        # must never be recreated or deleted here -- the same prohibition production's own
-        # SCP step carries above. No Caddyfile to transfer -- nonprod has none of its own;
-        # production's Caddy already fronts it over the shared kanban-edge network.
-        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345  # v1.0.0
-        with:
-          host: ${{ secrets.NETCUP_HOST }}
-          username: ${{ secrets.NETCUP_DEPLOY_USER }}
-          key: ${{ secrets.NETCUP_SSH_KEY }}
-          fingerprint: ${{ secrets.NETCUP_HOST_FINGERPRINT }}
-          source: "docker-compose.nonprod.yml"
-          target: "/opt/deploy/kanban-board-nonprod/"
-
-      # CI-05 (Phase 9, plan 09-03): registration is a step inside THIS job's own SSH script,
-      # not a separate job, deliberately -- this is the only position that makes CI-05's
-      # "registration completes before that environment's app serves traffic" literally true
-      # for nonprod. app-nonprod does not exist as a process until the final line below runs,
-      # and a failed registration aborts this script -- via the explicit `set -e` at the top
-      # of the script body (appleboy/ssh-action does NOT fail-fast by default; see that line's
-      # own comment for the live-verification history) -- before that line is ever reached.
-      # Reusing this job's existing SSH step also means registration reaches the broker over
-      # the SAME nonprod-scoped deploy identity (deploy-nonprod, via the staging environment)
-      # the deploy already uses (D-03) -- no second credential surface. `docker compose run`
-      # honours `depends_on`, so the registrar cannot run against a broker that is not already
-      # healthy.
-      - name: Deploy via Docker Compose
-        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2  # v1.2.5
-        with:
-          host: ${{ secrets.NETCUP_HOST }}
-          username: ${{ secrets.NETCUP_DEPLOY_USER }}
-          key: ${{ secrets.NETCUP_SSH_KEY }}
-          fingerprint: ${{ secrets.NETCUP_HOST_FINGERPRINT }}
-          script: |
-            set -e
-            # set -e (Phase 9, plan 09-03, live-verification fix, corrected twice -- see
-            # deploy-to-netcup's full comment for the script_stop dead-end): without this,
-            # appleboy/ssh-action runs the multi-line script below under a plain shell with no
-            # `set -e` -- a failing `docker compose run` (the registrar, mid-script) does NOT
-            # stop `up -d app-nonprod` on the next line from still running. Confirmed live twice:
-            # a deliberately unreachable registry URL threw the expected IllegalStateException and
-            # `docker compose run` exited 1 at the OS level (verified directly on the VM), yet
-            # app-nonprod was recreated and started anyway both times -- once with no fix at all,
-            # once with the silently-ignored `script_stop: true`. This is the mechanism that
-            # actually makes CI-05's "registration completes before the app process exists"
-            # guarantee for nonprod true, not just documented.
-            cd /opt/deploy/kanban-board-nonprod
-            # Exported, never a hardcoded or floating tag -- this project publishes no
-            # `latest` tag on Docker Hub (Phase 8's first schema-registration attempt already
-            # failed on exactly that assumption; docs/INFRA_RUNBOOK.md "Deviations from the
-            # plan text"). The registrar invocation below reuses this same export -- do not
-            # re-derive it and do not substitute a floating tag.
-            export IMAGE_TAG=${{ needs.build-and-push-docker-image.outputs.image_tag }}
-            # rudenkovladimir/kanban-board-backend-nonprod is a public Docker Hub repository
-            # (confirmed live during plan 09-01 Task 2, is_private: false) -- no docker
-            # login/registry credential is needed here to pull it. --env-file and --profile
-            # are mandatory on every invocation: Compose auto-loads only a file literally
-            # named .env, and without the profile flag Compose selects no service at all.
-            # Broker brought up before the app -- not cosmetic, this is the insertion point
-            # CI-05's schema registration (plan 09-03) needs, and it matches the order
-            # Phase 8's manual bring-up proved.
-            docker compose --env-file ./.env.nonprod -f docker-compose.nonprod.yml --profile nonprod pull app-nonprod
-            docker compose --env-file ./.env.nonprod -f docker-compose.nonprod.yml --profile nonprod up -d redpanda-nonprod
-            echo "Registering Avro schemas against the nonprod registry..."
-            docker compose --env-file ./.env.nonprod -f docker-compose.nonprod.yml --profile nonprod run --rm --entrypoint java app-nonprod \
-              -Dloader.main=com.vrudenko.kanban_board.config.AvroSchemaRegistrar \
-              -cp app.jar org.springframework.boot.loader.launch.PropertiesLauncher http://redpanda-nonprod:8081
-            docker compose --env-file ./.env.nonprod -f docker-compose.nonprod.yml --profile nonprod up -d app-nonprod
-
-  # Bounded health poll (Phase 9, plan 09-02, Task 2) -- a nonprod deploy that starts containers
-  # but never comes up must fail the workflow visibly, not report green over a dead stack (CI-04).
-  # Deliberately a separate job, not a final step inside deploy-to-nonprod: sitting inside that
-  # job would hold the deploy-to-nonprod-vm concurrency lock for the whole poll (up to 300s),
-  # queueing a following push behind pure waiting for no reason (see 09-02-PLAN.md's
-  # design_alternatives, Approach A, rejected on exactly this cost). No checkout -- this job reads
-  # nothing from the repository, only a public, non-secret hostname held as a plain env literal.
-  health-check-nonprod:
-    needs: [ deploy-to-nonprod ]
-    runs-on: ubuntu-latest
-    if: success()
-    environment: staging
-    env:
-      NONPROD_HEALTH_URL: https://kanban-board-rud-vlad-473-nonprod.duckdns.org/api/actuator/health
-      ATTEMPTS: 30
-      SLEEP_SECONDS: 10
-    steps:
-      - name: Poll nonprod health endpoint until 200
-        run: |
-          # Bound sized against docker-compose.nonprod.yml's real healthcheck numbers, not
-          # 09-RESEARCH.md's illustrative 60s (its own Assumption A3 flags that figure as unsized
-          # against real CI conditions). app-nonprod cannot be marked healthy by Compose before
-          # start_period 30s, and can take up to start_period 30s + (interval 10s x retries 5) =
-          # 80s -- and its clock only starts once redpanda-nonprod itself reports healthy
-          # (depends_on: service_healthy). Add image-pull time on the VM, Flyway's migration pass,
-          # and DNS/TLS latency from a GitHub-hosted runner, and 30 x 10s = 300s comfortably covers
-          # that with margin. Per-attempt status lines are printed deliberately: the first few real
-          # runs will produce a timing profile that can tighten this bound later.
-          for i in $(seq 1 "$ATTEMPTS"); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$NONPROD_HEALTH_URL" || echo "000")
-            if [ "$STATUS" = "200" ]; then
-              echo "Nonprod healthy after $i/$ATTEMPTS attempts."
-              exit 0
-            fi
-            echo "Attempt $i/$ATTEMPTS: status $STATUS, retrying in ${SLEEP_SECONDS}s..."
-            sleep "$SLEEP_SECONDS"
-          done
-          echo "::error::Nonprod did not answer 200 within $ATTEMPTS attempts (bound: $((ATTEMPTS * SLEEP_SECONDS))s elapsed). Health poll exhausted -- failing the run."
-          exit 1
-
   cleanup-old-images:
     runs-on: ubuntu-latest
     needs: [ deploy-to-netcup, build-and-push-docker-image, setup ]
@@ -822,10 +688,11 @@ jobs:
           # the digest reference, which is exactly what TOKEN/DIGEST were computed for.
           #
           # Status check added (Phase 10, HARDEN item, this job's own comment previously flagged
-          # this as Phase 10 scope -- see cleanup-unused-image-nonprod's identical, already-fixed
-          # copy below). Before this, production issued this DELETE with no status inspection at
-          # all, so whether it ever actually deleted anything was unproven in this repo's history.
-          # Warn-only, mirroring the nonprod twin exactly: this job already runs on an
+          # this as Phase 10 scope -- cleanup-unused-image-nonprod carried an identical,
+          # already-fixed copy of this check before it was removed Plan 13-05, D-14/D-15, along
+          # with the nonprod SSH deploy path it existed to clean up after). Before this, production
+          # issued this DELETE with no status inspection at all, so whether it ever actually deleted
+          # anything was unproven in this repo's history. Warn-only: this job already runs on an
           # already-failing workflow (if: failure()), and turning it red here would mask the
           # original deploy failure it exists to clean up after -- never ::error::, never a
           # non-zero exit.
@@ -837,28 +704,34 @@ jobs:
             *) echo "::warning::Manifest delete returned non-2xx HTTP $DELETE_HTTP_STATUS: $(cat /tmp/delete-response-unused.json)" ;;
           esac
 
-  # Nonprod twin of cleanup-old-images (Phase 9, plan 09-02, Task 3, D-05). Nonprod deploys at the
-  # same per-push rate as production and would otherwise accumulate tags identically. Gated on
-  # health-check-nonprod, not on deploy-to-nonprod: "the nonprod deploy is complete" now materially
-  # depends on the endpoint having actually answered (CI-04), not merely on the SSH script exiting
-  # 0. Never deploy-to-netcup -- referencing production's deploy job here would fire nonprod's
-  # sweep on production's success state, defeating CI-01's parallel-independence requirement.
+  # Nonprod twin of cleanup-old-images -- REWRITTEN Plan 13-05 (D-14, D-15): nonprod no longer
+  # deploys via SSH (Flux + image automation deploys it now, see apps-nonprod Kustomization), so
+  # this job can no longer key "the current tag" off a deploy job's own output -- there is no
+  # deploy-to-nonprod anymore, and health-check-nonprod (which this job used to depend on) is gone
+  # with it. Depends on [setup, build-and-push-docker-image] directly instead: this job now runs
+  # on every push to main regardless of what Flux later decides to deploy, so it prunes by AGE
+  # (keep the 5 newest sortable tags) rather than by "every tag except the one this run just
+  # built" -- Flux's ImagePolicy needs several recent tags to exist for a `git revert`-driven
+  # rollback (13-05-PLAN.md's own rollback note), and CI has no way to know which tag is actually
+  # running in the cluster at any given moment.
   cleanup-old-images-nonprod:
     runs-on: ubuntu-latest
-    needs: [ health-check-nonprod, build-and-push-docker-image, setup ]
+    needs: [ setup, build-and-push-docker-image ]
     if: success()
     # Phase 9, plan 09-02, Task 3: this job resolves secrets.DOCKERHUB_TOKEN through the `staging`
     # environment -- nonprod's copy of the account-wide token (see Plan 09-01's T-09-09).
     environment: staging
     steps:
-      - name: Delete old Docker Hub images (nonprod repository)
+      - name: Delete old Docker Hub images (nonprod repository, keep 5 newest sortable tags)
         run: |
-          # A copy of cleanup-old-images with exactly one axis changed: every repository-name
+          # A copy of cleanup-old-images with the repository-name axis changed (every
           # interpolation below reads setup's nonprod-repository job output, never hand-typed --
           # the production delete-URL bug fixed 2026-08-17 was exactly a hand-typed, missing
-          # repository path segment (docs/INFRA_RUNBOOK.md). Both already-fixed Docker Hub bugs
-          # are inherited in their fixed form: the JWT login-token exchange (2026-08-16 fix) and
-          # the follow-`next`-until-null pagination loop (2026-08-17 fix).
+          # repository path segment, docs/INFRA_RUNBOOK.md) PLUS the retention axis changed
+          # (Plan 13-05): "keep 5 newest matching main-<n>-<sha7>, ordered by n" instead of "keep
+          # only the tag this run built". Both already-fixed Docker Hub bugs are inherited in
+          # their fixed form: the JWT login-token exchange (2026-08-16 fix) and the
+          # follow-`next`-until-null pagination loop (2026-08-17 fix).
           HUB_TOKEN=$(curl -s -H "Content-Type: application/json" -X POST \
             -d "{\"username\": \"$DOCKERHUB_USER\", \"password\": \"${{ secrets.DOCKERHUB_TOKEN }}\"}" \
             "https://hub.docker.com/v2/users/login/" | jq -r .token)
@@ -881,10 +754,19 @@ jobs:
             NEXT_URL=$(jq -r '.next' /tmp/tags-nonprod.json)
           done
 
-          # Delete all tags except the current one
+          # Keep the 5 newest tags matching main-<run_number>-<sha7> (D-15's sortable scheme),
+          # ordered NUMERICALLY by run_number (a lexical sort would put main-9-... after
+          # main-100-... -- wrong). Legacy bare-SHA tags (pre-13-01, no main-N- prefix) never
+          # match this pattern, so they fall straight into the delete set -- exactly the "legacy
+          # bare-SHA tags included" instruction in 13-05-PLAN.md's Task 2 action text.
+          KEEP=$(printf '%s\n' $TAGS \
+            | grep -E '^main-[0-9]+-[0-9a-f]{7}$' \
+            | sort -t- -k2,2n \
+            | tail -n 5)
+
           FAILED=0
           for TAG in $TAGS; do
-            if [ "$TAG" != "${{ needs.build-and-push-docker-image.outputs.image_tag }}" ]; then
+            if ! printf '%s\n' "$KEEP" | grep -qx "$TAG"; then
               echo "Deleting tag: $TAG"
               DELETE_HTTP_STATUS=$(curl -s -o /tmp/delete-response-nonprod.json -w "%{http_code}" -X DELETE \
                 -H "Authorization: JWT ${HUB_TOKEN}" \
@@ -899,37 +781,3 @@ jobs:
             echo "::error::$FAILED nonprod tag deletion(s) failed -- see warnings above."
             exit 1
           fi
-
-  # Nonprod twin of cleanup-unused-image (Phase 9, plan 09-02, Task 3, D-06). Mirrors production's
-  # needs: shape literally, for parity: fires when the nonprod deploy job itself fails (not when
-  # health-check-nonprod fails), deleting the tag that will never be used.
-  cleanup-unused-image-nonprod:
-    runs-on: ubuntu-latest
-    needs: [ deploy-to-nonprod, build-and-push-docker-image, setup ]
-    if: failure()
-    # Phase 9, plan 09-02, Task 3: nonprod's environment declaration, matching its sibling jobs.
-    environment: staging
-    steps:
-      - name: Remove just-pushed image (nonprod repository)
-        run: |
-          echo "Deleting failed nonprod tag: ${{ needs.build-and-push-docker-image.outputs.image_tag }}"
-          TOKEN=$(curl -s "https://auth.docker.io/token?service=registry.docker.io&scope=repository:${{ needs.setup.outputs.base_image_name_nonprod }}:pull,push" \
-            | jq -r .token)
-          DIGEST=$(curl -sI \
-            -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
-            -H "Authorization: Bearer $TOKEN" \
-            "https://registry-1.docker.io/v2/${{ needs.setup.outputs.base_image_name_nonprod }}/manifests/${{ needs.build-and-push-docker-image.outputs.image_tag }}" \
-            | awk '/Docker-Content-Digest/ {print $2}' | tr -d $'\r')
-          # Deliberate addition over production's original (Phase 9, plan 09-02, Task 3, part B):
-          # production's copy issues this DELETE with no status check at all, so whether it has
-          # ever actually deleted anything is unproven in this repository's history. This job adds
-          # a status check but only ever warns, never fails, on a non-2xx -- this job already runs
-          # on an already-failing workflow (if: failure()), and turning it red here would mask the
-          # original deploy failure. Fixing both copies for real is Phase 10 CI-hardening scope.
-          DELETE_HTTP_STATUS=$(curl -s -o /tmp/delete-response-nonprod-unused.json -w "%{http_code}" -X DELETE \
-            -H "Authorization: Bearer $TOKEN" \
-            "https://registry-1.docker.io/v2/${{ needs.setup.outputs.base_image_name_nonprod }}/manifests/$DIGEST")
-          case "$DELETE_HTTP_STATUS" in
-            2??) echo "Nonprod manifest delete returned HTTP $DELETE_HTTP_STATUS." ;;
-            *) echo "::warning::Nonprod manifest delete returned non-2xx HTTP $DELETE_HTTP_STATUS: $(cat /tmp/delete-response-nonprod-unused.json)" ;;
-          esac
