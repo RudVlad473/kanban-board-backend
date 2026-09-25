@@ -71,7 +71,9 @@ spec:
       messageTemplate: |
         chore(flux): bump images
 
-        {{ range .Updated.Images }}{{ println . }}{{ end }}
+        {{ range .Changed.Changes -}}
+        - {{ .OldValue }} -> {{ .NewValue }}
+        {{ end -}}
     push:
       branch: main
   update:
