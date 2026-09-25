@@ -175,6 +175,11 @@ before any production-touching plan starts.
 - **D-14 clarified:** schema registration runs as an **initContainer on the app pod**, not a
   standalone `Job` — Job immutability would force three Flux stages per environment. Substance of
   D-14 (in-cluster, before app start, no CI SSH step) is unchanged.
+- **D-18 corrected (after fan-out review, run 471561):** recreate **three** public shares, not
+  two — D-18 was written from the README's two links, but `scripts/verify-public-dashboards.py`
+  records three live public dashboards (node-exporter-full, cadvisor, postgres-exporter/Postgres
+  Internals). Keep today's public surface exactly: all three are recreated; the README keeps its
+  two links. 13-07's two-vs-three checkpoint is settled by this and must not be asked again.
 - **D-13 clarified:** Traefik keeps **all three** Caddy-era rate-limit zones on the prod edge —
   signin/signup, the general prod-path zone, and the Grafana-login zone (Phase 12). Nonprod stays
   unlimited.
