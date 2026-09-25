@@ -132,3 +132,14 @@ Plans:
 **Wave 6** *(blocked on Wave 5 completion)*
 
 - [x] 12-06-PLAN.md — Caddy mem_limit, architecture doc + diagram correction, folded-todo closure (D-01, D-02)
+
+### Phase 13: Introduce Kubernetes
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 12
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 13 to break down)

@@ -3,14 +3,14 @@ gsd_state_version: "1.0"
 milestone: v1.3
 current_phase: 12
 status: completed
-stopped_at: Phase 12 complete — all phases complete
-last_updated: "2026-09-08T11:15:03.376Z"
-last_activity: 2026-09-08
+stopped_at: Phase 13 context gathered
+last_updated: "2026-09-25T08:44:00.534Z"
+last_activity: 2026-09-11
 last_activity_desc: Phase 12 complete
-state_head: ef0f2343e7daecf6cb515efd2a5aa2b7db39beb6
+state_head: d00c69c12dbc36964e9f5c80b43b9fb545e0bffb
 progress:
-  total_phases: 2
-  completed_phases: 2
+  total_phases: 3
+  completed_phases: 1
   total_plans: 14
   completed_plans: 14
 milestone_name: Nonprod Environment & CI Hardening
@@ -61,6 +61,7 @@ v1.0–v1.2 velocity/per-plan detail archived at milestone close — see `.plann
 
 - Phase 11 added: Migrate database from Neon to self-hosted Postgres
 - Phase 12 added: Self-hosted observability stack
+- Phase 13 added: Introduce Kubernetes
 
 ### Decisions
 
@@ -167,9 +168,9 @@ The 46 pending todos are individually listed and categorized in this document's 
 
 ## Session Continuity
 
-Last session: 2026-09-08T10:41:22.390Z
-Stopped at: Phase 12 complete — all phases complete
-Resume file: None
+Last session: 2026-09-25T08:44:00.137Z
+Stopped at: Phase 13 context gathered
+Resume file: .planning/phases/13-introduce-kubernetes/13-CONTEXT.md
 
 ## Operator Next Steps
 
