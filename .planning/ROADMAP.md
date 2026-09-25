@@ -135,11 +135,42 @@ Plans:
 
 ### Phase 13: Introduce Kubernetes
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Both environments run on a single-node k3s cluster on the existing Netcup VPS instead of Docker Compose. Nonprod moves first and completes a full GitOps deploy cycle; production follows in one announced maintenance window. Deploys are pull-based: Flux applies sortable `main-<run>-<sha7>` image tags. Traefik + cert-manager front both environments, with the Caddy-era rate limits re-derived and proven per client. Postgres runs in-cluster, restored from `pg_dump` with row-count parity. kube-prometheus-stack + Loki/Alloy provide observability, with the public dashboard links recreated. Compose (files, deploy jobs, volumes) is deleted only after the strict D-08 gate passes: automated checks, parity, 24h with zero OOMKilled/restarts, dump retained.
+**Requirements**: D-01..D-18 (CONTEXT.md decisions — no REQUIREMENTS.md for this not-yet-scoped milestone)
 **Depends on:** Phase 12
-**Plans:** 0 plans
+**Plans:** 10 plans
 
 Plans:
+**Wave 1**
 
-- [ ] TBD (run /gsd-plan-phase 13 to break down)
+- [ ] 13-01-PLAN.md — Tracer: Kustomize base + nonprod overlay, kubeconform and k8s invariant CI gates, sortable image tags (D-06, D-09, D-12, D-14, D-15)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 13-02-PLAN.md — k3s + Flux on netcup-prod beside Compose; interim Postgres bridge proven (A2); measured baseline (A1) (D-10, D-12, D-15, D-16)
+- [ ] 13-03-PLAN.md — kube-prometheus-stack/Loki/Alloy/exporter manifests + Kubernetes-label dashboards, suspended (D-07, D-17, D-18)
+- [ ] 13-04-PLAN.md — Prod overlay, in-cluster Postgres + NetworkPolicy, cert-manager + issuers, row-count SQL, suspended (D-05, D-11, D-13)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 13-05-PLAN.md — Nonprod cutover to k3s + first full GitOps cycle + interim measurement (D-02, D-06, D-14)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 13-06-PLAN.md — Production maintenance-window cutover: dump/restore with parity, Traefik owns 80/443, staging→production certs, CI retargeted (D-01, D-03, D-05, D-13, D-14)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 13-07-PLAN.md — Observability activated on k3s; public dashboard shares recreated (D-07, D-17, D-18)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 13-08-PLAN.md — Edge hardening: re-derived rate limits + two-IP proof, k3s-era host ingress filter (D-13)
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 13-09-PLAN.md — Restart-ladder for every new component, D-08 window start (T0), final-state architecture docs (D-07, D-08)
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
+- [ ] 13-10-PLAN.md — D-08 gate evaluation, D-04 decision, Compose/Caddy/Docker decommission (D-04, D-08)
