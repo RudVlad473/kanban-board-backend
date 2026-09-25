@@ -1,42 +1,40 @@
 {
   "version": "1.0",
-  "timestamp": "2026-09-08T19:26:24.491Z",
-  "phase": null,
-  "phase_name": null,
-  "phase_dir": null,
-  "plan": null,
-  "task": null,
-  "total_tasks": null,
+  "timestamp": "2026-09-25T18:03:37.120Z",
+  "phase": "13",
+  "phase_name": "Introduce Kubernetes",
+  "phase_dir": ".planning/phases/13-introduce-kubernetes",
+  "plan": 5,
+  "task": 3,
+  "total_tasks": 3,
   "status": "paused",
   "completed_tasks": [
-    {"id": "260908-mtl", "name": "Rename three phase-12 Grafana dashboards to human-readable titles, fan-out reviewed (Claude+agy+Codex), 2 real findings fixed", "status": "done", "commit": "69d8e7e"},
-    {"id": "260908-r16", "name": "Restructure Postgres Internals into five topic rows; rename cAdvisor title again to 'CPU/Memory & Network Usage - cAdvisor'", "status": "done", "commit": "44a2f83"},
-    {"id": "260908-sj9", "name": "Fix deploy.yml SCP coverage gap (4 of 6 repo-relative bind mounts never transferred); add CI gate proven bidirectionally", "status": "done", "commit": "0eea5e7"},
-    {"id": "manual-vm-ops", "name": "Pushed all three quick tasks to origin/main; both CI/CD deploys ran (second one required a live one-time chown fix on the VM after tar failed to overwrite root-owned files)", "status": "done", "commit": null}
+    {"id": 1, "name": "Authorize the nonprod cutover (checkpoint:decision)", "status": "done", "commit": "a94f6a8"},
+    {"id": 2, "name": "Tracer cutover — Caddyfile nonprod upstream, apps-nonprod unsuspend, deploy.yml nonprod SSH jobs removed", "status": "done", "commit": "1cc9fcb"}
   ],
   "remaining_tasks": [
-    {"id": "postgres-internals-fix", "name": "Admin must open Postgres Internals dashboard, pick real values for Instance and Database variables, and Save — the live public link is currently BROKEN (every panel errors, one gauge shows 9795%)", "status": "not_started"},
-    {"id": "cadvisor-pin-and-share", "name": "Admin must pin cAdvisor's $container variable to 'app', Save, then Share -> Share externally -> Enable", "status": "not_started"},
-    {"id": "node-exporter-share", "name": "Admin must Share -> Share externally -> Enable on Node Exporter Full (no variable pin needed, already confirmed safe)", "status": "not_started"},
-    {"id": "verify-new-links", "name": "Once cAdvisor and Node Exporter Full links exist, verify both via curl/Playwright the same way Postgres Internals was verified", "status": "not_started"}
+    {"id": 3, "name": "Prove one full GitOps deploy cycle end to end + measure interim memory steady state", "status": "not_started"}
   ],
   "blockers": [
-    {"description": "Cannot complete piece 2 of the dashboard-grooming todo (public links) without admin-level Grafana access — orchestrator only has viewer-role (read-only) credentials", "type": "human_action", "workaround": "User was asked to either do the 3 admin actions themselves, or hand over admin credentials for Playwright to drive directly. No response received before this pause."}
+    {"description": "deploy.yml's `caddy reload` step is structurally broken: appleboy/scp-action replaces Caddyfile via rename/untar, which changes its inode; Docker's bind mount (captured at container start) keeps pointing at the orphaned old inode, so `caddy reload` inside the container reloads stale content. This has silently affected every Caddyfile-only deploy since the reload step was added (quick task 260903-dvp) — it went undetected because the deploy that introduced it also recreated the container for an unrelated reason (new image tag), masking the bug. Caused a real ~2min public 502 on nonprod after 13-05's Caddyfile push (deploy-to-netcup reported green throughout). Manually fixed by force-recreating the caddy container on netcup-prod directly (`docker compose up -d --force-recreate caddy`) — confirmed via matching md5sum between host file and container-visible file, and nonprod's public health endpoint returning 200. NOT yet fixed in deploy.yml itself — will recur on every future Caddyfile-only deploy, including 13-06's production cutover, unless fixed before then.", "type": "technical", "workaround": "Manual `--force-recreate caddy` on the VM after any Caddyfile-only push, until deploy.yml is fixed properly."}
   ],
   "async_jobs": [],
   "human_actions_pending": [
-    {"action": "Open Postgres Internals dashboard as admin, select real Instance and Database variable values, click Save dashboard", "context": "Public link is live right now and broken -- every panel shows an error triangle, 'Connections used' gauge shows a nonsensical 9795%. Confirmed via direct Playwright screenshot of the actual public URL.", "blocking": true},
-    {"action": "Pin cAdvisor's $container variable to 'app', Save, then enable Share externally", "context": "Decision already made in this session: pinning to 'app' avoids exposing the full production container topology (app, postgres, redpanda x2, grafana, prometheus, loki, caddy, etc.) that leaving $container at 'All' would reveal in the public legends", "blocking": true},
-    {"action": "Enable Share externally on Node Exporter Full, no variable change needed", "context": "Confirmed safe: its $nodename value resolves to the container's own hostname 'node-exporter' (docker-compose.prod.yml sets hostname: node-exporter explicitly), not the real VM hostname -- verified live via the user's own admin check", "blocking": true},
-    {"action": "Rotate the Grafana viewer-role password again", "context": "The user pasted it in plaintext into this chat session -- the exact repeat of the incident already tracked in .planning/todos/pending/2026-09-07-rotate-grafana-viewer-password-leaked-in-session.md. Not urgent/blocking for resuming work, but should happen.", "blocking": false}
+    {"action": "Decide whether to fix deploy.yml's caddy reload mechanism now (before continuing phase 13) or continue phase 13 and fix it as a separate quick task before 13-06 specifically", "context": "13-06 is the one-way production cutover (D-04) and depends on Caddy config changes actually taking effect; this bug must not surprise that plan", "blocking": true},
+    {"action": "User requested a follow-on quick task after this wave: sort/standardize /docs (currently 9 top-level .md files + demo/diagrams/incidents/learning/netcup-report/plans subdirs, described as 'kinda too chaotic and hard to navigate')", "context": "Deferred deliberately to avoid splitting attention during live production infra work", "blocking": false}
   ],
   "decisions": [
-    {"decision": "Use Grafana's per-dashboard public-dashboard feature, not a shared viewer credential, for the portfolio-facing links", "rationale": "A shared Viewer login is org-wide (Explore access, any future dashboard, not scoped to the 3 intended ones) and not individually revocable; a public-dashboard link is hard-scoped by Grafana to that one dashboard's stored queries and can be disabled independently", "phase": null},
-    {"decision": "Pin cAdvisor's $container to 'app' rather than leaving at 'All' or pinning some other container", "rationale": "Leaving at 'All' reveals the full production container topology (every service name) in the public legends; 'app' is the one genuinely interesting to a portfolio viewer. Accepted brittleness: the exact container name has a Compose-generated suffix that could shift on redeploy, but the failure mode is a blank panel, not a worse disclosure.", "phase": null},
-    {"decision": "Node Exporter Full and Postgres Internals confirmed safe to publish without further panel-level changes", "rationale": "Node Exporter Full's nodename resolves to the node-exporter container's own hostname, not the real VM hostname (docker-compose.prod.yml sets hostname: node-exporter). Postgres Internals' worst-case disclosure via Database=All is just the two db names (kanban_prod/kanban_nonprod), no credentials or hostnames.", "phase": null},
-    {"decision": "deploy.yml fix: explicitly enumerate the 4 missing paths in source:, add a CI gate, rather than wildcarding docker/** or leaving it unguarded", "rationale": "A docker/ wildcard would ship docker/caddy/Dockerfile (a build-only artifact) to the VM and, combined with rm:, risks deleting .env.prod; an unguarded fix leaves the exact same drift class open for the next added mount. The gate (scripts/verify-deploy-scp-coverage.py) is proven to fail against the pre-fix state and pass against the fix.", "phase": null}
+    {"decision": "Orchestrator (not the plan's own executor) makes all merges/pushes to origin/main for every plan in this phase", "rationale": "Worktree-isolated executors cannot safely push to the shared branch; established after a sequencing mistake on 13-02 (pushed before merging once, corrected)", "phase": "13"},
+    {"decision": "Per-plan `--no-verify` authorization for the pre-commit hook's Gradle-daemon-death signature, granted case by case, each independently verified and documented in the commit body", "rationale": "Standing host memory-pressure issue (a resident non-Claude Node service holds ~3.5-4Gi permanently) kills the Gradle daemon under load, unrelated to any code defect in this phase's YAML/shell/manifest-only changes", "phase": "13"},
+    {"decision": "cadvisor's mem_limit raised 128m -> 256m (docker-compose.prod.yml)", "rationale": "k3s install (13-02) expanded cadvisor's monitored cgroup surface by 9, causing 3 live OOM kills on production; orchestrator-authorized fix, outside 13-02's declared scope, documented in its own commit (4817b99)", "phase": "13"}
   ],
-  "uncommitted_files": [],
-  "next_action": "Ask the user whether they've done the 3 admin-side Grafana actions (Postgres Instance/Database save, cAdvisor $container pin + share, Node Exporter Full share) or want to hand over admin credentials for Playwright to drive directly. Then re-verify all three dashboards live (curl the public API for each, and/or headless Playwright screenshot) before declaring piece 2 of the dashboard-grooming todo complete.",
-  "context_notes": "This was a long ad-hoc session, not phase-driven: three completed GSD quick tasks (mtl, r16, sj9) plus a chunk of live production infra work (manual SSH/SCP, a real deploy failure diagnosed and fixed live, and interactive Grafana verification via headless Playwright once given viewer credentials). All code/docs work is committed and pushed; main and origin/main are in sync (0 ahead, 0 behind) as of this pause. The ONLY remaining work is the three admin-side Grafana UI actions plus final verification -- nothing else needs GSD ceremony, it's a short interactive loop with the user once they're back at the keyboard."
+  "uncommitted_files": [
+    " M .planning/config.json",
+    "?? .planning/phases/13-introduce-kubernetes/.gitkeep",
+    "?? .zed/settings.json",
+    "?? docs/learning/.review-431836/",
+    "?? docs/netcup-report/"
+  ],
+  "next_action": "Decide on the deploy.yml caddy-reload fix (see blockers). If fixing now: replace the caddy reload step in .github/workflows/deploy.yml's deploy-to-netcup job with a --force-recreate caddy approach (or another mechanism proven to survive appleboy/scp-action's rename-based file replacement), verify against a real Caddyfile-only push, then resume 13-05's executor (worktree at .claude/worktrees/agent-a4f43b113ff7a0069, branch worktree-agent-a4f43b113ff7a0069) for Task 3. If deferring: resume 13-05's executor for Task 3 directly and track the deploy.yml fix as a blocking pre-13-06 item.",
+  "context_notes": "Wave 1 (13-01) and Wave 2 (13-02/03/04) are fully complete, merged, pushed, verified. Wave 3 (13-05) is mid-flight: nonprod is live on k3s (public health 200, verified after the caddy fix), Task 1+2 committed, Task 3 (GitOps cycle proof + measurement) not started. Production and nonprod are both currently healthy — this is a safe pause point, not mid-outage. The 13-05 executor's worktree still exists and has no uncommitted changes; it can be resumed directly via SendMessage to continue Task 3 once the caddy-reload decision is made."
 }
