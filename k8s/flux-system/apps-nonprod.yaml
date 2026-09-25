@@ -1,4 +1,4 @@
-# Suspended until 13-05 activates the nonprod app+Redpanda workload (D-02, D-17). Plan 13-02.
+# Activated Plan 13-05 (D-02): nonprod cutover to k3s, Compose nonprod stopped in D-06 order.
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
@@ -10,7 +10,7 @@ spec:
   path: ./k8s/overlays/nonprod
   prune: true
   wait: true
-  suspend: true
+  suspend: false
   dependsOn:
     - name: platform
     - name: data
