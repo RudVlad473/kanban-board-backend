@@ -330,14 +330,42 @@ renewal (sessions are fixed-duration), and no caching layer.
 
 ## Documentation
 
+`docs/` holds one flat list of files plus a few subdirectories; grouped here by what each one is
+for, not by where it lives — files aren't physically reorganized into subdirs because ~90% of the
+links that would break are inside `.planning/`'s own dated historical records, which shouldn't be
+rewritten after the fact.
+
+**What the application does**
+
 |                                                                        |                                                                                                                           |
 | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)                           | How the application works and why — the detail behind the highlights above                                                |
+| [docs/AUTH_FLOWS.md](docs/AUTH_FLOWS.md)                               | For a frontend/QA engineer writing E2E tests — the signup/signin contract in HTTP terms, plus session/cookie/CORS gotchas |
+| [docs/MOCKUP_FEATURE_GAP.md](docs/MOCKUP_FEATURE_GAP.md)               | What the Kanban design mock-ups ask for vs. what the API delivers, and the gap-closure history      |
+| [docs/demo/](docs/demo/)                                               | A short screen-recording demo of the live dashboards                                                                     |
+
+**How it's deployed and run**
+
+|                                                                        |                                                                                                                           |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | [docs/INFRA_ARCHITECTURE.md](docs/INFRA_ARCHITECTURE.md)               | The production deployment topology and the delivery path, in full                                                         |
 | [docs/INFRA_RUNBOOK.md](docs/INFRA_RUNBOOK.md)                         | Live-verified provider/firewall/DNS/database/backup reference state — durable how-to content only                        |
-| [docs/history/](docs/history/)                                         | The dated record of every infra change (deploys, cutovers, incidents, resource measurements) — one file per event, chronologically indexed |
-| [docs/AUTH_FLOWS.md](docs/AUTH_FLOWS.md)                               | For a frontend/QA engineer writing E2E tests — the signup/signin contract in HTTP terms, plus session/cookie/CORS gotchas |
+| [docs/history/](docs/history/)                                        | The dated record of every infra change (deploys, cutovers, incidents, resource measurements) — one file per event, chronologically indexed |
+| [docs/incidents/](docs/incidents/)                                     | Deep-dive write-ups for individual production incidents (e.g. a nonprod SYN-loss investigation)                          |
 | [docs/LOCAL_DEV.md](docs/LOCAL_DEV.md)                                 | Local runbook and the compose stack's scope                                                                               |
+| [docs/diagrams/](docs/diagrams/)                                       | Source `.mmd` + rendered `.png` for every architecture/auth/infra diagram, pinned to a digest-locked renderer             |
+
+**How to work in this repo (process, not product)**
+
+|                                                                        |                                                                                                                           |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | [docs/CODE_STYLE.md](docs/CODE_STYLE.md)                               | Judgement-level rules the formatter can't check                                                                           |
+| [docs/SESSION_LESSONS.md](docs/SESSION_LESSONS.md)                     | Operational lessons from running GSD workflows here — how work is *run*, the sibling to CODE_STYLE's how code is *written* |
 | [docs/DIAGRAM_CONVENTIONS.md](docs/DIAGRAM_CONVENTIONS.md)             | Which Kruchten 4+1 view a diagram should be, and why it matters                                                           |
+| [docs/learning/](docs/learning/)                                       | A chaptered guide explaining every major architectural decision, written for a new contributor's onboarding pass         |
+
+**Planning**
+
+|                                                                        |                                                                                                                           |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | [docs/plans/backend-modernization/](docs/plans/backend-modernization/) | The remaining modernization epics                                                                                         |
