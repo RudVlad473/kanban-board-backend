@@ -1,0 +1,20 @@
+# Suspended until 13-06's maintenance window (D-02, D-17). Plan 13-02.
+# Bumping the prod overlay's image setter marker before 13-06 is harmless: this Kustomization is
+# suspended, so nothing reconciles the bump into a live object until 13-06 unsuspends it.
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: apps-prod
+  namespace: flux-system
+spec:
+  interval: 10m
+  path: ./k8s/overlays/prod
+  prune: true
+  suspend: true
+  dependsOn:
+    - name: data
+    - name: edge
+  sourceRef:
+    kind: GitRepository
+    name: flux-system

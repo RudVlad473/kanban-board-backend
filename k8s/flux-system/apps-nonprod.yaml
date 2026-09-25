@@ -1,0 +1,28 @@
+# Suspended until 13-05 activates the nonprod app+Redpanda workload (D-02, D-17). Plan 13-02.
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: apps-nonprod
+  namespace: flux-system
+spec:
+  interval: 10m
+  path: ./k8s/overlays/nonprod
+  prune: true
+  wait: true
+  suspend: true
+  dependsOn:
+    - name: platform
+    - name: data
+  healthChecks:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: app
+      namespace: kanban-nonprod
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      name: redpanda
+      namespace: kanban-nonprod
+  sourceRef:
+    kind: GitRepository
+    name: flux-system

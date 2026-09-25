@@ -1,0 +1,17 @@
+# Suspended until 13-07 activates observability (D-02, D-17). Plan 13-02.
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: monitoring-controllers
+  namespace: flux-system
+spec:
+  interval: 10m
+  path: ./k8s/monitoring/controllers
+  prune: true
+  suspend: true
+  dependsOn:
+    - name: platform
+  sourceRef:
+    kind: GitRepository
+    name: flux-system

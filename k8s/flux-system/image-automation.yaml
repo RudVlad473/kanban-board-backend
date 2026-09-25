@@ -1,0 +1,79 @@
+# Flux image automation (D-15, D-16): two Docker Hub repos, one ImagePolicy each tracking the
+# sortable `main-<run_number>-<sha7>` tag scheme (13-01), one ImageUpdateAutomation pushing tag
+# bumps to main. Plan 13-02.
+---
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImageRepository
+metadata:
+  name: kanban-board-backend
+  namespace: flux-system
+spec:
+  image: docker.io/rudenkovladimir/kanban-board-backend
+  interval: 5m
+---
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImageRepository
+metadata:
+  name: kanban-board-backend-nonprod
+  namespace: flux-system
+spec:
+  image: docker.io/rudenkovladimir/kanban-board-backend-nonprod
+  interval: 5m
+---
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImagePolicy
+metadata:
+  name: kanban-board-backend-prod
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: kanban-board-backend
+  filterTags:
+    pattern: '^main-(?P<num>[0-9]+)-[a-f0-9]{7}$'
+    extract: $num
+  policy:
+    numerical:
+      order: asc
+---
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImagePolicy
+metadata:
+  name: kanban-board-backend-nonprod
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: kanban-board-backend-nonprod
+  filterTags:
+    pattern: '^main-(?P<num>[0-9]+)-[a-f0-9]{7}$'
+    extract: $num
+  policy:
+    numerical:
+      order: asc
+---
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImageUpdateAutomation
+metadata:
+  name: kanban-images
+  namespace: flux-system
+spec:
+  interval: 5m
+  sourceRef:
+    kind: GitRepository
+    name: flux-system
+  git:
+    checkout:
+      ref:
+        branch: main
+    commit:
+      author:
+        name: fluxcdbot
+        email: fluxcdbot@users.noreply.github.com
+      messageTemplate: |
+        chore(flux): bump images
+
+        {{ range .Updated.Images }}{{ println . }}{{ end }}
+    push:
+      branch: main
+  update:
+    path: ./k8s/overlays
+    strategy: Setters
