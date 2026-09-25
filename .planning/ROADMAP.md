@@ -138,7 +138,7 @@ Plans:
 **Goal:** Both environments run on a single-node k3s cluster on the existing Netcup VPS instead of Docker Compose. Nonprod moves first and completes a full GitOps deploy cycle; production follows in one announced maintenance window. Deploys are pull-based: Flux applies sortable `main-<run>-<sha7>` image tags. Traefik + cert-manager front both environments, with the Caddy-era rate limits re-derived and proven per client. Postgres runs in-cluster, restored from `pg_dump` with row-count parity. kube-prometheus-stack + Loki/Alloy provide observability, with the public dashboard links recreated. Compose (files, deploy jobs, volumes) is deleted only after the strict D-08 gate passes: automated checks, parity, 24h with zero OOMKilled/restarts, dump retained.
 **Requirements**: D-01..D-18 (CONTEXT.md decisions — no REQUIREMENTS.md for this not-yet-scoped milestone)
 **Depends on:** Phase 12
-**Plans:** 1/10 plans executed
+**Plans:** 4/10 plans executed
 
 Plans:
 **Wave 1**
@@ -147,9 +147,9 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 13-02-PLAN.md — k3s + Flux on netcup-prod beside Compose; interim Postgres bridge proven (A2); measured baseline (A1) (D-10, D-12, D-15, D-16)
-- [ ] 13-03-PLAN.md — kube-prometheus-stack/Loki/Alloy/exporter manifests + Kubernetes-label dashboards, suspended (D-07, D-17, D-18)
-- [ ] 13-04-PLAN.md — Prod overlay, in-cluster Postgres + NetworkPolicy, cert-manager + issuers, row-count SQL, suspended (D-05, D-11, D-13)
+- [x] 13-02-PLAN.md — k3s + Flux on netcup-prod beside Compose; interim Postgres bridge proven (A2); measured baseline (A1) (D-10, D-12, D-15, D-16)
+- [x] 13-03-PLAN.md — kube-prometheus-stack/Loki/Alloy/exporter manifests + Kubernetes-label dashboards, suspended (D-07, D-17, D-18)
+- [x] 13-04-PLAN.md — Prod overlay, in-cluster Postgres + NetworkPolicy, cert-manager + issuers, row-count SQL, suspended (D-05, D-11, D-13)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
