@@ -1,0 +1,36 @@
+# Interim Traefik config for the k3s-packaged Traefik chart. Plan 13-02 (D-13's edge controller,
+# interim NodePort topology per 13-RESEARCH.md's "Interim state" diagram).
+#
+# service.type NodePort + ports.web.nodePort: Traefik gets no host port of its own for the whole
+# interim -- Caddy remains the only process serving public 80/443 (ServiceLB is disabled in
+# infra/vm/k3s/config.yaml). Caddy's own reverse_proxy config points at
+# 127.0.0.1:30080 for the nonprod hostname (wired in 13-05).
+#
+# websecure not exposed: no TLS terminates in Traefik yet -- Caddy still owns TLS for every
+# hostname during the interim; cert-manager/ClusterIssuers land in 13-04 but stay inert
+# (Kustomizations suspended) until 13-06's cutover.
+#
+# PROVISIONAL (restart-ladder in 13-09): resource values below are k3s chart defaults, not yet
+# measured on this host -- 13-09 replaces them with a measured figure the same way every other
+# workload in this phase carries a MEASURED comment.
+#
+# resources.requests/limits keys confirmed against the packaged chart version via
+# `k3s kubectl get helmchart traefik -n kube-system -o yaml` at install time (Task 2, VM steps).
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    service:
+      type: NodePort
+    ports:
+      web:
+        nodePort: 30080
+      websecure:
+        expose:
+          default: false
+    logs:
+      access:
+        enabled: true

@@ -30,9 +30,13 @@ _spec.loader.exec_module(_gate)
 find_violations = _gate.find_violations
 find_uncovered_files = _gate.find_uncovered_files
 
-PROD_ALLOWED = {"caddy"}
+PROD_ALLOWED = {"caddy", "postgres"}
 NONPROD_ALLOWED = set()
-PROD_EXPECTED = {"caddy": {"80:80", "443:443"}}
+PROD_EXPECTED = {
+    "caddy": {"80:80", "443:443"},
+    # Plan 13-02 interim bridge exception: docker0 gateway only, port 5432 only.
+    "postgres": {"172.17.0.1:5432:5432"},
+}
 NONPROD_EXPECTED = {}
 
 
@@ -41,7 +45,7 @@ def clean_prod_doc():
         "services": {
             "caddy": {"ports": ["80:80", "443:443"]},
             "app": {"image": "app:latest"},
-            "postgres": {"image": "postgres:16"},
+            "postgres": {"image": "postgres:16", "ports": ["172.17.0.1:5432:5432"]},
         }
     }
 
@@ -161,6 +165,26 @@ def run_cases():
         "I4 (non-caddy allowed service violates its own EXPECTED_PORTS entry)",
         find_violations(doc, {"edge"}, "docker-compose.made-up.yml", {"edge": {"80:80", "443:443"}}),
         "I4 violated",
+    )
+
+    # I4 -- postgres's interim exception is EXACT, not "any 172.17.0.1 binding": 0.0.0.0/eth0/empty
+    # still fails even though postgres is now an allowed publisher.
+    doc = clean_prod_doc()
+    doc["services"]["postgres"]["ports"] = ["0.0.0.0:5432:5432"]
+    expect_violation(
+        "I4 (postgres on 0.0.0.0 instead of the docker0 gateway)",
+        find_violations(doc, PROD_ALLOWED, "docker-compose.prod.yml", PROD_EXPECTED),
+        "I4 violated",
+    )
+
+    # I1 -- a DIFFERENT, non-allowed service publishing on the same docker0-gateway IP still fails.
+    # The exception is scoped to the service `postgres`, not to the IP `172.17.0.1` generally.
+    doc = clean_prod_doc()
+    doc["services"]["app"]["ports"] = ["172.17.0.1:9999:9999"]
+    expect_violation(
+        "I1 (a non-allowed service publishing on the docker0 gateway IP is still a violation)",
+        find_violations(doc, PROD_ALLOWED, "docker-compose.prod.yml", PROD_EXPECTED),
+        "I1 violated",
     )
 
     # I5 -- network_mode carries an unresolved `${...}` interpolation. PyYAML reads this as a

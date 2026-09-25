@@ -60,7 +60,7 @@
 # alter what a green run of this gate means (T-13-01).
 #
 # CRD kinds this phase uses, each HEAD-checked live at the pinned commit above on 2026-09-25 and
-# confirmed present (all returned HTTP 200, so the `-skip` list below is empty):
+# confirmed present (all returned HTTP 200):
 #   helm.cattle.io/HelmChartConfig (v1), traefik.io/IngressRoute + Middleware (v1alpha1),
 #   cert-manager.io/Certificate + ClusterIssuer (v1), monitoring.coreos.com/ServiceMonitor +
 #   PodMonitor (v1), helm.toolkit.fluxcd.io/HelmRelease (v2), source.toolkit.fluxcd.io/
@@ -68,7 +68,9 @@
 #   image.toolkit.fluxcd.io/ImageRepository + ImagePolicy + ImageUpdateAutomation (v1).
 # `-ignore-missing-schemas` is never used (D-12 spirit: a genuinely missing schema must fail
 # loudly, not pass silently) -- if a future kind's schema goes missing at the pinned commit, add
-# it to KUBECONFORM_SKIP_KINDS below with a dated reason, never blanket-ignore.
+# it to KUBECONFORM_SKIP_KINDS below with a dated reason, never blanket-ignore. One kind IS
+# skipped as of 2026-09-25 (Plan 13-02): CustomResourceDefinition itself (apiextensions.k8s.io/v1,
+# a core kind, not a CRD-catalog kind) -- see KUBECONFORM_SKIP_KINDS below for why.
 
 set -euo pipefail
 
@@ -87,10 +89,21 @@ HELM_SHA256="86584a54def73570558f66f5111cc53dfed56689637ae32c1201205d494f54fb"
 CRDS_CATALOG_COMMIT="ad3b08c5045129d7bb1eeffd8e61719b2c8dd1e2"
 KUBERNETES_SCHEMA_VERSION="1.36.4"
 
-# Kinds known to be absent from the pinned CRDs-catalog commit, with a dated reason each. Empty
-# today (all 14 phase-13 kinds confirmed present 2026-09-25) -- kept as a named, documented
-# mechanism rather than adding `-ignore-missing-schemas` if one ever goes missing.
-KUBECONFORM_SKIP_KINDS=()
+# Kinds known to be absent from the pinned CRDs-catalog commit, with a dated reason each. Kept as
+# a named, documented mechanism rather than adding `-ignore-missing-schemas` if one ever goes
+# missing.
+#
+# CustomResourceDefinition -- added 2026-09-25 (Plan 13-02, Task 2). This is a CORE Kubernetes
+# kind (apiextensions.k8s.io/v1), not a CRD-catalog kind -- `k8s/flux-system/gotk-components.yaml`
+# (flux's own `flux install --export` output) embeds the CRD *definitions* themselves, which is a
+# different object kind than the custom resource *instances* (GitRepository, Kustomization, etc.)
+# the 14-kind list above already covers. Confirmed 2026-09-25 that
+# yannh/kubernetes-json-schema/master publishes NO customresourcedefinition-apiextensions-v1.json
+# at any schema version checked (v1.36.4, v1.30.0) -- a structural gap in that schema repo's
+# coverage, not a version-pin artifact. Skipping this kind loses nothing this gate's own KNOWN
+# HOLES doesn't already disclose: schema-shape validation for a hand-authored CRD would matter,
+# but every CRD here is flux's own unmodified `flux install --export` output, never hand-edited.
+KUBECONFORM_SKIP_KINDS=("CustomResourceDefinition")
 
 CACHE_ROOT="${XDG_CACHE_HOME:-$HOME/.cache}/kanban-k8s-tools"
 

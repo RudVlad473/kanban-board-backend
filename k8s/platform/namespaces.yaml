@@ -1,0 +1,23 @@
+# The four phase namespaces (Plan 13-02). kanban-prod/kanban-nonprod host the app+redpanda
+# workloads; kanban-data hosts the final Postgres StatefulSet (13-04) and, for now, the interim
+# postgres-bridge Service; monitoring hosts the observability stack (13-03).
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kanban-prod
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kanban-nonprod
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kanban-data
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring

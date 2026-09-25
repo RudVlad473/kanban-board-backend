@@ -307,9 +307,14 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
-    # No `ports:` entry at all (D-03) -- mirrors redpanda's own posture exactly: nothing is
-    # published to the host, admin access is SSH + `docker exec`.
-    # Mechanically enforced: scripts/verify-compose-ports.py fails CI if this service ever gains one.
+    # INTERIM (Plan 13-02, 2026-09-25), removed in 13-10: publishes 5432 on the docker0 bridge
+    # gateway ONLY, never on eth0 -- 13-RESEARCH.md Pattern 1 needs this so a k3s pod in
+    # kanban-nonprod can reach this still-Compose Postgres via a selector-less Service pointing
+    # at 172.17.0.1. DOCKER-USER's `! -i eth0 -j RETURN` rule means this bind is unreachable from
+    # the public internet by construction (verified live, docs/INFRA_RUNBOOK.md Firewall Layer 3).
+    # scripts/verify-compose-ports.py carries a narrow exception for exactly this one binding.
+    ports:
+      - "172.17.0.1:5432:5432"
     healthcheck:
       # -h 127.0.0.1 is load-bearing: during initialization the image's entrypoint runs a
       # temporary server with listen_addresses empty, so a socket-based probe (bare `pg_isready`

@@ -1,0 +1,45 @@
+# Interim cross-runtime bridge (13-RESEARCH.md Pattern 1): a selector-less Service paired with a
+# manually-authored EndpointSlice gives k3s pods a stable in-cluster DNS name
+# (postgres.kanban-data.svc.cluster.local) for the Compose Postgres container, which still lives
+# outside Kubernetes entirely during the interim. Plan 13-02 (D-11 assumption A2).
+#
+# clusterIP is pinned to 10.43.54.32 so 13-04's final Postgres Service (same clusterIP, same
+# name, same namespace) is a drop-in replacement at the 13-06 path switch -- clients never see the
+# ClusterIP change.
+#
+# EndpointSlice (discovery.k8s.io/v1), not the deprecated v1 Endpoints: at the 13-06 path switch,
+# the StatefulSet's controller-managed EndpointSlice must not collide with this hand-authored one.
+# Deleting this Kustomization (data.yaml's suspend, or the 13-06 path switch replacing this
+# manifest wholesale) removes both objects together.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: kanban-data
+spec:
+  clusterIP: 10.43.54.32
+  ports:
+    - name: postgres
+      port: 5432
+      protocol: TCP
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: postgres-bridge
+  namespace: kanban-data
+  labels:
+    kubernetes.io/service-name: postgres
+addressType: IPv4
+ports:
+  - name: postgres
+    port: 5432
+    protocol: TCP
+endpoints:
+  # 172.17.0.1: the docker0 bridge gateway IP on this host, where Compose Postgres publishes
+  # 172.17.0.1:5432 (docker-compose.prod.yml). Reachable from k3s pods per 13-RESEARCH.md
+  # Assumption A2 (DOCKER-USER's `! -i eth0 -j RETURN` allows non-external-interface traffic
+  # through) -- proven live by Task 2's A2 probe, not merely assumed.
+  - addresses:
+      - "172.17.0.1"

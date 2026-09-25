@@ -1,0 +1,21 @@
+# k3s server config, installed to /etc/rancher/k3s/config.yaml by infra/vm/k3s/install.sh.
+# Plan 13-02 (D-10, D-12): secrets encryption on, root-only kubeconfig, and the two addons this
+# interim topology must not run.
+
+# D-10: encrypt Secrets at rest in the embedded sqlite datastore.
+secrets-encryption: true
+
+# D-10: kubeconfig readable only by root (0600), never the k3s default 0644 -- CI's deploy/
+# deploy-nonprod SSH users must not be able to read cluster-admin credentials off disk.
+write-kubeconfig-mode: "0600"
+
+# D-12: neither addon runs during the interim (2026-09-25, Plan 13-02).
+#   - servicelb: k3s's bundled LoadBalancer controller would otherwise grab a hostPort for any
+#     LoadBalancer-type Service and fight Caddy for 80/443. Disabled for the WHOLE interim window;
+#     13-06 re-enables it only once Caddy stops owning the public edge and Traefik takes over
+#     80/443 directly.
+#   - metrics-server: kube-prometheus-stack's own Prometheus (13-03) supersedes it for this
+#     phase's purposes (no HPA in scope); running both wastes ~30-40MB for no consumer.
+disable:
+  - servicelb
+  - metrics-server

@@ -1,7 +1,17 @@
 #!/usr/bin/env python3
-r"""Gate: only `caddy` may publish a host port, and only 80/443.
+r"""Gate: only `caddy` may publish a host port (80/443), plus one narrow, exactly-scoped
+exception for `postgres`'s interim cross-runtime bridge (172.17.0.1:5432, Plan 13-02).
 Same shape as scripts/verify-caddy-image-tag.py: a committed, re-runnable check, not a comment
 restating an invariant that nothing enforces.
+
+INTERIM EXCEPTION (Plan 13-02, 2026-09-25, removed in 13-10): `postgres` in
+docker-compose.prod.yml is allowed to publish EXACTLY `172.17.0.1:5432:5432` -- binding to the
+docker0 bridge gateway IP only, never `0.0.0.0`/empty/eth0, and on port 5432 only. This is I4's
+usual exact-set discipline, not a looser check: any other host IP, any other port, or any other
+service publishing anything still fails. It exists so a k3s pod in kanban-nonprod can reach this
+still-Compose Postgres via a selector-less Service (13-RESEARCH.md Pattern 1) -- DOCKER-USER's
+`! -i eth0 -j RETURN` rule means this bind is unreachable from the public internet by construction
+(docs/INFRA_RUNBOOK.md Firewall Layer 3).
 
 WHY this exists, verified live on the VM 2026-09-05: `iptables -t nat -S PREROUTING` carries the
 `-A PREROUTING -m addrtype --dst-type LOCAL -j DOCKER` DNAT jump, so traffic to a published port
@@ -96,7 +106,7 @@ import sys
 # a value read out of the file it guards cannot disagree with it. The allowed set is PER FILE
 # (each covered path maps to its own set), never one global set shared across both files.
 ALLOWED_PUBLISHERS = {
-    "docker-compose.prod.yml": {"caddy"},
+    "docker-compose.prod.yml": {"caddy", "postgres"},
     "docker-compose.nonprod.yml": set(),
 }
 
@@ -112,7 +122,11 @@ DELIBERATELY_EXCLUDED = {
 # I4's exact literal set required per allowed publisher, keyed by the file that allows it, then by
 # service name -- allowlist membership alone leaves a service unconstrained without an entry here.
 EXPECTED_PORTS = {
-    "docker-compose.prod.yml": {"caddy": {"80:80", "443:443"}},
+    "docker-compose.prod.yml": {
+        "caddy": {"80:80", "443:443"},
+        # Plan 13-02 interim bridge: docker0 gateway only, never 0.0.0.0/empty/eth0.
+        "postgres": {"172.17.0.1:5432:5432"},
+    },
     "docker-compose.nonprod.yml": {},
 }
 
