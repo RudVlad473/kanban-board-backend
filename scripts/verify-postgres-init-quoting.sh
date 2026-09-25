@@ -58,6 +58,11 @@ PROD_USER="qtest_prod_app"
 NONPROD_USER="qtest_np_app"
 PROD_PASS="benign-prod-value"
 NONPROD_PASS="benign-np-value"
+# Extended Phase 13 plan 04 Task 2: MONITORING_DB_PASS is required by an optional
+# 02-create-monitoring-role.sh alongside 01's own two roles (k8s/data/postgres/init). Supplied
+# unconditionally so this harness still passes against an init dir that carries only 01 (the
+# entrypoint simply has no 02 script to source in that case) as well as one that carries both.
+MONITORING_PASS="benign-monitoring-value"
 
 # --- Hostile values, one per attack case. Named for their role in the test, not as credentials. ---
 # breaking: apostrophe + double quote + backslash + dollar + trailing space -- the current script's
@@ -139,6 +144,7 @@ docker run -d \
   -e NONPROD_DB_NAME="$NONPROD_DB" \
   -e NONPROD_DB_USER="$NONPROD_USER" \
   -e NONPROD_DB_PASS="$NONPROD_PASS" \
+  -e MONITORING_DB_PASS="$MONITORING_PASS" \
   postgres:16 >/dev/null
 
 # Readiness: poll up to 60s. Treat readiness as pg_isready succeeding over forced TCP. Abort early
@@ -213,6 +219,23 @@ check_cross_refused() {
 }
 check_cross_refused "$PROD_USER" "$PROD_PASS" "$NONPROD_DB" "prod role ($PROD_USER)"
 check_cross_refused "$NONPROD_USER" "$NONPROD_PASS" "$PROD_DB" "nonprod role ($NONPROD_USER)"
+
+# 5. The monitoring role (k8s/data/postgres/init/02-create-monitoring-role.sh), only asserted
+# when the init dir under test actually carries that script -- docker/postgres-init has no 02
+# script and must keep passing without one.
+if [[ -f "${INIT_DIR}/02-create-monitoring-role.sh" ]]; then
+  check_auth "monitoring" "$MONITORING_PASS" "$MAINT_DB" "monitoring role"
+  if OUT="$(run_psql "$SUPERUSER" "$SUPERUSER_PASS" "$MAINT_DB" \
+    "SELECT roleid::regrole::text FROM pg_auth_members m JOIN pg_roles r ON r.oid = m.member WHERE r.rolname = 'monitoring'")"; then
+    if echo "$OUT" | grep -qx "pg_monitor"; then
+      pass "monitoring role holds pg_monitor"
+    else
+      fail "monitoring role does not hold pg_monitor: $OUT"
+    fi
+  else
+    fail "could not query pg_auth_members for the monitoring role: $OUT"
+  fi
+fi
 
 if [[ "$FAIL_COUNT" -gt 0 ]]; then
   dump_logs_and_exit

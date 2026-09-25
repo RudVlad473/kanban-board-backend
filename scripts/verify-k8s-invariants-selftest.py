@@ -232,6 +232,80 @@ def run_cases():
     doc = {"kind": "Secret", "metadata": {"name": "app-env"}}
     expect_violation("I8", _gate.check_rendered_doc(doc, "fixture"), "I8:")
 
+    # I9 -- init-script byte identity between docker/postgres-init and the k8s init dir.
+    expect_violation(
+        "I9 (1-byte diff)",
+        _gate.check_i9_init_script_identity(b"same\n", b"different\n", "fixture-init.sh"),
+        "I9:",
+    )
+    expect_clean(
+        "I9 (identical, clean)",
+        _gate.check_i9_init_script_identity(b"same\n", b"same\n", "fixture-init.sh"),
+    )
+
+    # I10 -- a redirect route without the ACME-challenge-path negation must fire.
+    redirect_mw = {
+        "kind": "Middleware",
+        "metadata": {"name": "redirect-https", "namespace": "kanban-prod"},
+        "spec": {"redirectScheme": {"scheme": "https"}},
+    }
+    bad_route_ir = {
+        "kind": "IngressRoute",
+        "metadata": {"name": "app-http", "namespace": "kanban-prod"},
+        "spec": {
+            "entryPoints": ["web"],
+            "routes": [
+                {
+                    "match": "Host(`example.com`)",
+                    "middlewares": [{"name": "redirect-https"}],
+                }
+            ],
+        },
+    }
+    expect_violation(
+        "I10 (missing negation)",
+        _gate.check_i10_redirect_acme_exclusion([redirect_mw, bad_route_ir], "fixture"),
+        "I10:",
+    )
+    good_route_ir = {
+        "kind": "IngressRoute",
+        "metadata": {"name": "app-http", "namespace": "kanban-prod"},
+        "spec": {
+            "entryPoints": ["web"],
+            "routes": [
+                {
+                    "match": "Host(`example.com`) && !PathPrefix(`/.well-known/acme-challenge/`)",
+                    "middlewares": [{"name": "redirect-https"}],
+                }
+            ],
+        },
+    }
+    expect_clean(
+        "I10 (negation present, clean)",
+        _gate.check_i10_redirect_acme_exclusion([redirect_mw, good_route_ir], "fixture"),
+    )
+
+    # I10 -- a web-entrypoint route naming a Middleware undefined in its root/namespace fails
+    # closed as unclassifiable, even with no redirectScheme Middleware present at all.
+    undefined_mw_ir = {
+        "kind": "IngressRoute",
+        "metadata": {"name": "app-http", "namespace": "kanban-prod"},
+        "spec": {
+            "entryPoints": ["web"],
+            "routes": [
+                {
+                    "match": "Host(`example.com`)",
+                    "middlewares": [{"name": "does-not-exist"}],
+                }
+            ],
+        },
+    }
+    expect_violation(
+        "I10 (undefined Middleware, fail closed)",
+        _gate.check_i10_redirect_acme_exclusion([undefined_mw_ir], "fixture"),
+        "I10:",
+    )
+
     return fails
 
 
@@ -241,7 +315,9 @@ def main():
         for line in fails:
             print(f"SELFTEST FAIL: {line}")
         return 1
-    print("selftest OK -- I1-I8 each fire on an engineered violation; clean fixtures report nothing")
+    print(
+        "selftest OK -- I1-I10 each fire on an engineered violation; clean fixtures report nothing"
+    )
     return 0
 
 

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 r"""Gate: only the edge is exposed, memory is measured and dated, images are pinned and sortable,
-every k8s/ root is accounted for, and no Secret is committed (Phase 13 plan 01, Task 3).
+every k8s/ root is accounted for, no Secret is committed, the Postgres init scripts stay
+byte-identical to their Compose source, and no redirect route can ever match the ACME HTTP-01
+challenge path (Phase 13 plans 01/04).
 
 WHY this exists: this is the k8s-native successor of scripts/verify-compose-ports.py's "only the
 edge is public" invariant. That script guards docker-compose*.yml files and stops mattering once
@@ -60,6 +62,21 @@ I7: every directory under k8s/ that holds a kustomization.yaml is either rendere
     DELIBERATELY_EXCLUDED with a reason -- a root in neither set would be silently ungated.
 I8: no rendered object has `kind: Secret` -- D-10 requires every Secret be created on the VM from
     env files, never committed.
+I9: when docker/postgres-init/01-create-databases-and-roles.sh exists,
+    k8s/data/postgres/init/01-create-databases-and-roles.sh must be byte-identical to it -- a
+    one-byte difference fails. Read from disk directly (not part of any rendered root); a pure
+    function of two byte strings so the selftest can exercise it with no disk access.
+I10: an IngressRoute route attaching a Middleware whose spec is `redirectScheme` or
+    `redirectRegex` must fullmatch ``Host(`<host>`) && !PathPrefix(`/.well-known/acme-challenge/`)``.
+    Evaluated over every rendered root the gate already renders, so it covers the redirect routes
+    on the prod (13-04), monitoring (13-03) and nonprod (13-06) hostnames as each lands. Fails
+    closed: a `web`-entryPoint route naming a Middleware that is undefined in its own rendered
+    root and namespace cannot be classified, and is reported as a violation rather than skipped.
+    WHY: cert-manager's HTTP-01 solver answers on the `web` entryPoint. A redirect router that
+    also matches the challenge path sends the ACME CA to HTTPS, and issuance/renewal fails.
+    Traefik's own rule-length priority happens to favour the solver today, but an explicit
+    `priority` or a longer redirect rule silently inverts that. KNOWN HOLE: this is a rule-TEXT
+    check -- the live proof is an HTTP probe of the challenge path, run in the cutover runbook.
 
 A missing/malformed rendered document, or a root that fails to render entirely, is its own
 violation rather than a silently skipped root -- treating "I could not read this" as "nothing to
@@ -277,6 +294,77 @@ def check_i8(doc, label):
     return []
 
 
+ACME_EXCLUSION_RE = re.compile(
+    r"Host\(`[^`]+`\) && !PathPrefix\(`/\.well-known/acme-challenge/`\)"
+)
+REDIRECT_MIDDLEWARE_SPEC_KEYS = ("redirectScheme", "redirectRegex")
+
+
+def check_i9_init_script_identity(compose_bytes, k8s_bytes, label):
+    """I9: byte identity between the Compose init script and its k8s copy. Pure function of two
+    byte strings (no disk access) so the selftest can exercise it directly; the real call site in
+    main() reads both files first."""
+    if compose_bytes != k8s_bytes:
+        return [
+            f"I9: {label}: k8s/data/postgres/init copy is not byte-identical to "
+            f"docker/postgres-init's own script"
+        ]
+    return []
+
+
+def check_i10_redirect_acme_exclusion(docs, label):
+    """I10: every IngressRoute route attaching a redirectScheme/redirectRegex Middleware must
+    fullmatch the ACME-challenge-exclusion rule shape. Fails closed on a web-entrypoint route
+    naming a Middleware undefined in this same doc list (root+namespace). Pure function of a
+    rendered-document list (no disk/subprocess access) so the selftest can exercise it directly
+    with hand-built fixtures; the real call site in main() passes one root's own rendered docs.
+    """
+    violations = []
+    redirect_middlewares = set()
+    all_middlewares = set()
+    for doc in docs:
+        if not isinstance(doc, dict) or doc.get("kind") != "Middleware":
+            continue
+        key = (doc.get("metadata", {}).get("namespace"), doc.get("metadata", {}).get("name"))
+        all_middlewares.add(key)
+        spec = doc.get("spec") or {}
+        if any(k in spec for k in REDIRECT_MIDDLEWARE_SPEC_KEYS):
+            redirect_middlewares.add(key)
+
+    for doc in docs:
+        if not isinstance(doc, dict) or doc.get("kind") != "IngressRoute":
+            continue
+        ir_name = doc.get("metadata", {}).get("name", "<unnamed>")
+        ir_ns = doc.get("metadata", {}).get("namespace")
+        spec = doc.get("spec") or {}
+        entry_points = spec.get("entryPoints") or []
+        for route in spec.get("routes", []) or []:
+            if not isinstance(route, dict):
+                continue
+            match_rule = route.get("match", "")
+            mw_names = [
+                m.get("name") for m in (route.get("middlewares") or []) if isinstance(m, dict)
+            ]
+            for mw_name in mw_names:
+                mw_key = (ir_ns, mw_name)
+                is_redirect = mw_key in redirect_middlewares
+                is_defined = mw_key in all_middlewares
+                if not is_defined and "web" in entry_points:
+                    violations.append(
+                        f"I10: {label}: IngressRoute/{ir_name} route {match_rule!r} on "
+                        f"entryPoint web names Middleware {mw_name!r}, undefined in this "
+                        f"root/namespace -- cannot classify, failing closed"
+                    )
+                    continue
+                if is_redirect and not ACME_EXCLUSION_RE.fullmatch(match_rule):
+                    violations.append(
+                        f"I10: {label}: IngressRoute/{ir_name} route {match_rule!r} attaches "
+                        f"redirect Middleware {mw_name!r} but does not fullmatch the "
+                        f"ACME-challenge-exclusion shape"
+                    )
+    return violations
+
+
 def check_rendered_doc(doc, label, is_base_root=False):
     """Runs every rendered-object invariant (I1-I3, I5, I6, I8) against one parsed document.
 
@@ -399,10 +487,26 @@ def main():
             all_violations.append(f"{root}: failed to render ({e})")
             continue
         is_base_root = root.replace(os.sep, "/").startswith("k8s/base/")
-        for doc in yaml.safe_load_all(rendered):
-            if doc is None:
-                continue
+        root_docs = [d for d in yaml.safe_load_all(rendered) if d is not None]
+        for doc in root_docs:
             all_violations += check_rendered_doc(doc, root, is_base_root=is_base_root)
+        # I10 needs cross-object lookup (Middleware <-> IngressRoute) within one rendered root,
+        # so it runs once per root over that root's own doc list rather than per-document.
+        all_violations += check_i10_redirect_acme_exclusion(root_docs, root)
+
+    # I9: byte identity between the Compose init script and its k8s copy. A missing Compose
+    # source (a future Compose deletion post-D-04) makes this a no-op rather than a violation --
+    # nothing to compare against once Compose itself is gone.
+    compose_init = os.path.join(REPO_ROOT, "docker", "postgres-init", "01-create-databases-and-roles.sh")
+    k8s_init = os.path.join(REPO_ROOT, "k8s", "data", "postgres", "init", "01-create-databases-and-roles.sh")
+    if os.path.isfile(compose_init) and os.path.isfile(k8s_init):
+        with open(compose_init, "rb") as f:
+            compose_bytes = f.read()
+        with open(k8s_init, "rb") as f:
+            k8s_bytes = f.read()
+        all_violations += check_i9_init_script_identity(
+            compose_bytes, k8s_bytes, "k8s/data/postgres/init/01-create-databases-and-roles.sh"
+        )
 
     for path in sorted(glob.glob(os.path.join(REPO_ROOT, "k8s", "**", "*.yaml"), recursive=True)):
         rel = os.path.relpath(path, REPO_ROOT)
@@ -420,7 +524,9 @@ def main():
     print(
         f"invariants OK -- {len(roots)} kustomization root(s) checked; no NodePort/LoadBalancer "
         "Service, no hostNetwork/hostPID/hostPort/hostPath, every container's memory "
-        "requests+limits set and dated, no untagged/:latest image, no committed Secret"
+        "requests+limits set and dated, no untagged/:latest image, no committed Secret, "
+        "postgres init scripts byte-identical to Compose, no redirect route matches the ACME "
+        "challenge path"
     )
     return 0
 
