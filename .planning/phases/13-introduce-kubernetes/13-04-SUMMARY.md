@@ -268,3 +268,17 @@ None - no external service configuration required. Nothing in this plan touches 
 ---
 *Phase: 13-introduce-kubernetes*
 *Completed: 2026-09-25*
+
+## Self-Check: PASSED
+
+- `k8s/overlays/prod/kustomization.yaml` exists: FOUND
+- `k8s/data/postgres/postgres.yaml` exists: FOUND
+- `k8s/platform/cert-manager/cert-manager.yaml` exists: FOUND
+- `scripts/cutover/row-counts.sql` exists: FOUND
+- Commit `bf57bc1` exists in `git log`: FOUND
+- Commit `bc186a6` exists in `git log`: FOUND
+- Commit `bcc78c7` exists in `git log`: FOUND
+- Commit `cc69e1d` exists in `git log`: FOUND
+- `bash scripts/verify-k8s-manifests.sh` exits 0: PASSED (re-run at Self-Check time, 7/7 roots)
+- `python3 scripts/verify-k8s-invariants-selftest.py` exits 0: PASSED (re-run at Self-Check time)
+- `python3 scripts/verify-k8s-invariants.py` exits 0: PASSED (re-run at Self-Check time)
