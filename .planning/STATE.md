@@ -4,16 +4,16 @@ milestone: v1.3
 current_phase: 13
 current_phase_name: Introduce Kubernetes
 status: executing
-stopped_at: Phase 13 context gathered
-last_updated: "2026-09-25T12:04:41.416Z"
+stopped_at: Phase 13 wave 3 (13-05) complete; deploy.yml caddy-reload-inode-bug fixed and live-verified
+last_updated: "2026-09-25T18:45:00.000Z"
 last_activity: 2026-09-25
-last_activity_desc: Phase 13 execution started
-state_head: 49845b2b5d17acae945ff67dc55b34defec886f0
+last_activity_desc: Fixed deploy.yml's caddy-reload-inode-bug (force-recreate over exec reload), live-verified via a real production deploy; resumed and completed 13-05 Task 3 (GitOps cycle proof, kubectl health evidence, interim memory budget PASS by 268 MiB thin margin)
+state_head: 31c36fb
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 24
-  completed_plans: 14
+  completed_plans: 19
 milestone_name: Nonprod Environment & CI Hardening
 ---
 
@@ -29,9 +29,11 @@ See: .planning/PROJECT.md (updated 2026-09-08)
 ## Current Position
 
 Phase: 13 (Introduce Kubernetes) — EXECUTING
-Plan: 1 of 10
+Plan: 5 of 10 (Wave 3, 13-05) — COMPLETE. Waves 1-3 (13-01 through 13-05) done, merged, verified. Waves 4-8 (13-06 through 13-10) not started.
 Status: Executing Phase 13
-Last activity: 2026-09-25 — Phase 13 execution started
+Last activity: 2026-09-25 — Fixed a real production bug (deploy.yml's caddy-reload silently served stale config after a Caddyfile-only push, due to an inode mismatch), live-verified the fix (host/container Caddyfile md5sum match, ~1min container uptime confirming genuine recreation), then completed 13-05 Task 3: proved one full GitOps deploy cycle end to end, gathered kubectl-only health evidence, measured the interim memory budget (PASS, 5040 MiB projected vs 5308 MiB threshold — 268 MiB margin, flagged thin/provisional pending 13-06/13-07's real cert-manager/Prometheus-Operator/Alloy figures). One gap disclosed rather than hidden: 13-05 Task 2's verbatim rpk/reset-endpoint acceptance-criteria captures from a prior session are unreproducible from git history — logged as WINDOWS.md entry 9, open.
+
+Next: 13-06 (production cutover, one-way per D-04) — Wave 4. Read 13-05-SUMMARY.md and the runbook's new "Nonprod on k3s — Plan 13-05" section before starting; the memory margin is thin enough that 13-06 should not proceed on the assumption it's comfortable.
 
 ## Performance Metrics
 
@@ -99,6 +101,9 @@ decision before proceeding, not bypassed
 SSH too, with explicit acknowledgment this ladder briefly interrupts live public production
 traffic on every rung -- a materially higher-stakes decision than plan 12-05's authorization — Presented as its own fresh checkpoint decision rather than assumed to extend 12-05's blanket
 authorization, given the real-traffic-interruption and Let's Encrypt cert-safety risk profile
+
+- [Phase 13]: 13-05 resume session: fixed deploy.yml's caddy-reload-inode-bug (replaced `caddy reload` inside the running container with `docker compose up -d --force-recreate caddy`) before continuing 13-05 Task 3 rather than deferring it -- appleboy/scp-action's rename-based file replacement gives the new Caddyfile a new inode, but Docker's bind mount is resolved once at container start and kept pointing at the old one, so the old mechanism was fail-closed-looking but actually silently stale; force-recreate sidesteps the inode problem structurally and trades that for a fail-loud failure mode instead. Live-verified via a real production deploy (host/container Caddyfile md5sum match, ~1min container uptime confirming genuine recreation), not just a green CI job -- the same md5sum-comparison discipline that caught the bug in the first place.
+- [Phase 13]: 13-05 Task 3's interrupted-executor resume: the prior session's worktree (`agent-a4f43b113ff7a0069`) had no live agent to SendMessage-resume, but was clean and un-reaped, so it was rebased onto current main and then discarded in favor of a fresh `isolation="worktree"` dispatch once the project's own dispatch-isolation guard rejected manually pointing an Agent() call at a pre-existing worktree path -- no work was lost since the manual worktree's commits were already on main.
 
 ### Pending Todos
 
@@ -169,11 +174,13 @@ The 46 pending todos are individually listed and categorized in this document's 
 
 ## Session Continuity
 
-Last session: 2026-09-25T08:44:00.137Z
-Stopped at: Phase 13 context gathered
-Resume file: .planning/phases/13-introduce-kubernetes/13-CONTEXT.md
+Last session: 2026-09-25T18:45:00.000Z
+Stopped at: 13-05 fully complete (all 3 tasks, SUMMARY.md written, merged, pushed). No open checkpoint or handoff.
+Resume file: none — HANDOFF.json and both .continue-here.md checkpoints were consumed and deleted this session now that 13-05 is closed.
 
 ## Operator Next Steps
 
-- Phase 12 is complete and verified (21/21 must-haves, 6/6 plans). Start the next milestone with `/gsd-new-milestone`.
-- Three follow-up todos filed this session, worth triaging into the next milestone's scope or leaving pending: `.planning/todos/pending/2026-09-08-cadvisor-grafana-and-caddy-mem-limits-need-a-longer-observation-window-re-ladder.md`, `.planning/todos/pending/2026-09-08-grafana-admin-password-drift-from-env-prod.md`, and the `.env.prod.example` secret-guard false-positive noted mid-session (not yet filed as a todo per user's explicit "don't pick it up yet").
+- Phase 13 Wave 4 (13-06, production cutover) is next. It is a one-way decision per D-04 — read `.planning/phases/13-introduce-kubernetes/13-06-PLAN.md` and the 13-05-SUMMARY.md memory-budget verdict (PASS, but only a 268 MiB margin, explicitly flagged thin/provisional) before starting.
+- `deploy.yml`'s caddy-reload-inode-bug is fixed and live-verified (commit `37643d0`) — no longer a blocker for 13-06.
+- WINDOWS.md entry 9 (13-05 Task 2's unreproducible verbatim rpk/reset-endpoint acceptance-criteria capture) is open, not blocking, worth closing opportunistically.
+- Deferred, user-requested: reorganize `/docs` (9 top-level .md files + demo/diagrams/incidents/learning/netcup-report/plans subdirs) — still deferred; `docs/INFRA_RUNBOOK.md` just grew again this session (now ~300KB) and is a prime candidate. Two untracked items found in the working tree this session, not cleaned up (unclear provenance, predate this session): `docs/netcup-report/netcup_network_diagnostics.txt` and `docs/learning/.review-431836/` (a completed multi-agent review's scratch output, 20 findings) — triage or delete before/during the docs reorg.
