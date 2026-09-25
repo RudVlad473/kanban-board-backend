@@ -216,14 +216,15 @@ Docker network (`kanban-edge`) joining only the two edge pieces that must talk t
 exists so a change can be proven against a real broker, a real registry, and real TLS before it
 ever reaches production data. Full isolation proof (container/volume/network identity, a live
 signup-then-board-create that left production's row counts unchanged) is in
-[docs/INFRA_RUNBOOK.md](docs/INFRA_RUNBOOK.md)'s "Nonprod bring-up" and later sections.
+[docs/history/2026-08-18-nonprod-bring-up.md](docs/history/2026-08-18-nonprod-bring-up.md)'s
+"Nonprod bring-up" and later sections.
 
 **Interim note (Plan 13-05, 2026-09-25):** nonprod now runs on a k3s cluster on this same VM,
 behind the unchanged Caddy edge (Caddy proxies to Traefik's NodePort rather than directly to the
 Compose `app-nonprod` container) — production stays on Docker Compose until Plan 13-06's cutover.
 The Compose nonprod containers described above are stopped, not removed (cheap rollback until
-13-06). See [docs/INFRA_RUNBOOK.md](docs/INFRA_RUNBOOK.md)'s "Nonprod on k3s — Plan 13-05" section
-for the full cutover evidence, the GitOps deploy-cycle proof, and the measured interim memory
+13-06). See [docs/history/2026-09-25-nonprod-on-k3s.md](docs/history/2026-09-25-nonprod-on-k3s.md)'s
+"Nonprod on k3s — Plan 13-05" section for the full cutover evidence, the GitOps deploy-cycle proof, and the measured interim memory
 budget. The diagram above still shows nonprod's old Compose-only topology; the full redraw
 covering both runtimes happens in Plan 13-09.
 
@@ -259,7 +260,7 @@ A Flux `ImageUpdateAutomation` running in the k3s cluster polls Docker Hub direc
 bump to `k8s/overlays/nonprod/kustomization.yaml` on `main` when it finds a newer sortable tag, and
 Flux's own `Kustomization` reconciler applies the change — no SSH, no CI job, no `deploy.yml` run
 at all for that commit (`k8s/**` is on this workflow's paths-ignore list specifically to prevent a
-rebuild loop). `docs/INFRA_RUNBOOK.md`'s "Nonprod on k3s — Plan 13-05" section has the full cycle
+rebuild loop). `docs/history/2026-09-25-nonprod-on-k3s.md`'s "Nonprod on k3s — Plan 13-05" section has the full cycle
 proven end to end with SHAs and timestamps. Production is unaffected by this change and keeps
 deploying exactly as described above until Plan 13-06's cutover.
 
@@ -333,7 +334,8 @@ renewal (sessions are fixed-duration), and no caching layer.
 | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)                           | How the application works and why — the detail behind the highlights above                                                |
 | [docs/INFRA_ARCHITECTURE.md](docs/INFRA_ARCHITECTURE.md)               | The production deployment topology and the delivery path, in full                                                         |
-| [docs/INFRA_RUNBOOK.md](docs/INFRA_RUNBOOK.md)                         | Live-verified provider/firewall/DNS state, and the dated record of every infra change including nonprod's bring-up        |
+| [docs/INFRA_RUNBOOK.md](docs/INFRA_RUNBOOK.md)                         | Live-verified provider/firewall/DNS/database/backup reference state — durable how-to content only                        |
+| [docs/history/](docs/history/)                                         | The dated record of every infra change (deploys, cutovers, incidents, resource measurements) — one file per event, chronologically indexed |
 | [docs/AUTH_FLOWS.md](docs/AUTH_FLOWS.md)                               | For a frontend/QA engineer writing E2E tests — the signup/signin contract in HTTP terms, plus session/cookie/CORS gotchas |
 | [docs/LOCAL_DEV.md](docs/LOCAL_DEV.md)                                 | Local runbook and the compose stack's scope                                                                               |
 | [docs/CODE_STYLE.md](docs/CODE_STYLE.md)                               | Judgement-level rules the formatter can't check                                                                           |

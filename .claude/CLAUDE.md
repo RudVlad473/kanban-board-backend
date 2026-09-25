@@ -81,8 +81,8 @@ A Spring Boot 3.5.16 / Java 21 REST API backend for a Kanban board application (
 - Self-hosted PostgreSQL 16 - Database server, resource-capped. One container on the VPS serving
   BOTH environments' databases (production's `kanban_prod` and nonprod's `kanban_nonprod`, D-01)
   over the shared external `kanban-db` network (Phase 11, 2026-08-26; superseded Neon serverless
-  Postgres, decommissioned in 11-06 — see `docker-compose.prod.yml` and `docs/INFRA_RUNBOOK.md`'s
-  "Self-hosted Postgres cutover")
+  Postgres, decommissioned in 11-06 — see `docker-compose.prod.yml` and
+  `docs/history/2026-08-26-self-hosted-postgres-cutover.md`'s "Self-hosted Postgres cutover")
 - Self-hosted Redpanda - Kafka-protocol broker, resource-capped
 - Caddy - Automatic public HTTPS / reverse proxy. A pinned custom image
   (`docker/caddy/Dockerfile`, CI-built via `build-and-push-caddy-image`), not the stock `caddy:2` —

@@ -876,7 +876,7 @@ current tag must stay pullable for a cold VM restart.
 reason is that "the VM is a 2GB box with a documented OOM history"
 ([`deploy.yml`](../../.github/workflows/deploy.yml#L157-L162)). That premise is stale. The comment
 dates from the earlier host. The current Netcup VM has 7.8 GiB of RAM
-([`INFRA_RUNBOOK.md`](../INFRA_RUNBOOK.md#L20)). Step 3 proves the artifact, because "a green
+([`INFRA_RUNBOOK.md`](../INFRA_RUNBOOK.md#L24)). Step 3 proves the artifact, because "a green
 `xcaddy build` is not evidence the module was linked in". The build and the push are separate, so a broken image never
 reaches the registry.
 
@@ -994,7 +994,7 @@ eight Python scripts exited 0 on the current tree when this chapter was written.
   developer out. Each run also costs about 20 bcrypt hashes on the VPS, so it does not run on every
   deploy ([`verify-rate-limit.yml`](../../.github/workflows/verify-rate-limit.yml#L1-L21)). The
   workflow comment calls the VPS "a 2 GB VPS". That premise is stale: the current VM has 7.8 GiB
-  of RAM ([`INFRA_RUNBOOK.md`](../INFRA_RUNBOOK.md#L20)).
+  of RAM ([`INFRA_RUNBOOK.md`](../INFRA_RUNBOOK.md#L24)).
 
 ### Alternatives we rejected
 

@@ -256,7 +256,7 @@ HTTPS, proven end to end before any other exporter.
 
 There is no automated test of the running stack. Plan 12-03 verified live that every intended
 target was `up`, including `redpanda-nonprod:9644`
-([INFRA_RUNBOOK.md, "Monitoring role and metrics targets"](../INFRA_RUNBOOK.md)).
+([INFRA_RUNBOOK.md, "Monitoring role and metrics targets"](../history/2026-09-07-monitoring-role-and-metrics-targets.md)).
 `scripts/verify-compose-ports.py` in CI fails if any of these services gains a `ports:` entry
 (see [chapter 09](09-build-quality-and-ci.md)).
 
@@ -336,7 +336,7 @@ change in a future image would remove the only gate without a diff (compose comm
   change an existing admin password; use `grafana cli admin reset-admin-password`
   ([12-01-SUMMARY.md, Issues Encountered](../../.planning/phases/12-self-hosted-observability-stack/12-01-SUMMARY.md)).
   This caused an open drift: the deployed admin password does not match `.env.prod` (18 vs. 16
-  characters, [INFRA_RUNBOOK.md](../INFRA_RUNBOOK.md), Plan 12-05 known gap).
+  characters, [INFRA_RUNBOOK.md](../history/2026-09-08-observability-stack-resource-measurement.md), Plan 12-05 known gap).
 - During plan 12-01, a `docker exec ... wget --password=...` call put the admin password into the
   `docker events` argv log. The password was rotated. Since then, secrets reach a container only
   through stdin (for example, psql `\set` inside a heredoc).
@@ -470,7 +470,7 @@ returning values for both databases, the least-privilege positive and negative q
 
 ### Where this is recorded
 
-- [INFRA_RUNBOOK.md, "Monitoring role and metrics targets — Plan 12-03"](../INFRA_RUNBOOK.md), including "cAdvisor mount posture" and "postgres_exporter credential handling"
+- [INFRA_RUNBOOK.md, "Monitoring role and metrics targets — Plan 12-03"](../history/2026-09-07-monitoring-role-and-metrics-targets.md), including "cAdvisor mount posture" and "postgres_exporter credential handling"
 - [12-03-SUMMARY.md](../../.planning/phases/12-self-hosted-observability-stack/12-03-SUMMARY.md)
 - Compose comments on each service
 - Commits `72e7686`, `2ad3656`
@@ -666,7 +666,7 @@ and internal IPs before sharing.
 **OBS-18.** For about a month, every public panel showed "Datasource was not found". Every
 exporter was healthy and the logged-in view worked. The 2026-09-12 debug session found two
 separate conditions
-([INFRA_RUNBOOK.md, "Public Grafana dashboards rendered no data"](../INFRA_RUNBOOK.md)):
+([INFRA_RUNBOOK.md, "Public Grafana dashboards rendered no data"](../history/2026-09-12-public-grafana-dashboards-rendered-no-data-debug-session.md)):
 
 1. **The datasource ref must be a literal uid.** `node-exporter-full.json` used
    `"uid": "${ds_prometheus}"`; the other two used the name string `"Prometheus"`. The public
@@ -736,7 +736,7 @@ expectations too. On this worktree both scripts exit 0 (run for this chapter).
 
 ### Where this is recorded
 
-- [INFRA_RUNBOOK.md, "Public Grafana dashboards rendered no data — debug session (2026-09-12)"](../INFRA_RUNBOOK.md)
+- [INFRA_RUNBOOK.md, "Public Grafana dashboards rendered no data — debug session (2026-09-12)"](../history/2026-09-12-public-grafana-dashboards-rendered-no-data-debug-session.md)
 - [`.planning/debug/grafana-datasource-not-found.md`](../../.planning/debug/grafana-datasource-not-found.md)
 - Commit `f643255` (PR #17)
 
@@ -885,7 +885,7 @@ holds an arithmetic rule for Postgres only (see chapter 10).
 
 ### Where this is recorded
 
-- [INFRA_RUNBOOK.md, "Observability stack resource measurement — Plan 12-05"](../INFRA_RUNBOOK.md) and its addendum; "Caddy resource measurement — Plan 12-06"
+- [INFRA_RUNBOOK.md, "Observability stack resource measurement — Plan 12-05"](../history/2026-09-08-observability-stack-resource-measurement.md) and its addendum; [INFRA_RUNBOOK.md, "Caddy resource measurement — Plan 12-06"](../history/2026-09-08-caddy-resource-measurement.md)
 - [12-05-SUMMARY.md](../../.planning/phases/12-self-hosted-observability-stack/12-05-SUMMARY.md), [12-06-SUMMARY.md](../../.planning/phases/12-self-hosted-observability-stack/12-06-SUMMARY.md)
 - `.planning/todos/pending/2026-09-08-cadvisor-grafana-and-caddy-mem-limits-need-a-longer-observation-window-re-ladder.md`
 
@@ -910,7 +910,7 @@ the public health endpoint of production and nonprod.
 **OBS-22.** Quick task 260902-vjo added it after a false alarm. A frozen screenshot of the Netcup
 "Screen" console looked like an outage but showed week-old output. The workflow gives dated
 evidence of "was the service answering". This evidence does not depend on the VPS (header comment
-and [INFRA_RUNBOOK.md, "Triage — dating what the Netcup SCP 'Screen' console shows"](../INFRA_RUNBOOK.md)).
+and [INFRA_RUNBOOK.md, "Triage — dating what the Netcup SCP 'Screen' console shows"](../history/2026-09-02-triage-netcup-scp-screen-console.md)).
 The interval is 15 minutes, not 5: GitHub queues scheduled runs late, so `*/5` gives little real
 gain for three times the runs.
 

@@ -963,7 +963,7 @@ decision D-1: "Limit at the Caddy edge, not app-level Bucket4j."
   app-level per-IP limiter "would bucket the entire internet into one key".
 - Each signin costs a BCrypt hash on a VPS that also runs Redpanda. The 260903-dvp context calls
   the VPS "2 GB". That figure is wrong: the VM has 7.8 GiB
-  ([INFRA_RUNBOOK.md L20](../INFRA_RUNBOOK.md#L20)).
+  ([INFRA_RUNBOOK.md L24](../INFRA_RUNBOOK.md#L24)).
 - No per-user quota is needed: there is no billing, no tenancy, and no expensive authenticated
   endpoint.
 

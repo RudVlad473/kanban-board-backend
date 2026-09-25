@@ -69,7 +69,7 @@ containers: 11 in the production project and 2 in the nonprod project.
 The VM is a plain Docker host. Access is SSH with keys only (`PasswordAuthentication no`). CI
 connects as a dedicated `deploy` user in the `docker` group, which cannot `sudo`. A second user,
 `deploy-nonprod`, owns the nonprod directory
-([INFRA_RUNBOOK.md, "Deploy user setup — Plan 05-05 Task 1"](../INFRA_RUNBOOK.md)). The deploy
+([INFRA_RUNBOOK.md, "Deploy user setup — Plan 05-05 Task 1"](../history/2026-08-16-deploy-user-setup-task-1.md)). The deploy
 directories are `/opt/deploy/kanban-board-backend/` and `/opt/deploy/kanban-board-nonprod/`.
 Each holds a Compose file and a real `.env` file that is never committed.
 
@@ -167,7 +167,7 @@ directory. A `docker compose up` created a second, unrelated project with fresh,
 The cutover lost the 14 registered Avro schemas (they were still in the orphaned
 `root_redpanda-data` volume) and forced a new Let's Encrypt certificate. The operator copied the
 old Redpanda volume into the new one with a one-off `alpine` container. All 14 subjects came
-back ([INFRA_RUNBOOK.md, "Deviation found and fixed: Compose project name was directory-derived"](../INFRA_RUNBOOK.md)).
+back ([INFRA_RUNBOOK.md, "Deviation found and fixed: Compose project name was directory-derived"](../history/2026-08-16-deploy-user-setup-task-1.md)).
 The fix is the `name:` pin (`5eea749`). The nonprod file copies the same pin.
 
 ### Trade-offs and limits
@@ -179,7 +179,7 @@ The fix is the `name:` pin (`5eea749`). The nonprod file copies the same pin.
 
 ### Where this is recorded
 
-- [INFRA_RUNBOOK.md, "Deploy user setup — Plan 05-05 Task 1"](../INFRA_RUNBOOK.md)
+- [INFRA_RUNBOOK.md, "Deploy user setup — Plan 05-05 Task 1"](../history/2026-08-16-deploy-user-setup-task-1.md)
 - [`.planning/quick/260804-nd3-remap-docker-compose-yml-postgres-host-p/`](../../.planning/quick/)
   (the 5433 remap, commit `ffa5587`)
 
@@ -495,7 +495,7 @@ and nonprod were two branches of one project, so they shared the allowance. The 
 `minimum-idle=1` and `keepalive-time=120000` kept both computes awake on purpose, to avoid
 cold-start latency. The allowance ran out mid-month, and both environments went down with no
 deploy. The quota reset date was 2026-09-01, and only a paid plan could restore access earlier
-([INFRA_RUNBOOK.md, "Self-hosted Postgres cutover — Plan 11-02"](../INFRA_RUNBOOK.md)). The team
+([INFRA_RUNBOOK.md, "Self-hosted Postgres cutover — Plan 11-02"](../history/2026-08-26-self-hosted-postgres-cutover.md)). The team
 moved the database onto the VM on 2026-08-26.
 
 **INFRA-11.** Decision D-01 in
@@ -559,8 +559,9 @@ Neon held are gone. All sessions were lost too, so every signed-in browser was s
 
 - [11-CONTEXT.md](../../.planning/phases/11-migrate-database-from-neon-to-self-hosted-postgres/11-CONTEXT.md)
   (D-01 to D-13)
-- [INFRA_RUNBOOK.md: "Database — self-hosted PostgreSQL", "Decommission Record — Plan 11-06",
-  "Provisioning script hardening — Plan 11-07"](../INFRA_RUNBOOK.md)
+- [INFRA_RUNBOOK.md, "Database — self-hosted PostgreSQL"](../INFRA_RUNBOOK.md),
+  [INFRA_RUNBOOK.md, "Decommission Record — Plan 11-06"](../history/2026-08-26-decommission-record-neon.md),
+  [INFRA_RUNBOOK.md, "Provisioning script hardening — Plan 11-07"](../history/2026-08-26-provisioning-script-hardening.md)
 - Commits `01b04d1` (shared service), `7a3874f` (cutover record), `a48706a` (decommission)
 
 ## Memory caps and how they are measured
@@ -656,7 +657,7 @@ The Netcup "Screen" console keeps old kernel lines forever, with timestamps in s
 On 2026-09-02 a screenshot of the 2026-08-26 kills was reported as an outage. The runbook now has
 a triage order. Curl both health endpoints first, then run `docker inspect`, then `dmesg -T`.
 Convert the time zones, because `dmesg -T` shows CEST and `docker inspect` shows UTC
-([INFRA_RUNBOOK.md, "Triage — dating what the Netcup SCP Screen console shows"](../INFRA_RUNBOOK.md)).
+([INFRA_RUNBOOK.md, "Triage — dating what the Netcup SCP Screen console shows"](../history/2026-09-02-triage-netcup-scp-screen-console.md)).
 
 ### Trade-offs and limits
 
@@ -724,7 +725,7 @@ The reset endpoint is `POST /api/admin/reset` with an `X-Reset-Token` header
 ### Why we chose it
 
 **INFRA-18.** The runbook and the file header give two reasons for a separate file and project
-([INFRA_RUNBOOK.md, "Nonprod bring-up — Plan 08-01", "Deviations"](../INFRA_RUNBOOK.md)):
+([INFRA_RUNBOOK.md, "Nonprod bring-up — Plan 08-01", "Deviations"](../history/2026-08-18-nonprod-bring-up.md)):
 
 1. Requirement NONPROD-01 needs a distinct project name, and one Compose file carries one name.
 2. The researched alternative, `docker compose -f docker-compose.prod.yml --env-file .env.nonprod
@@ -768,7 +769,7 @@ truly empty reset target, with no seed data. Each test creates its own fixtures.
   and [`ResetServiceE2ETest`](../../src/test/java/com/vrudenko/kanban_board/e2e/reset/ResetServiceE2ETest.java).
 - Live proof on 2026-08-18. After the reset, 8 tables went to 0 rows and `flyway_schema_history`
   stayed at 7. The same call against production answered `401 UNAUTHENTICATED`, because the bean
-  does not exist there ([INFRA_RUNBOOK.md, "Nonprod reset endpoint — Plan 08-02"](../INFRA_RUNBOOK.md)).
+  does not exist there ([INFRA_RUNBOOK.md, "Nonprod reset endpoint — Plan 08-02"](../history/2026-08-18-nonprod-reset-endpoint.md)).
 - After a deploy, CI job `health-check-nonprod` polls the nonprod health endpoint (see chapter 09).
 
 ### Where this is recorded
@@ -854,7 +855,7 @@ that the action ignored, and a failed schema registration let `up -d` run anyway
 **INFRA-21.** After the cutover to self-hosted Postgres, the GitHub runner had no route to a
 container with no host port, and both Flyway jobs failed. Decision D-13 (plan 11-05) chose a
 one-off container on the VM over SSH. The runbook records the option set
-([INFRA_RUNBOOK.md, "CI Flyway verification over SSH — Plan 11-05"](../INFRA_RUNBOOK.md)):
+([INFRA_RUNBOOK.md, "CI Flyway verification over SSH — Plan 11-05"](../history/2026-08-26-ci-flyway-verification-over-ssh.md)):
 
 | Option | Result |
 |--------|--------|
@@ -882,7 +883,7 @@ green deploys. The file timestamps on the VM showed the difference. Quick task 2
 the list to seven and added
 [`scripts/verify-deploy-scp-coverage.py`](../../scripts/verify-deploy-scp-coverage.py). The script
 fails a pull request if the SCP list does not include a repo-relative bind mount
-([INFRA_RUNBOOK.md, "Deploy SCP coverage gap"](../INFRA_RUNBOOK.md)).
+([INFRA_RUNBOOK.md, "Deploy SCP coverage gap"](../history/2026-09-08-deploy-scp-coverage-gap-quick-task-260908-sj9.md)).
 
 **INFRA-25.** All services share the `x-logging` anchor: `json-file`, `max-size: "10m"`,
 `max-file: "3"` ([`docker-compose.prod.yml` L20-L33](../../docker-compose.prod.yml#L20-L33)). Worst
@@ -916,7 +917,7 @@ case is 30 MB per container. One anchor, not per-service copies, so a new servic
 ### Where this is recorded
 
 - [INFRA_ARCHITECTURE.md, "Scenario (+1) View — Delivery Path"](../INFRA_ARCHITECTURE.md)
-- [INFRA_RUNBOOK.md, "Automated deploy — Plan 05-05 Task 2 and Task 3"](../INFRA_RUNBOOK.md)
+- [INFRA_RUNBOOK.md, "Automated deploy — Plan 05-05 Task 2 and Task 3"](../history/2026-08-16-automated-deploy-task-2-and-task-3.md)
 - Commits `a536e60` (Flyway over SSH), `5d31c5e` (SCP coverage gate)
 
 ## Backups

@@ -100,8 +100,8 @@ different bytes to the socket file, but the Docker API's dangerous operations (c
 privileged container, mounting the host filesystem into one) are HTTP requests over that socket,
 not filesystem writes — a real, accepted exception, not a control that fully closes the risk it
 sounds like it closes. `cadvisor`'s actual deployed mount set is a dated, disclosed amendment to
-D-05's literal list (plan 12-03; full reasoning in `docs/INFRA_RUNBOOK.md`'s "### cAdvisor mount
-posture"). `node-exporter` holds a read-only bind of the host's root filesystem
+D-05's literal list (plan 12-03; full reasoning in
+`docs/history/2026-09-07-monitoring-role-and-metrics-targets.md`'s "cAdvisor mount posture"). `node-exporter` holds a read-only bind of the host's root filesystem
 (`/:/host:ro,rslave`) to reach real host CPU/memory/disk metrics without `network_mode: host` or
 `pid: host` (both forbidden or unneeded) — with one disclosed consequence: `node_network_*` series
 report the HOST's full interface set, not just this container's own namespace, because sysfs's
@@ -281,7 +281,7 @@ rather than directly to a Compose container. Production stays on Docker Compose,
 accurately by the diagram and job graph below, until Plan 13-06's cutover. The diagram above and
 the job-graph description below both still describe nonprod's pre-13-05, Compose-only,
 SSH-deployed shape — they are accurate for production and stale for nonprod until Plan 13-09's
-redraw. See `docs/INFRA_RUNBOOK.md`'s "Nonprod on k3s — Plan 13-05" section for the current
+redraw. See `docs/history/2026-09-25-nonprod-on-k3s.md`'s "Nonprod on k3s — Plan 13-05" section for the current
 nonprod topology, the GitOps deploy-cycle proof, and the measured interim memory budget.
 
 This document describes `docker-compose.prod.yml`, `Caddyfile`, `docker/caddy/Dockerfile`,

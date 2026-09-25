@@ -21,7 +21,8 @@ originally written.
 
 Kafka-in-production is no longer a deferred decision (`KAFKA-V2-01` is resolved by the Redpanda
 service in `docker-compose.prod.yml`) — its listener/network configuration and volume durability
-are documented in `docs/INFRA_RUNBOOK.md`'s "Manual deploy" and "Log Rotation Observation"
+are documented in `docs/history/2026-08-16-manual-deploy-task-1.md`'s "Manual deploy" and
+`docs/history/2026-08-17-log-rotation-observation-task-2.md`'s "Log Rotation Observation"
 sections. TLS/SASL on the internal Kafka listener remains out of scope, since that listener never
 leaves the VM's internal Docker network (no host port is published) — see
 `docs/INFRA_ARCHITECTURE.md`'s Physical/Deployment view for the trust-boundary reasoning.
