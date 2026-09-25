@@ -1,0 +1,28 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-09-25T21:08:31.959Z",
+  "phase": "13",
+  "phase_name": "Introduce Kubernetes",
+  "phase_dir": ".planning/phases/13-introduce-kubernetes",
+  "plan": 6,
+  "task": 1,
+  "total_tasks": 3,
+  "status": "paused",
+  "completed_tasks": [],
+  "remaining_tasks": [
+    {"id": 1, "name": "D-01 go/no-go — move production to k3s in a named maintenance window (checkpoint:decision, gate=blocking)", "status": "awaiting_operator_decision"},
+    {"id": 2, "name": "Stage W1-W4 locally (unpushed), validate them, rehearse the restore against a pre-window dump", "status": "not_started"},
+    {"id": 3, "name": "Run the maintenance window — stop, dump, restore with parity, start on k3s, take over 80/443, staging then production certs, retarget CI", "status": "not_started"}
+  ],
+  "blockers": [
+    {"description": "13-06 Task 1 is a blocking checkpoint:decision — the plan will not proceed to Task 2/3 without an explicit operator reply (proceed <time> / postpone / abandon). All required decision-context evidence has already been gathered fresh this session (see decisions/context_notes below) and presented to the operator; no reply was given before /gsd-pause-work was invoked.", "type": "human_action", "workaround": "none — this is the correct behavior for a one-way, gate=blocking checkpoint"}
+  ],
+  "async_jobs": [],
+  "human_actions_pending": [
+    {"action": "Answer 13-06 Task 1's checkpoint: proceed <time> (and confirm the window was announced), postpone, or abandon", "context": "One-way production cutover (D-01 combined with D-04 — reversible only until 13-10 deletes Compose volumes). 13-05's own memory-budget verdict is PASS by 268 MiB but explicitly flagged as a thin, provisional margin pending re-measurement once cert-manager/observability are actually installed. ~30-45 min of real public downtime if approved. Approving also authorizes 13-07 to start immediately after.", "blocking": true}
+  ],
+  "decisions": [],
+  "uncommitted_files": [" M .planning/config.json", "?? .planning/phases/13-introduce-kubernetes/.gitkeep", "?? .zed/settings.json"],
+  "next_action": "Present 13-06 Task 1's checkpoint decision to the operator again (the evidence gathered this session — 13-05's PASS-by-268MiB verdict flagged thin/provisional, D-02 GitOps SHAs, empty AAAA records for all 3 hostnames, branch protection still 404, no in-flight deploy.yml run — is all still fresh as of this pause and does not need re-gathering unless meaningful time has passed). Do not proceed to Task 2 (staging W1-W4) without an explicit proceed/postpone/abandon reply.",
+  "context_notes": "This is the biggest decision in Phase 13 so far: a genuinely one-way production cutover from Docker Compose to k3s, with real public downtime, gated by the plan's own checkpoint:decision (gate=blocking) — not something to wave through. All prerequisite evidence has already been verified fresh (not from memory): 13-05's memory-budget PASS verdict (268 MiB margin, explicitly called thin/provisional by 13-05's own SUMMARY with a stated recommendation to re-measure before trusting it), the D-02 GitOps cycle proof with real SHAs, empty AAAA records on all three hostnames (no IPv6 exposure risk), branch protection still absent (404, matches plan assumption), and no in-flight deploy.yml run blocking a window start. The full decision was presented to the operator in the conversation immediately before this pause, following CLAUDE.md's decision-quality bar (consequence-labeled options, a stated recommendation with reasoning, what happens on silence). No reply was given before pausing. On resume, re-present that same summary (it's still accurate unless significant time passed) rather than silently picking a time or assuming consent — this checkpoint exists specifically so a human, not the agent, makes this call."
+}
