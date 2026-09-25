@@ -210,6 +210,72 @@ check(
     _gate.find_uid_mismatches(dashboard([panel()]), "d.json", "rYdddlPWk") == [],
 )
 
+print("k8s scope -- Phase 13 plan 03 (D-07/D-18)")
+
+v = _gate.find_datasource_violations(
+    dashboard([panel(datasource={"type": "prometheus", "uid": "${DS_PROMETHEUS}"})]),
+    "d.json",
+    KNOWN_UIDS,
+    _gate.K8S_DATASOURCES,
+)
+check(
+    "a k8s-scope dashboard with a ${DS_*} datasource fails",
+    len(v) == 1 and "template variable" in v[0],
+    v,
+)
+
+import tempfile
+
+with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as f:
+    f.write(
+        "apiVersion: helm.toolkit.fluxcd.io/v2\n"
+        "kind: HelmRelease\n"
+        "metadata: {name: kube-prometheus-stack, namespace: monitoring}\n"
+        "spec:\n"
+        "  values:\n"
+        "    grafana:\n"
+        "      image:\n"
+        f"        tag: \"{_gate.PINNED_GRAFANA_TAG}\"\n"
+    )
+    matching_hr_path = f.name
+v = _gate.find_grafana_version_drift_k8s(matching_hr_path)
+check("a HelmRelease pinning the expected Grafana tag passes", v == [], v)
+os.unlink(matching_hr_path)
+
+with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as f:
+    f.write(
+        "apiVersion: helm.toolkit.fluxcd.io/v2\n"
+        "kind: HelmRelease\n"
+        "metadata: {name: kube-prometheus-stack, namespace: monitoring}\n"
+        "spec:\n"
+        "  values:\n"
+        "    grafana:\n"
+        "      image:\n"
+        "        tag: \"14.0.0\"\n"
+    )
+    drifted_hr_path = f.name
+v = _gate.find_grafana_version_drift_k8s(drifted_hr_path)
+check(
+    "a HelmRelease pinning a drifted Grafana tag is rejected",
+    len(v) == 1 and "14.0.0" in v[0],
+    v,
+)
+os.unlink(drifted_hr_path)
+
+v = _gate.find_k8s_literal_violations(
+    'up{job="prometheus-node-exporter",instance="node-exporter:9100"}', "d.json"
+)
+check(
+    "a surviving Docker-era literal in a k8s dashboard is rejected",
+    len(v) == 1 and "node-exporter:9100" in v[0],
+    v,
+)
+
+v = _gate.find_k8s_literal_violations(
+    'up{job="prometheus-node-exporter",instance="netcup-prod-node"}', "d.json"
+)
+check("a fully rewritten k8s query passes", v == [], v)
+
 print()
 if failures:
     print(f"SELFTEST FAILED: {len(failures)} case(s): {failures}")

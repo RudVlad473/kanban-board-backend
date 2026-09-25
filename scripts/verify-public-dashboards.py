@@ -40,11 +40,21 @@ HTTP 200 with 793-803 datapoints each while every panel rendered blank. A gate t
 queries are well-formed reports success on a dashboard no browser can draw. That is precisely what
 happened: this file passed, CI was green, and two of the three public dashboards were still broken.
 
-SCOPE: every *.json under docker/grafana/provisioning/dashboards/json/, split into two disjoint
-sets so a new dashboard cannot land ungated (I4): PUBLIC_DASHBOARDS, checked against every
-invariant, and DELIBERATELY_PRIVATE, documented and exempted from the public-only invariants. I1
-(datasource refs resolve by uid) applies to BOTH sets -- a name-string ref happens to work in the
-authenticated path, but it is the same latent defect one "share publicly" click away.
+DUAL SCOPE (Phase 13 plan 03, D-07/D-18): the observability stack is migrating from Compose to
+Kubernetes (kube-prometheus-stack). Until 13-10 deletes the Compose scope, BOTH copies of every
+public dashboard must independently pass every invariant below -- the k8s copies are new files
+under a new directory (k8s/monitoring/configs/dashboards/), not a replacement of the Compose ones.
+A scope is a (json_dir, uid_source, grafana_version_source) triple; every invariant below runs once
+per scope, against that scope's own datasource-uid and Grafana-version ground truth. A dashboard
+file that is expected in a scope but does not yet exist there (Task 1 of 3 in this plan; the k8s
+scope's cadvisor/postgres-exporter dashboards land in Tasks 2-3) is listed as PENDING so the gate
+names exactly what is still missing, rather than silently passing a scope with 1 of 3 dashboards.
+
+SCOPE: every *.json under each scope's json_dir, split into two disjoint sets so a new dashboard
+cannot land ungated (I4): PUBLIC_DASHBOARDS, checked against every invariant, and
+DELIBERATELY_PRIVATE, documented and exempted from the public-only invariants. I1 (datasource refs
+resolve by uid) applies to BOTH sets -- a name-string ref happens to work in the authenticated
+path, but it is the same latent defect one "share publicly" click away.
 
 KNOWN HOLES, enumerated rather than left to be rediscovered:
   * This reads the COMMITTED JSON, not the running Grafana. A dashboard edited in the UI and saved
@@ -53,11 +63,16 @@ KNOWN HOLES, enumerated rather than left to be rediscovered:
     true; the authoritative list lives at GET /api/dashboards/public-dashboards on the VM.
   * Passing I2 does NOT mean a panel renders. It means the query is free of the specific defect
     measured above. A query can still be wrong, reference a renamed metric, or match nothing --
-    proving a panel returns data needs a live Prometheus, which this gate does not have.
+    proving a panel returns data needs a live Prometheus, which this gate does not have. For the
+    k8s scope specifically, "renders data" is proven only live, at the 13-07 activation -- this
+    gate proves only that the query shape is public-renderer-safe.
   * The hardcoded label values that replaced the template variables (instance="node-exporter:9100",
-    job="node", ...) are correct for a single-host deployment and are NOT checked against live
-    Prometheus here. If the stack ever grows a second node or an exporter is renamed, this gate
-    stays green while the dashboards quietly narrow to a host that no longer exists.
+    job="node", ... for Compose; job="prometheus-node-exporter", instance=<k8s node name> for k8s)
+    are correct for a single-host deployment and are NOT checked against live Prometheus here. If
+    the stack ever grows a second node or an exporter is renamed, this gate stays green while the
+    dashboards quietly narrow to a host that no longer exists. For the k8s scope, the exact node
+    name is not knowable until k3s is actually installed (13-07); the committed placeholder is
+    verified live at that activation, not here.
   * A dashboard can be moved into DELIBERATELY_PRIVATE in the same pull request that adds a
     variable to it. This gate makes that a REVIEWED choice, not an impossible one.
 """
@@ -68,17 +83,31 @@ import os
 import re
 import sys
 
-JSON_DIR = "docker/grafana/provisioning/dashboards/json"
+# Compose scope (unchanged) -- deleted entirely by 13-10 once the k8s scope is proven live.
+COMPOSE_JSON_DIR = "docker/grafana/provisioning/dashboards/json"
 DATASOURCES = "docker/grafana/provisioning/datasources/datasources.yaml"
 COMPOSE = "docker-compose.prod.yml"
 
+# k8s scope (Phase 13 plan 03) -- the Kubernetes-label rewrite of the same three dashboards.
+K8S_JSON_DIR = "k8s/monitoring/configs/dashboards"
+K8S_DATASOURCES = "k8s/monitoring/configs/datasources.yaml"
+K8S_HELMRELEASE = "k8s/monitoring/controllers/kube-prometheus-stack.yaml"
+
 # Shared through Grafana's public-dashboard feature, so subject to every invariant below.
-# Verified against GET /api/dashboards/public-dashboards on the VM, 2026-09-12.
+# Verified against GET /api/dashboards/public-dashboards on the VM, 2026-09-12. Same file names,
+# same uids, in both scopes -- the k8s copies are a runtime-label rewrite of the identical
+# dashboard, not a new one.
 PUBLIC_DASHBOARDS = {
     "node-exporter-full.json": "rYdddlPWk",
     "cadvisor.json": "pMEd7m0Mz",
     "postgres-exporter.json": "v5ciIbUZz",
 }
+
+# k8s-scope files not yet authored. Task 1 of this 3-task plan adds only node-exporter-full.json;
+# Tasks 2-3 add the remaining two and remove their names from this set. Listed explicitly so the
+# gate says exactly which files are still missing, rather than a scope silently passing with 1 of
+# 3 dashboards present.
+K8S_PENDING = {"cadvisor.json", "postgres-exporter.json"}
 
 # Not shared publicly: exempt from I2/I3 (they may use template variables freely), still subject
 # to I1. Empty today -- every provisioned dashboard is public. A future admin-only dashboard goes
@@ -97,8 +126,11 @@ BUILTIN_DATASOURCE_UIDS = {"grafana", "-- Grafana --", "-- Mixed --", "-- Dashbo
 
 # The image tag docker-compose.prod.yml pins, and therefore the only version PANEL_PLUGINS below
 # describes. Checked against the Compose file at run time (I6) so a Grafana bump cannot silently
-# leave this allowlist describing a version nothing runs any more.
+# leave this allowlist describing a version nothing runs any more. The k8s scope's HelmRelease
+# pins the SAME tag (kube-prometheus-stack.yaml values.grafana.image.tag) -- checked against that
+# file too, so a drift between the two runtimes' Grafana versions is caught the same way.
 PINNED_GRAFANA_IMAGE = "grafana/grafana:13.2.1"
+PINNED_GRAFANA_TAG = "13.2.1"
 
 # Derived, not recalled: every directory under /usr/share/grafana/public/app/plugins/panel/ that
 # contains a plugin.json, read out of the pinned image itself on 2026-09-12. Exactly 30. The bare
@@ -123,6 +155,17 @@ STRUCTURAL_PANEL_TYPES = {"row"}
 # is rejected regardless; these two get a specific replacement because they are what the vendored
 # grafana.com dashboards actually carry.
 ANGULAR_REPLACEMENTS = {"graph": "timeseries", "singlestat": "stat"}
+
+# k8s-scope-only (I7 below): a Docker/Compose-era literal left in a k8s dashboard means the label
+# rewrite was incomplete -- the panel will silently render "No data" against the real chart-scraped
+# series (13-RESEARCH.md Pitfall 7), a failure this gate's other invariants cannot see because the
+# query is otherwise well-formed.
+K8S_BANNED_LITERALS = (
+    "cadvisor:8080",
+    "node-exporter:9100",
+    "postgres-exporter:9187",
+    "container_label_com_docker",
+)
 
 
 def walk(node, fn):
@@ -182,7 +225,7 @@ def find_panel_type_violations(dashboard, filename):
 
 
 def find_grafana_version_drift(compose_text):
-    """I6: the allowlist above describes the image Compose actually pins, or this gate is fiction.
+    """I6 (Compose scope): the allowlist above describes the image Compose actually pins.
 
     A panel-plugin allowlist is only true of one Grafana version. Bumping the image without
     re-deriving it would leave I5 silently enforcing a former version's plugin set -- passing a
@@ -193,7 +236,7 @@ def find_grafana_version_drift(compose_text):
     found = re.findall(r"image:\s*(grafana/grafana:\S+)", compose_text)
     return [
         f"GRAFANA_PANEL_PLUGINS in {os.path.basename(__file__)} was derived from "
-        f"{PINNED_GRAFANA_IMAGE}, but docker-compose.prod.yml pins {found or 'no grafana image'}. "
+        f"{PINNED_GRAFANA_IMAGE}, but {COMPOSE} pins {found or 'no grafana image'}. "
         "Re-derive the allowlist from the new image "
         "(`docker run --rm --entrypoint sh <image> -c 'cd /usr/share/grafana/public/app/plugins/"
         "panel && for d in */; do [ -f \"$d/plugin.json\" ] && echo \"${d%/}\"; done'`) "
@@ -201,7 +244,33 @@ def find_grafana_version_drift(compose_text):
     ]
 
 
-def find_datasource_violations(dashboard, filename, known_uids):
+def find_grafana_version_drift_k8s(helmrelease_path):
+    """I6 (k8s scope): the HelmRelease pins the SAME Grafana tag PINNED_GRAFANA_IMAGE describes.
+
+    Same failure mode as find_grafana_version_drift, against the k8s runtime's own version
+    source instead of docker-compose.prod.yml's image: line.
+    """
+    import yaml
+
+    with open(helmrelease_path) as f:
+        hr = yaml.safe_load(f)
+    tag = (
+        (hr.get("spec", {}).get("values", {}) or {})
+        .get("grafana", {})
+        .get("image", {})
+        .get("tag")
+    )
+    if tag == PINNED_GRAFANA_TAG:
+        return []
+    return [
+        f"GRAFANA_PANEL_PLUGINS in {os.path.basename(__file__)} was derived from "
+        f"{PINNED_GRAFANA_IMAGE}, but {helmrelease_path}'s values.grafana.image.tag is "
+        f"{tag!r}. Re-derive the allowlist from the new image and update PINNED_GRAFANA_TAG "
+        "together with it."
+    ]
+
+
+def find_datasource_violations(dashboard, filename, known_uids, datasources_path=DATASOURCES):
     """I1: every datasource ref is a literal uid that datasources.yaml actually declares."""
     violations = []
 
@@ -216,7 +285,7 @@ def find_datasource_violations(dashboard, filename, known_uids):
                 return
             violations.append(
                 f"{filename}: datasource referenced by NAME {ref!r}; the public renderer resolves "
-                f"by uid only. Use {{'type': ..., 'uid': ...}} with a uid from {DATASOURCES}."
+                f"by uid only. Use {{'type': ..., 'uid': ...}} with a uid from {datasources_path}."
             )
             return
         if not isinstance(ref, dict):
@@ -234,7 +303,7 @@ def find_datasource_violations(dashboard, filename, known_uids):
             )
         elif uid not in known_uids:
             violations.append(
-                f"{filename}: datasource uid {uid!r} is not declared in {DATASOURCES} "
+                f"{filename}: datasource uid {uid!r} is not declared in {datasources_path} "
                 f"(declared: {sorted(known_uids)})."
             )
 
@@ -299,12 +368,96 @@ def find_uid_mismatches(dashboard, filename, expected_uid):
     return []
 
 
+def find_k8s_literal_violations(dashboard_text, filename):
+    """k8s-scope-only: no Docker/Compose-era literal survived the label rewrite (13-RESEARCH.md
+    Pitfall 7) -- a query holding one is well-formed but matches nothing the chart-scraped
+    Kubernetes-labelled series ever produce, and renders a silent, empty panel.
+    """
+    return [
+        f"{filename}: still contains Docker-era literal {literal!r} -- the Kubernetes-label "
+        "rewrite is incomplete for this query; it will render \"No data\" against the real "
+        "chart-scraped series."
+        for literal in K8S_BANNED_LITERALS
+        if literal in dashboard_text
+    ]
+
+
 def load_known_uids(path):
     import yaml
 
     with open(path) as f:
         doc = yaml.safe_load(f)
     return {ds["uid"] for ds in doc.get("datasources", []) if ds.get("uid")}
+
+
+def load_known_uids_k8s(path):
+    """The k8s datasources ConfigMap embeds the same datasources.yaml shape as a string value
+    under data.<key> rather than as top-level YAML -- one extra safe_load to unwrap it."""
+    import yaml
+
+    with open(path) as f:
+        cm = yaml.safe_load(f)
+    (embedded_yaml,) = cm["data"].values()
+    doc = yaml.safe_load(embedded_yaml)
+    return {ds["uid"] for ds in doc.get("datasources", []) if ds.get("uid")}
+
+
+def check_scope(name, json_dir, known_uids, datasources_path, version_drift_violations, pending):
+    """Runs every invariant for one scope, returns (violations, checked_count)."""
+    violations = []
+    if not os.path.isdir(json_dir):
+        return (
+            [f"scope {name!r}: json_dir {json_dir} does not exist -- 0 of "
+             f"{len(PUBLIC_DASHBOARDS)} public dashboards checked"],
+            0,
+        )
+
+    violations.extend(version_drift_violations)
+
+    discovered = {os.path.basename(p) for p in glob.glob(os.path.join(json_dir, "*.json"))}
+    expected_present = set(PUBLIC_DASHBOARDS) - pending
+    missing = expected_present - discovered
+    if missing:
+        violations.append(
+            f"scope {name!r}: expected public dashboard(s) {sorted(missing)} not found under "
+            f"{json_dir} (not listed as pending in K8S_PENDING)."
+        )
+
+    accounted_discovered = discovered - pending
+    violations.extend(
+        find_uncovered_files(accounted_discovered, PUBLIC_DASHBOARDS, DELIBERATELY_PRIVATE)
+    )
+
+    checked = 0
+    for filename in sorted(accounted_discovered):
+        path = os.path.join(json_dir, filename)
+        with open(path) as f:
+            raw_text = f.read()
+        dashboard = json.loads(raw_text)
+        violations.extend(find_datasource_violations(dashboard, filename, known_uids, datasources_path))
+        # I5 applies to private dashboards too: a missing panel plugin breaks the AUTHENTICATED
+        # renderer identically. Unlike I2/I3, nothing about it is public-path-specific.
+        violations.extend(find_panel_type_violations(dashboard, filename))
+        if filename in PUBLIC_DASHBOARDS:
+            violations.extend(find_uid_mismatches(dashboard, filename, PUBLIC_DASHBOARDS[filename]))
+            violations.extend(find_variable_violations(dashboard, filename))
+            violations.extend(find_templating_violations(dashboard, filename))
+        if json_dir == K8S_JSON_DIR:
+            violations.extend(find_k8s_literal_violations(raw_text, filename))
+        checked += 1
+
+    if pending:
+        still_pending = pending & (expected_present | pending)
+        present_pending = still_pending & discovered
+        # A file listed as pending that HAS landed should have been removed from K8S_PENDING in
+        # the same change -- caught here rather than silently under-checking it forever.
+        if present_pending:
+            violations.append(
+                f"scope {name!r}: {sorted(present_pending)} exist under {json_dir} but are still "
+                f"listed in K8S_PENDING -- remove them from that set now that they are authored."
+            )
+
+    return violations, checked
 
 
 def main():
@@ -314,47 +467,60 @@ def main():
         print("FAIL: PyYAML is required (pip install pyyaml)")
         return 1
 
-    known_uids = load_known_uids(DATASOURCES)
-    if not known_uids:
+    violations = []
+    summary_lines = []
+
+    # Compose scope -- unchanged behavior, deleted entirely by 13-10.
+    compose_known_uids = load_known_uids(DATASOURCES)
+    if not compose_known_uids:
         print(
             f"FAIL: {DATASOURCES} declares no explicit uid. Grafana would derive one, leaving the "
             "dashboards' hard-coded refs depending on an underived value."
         )
         return 1
-
-    discovered = {os.path.basename(p) for p in glob.glob(os.path.join(JSON_DIR, "*.json"))}
-    violations = find_uncovered_files(discovered, PUBLIC_DASHBOARDS, DELIBERATELY_PRIVATE)
-
     with open(COMPOSE) as f:
-        violations.extend(find_grafana_version_drift(f.read()))
+        compose_version_violations = find_grafana_version_drift(f.read())
+    compose_violations, compose_checked = check_scope(
+        "compose", COMPOSE_JSON_DIR, compose_known_uids, DATASOURCES, compose_version_violations,
+        pending=set(),
+    )
+    violations.extend(compose_violations)
+    summary_lines.append(f"compose: {compose_checked} dashboard(s) checked")
 
-    for name in sorted(discovered):
-        with open(os.path.join(JSON_DIR, name)) as f:
-            dashboard = json.load(f)
-        violations.extend(find_datasource_violations(dashboard, name, known_uids))
-        # I5 applies to private dashboards too: a missing panel plugin breaks the AUTHENTICATED
-        # renderer identically. Unlike I2/I3, nothing about it is public-path-specific.
-        violations.extend(find_panel_type_violations(dashboard, name))
-        if name in PUBLIC_DASHBOARDS:
-            violations.extend(find_uid_mismatches(dashboard, name, PUBLIC_DASHBOARDS[name]))
-            violations.extend(find_variable_violations(dashboard, name))
-            violations.extend(find_templating_violations(dashboard, name))
+    # k8s scope (Phase 13 plan 03) -- fails loudly if the directory does not exist yet, rather
+    # than silently skipping (D-07/D-18 spirit: a missing scope is a gate failure, not a no-op).
+    if os.path.isdir(K8S_JSON_DIR):
+        k8s_known_uids = load_known_uids_k8s(K8S_DATASOURCES)
+        if not k8s_known_uids:
+            violations.append(
+                f"scope 'k8s': {K8S_DATASOURCES} declares no explicit uid."
+            )
+            k8s_version_violations = []
+        else:
+            k8s_version_violations = find_grafana_version_drift_k8s(K8S_HELMRELEASE)
+        k8s_violations, k8s_checked = check_scope(
+            "k8s", K8S_JSON_DIR, k8s_known_uids if k8s_known_uids else set(), K8S_DATASOURCES,
+            k8s_version_violations, pending=K8S_PENDING,
+        )
+        violations.extend(k8s_violations)
+        summary_lines.append(
+            f"k8s: {k8s_checked} dashboard(s) checked "
+            f"({len(K8S_PENDING)} pending: {sorted(K8S_PENDING)})" if K8S_PENDING
+            else f"k8s: {k8s_checked} dashboard(s) checked"
+        )
+    else:
+        violations.append(
+            f"scope 'k8s': {K8S_JSON_DIR} does not exist -- 0 of {len(PUBLIC_DASHBOARDS)} public "
+            "dashboards checked. A scope whose json_dir does not exist fails loudly rather than "
+            "being skipped."
+        )
 
     if violations:
         for line in violations:
             print(f"FAIL: {line}")
         return 1
 
-    # Rendered from the sets themselves -- a hardcoded success string can claim a guarantee the
-    # checks above stopped enforcing the moment those sets changed.
-    print(
-        f"invariants OK -- {len(discovered)} dashboard(s) checked; "
-        f"every datasource ref resolves to a uid declared in {DATASOURCES} "
-        f"({sorted(known_uids)}); every panel type is one of the "
-        f"{len(GRAFANA_PANEL_PLUGINS)} plugins {PINNED_GRAFANA_IMAGE} ships (or a structural "
-        f"{sorted(STRUCTURAL_PANEL_TYPES)}); public dashboards {sorted(PUBLIC_DASHBOARDS)} carry "
-        f"no template variables in {QUERY_FIELDS} and declare none"
-    )
+    print("invariants OK -- " + "; ".join(summary_lines))
     return 0
 
 

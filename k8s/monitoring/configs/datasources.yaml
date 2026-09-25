@@ -1,0 +1,39 @@
+# Grafana datasource ConfigMap (Phase 13 plan 03 Task 1, D-07). Provisioned via the
+# kube-prometheus-stack chart's datasources sidecar (label grafana_datasource: "1",
+# sidecar.datasources.defaultDatasourceEnabled: false in kube-prometheus-stack.yaml) -- so this
+# ConfigMap is the ONLY Prometheus datasource Grafana ever provisions.
+#
+# Both uid values are carried VERBATIM from docker/grafana/provisioning/datasources/datasources.yaml
+# -- they are not arbitrary, deterministically-derived opaque strings Grafana itself assigned when
+# first provisioned. The three public dashboards under configs/dashboards/ reference these exact
+# uids literally; Grafana's public-dashboard query backend resolves datasources by uid ONLY, never
+# by name or template variable. Changing either value here without updating every dashboard ref
+# returns every public panel to HTTP 500 -- see the same rationale documented in the Compose-era
+# file, unchanged by the runtime migration.
+#
+# URLs use the Service names kube-prometheus-stack.yaml's fullnameOverride: kps produces
+# (kps-prometheus) and this same plan's Task 2 loki.yaml HelmRelease name (loki, singleBinary
+# Service, chart default with fullnameOverride: loki) -- both verified via `helm template` in this
+# task's own <verify> block, not guessed.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: monitoring
+  labels:
+    grafana_datasource: "1"
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        uid: PBFA97CFB590B2093
+        type: prometheus
+        access: proxy
+        url: http://kps-prometheus.monitoring.svc:9090
+        isDefault: true
+      - name: Loki
+        uid: P8E80F9AEF21F6940
+        type: loki
+        access: proxy
+        url: http://loki.monitoring.svc:3100

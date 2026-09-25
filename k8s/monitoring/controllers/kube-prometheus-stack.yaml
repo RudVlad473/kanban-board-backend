@@ -1,0 +1,179 @@
+# kube-prometheus-stack HelmRelease (Phase 13 plan 03 Task 1, D-07/D-17). Prometheus Operator +
+# Prometheus + Grafana + kube-state-metrics; Alertmanager and the default alerting rules stay
+# disabled (alerting deferred, per 13-CONTEXT.md's explicit out-of-scope). Nothing reconciles
+# until 13-02's monitoring Kustomizations unsuspend at the prod cutover (13-07).
+#
+# Chart pinned to prometheus-community/kube-prometheus-stack 91.5.2 (appVersion v0.94.1), the
+# latest release on the prometheus-community/helm-charts index as of 2026-09-25 -- recorded here,
+# not "latest", per D-12's pinning discipline.
+#
+# fullnameOverride: kps -- Service names are deterministic and independent of the Flux
+# HelmRelease's own release name. Rendered Service names (verified via `helm template` against
+# this exact chart/version/values, recorded so a later plan does not have to re-derive them):
+#   - Prometheus:        kps-prometheus (port 9090)
+#   - Grafana:            kps-grafana (chart default: release "kps" does not contain "grafana",
+#                          so grafana.fullname falls back to "<release>-grafana"; port 80 -> 3000)
+#   - kube-state-metrics: kps-kube-state-metrics
+#   - node-exporter:      kps-prometheus-node-exporter (DaemonSet)
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: kube-prometheus-stack
+  namespace: monitoring
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: kube-prometheus-stack
+      version: "91.5.2"
+      sourceRef:
+        kind: HelmRepository
+        name: prometheus-community
+        namespace: flux-system
+  install:
+    crds: CreateReplace
+  upgrade:
+    crds: CreateReplace
+  values:
+    fullnameOverride: kps
+
+    # Alerting stays out of scope this phase (13-CONTEXT.md deferred list) -- Alertmanager ships
+    # inside the chart but is not configured or wanted yet.
+    alertmanager:
+      enabled: false
+    defaultRules:
+      create: false
+
+    # k3s runs these as goroutines inside one process bound to localhost (13-RESEARCH.md
+    # Pitfall 5) -- the chart's control-plane ServiceMonitors would target permanently-down
+    # endpoints. k3s also uses kine/SQLite, not etcd, reinforcing why the etcd monitor can never
+    # work here.
+    kubeControllerManager:
+      enabled: false
+    kubeScheduler:
+      enabled: false
+    kubeEtcd:
+      enabled: false
+    kubeProxy:
+      enabled: false
+
+    prometheus:
+      prometheusSpec:
+        retention: 30d
+        # PROVISIONAL (restart-ladder in 13-09) -- starting point matches the same-binary
+        # Compose predecessor's measured cap (docker-compose.prod.yml prometheus: mem_limit
+        # 256Mi), not re-derived here. Requests set conservatively below the Compose peak
+        # (~108MiB measured, Plan 12-05) with headroom for the Operator's own overhead.
+        resources:
+          requests:
+            memory: 200Mi
+            cpu: 50m
+          limits:
+            memory: 256Mi
+        storageSpec:
+          volumeClaimTemplate:
+            spec:
+              storageClassName: local-path
+              accessModes: ["ReadWriteOnce"]
+              resources:
+                requests:
+                  storage: 10Gi
+        serviceMonitorSelectorNilUsesHelmValues: false
+        podMonitorSelectorNilUsesHelmValues: false
+
+    grafana:
+      defaultDashboardsEnabled: false
+      image:
+        tag: "13.2.1"
+      admin:
+        existingSecret: grafana-admin
+        userKey: admin-user
+        passwordKey: admin-password
+      "grafana.ini":
+        server:
+          root_url: https://kanban-board-rud-vlad-473-monitoring.duckdns.org
+        users:
+          allow_sign_up: false
+        auth.anonymous:
+          enabled: false
+        security:
+          cookie_secure: true
+      persistence:
+        enabled: true
+        type: pvc
+        storageClassName: local-path
+        size: 1Gi
+      # PROVISIONAL (restart-ladder in 13-09) -- starting point matches the same-binary Compose
+      # predecessor's measured cap (docker-compose.prod.yml grafana: mem_limit 768Mi, raised
+      # same-day at Phase 12 close under real sustained load -- see that file's own comment).
+      resources:
+        requests:
+          memory: 400Mi
+          cpu: 50m
+        limits:
+          memory: 768Mi
+
+    sidecar:
+      dashboards:
+        enabled: true
+        # label defaults to grafana_dashboard (chart default, unchanged)
+      datasources:
+        enabled: true
+        # label defaults to grafana_datasource (chart default, unchanged)
+        # The ONLY Prometheus datasource is grafana-datasources (configs/datasources.yaml,
+        # literal UIDs carried from Compose) -- the chart's own auto-provisioned Prometheus
+        # datasource must not also exist, or the literal-UID dashboards below could silently
+        # resolve against the wrong one.
+        defaultDatasourceEnabled: false
+
+    # node-exporter subchart (kube-prometheus-stack.charts.prometheus-node-exporter). Same
+    # trade-off Phase 12's node-exporter Compose service already documents: host filesystems
+    # visible (hostRootFsMount), network metrics scoped to the pod's own namespace (no
+    # hostNetwork/hostPID) -- closes the docker.sock-adjacent host-visibility surface that
+    # existed only because Compose's node-exporter needed network_mode:host to avoid; a k8s
+    # DaemonSet does not.
+    prometheus-node-exporter:
+      hostNetwork: false
+      hostPID: false
+      hostRootFsMount:
+        enabled: true
+      # PROVISIONAL (restart-ladder in 13-09) -- starting point matches the same-binary Compose
+      # predecessor's measured cap (docker-compose.prod.yml node-exporter: mem_limit 32Mi).
+      resources:
+        requests:
+          memory: 20Mi
+          cpu: 10m
+        limits:
+          memory: 32Mi
+      prometheus:
+        monitor:
+          enabled: true
+          # Sets `instance` from the k8s node name rather than the DaemonSet pod's own
+          # ephemeral IP/hostname target address, so the node-exporter-full dashboard's
+          # hard-coded `instance` value (rewritten below in this task) survives pod restarts --
+          # required per this task's own <action>.
+          relabelings:
+            - sourceLabels: [__meta_kubernetes_pod_node_name]
+              targetLabel: instance
+
+    kube-state-metrics:
+      # PROVISIONAL (restart-ladder in 13-09) -- no same-binary Compose predecessor existed;
+      # starting point taken from 13-RESEARCH.md's Q8 ranges for a small-cluster kube-state-metrics
+      # install.
+      resources:
+        requests:
+          memory: 32Mi
+          cpu: 10m
+        limits:
+          memory: 64Mi
+
+    prometheusOperator:
+      # PROVISIONAL (restart-ladder in 13-09) -- 13-RESEARCH.md Q8 range for Prometheus Operator +
+      # kube-state-metrics combined (~130MiB requests / ~250MiB limits); operator's own share
+      # taken as roughly half.
+      resources:
+        requests:
+          memory: 64Mi
+          cpu: 25m
+        limits:
+          memory: 128Mi

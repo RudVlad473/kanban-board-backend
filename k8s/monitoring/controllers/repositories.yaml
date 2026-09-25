@@ -1,0 +1,21 @@
+# HelmRepositories for the observability stack (Phase 13 plan 03, D-07/D-09/D-17). Nothing here
+# reconciles until 13-07 unsuspends the monitoring Kustomizations (13-02) -- every choice in this
+# plan is a file edit against a real, pinned chart, statically proven with `helm template` in this
+# plan's own <verify> blocks, not yet applied to any live cluster.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: prometheus-community
+  namespace: flux-system
+spec:
+  interval: 1h
+  url: https://prometheus-community.github.io/helm-charts
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: grafana
+  namespace: flux-system
+spec:
+  interval: 1h
+  url: https://grafana.github.io/helm-charts
