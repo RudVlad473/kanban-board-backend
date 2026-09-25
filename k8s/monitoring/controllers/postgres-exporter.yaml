@@ -1,0 +1,76 @@
+# postgres-exporter HelmRelease (Phase 13 plan 03 Task 2, D-07). Analog:
+# docker-compose.prod.yml `postgres-exporter:` service block. Chart pinned to
+# prometheus-community/prometheus-postgres-exporter 8.2.0 (appVersion v0.20.1, matching the
+# Compose image tag exactly), the latest release on the prometheus-community/helm-charts index as
+# of 2026-09-25.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: postgres-exporter
+  namespace: monitoring
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: prometheus-postgres-exporter
+      version: "8.2.0"
+      sourceRef:
+        kind: HelmRepository
+        name: prometheus-community
+        namespace: flux-system
+  install:
+    crds: CreateReplace
+  upgrade:
+    crds: CreateReplace
+  values:
+    image:
+      tag: v0.20.1
+
+    # config.datasource.* (the chart's own structured datasource block), NOT extraEnvs -- the
+    # chart's secrets.yaml template unconditionally requires config.datasource.password unless
+    # passwordSecret/passwordFile/datasourceSecret is set, and setting `password` directly would
+    # make the chart RENDER a committed Secret object containing it (violates D-10/I8). Host,
+    # user, port, database, sslmode are plain values assembled into DATA_SOURCE_URI by the
+    # chart's own template (no scheme, no credentials in the string itself -- the chart's own
+    # url.UserPassword(user, pass) percent-encodes the credential, same split
+    # docker-compose.prod.yml's postgres-exporter: comment documents and quick task 260911-gkz's
+    # fix applies). passwordSecret references the Secret created on the VM in 13-07 (D-10) --
+    # never committed, never handled by CI.
+    config:
+      datasource:
+        host: postgres.kanban-data.svc.cluster.local
+        port: "5432"
+        database: kanban_prod
+        sslmode: disable
+        user: monitoring
+        passwordSecret:
+          name: postgres-exporter
+          key: password
+
+    extraArgs:
+      - --auto-discover-databases
+      - --collector.postmaster
+      - --collector.stat_statements
+
+    # The NetworkPolicy contract (13-04, D-11): only a pod carrying this label may reach Postgres
+    # port 5432 from the monitoring namespace.
+    podLabels:
+      kanban-board/postgres-client: "true"
+
+    serviceMonitor:
+      enabled: true
+      # Stable job/instance so the postgres-exporter dashboard's hard-coded matchers (Task 3)
+      # survive pod restarts -- same relabeling shape as kube-prometheus-stack.yaml's node-exporter
+      # ServiceMonitor.
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: instance
+
+    # PROVISIONAL (restart-ladder in 13-09) -- starting point matches the same-binary Compose
+    # predecessor's measured cap (docker-compose.prod.yml postgres-exporter: mem_limit 32Mi).
+    resources:
+      requests:
+        memory: 16Mi
+        cpu: 10m
+      limits:
+        memory: 32Mi

@@ -1,0 +1,27 @@
+# Redpanda PodMonitor (Phase 13 plan 03 Task 2, D-06/D-11). Scrapes both environments' Redpanda
+# StatefulSets (13-01 k8s/base/redpanda) across namespaces from one PodMonitor -- analog to
+# docker-compose.prod.yml's Prometheus scraping both the prod and nonprod Redpanda brokers via the
+# kanban-metrics cross-project network.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: redpanda
+  namespace: monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+      - kanban-prod
+      - kanban-nonprod
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redpanda
+  podMetricsEndpoints:
+    - port: admin
+      path: /public_metrics
+      relabelings:
+        # Preserves the Compose-era env label semantics (prod/nonprod), derived from which
+        # namespace the scraped pod actually lives in rather than a hardcoded per-environment
+        # PodMonitor copy.
+        - sourceLabels: [__meta_kubernetes_namespace]
+          regex: kanban-(.+)
+          targetLabel: env

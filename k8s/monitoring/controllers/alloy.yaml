@@ -1,0 +1,88 @@
+# Grafana Alloy HelmRelease (Phase 13 plan 03 Task 2, D-07). Replaces docker-compose.prod.yml's
+# `promtail:` service -- Promtail is formally EOL upstream (13-RESEARCH.md, State of the Art).
+# Chart pinned to grafana/alloy 1.12.1 (appVersion v1.19.2), the latest release on
+# grafana.github.io/helm-charts as of 2026-09-25.
+#
+# controller.type defaults to 'daemonset' (chart default, unchanged) -- one Alloy pod per node,
+# matching Promtail's own DaemonSet-equivalent coverage today.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: alloy
+  namespace: monitoring
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: alloy
+      version: "1.12.1"
+      sourceRef:
+        kind: HelmRepository
+        name: grafana
+        namespace: flux-system
+  install:
+    crds: CreateReplace
+  upgrade:
+    crds: CreateReplace
+  values:
+    alloy:
+      mounts:
+        # No hostPath log mounts -- pod logs are tailed via the Kubernetes API
+        # (loki.source.kubernetes below), the mechanism that makes the docker.sock-equivalent
+        # host-visibility surface Promtail needed simply not exist here (13-RESEARCH.md, State of
+        # the Art). Both already default to false at this chart version; set explicitly per this
+        # task's own requirement rather than relying on the unstated default.
+        varlog: false
+        dockercontainers: false
+      # PROVISIONAL (restart-ladder in 13-09) -- 13-RESEARCH.md Q8 range for Alloy (~80MiB
+      # requests / ~150MiB limits, "successor to Promtail's 60Mi, more featureful"); no
+      # same-binary Compose predecessor to anchor a tighter starting point.
+      resources:
+        requests:
+          memory: 40Mi
+          cpu: 10m
+        limits:
+          memory: 150Mi
+      configMap:
+        create: true
+        content: |
+          // Discover every pod across the cluster, then keep only namespace/pod/container/app
+          // labels -- the Kubernetes-label shape the rewritten dashboards (Task 3) query against.
+          discovery.kubernetes "pods" {
+            role = "pod"
+          }
+
+          discovery.relabel "pod_logs" {
+            targets = discovery.kubernetes.pods.targets
+
+            rule {
+              source_labels = ["__meta_kubernetes_namespace"]
+              target_label  = "namespace"
+            }
+            rule {
+              source_labels = ["__meta_kubernetes_pod_name"]
+              target_label  = "pod"
+            }
+            rule {
+              source_labels = ["__meta_kubernetes_pod_container_name"]
+              target_label  = "container"
+            }
+            rule {
+              source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+              target_label  = "app"
+            }
+          }
+
+          // Tails container logs through the Kubernetes API (kubelet log endpoint) -- no
+          // docker.sock, no hostPath /var/log mount. This is the mechanism that makes this
+          // task's mounts.varlog/dockercontainers: false above safe rather than a coverage gap.
+          loki.source.kubernetes "pods" {
+            targets    = discovery.relabel.pod_logs.output
+            forward_to = [loki.write.default.receiver]
+          }
+
+          loki.write "default" {
+            endpoint {
+              url = "http://loki.monitoring.svc:3100/loki/api/v1/push"
+            }
+          }

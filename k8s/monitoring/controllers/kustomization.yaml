@@ -3,3 +3,6 @@ kind: Kustomization
 resources:
   - repositories.yaml
   - kube-prometheus-stack.yaml
+  - loki.yaml
+  - alloy.yaml
+  - postgres-exporter.yaml

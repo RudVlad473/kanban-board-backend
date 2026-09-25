@@ -1,0 +1,105 @@
+# Loki HelmRelease (Phase 13 plan 03 Task 2, D-07/D-17). Single-binary deployment mode, matching
+# docker/loki/loki-config.yaml's shape (filesystem storage, tsdb, no object store, single
+# replica). Chart pinned to grafana/loki 7.3.0 (appVersion 3.6.12), the latest release on
+# grafana.github.io/helm-charts as of 2026-09-25. deploymentMode key is `SingleBinary` at this
+# chart version (verified against the pinned chart's own values.yaml -- the chart has NOT yet
+# renamed this to `Monolithic`, contrary to 13-RESEARCH.md's caveat about newer chart releases).
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: loki
+  namespace: monitoring
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: loki
+      version: "7.3.0"
+      sourceRef:
+        kind: HelmRepository
+        name: grafana
+        namespace: flux-system
+  install:
+    crds: CreateReplace
+  upgrade:
+    crds: CreateReplace
+  values:
+    # Deterministic Service name (loki) -- configs/datasources.yaml's Loki datasource URL depends
+    # on it, verified via `helm template` in this task's own <verify> block.
+    fullnameOverride: loki
+    deploymentMode: SingleBinary
+
+    loki:
+      auth_enabled: false
+      commonConfig:
+        replication_factor: 1
+      storage:
+        type: filesystem
+      # D-07: 30 days, matching docker/loki/loki-config.yaml's 720h exactly. schema_config.from
+      # is deliberately far in the past, not the deploy date -- same rationale that file's own
+      # comment documents (a fresh install's first scrape can still tail a container's pre-deploy
+      # backlog; backdating costs nothing since schema periods do not pre-allocate storage).
+      schemaConfig:
+        configs:
+          - from: "2024-01-01"
+            store: tsdb
+            object_store: filesystem
+            schema: v13
+            index:
+              prefix: index_
+              period: 24h
+      limits_config:
+        retention_period: 720h
+        reject_old_samples_max_age: 720h
+      compactor:
+        working_directory: /var/loki/compactor
+        retention_enabled: true
+        delete_request_store: filesystem
+
+    singleBinary:
+      replicas: 1
+      persistence:
+        enabled: true
+        storageClass: local-path
+        size: 10Gi
+      # PROVISIONAL (restart-ladder in 13-09) -- starting point matches the same-binary Compose
+      # predecessor's measured cap (docker-compose.prod.yml loki: mem_limit 256Mi).
+      resources:
+        requests:
+          memory: 64Mi
+          cpu: 25m
+        limits:
+          memory: 256Mi
+
+    # read/write/backend are the SimpleScalable-mode components -- zeroed explicitly so a chart
+    # default change cannot silently stand up a second deployment shape alongside singleBinary.
+    read:
+      replicas: 0
+    write:
+      replicas: 0
+    backend:
+      replicas: 0
+
+    # Disabled: no object-store gateway (filesystem storage only), no memcached-backed
+    # chunks/results caches (a single-binary, single-node install has no cache tier to front),
+    # no canary/self-test workloads, no self-monitoring stack (this chart's own Prometheus/Grafana
+    # sidecar bundle -- kube-prometheus-stack already provides both).
+    gateway:
+      enabled: false
+    chunksCache:
+      enabled: false
+    resultsCache:
+      enabled: false
+    lokiCanary:
+      enabled: false
+    test:
+      enabled: false
+    monitoring:
+      selfMonitoring:
+        enabled: false
+      serviceMonitor:
+        enabled: false
+      dashboards:
+        enabled: false
+      rules:
+        enabled: false

@@ -3,6 +3,8 @@ kind: Kustomization
 namespace: monitoring
 resources:
   - datasources.yaml
+  - podmonitors.yaml
+  - ingressroute.yaml
 # One ConfigMap per dashboard, each labelled grafana_dashboard: "1" so the kube-prometheus-stack
 # Grafana dashboards sidecar picks it up. disableNameSuffixHash: true -- a content-hash suffix
 # would break the sidecar's ability to reference a stable ConfigMap name across re-generates, and
