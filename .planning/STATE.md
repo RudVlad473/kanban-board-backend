@@ -107,9 +107,13 @@ authorization, given the real-traffic-interruption and Let's Encrypt cert-safety
 
 ### Pending Todos
 
-~46 pending todos remain in `.planning/todos/pending/` (security/CI/minor backlog, all explicitly
-out of v1.3 scope) — full inventory in this document's Deferred Items table below, acknowledged
-and carried forward at v1.3 close. None block the next milestone; triage candidates for it via
+60 pending todos in `.planning/todos/pending/` as of 2026-09-25 (count drifted from this
+section's earlier "~46" since v1.3 close and was not tracked incrementally; not re-audited here,
+just corrected to the current `ls | wc -l`). Newest: `2026-09-24-netcup-vps-intermittent-tcp-retransmits-under-sustained-throughput.md`
+(minor, infra — a real but thin iperf3 retransmit/bitrate-dip signal found while triaging an
+orphaned diagnostics file during the 2026-09-25 docs cleanup). Full inventory in this document's
+Deferred Items table below, acknowledged and carried forward at v1.3 close. None block the next
+milestone; triage candidates for it via
 `.planning/todos/pending/`.
 
 ### Blockers/Concerns
