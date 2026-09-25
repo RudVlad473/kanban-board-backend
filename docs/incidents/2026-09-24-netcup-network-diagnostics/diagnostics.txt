@@ -1,0 +1,116 @@
+Netcup VPS Lite 2 G12s network diagnostics
+Server: v2202608397723499373 (159.195.114.230)
+Rescue system used for all server-side tests, per Netcup's instructions.
+Date: 2026-09-24
+
+====================================================================
+1. DHCP connectivity test (dhclient equivalent, rescue system)
+====================================================================
+
+Rescue image does not ship the `dhclient` binary; `dhcpcd` was used instead
+to perform an equivalent live DHCP test on eth0.
+
+Result: dhcpcd sent DHCP discover requests and received NO reply from any
+DHCP server on this segment. It fell back to an IPv4 link-local (APIPA)
+address (169.254.193.112/16), which is the standard fallback behavior when
+no DHCP server responds within the timeout.
+
+  $ dhcpcd -n eth0
+  dhcpcd-10.3.1 starting
+  DUID 00:01:00:01:32:47:c2:d0:46:d8:1c:09:97:91
+  eth0: IAID 1c:09:97:91
+  eth0: soliciting a DHCP lease
+  eth0: soliciting an IPv6 router
+  eth0: using IPv4LL address 169.254.193.112
+  eth0: adding route to 169.254.0.0/16
+  eth0: adding default route
+
+Note: the rescue system's normal working address (159.195.114.230/22) is a
+static configuration baked into the rescue image at boot, not something
+obtained via a live DHCP exchange. After this test, the static address and
+default route were manually restored and outbound connectivity (ping to
+8.8.8.8) was confirmed working again.
+
+====================================================================
+2. MTR, server -> host (rescue system -> 8.8.8.8), 500 cycles
+====================================================================
+
+Start: 2026-09-24T11:16:05+0000
+HOST: v2202608397723499373        Loss%   Snt Drop  Last  Best   Avg  Wrst StDev
+  1.|-- 159.195.112.1              1.0%   500    5   0.4   0.2   0.3   0.5   0.1
+  2.|-- 94.16.25.37                0.0%   500    0   0.3   0.2   0.3   0.5   0.1
+  3.|-- 94.16.25.36                0.0%   500    0   0.3   0.3   0.3   0.6   0.1
+  4.|-- 144.208.208.169           80.4%   500  402  11.9  11.9  12.0  12.8   0.1
+  5.|-- 144.208.208.170            0.0%   500    0  12.1  12.0  14.3  88.2  10.3
+  6.|-- 144.208.208.128            0.0%   500    0  12.1  11.9  13.7  85.2   8.2
+  7.|-- 144.208.208.150            0.0%   500    0  12.1  11.9  12.6  32.1   2.4
+  8.|-- 144.208.208.144            1.0%   500    5  12.3  11.8  13.2  53.2   3.9
+  9.|-- 144.208.211.75             0.0%   500    0  12.8  12.6  12.9  16.8   0.4
+ 10.|-- 142.251.48.237             0.0%   500    0  13.3  12.4  13.3  14.7   0.6
+ 11.|-- 142.250.214.203            0.0%   500    0  12.2  12.0  12.1  12.4   0.1
+ 12.|-- 8.8.8.8                    0.0%   500    0  12.1  12.0  12.0  12.2   0.1
+
+====================================================================
+3. MTR, host -> server (client machine -> 159.195.114.230), 500 cycles
+====================================================================
+
+Start: 2026-09-24T17:00:47+0200
+HOST: DESKTOP-88EQU47             Loss%   Snt   Last   Avg  Best  Wrst StDev
+  1.|-- 172.27.144.1               0.0%   500    0.4   0.2   0.1   9.4   0.5
+  2.|-- 10.128.0.1                 0.0%   500   10.6  10.8   9.3  24.0   1.7
+  3.|-- 45.134.212.126             0.2%   500   11.2  11.1   9.4  29.7   1.8
+  4.|-- 80.239.133.86              0.0%   500   11.8  13.3   9.7 162.3   9.8
+  5.|-- 62.115.120.20             81.8%   500   28.4  28.8  27.1  40.2   2.1
+  6.|-- 62.115.141.153             0.0%   500   30.0  30.0  27.0  79.4   6.0
+  7.|-- 62.115.14.117              0.0%   500   28.2  29.5  27.0  53.8   3.7
+  8.|-- 144.208.208.145            0.0%   500   34.1  40.3  32.8  81.6   8.8
+  9.|-- 144.208.208.151            0.0%   500   34.5  36.4  32.7 118.3  10.2
+ 10.|-- 144.208.208.129            0.0%   500   33.5  36.6  32.6 113.9  10.6
+ 11.|-- 144.208.208.171           51.0%   500   33.7  33.9  32.5  43.0   1.4
+ 12.|-- 94.16.25.97                0.0%   500   33.3  33.8  32.3  48.8   1.6
+ 13.|-- 62.83.16.1                 0.4%   500   35.3  33.8  32.4  56.3   1.6
+ 14.|-- 159.195.114.230            0.0%   500   33.6  33.9  32.4  49.8   1.9
+
+====================================================================
+4. iperf3, host -> server (159.195.114.230:5201), 10s TCP test
+====================================================================
+
+Connecting to host 159.195.114.230, port 5201
+[  5] local 172.27.154.11 port 40660 connected to 159.195.114.230 port 5201
+[ ID] Interval           Transfer     Bitrate         Retr  Cwnd
+[  5]   0.00-1.00   sec  26.9 MBytes   225 Mbits/sec    0   2.71 MBytes
+[  5]   1.00-2.00   sec  34.2 MBytes   287 Mbits/sec    0   3.88 MBytes
+[  5]   2.00-3.00   sec  35.5 MBytes   298 Mbits/sec    0   3.88 MBytes
+[  5]   3.00-4.00   sec  34.4 MBytes   288 Mbits/sec    0   3.88 MBytes
+[  5]   4.00-5.00   sec  35.9 MBytes   301 Mbits/sec    0   3.88 MBytes
+[  5]   5.00-6.00   sec  32.6 MBytes   274 Mbits/sec   32   2.85 MBytes
+[  5]   6.00-7.00   sec  35.5 MBytes   298 Mbits/sec    0   3.08 MBytes
+[  5]   7.00-8.00   sec  26.5 MBytes   222 Mbits/sec  312    801 KBytes
+[  5]   8.00-9.00   sec  24.6 MBytes   206 Mbits/sec    0    855 KBytes
+[  5]   9.00-10.00  sec  23.8 MBytes   199 Mbits/sec    0    892 KBytes
+- - - - - - - - - - - - - - - - - - - - - - - - -
+[ ID] Interval           Transfer     Bitrate         Retr
+[  5]   0.00-10.00  sec   310 MBytes   260 Mbits/sec  344            sender
+[  5]   0.00-10.04  sec   307 MBytes   257 Mbits/sec                  receiver
+
+iperf Done.
+
+====================================================================
+Summary
+====================================================================
+
+- DHCP: no DHCP server answered on the rescue system's segment; only a
+  link-local fallback address was obtained. Static addressing works fine.
+
+- Both MTR runs show a single hop with high reported ICMP loss
+  (hop 4 server-side, hop 5 and hop 11 client-side) while every hop
+  downstream of each stays at or near 0% loss. Loss that does not compound
+  forward is consistent with those routers deprioritizing/rate-limiting
+  their own ICMP TTL-exceeded replies rather than dropping real traffic.
+
+- iperf3 throughput averaged 260 Mbit/s over 10s with 344 TCP
+  retransmissions and a visible bitrate dip in the final three 1-second
+  intervals (222 -> 206 -> 199 Mbit/s). Retransmits are triggered by actual
+  packet loss/reordering seen by TCP, not an ICMP-probe artifact, so this
+  is the one measurement here indicating a real, if intermittent,
+  throughput issue on the path.
