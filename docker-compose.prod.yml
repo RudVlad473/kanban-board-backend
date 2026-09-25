@@ -868,7 +868,19 @@ services:
     # already-proven-passing rung one step above 64m in this same ladder -- as a same-day
     # correction pending a longer-duration re-measurement. Full incident evidence:
     # docs/INFRA_RUNBOOK.md, "Observability stack resource measurement -- Plan 12-05" addendum.
-    mem_limit: 128m
+    # CORRECTED AGAIN (Plan 13-02, 2026-09-25): 128m proved insufficient once k3s + Flux existed
+    # on the host -- cAdvisor scrapes cgroup stats for every container/pod, and k3s's install
+    # added 9 new cgroups (Flux's 6 controllers, coredns, local-path-provisioner, traefik) to that
+    # surface. Confirmed via `dmesg` on netcup-prod: THREE OOM kills in ~8 minutes immediately
+    # following the k3s install (RestartCount 0->1->2->3), each with anon-rss approaching the
+    # 128m cap (117MiB, 124MiB, ~123MiB observed via `docker stats` moments before the third
+    # kill) -- not a one-time install-time spike, a genuine new steady-state above the old cap.
+    # Raised to 256m (doubled, matching this ladder's own prior doubling step) as an interim,
+    # PROVISIONAL value pending a proper restart-ladder re-measurement -- tracked by
+    # .planning/todos/pending/2026-09-08-cadvisor-grafana-and-caddy-mem-limits-need-a-longer-observation-window-re-ladder.md
+    # and superseded by Plan 13-09's restart-ladder pass once the full k8s+Compose dual-runtime
+    # window closes.
+    mem_limit: 256m
     # No `ports:` entry at all -- mirrors every other internal-only service in this file. Only
     # Prometheus reaches this container, over the internal `default` network.
     # Mechanically enforced: scripts/verify-compose-ports.py fails CI if this service ever gains one.
