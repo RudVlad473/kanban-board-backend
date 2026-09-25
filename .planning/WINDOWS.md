@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 1
+open_count: 2
 waived_count: 0
 fixed_count: 7
-total_count: 8
-last_updated: 2026-08-20T08:19:01.132Z
+total_count: 9
+last_updated: 2026-09-25T18:42:51.956Z
 ---
 
 # Broken Windows Ledger
@@ -23,6 +23,7 @@ last_updated: 2026-08-20T08:19:01.132Z
 | 6 | 09 | unrun-verify | docs/INFRA_RUNBOOK.md |  | Task 1 repository-secret sweep (gh secret delete on 9 secrets) + live push-to-master proof not executed (CI-02) -- deferred out of worktree per Plan 09-01 precedent | fixed |  | 2026-08-19T08:28:32.183Z | 2026-08-19T09:34:24.050Z |
 | 7 | 10 | unrun-verify | .github/workflows/deploy.yml |  | Task 1 tracer real push-to-master + gh run watch deploy proof deferred to post-merge (worktree agent has no push authority; Plan 10-04 further edits deploy.yml) | fixed |  | 2026-08-19T15:31:56.697Z | 2026-08-20T08:19:01.132Z |
 | 8 | 10 | unrun-verify | .github/dependabot.yml |  | Task 4 D-07 composition proof (Dependabot Check-for-updates UI log confirming both appleboy digest pins parse without error) not observed live -- checkpoint auto-approved per workflow.auto_advance=true, no CLI/API equivalent for this UI-only GitHub flow | open |  | 2026-08-19T15:32:05.656Z |  |
+| 9 | 13 | unrun-verify | docs/INFRA_RUNBOOK.md |  | 13-05 Task 2 acceptance criteria (verbatim rpk group describe/topic describe output, reset-endpoint live curl proof) were captured in a prior session's terminal, not persisted to any file or commit message -- not reproducible from git history when Task 3 picked this plan back up in a fresh worktree; the D-06 lag-0/DLT-empty and reset-endpoint facts are corroborated indirectly (Compose brokers stopped cleanly, no data-loss reported, nonprod healthy) but the plan's own literal acceptance criteria (verbatim capture) is unmet | open |  | 2026-09-25T18:42:51.956Z |  |
 
 ````json
 [
@@ -120,6 +121,18 @@ last_updated: 2026-08-20T08:19:01.132Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-08-19T15:32:05.656Z",
+    "resolved_at": null
+  },
+  {
+    "id": 9,
+    "kind": "unrun-verify",
+    "phase": "13",
+    "file": "docs/INFRA_RUNBOOK.md",
+    "line": null,
+    "description": "13-05 Task 2 acceptance criteria (verbatim rpk group describe/topic describe output, reset-endpoint live curl proof) were captured in a prior session's terminal, not persisted to any file or commit message -- not reproducible from git history when Task 3 picked this plan back up in a fresh worktree; the D-06 lag-0/DLT-empty and reset-endpoint facts are corroborated indirectly (Compose brokers stopped cleanly, no data-loss reported, nonprod healthy) but the plan's own literal acceptance criteria (verbatim capture) is unmet",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-25T18:42:51.956Z",
     "resolved_at": null
   }
 ]

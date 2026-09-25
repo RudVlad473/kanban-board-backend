@@ -207,9 +207,9 @@ breakdown and [docs/INFRA_RUNBOOK.md](docs/INFRA_RUNBOOK.md) for the provider pi
 Oracle Cloud's Always Free A1 Flex, ARM64 capacity that proved structurally unavailable) and the
 VM's live firewall/DNS state.
 
-**Nonprod** is a second, fully isolated deployment colocated on the same VM: its own Compose project
-(`kanban-board-nonprod`), its own database (`kanban_nonprod`) on that same shared self-hosted
-Postgres instance — never holding a production row — its own Redpanda broker with an
+**Nonprod** is a second, fully isolated deployment colocated on the same VM: originally its own
+Compose project (`kanban-board-nonprod`), its own database (`kanban_nonprod`) on that same shared
+self-hosted Postgres instance — never holding a production row — its own Redpanda broker with an
 independently-populated Avro Schema Registry, and its own publicly trusted HTTPS host
 (`kanban-board-rud-vlad-473-nonprod.duckdns.org`) — bridged to production by exactly one shared
 Docker network (`kanban-edge`) joining only the two edge pieces that must talk to each other. It
@@ -218,39 +218,56 @@ ever reaches production data. Full isolation proof (container/volume/network ide
 signup-then-board-create that left production's row counts unchanged) is in
 [docs/INFRA_RUNBOOK.md](docs/INFRA_RUNBOOK.md)'s "Nonprod bring-up" and later sections.
 
+**Interim note (Plan 13-05, 2026-09-25):** nonprod now runs on a k3s cluster on this same VM,
+behind the unchanged Caddy edge (Caddy proxies to Traefik's NodePort rather than directly to the
+Compose `app-nonprod` container) — production stays on Docker Compose until Plan 13-06's cutover.
+The Compose nonprod containers described above are stopped, not removed (cheap rollback until
+13-06). See [docs/INFRA_RUNBOOK.md](docs/INFRA_RUNBOOK.md)'s "Nonprod on k3s — Plan 13-05" section
+for the full cutover evidence, the GitOps deploy-cycle proof, and the measured interim memory
+budget. The diagram above still shows nonprod's old Compose-only topology; the full redraw
+covering both runtimes happens in Plan 13-09.
+
 ## CI/CD pipeline & deploy strategy
 
 Every push to `master` runs [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) — there
-is no other trigger, so nothing reaches production or nonprod without going through this file.
-`run-tests` (`./gradlew test`, then `spotlessCheck`) gates everything below it; nothing else runs
-unless it's green. From there the graph fans out and back in:
+is no other trigger, so nothing reaches production without going through this file. Nonprod no
+longer deploys through CI at all as of Plan 13-05 (see the interim note below). `run-tests`
+(`./gradlew test`, then `spotlessCheck`) gates everything below it; nothing else runs unless it's
+green. From there the graph fans out and back in:
 
-- **In parallel:** the Docker image builds and pushes to Docker Hub (tagged by commit short SHA,
-  `linux/amd64` natively — the runner and the VM share the same architecture, no QEMU needed), and
-  a Flyway migration-verification job runs **on the VM itself** (the runner SCPs the migration
-  scripts over, then runs the pinned Flyway CLI over SSH against the self-hosted Postgres container
-  on the internal `kanban-db` network — not against a runner-side connection to a managed provider),
-  with an identical job verifying nonprod's own database on that same shared instance.
+- **In parallel:** the Docker image builds and pushes to Docker Hub, tagged with a sortable scheme
+  (`main-<run_number>-<short SHA>`, D-15) so Flux's image-automation controller can pick the
+  numerically newest tag deterministically — `linux/amd64` natively, the runner and the VM share
+  the same architecture, no QEMU needed — and a Flyway migration-verification job runs **on the VM
+  itself** (the runner SCPs the migration scripts over, then runs the pinned Flyway CLI over SSH
+  against the self-hosted Postgres container on the internal `kanban-db` network — not against a
+  runner-side connection to a managed provider), with an identical job verifying nonprod's own
+  database on that same shared instance (this job stays: nonprod's data still lives in Compose
+  Postgres until Plan 13-06).
 - **Then:** `deploy-to-netcup` ships the new image to production over SSH (host key pinned by
-  fingerprint) once the build and production's Flyway job both succeed; `deploy-to-nonprod` does the
-  same for nonprod once the build and nonprod's Flyway job succeed — the two deploy jobs share no
-  `needs:` edge, so neither gates or is gated by the other. Each resolves its own environment-scoped
-  GitHub Environment secrets (`production` vs `staging`) through a distinct SSH identity, target
-  directory, Compose project name, and container-name prefix, so a copy-paste mistake in one cannot
-  mutate the other's running stack. `deploy-to-nonprod` also re-registers Avro schemas against the
-  nonprod registry as part of the same job, mirroring how `register-schemas-production` runs for
-  production immediately after `deploy-to-netcup`.
-- **After nonprod deploys:** `health-check-nonprod` polls the deployed container's health endpoint
-  with a bounded timeout, since `docker compose up -d` itself returns once a container is _started_,
-  not once it's _healthy_ — nothing else in the pipeline waits on that distinction.
-- **Cleanup, gated by outcome, per environment:** a successful deploy prunes older Docker Hub tags;
-  a failed one deletes only the just-pushed manifest by digest instead, so a broken deploy never
-  strands an unreferenced image.
+  fingerprint) once the build and production's Flyway job both succeed, and also
+  `register-schemas-production` re-registers Avro schemas against the production registry
+  immediately after.
+- **Cleanup, gated by outcome:** a successful production deploy prunes older Docker Hub tags; a
+  failed one deletes only the just-pushed manifest by digest instead, so a broken deploy never
+  strands an unreferenced image. `cleanup-old-images-nonprod` runs independently of any deploy
+  job's outcome (there is no nonprod deploy job left to gate on) and keeps the five newest
+  sortable-tag images, since Flux needs recent tags available for a `git revert`-based rollback.
+
+**Interim note (Plan 13-05, 2026-09-25):** nonprod no longer deploys through this pipeline at all.
+A Flux `ImageUpdateAutomation` running in the k3s cluster polls Docker Hub directly, commits a tag
+bump to `k8s/overlays/nonprod/kustomization.yaml` on `main` when it finds a newer sortable tag, and
+Flux's own `Kustomization` reconciler applies the change — no SSH, no CI job, no `deploy.yml` run
+at all for that commit (`k8s/**` is on this workflow's paths-ignore list specifically to prevent a
+rebuild loop). `docs/INFRA_RUNBOOK.md`'s "Nonprod on k3s — Plan 13-05" section has the full cycle
+proven end to end with SHAs and timestamps. Production is unaffected by this change and keeps
+deploying exactly as described above until Plan 13-06's cutover.
 
 Full delivery-path detail, including the exact honest limits (e.g. `up -d` not waiting on the
-healthcheck) and the "why not run production's cleanup on nonprod's job" reasoning, is in
-[docs/INFRA_ARCHITECTURE.md](docs/INFRA_ARCHITECTURE.md); the same path is drawn as a sequence
-diagram at [docs/diagrams/infra-delivery-scenario.mmd](docs/diagrams/infra-delivery-scenario.mmd).
+healthcheck), is in [docs/INFRA_ARCHITECTURE.md](docs/INFRA_ARCHITECTURE.md); the same path is
+drawn as a sequence diagram at
+[docs/diagrams/infra-delivery-scenario.mmd](docs/diagrams/infra-delivery-scenario.mmd) — that
+diagram still reflects the pre-13-05 dual-SSH-deploy shape and is due for a redraw in Plan 13-09.
 
 ## Quality & security gates
 

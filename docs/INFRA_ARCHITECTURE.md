@@ -275,12 +275,23 @@ two requirements (persistence, re-verification) were met by which mechanism.
 
 ## Maintenance Note
 
+**Interim note (Plan 13-05, 2026-09-25):** nonprod now runs on a k3s cluster on this same VM,
+GitOps-deployed by Flux, behind the unchanged Caddy edge — Caddy proxies to Traefik's NodePort
+rather than directly to a Compose container. Production stays on Docker Compose, described
+accurately by the diagram and job graph below, until Plan 13-06's cutover. The diagram above and
+the job-graph description below both still describe nonprod's pre-13-05, Compose-only,
+SSH-deployed shape — they are accurate for production and stale for nonprod until Plan 13-09's
+redraw. See `docs/INFRA_RUNBOOK.md`'s "Nonprod on k3s — Plan 13-05" section for the current
+nonprod topology, the GitOps deploy-cycle proof, and the measured interim memory budget.
+
 This document describes `docker-compose.prod.yml`, `Caddyfile`, `docker/caddy/Dockerfile`,
 `.github/workflows/invariant-checks.yml`, and
 `.github/workflows/deploy.yml` — specifically the `build-and-push-docker-image` and
 `build-and-push-caddy-image` jobs' `linux/amd64` platform target (the deploy target pivoted from
-Oracle A1 Flex/ARM64 to Netcup/x86_64 in Phase 5), the 14 job names and the job graph (`needs:`
-edges) in `deploy.yml`, and `docker-compose.prod.yml`'s top-level `name: kanban-board-backend`
+Oracle A1 Flex/ARM64 to Netcup/x86_64 in Phase 5), the 11 job names (reduced from 14 by Plan
+13-05's removal of `deploy-to-nonprod`, `health-check-nonprod` and `cleanup-unused-image-nonprod`
+— nonprod deploys via Flux now, not SSH) and the job graph (`needs:` edges) in `deploy.yml`, and
+`docker-compose.prod.yml`'s top-level `name: kanban-board-backend`
 project pin plus the `app`, `caddy` and `postgres` services' `image:` references. If any of those
 facts changes — a job renamed or added, a build platform changed, or any of those
 `docker-compose.prod.yml` lines changed — update this document, and the diagrams it links to, in
