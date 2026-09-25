@@ -1,0 +1,33 @@
+# D-13: every Certificate starts on letsencrypt-staging (T-13-20 -- premature production ACME
+# issuance risks Let's Encrypt's real rate limits). The production flip is a separate 13-06
+# commit, made only after all three hostnames (prod, nonprod, monitoring) validate against
+# staging. `email` is deliberately omitted on both -- the Caddy edge it replaces registered with
+# ACME without one (T-13-21: an operator address should not be sent to the CA unless the operator
+# explicitly supplies one).
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-staging
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: traefik
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-production
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-production
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: traefik

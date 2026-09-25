@@ -1,0 +1,60 @@
+# cert-manager, deployed via Flux HelmRelease (D-13, D-09: third-party charts go through
+# HelmRepository/HelmRelease rather than hand-written manifests). Owns the ACME certificate
+# lifecycle for all three hostnames (prod, nonprod's own overlay in 13-06, monitoring below).
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: jetstack
+spec:
+  interval: 1h
+  url: https://charts.jetstack.io
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: cert-manager
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: cert-manager
+      # Pinned to the latest v1.x stable release as of 2026-09-25 (this file's write date) --
+      # cert-manager.io's own release notes confirm v1.21.1 as a current, real patch release
+      # (fixes a controller panic + a Secret-informer regression from v1.21.0). Never `latest`,
+      # matching D-12's spirit for every other pinned version in this phase.
+      version: v1.21.1
+      sourceRef:
+        kind: HelmRepository
+        name: jetstack
+  install:
+    createNamespace: true
+  targetNamespace: cert-manager
+  values:
+    crds:
+      enabled: true
+      keep: true
+    prometheus:
+      # No ServiceMonitor CRD exists before 13-07 (kube-prometheus-stack, which provides it) --
+      # enabling this here would leave a permanently-unsatisfiable CRD reference.
+      enabled: false
+    # PROVISIONAL (13-09): controller/webhook/cainjector resource requests/limits are the
+    # chart's own defaults, not yet measured against this box via the restart-ladder method --
+    # every other workload in this phase carries a MEASURED figure; cert-manager's three
+    # components are new surface with no Compose-era baseline to carry over.
+    resources:
+      requests:
+        memory: 32Mi # PROVISIONAL, chart default order of magnitude; re-measured in 13-09
+      limits:
+        memory: 128Mi # PROVISIONAL, re-measured in 13-09
+    webhook:
+      resources:
+        requests:
+          memory: 32Mi # PROVISIONAL, re-measured in 13-09
+        limits:
+          memory: 128Mi # PROVISIONAL, re-measured in 13-09
+    cainjector:
+      resources:
+        requests:
+          memory: 32Mi # PROVISIONAL, re-measured in 13-09
+        limits:
+          memory: 128Mi # PROVISIONAL, re-measured in 13-09
