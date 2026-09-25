@@ -499,34 +499,48 @@ jobs:
             # -- see this task's own user_setup requirement, verified before merge.
             docker compose --env-file ./.env.prod -f docker-compose.prod.yml pull app caddy
             docker compose --env-file ./.env.prod -f docker-compose.prod.yml up -d
-            # Reload Caddy explicitly (F-1, quick task 260903-dvp): docker-compose.prod.yml
-            # bind-mounts ./Caddyfile read-only, and a bind-mounted file's CONTENT is not part of
-            # Compose's config hash -- so `up -d` above is a no-op for `caddy` whenever its image
-            # tag is unchanged (every deploy after the one that first ships this pinned image), and
-            # Caddy keeps serving whatever config it loaded at its own container start. This has
-            # been true of every prior Caddyfile edit in this repo's history; without this line, a
-            # new Caddyfile would have zero effect in production.
+            # Force-recreate Caddy explicitly (F-1, quick task 260903-dvp; corrected 13-05 --
+            # caddy-reload-inode-bug): docker-compose.prod.yml bind-mounts ./Caddyfile read-only,
+            # and a bind-mounted file's CONTENT is not part of Compose's config hash -- so `up -d`
+            # above is a no-op for `caddy` whenever its image tag is unchanged (every deploy after
+            # the one that first ships this pinned image), and Caddy keeps serving whatever config
+            # it loaded at its own container start. Without this step, a new Caddyfile would have
+            # zero effect in production.
             #
-            # Ordering is load-bearing, dated 2026-09-03: this reload MUST run AFTER `up -d`, never
-            # before. On the one deploy that first ships this pinned image, the container running
-            # at the top of this script is still stock `caddy:2` with no rate_limit module, so
-            # reloading or validating the new Caddyfile against IT would fail on an unrecognised
-            # directive and block the very deploy meant to install the module. After `up -d`, the
-            # image reference has changed and the container has already been recreated from the
-            # new image, which loaded the new Caddyfile at its own startup -- so this reload is a
-            # no-op on that first deploy and is the load-bearing step on every deploy after, where
-            # the tag is unchanged and Compose correctly leaves the container alone.
+            # `--force-recreate`, not `caddy reload` inside the running container: appleboy/
+            # scp-action replaces the Caddyfile via rename/untar, which gives the new file a new
+            # inode. Docker's bind mount is resolved once, at container start, and keeps pointing
+            # at the OLD inode -- so `exec caddy reload` reloads stale content even though the host
+            # file is current. Confirmed live 2026-09-25 (13-05): this caused a real ~2min public
+            # 502 on nonprod despite deploy-to-netcup reporting green throughout, undetected
+            # historically only because the deploy that first introduced the old reload mechanism
+            # also recreated the container for an unrelated reason (new image tag), masking the
+            # bug. `--force-recreate` sidesteps the inode problem entirely by discarding the
+            # container and its resolved bind mount along with it, re-resolving against the
+            # current file on every deploy regardless of whether the image tag changed.
             #
-            # Failure semantics: if this reload fails, `set -e` (top of this script) reddens this
-            # job with `app` already swapped in and the previous Caddy config still serving -- the
-            # edge stays up and a human looks. That is the intended end state, not an oversight.
-            # `-T` on both `exec` calls below is required: appleboy/ssh-action runs this script
-            # under a non-interactive shell, and `exec` defaulting to a TTY is a well-known way to
-            # turn a working command into a hard failure.
-            docker compose --env-file ./.env.prod -f docker-compose.prod.yml exec -T caddy \
-              caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+            # Ordering is still load-bearing: this MUST run AFTER `up -d`, never before, for the
+            # same reason as the mechanism it replaces. On the one deploy that first ships this
+            # pinned image, the container running at the top of this script is still stock
+            # `caddy:2` with no rate_limit module -- validating the new Caddyfile against IT before
+            # `up -d` has swapped the image would fail on an unrecognised directive. After `up -d`,
+            # the image reference has already changed, so this force-recreate is a no-op recreation
+            # against the same (new) image on that first deploy, and the load-bearing step on every
+            # deploy after, where the tag is unchanged and a plain `up -d` would otherwise leave
+            # Caddy alone.
+            #
+            # Failure semantics: if this fails, `set -e` (top of this script) reddens this job with
+            # `app` already swapped in -- the edge may be down or serving stale config, and a human
+            # looks. That is an accepted, disclosed trade against the previous mechanism's
+            # fail-closed-with-old-container-still-serving behavior: the previous mechanism was
+            # fail-closed but silently wrong (looked fine, served stale content); this one is
+            # fail-loud (a failed recreate is visibly red, not silently stale).
+            docker compose --env-file ./.env.prod -f docker-compose.prod.yml up -d --force-recreate caddy
             # Read back the config Caddy is actually RUNNING, not the file that was copied -- the
-            # only thing that closes F-1 rather than assuming the reload above worked.
+            # only thing that closes F-1 rather than assuming the recreate above worked. `-T` on
+            # both `exec` calls below is required: appleboy/ssh-action runs this script under a
+            # non-interactive shell, and `exec` defaulting to a TTY is a well-known way to turn a
+            # working command into a hard failure.
             #
             # 127.0.0.1, never `localhost` (2026-09-03 review, F1 -- this shipped as `localhost`
             # and was caught before merge): Caddy's admin API binds IPv4-only, while the runtime

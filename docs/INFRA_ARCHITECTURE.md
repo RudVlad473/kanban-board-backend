@@ -179,14 +179,23 @@ Honest limit: nothing in this pipeline waits for the new `app` container's healt
 returns once the container is started, not once it is healthy — so a green `deploy-to-netcup` job
 is not by itself proof the new container reached `UP`.
 
-**The Caddy reload (F-1, quick task 260903-dvp):** `Caddyfile` is bind-mounted read-only into the
-`caddy` container, and a bind-mounted file's *content* is not part of Compose's config hash — so
-`up -d` alone is a no-op for `caddy` on every deploy where its `image:` tag is unchanged, which
-means a Caddyfile edit had zero effect in production until this change. `deploy-to-netcup` now
-runs `docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile`
-immediately after `up -d`, then reads the config Caddy is actually *running* back from its admin
-API (`http://127.0.0.1:2019/config/`) and fails the job loudly if the expected handler is absent
-— this is what actually proves the reload took effect, rather than assuming it from a copied file.
+**The Caddy config refresh (F-1, quick task 260903-dvp; mechanism corrected 13-05,
+caddy-reload-inode-bug):** `Caddyfile` is bind-mounted read-only into the `caddy` container, and a
+bind-mounted file's *content* is not part of Compose's config hash — so `up -d` alone is a no-op
+for `caddy` on every deploy where its `image:` tag is unchanged, which means a Caddyfile edit had
+zero effect in production until this change. `deploy-to-netcup` originally ran
+`docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile`
+immediately after `up -d`, but this proved structurally broken: `appleboy/scp-action` replaces
+`Caddyfile` on the VM via rename/untar, which gives the new file a new inode, while Docker's bind
+mount is resolved once at container start and keeps pointing at the old one — so `caddy reload`
+silently reloaded stale content even though the host file was current. Confirmed live 2026-09-25
+(caused a real ~2min public 502 on nonprod despite a green `deploy-to-netcup` run). `deploy-to-netcup`
+now runs `docker compose ... up -d --force-recreate caddy` instead, which discards the container
+and its resolved bind mount together and re-resolves against the current file on every deploy,
+sidestepping the inode problem entirely. It then reads the config Caddy is actually *running* back
+from its admin API (`http://127.0.0.1:2019/config/`) and fails the job loudly if the expected
+handler is absent — this is what actually proves the new config took effect, rather than assuming
+it from a copied file.
 
 That readback address must stay `127.0.0.1` and must never be written as `localhost` (observed
 2026-09-03, `caddy:2.11.4`): Caddy's admin API binds IPv4 only, while the image's `/etc/hosts`
