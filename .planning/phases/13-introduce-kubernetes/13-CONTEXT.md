@@ -171,6 +171,14 @@ before any production-touching plan starts.
   `scripts/verify-public-dashboards.py` must pass against the new links. This resolves D-07's
   either/or.
 
+### Post-planning clarifications (2026-09-25, operator-confirmed)
+- **D-14 clarified:** schema registration runs as an **initContainer on the app pod**, not a
+  standalone `Job` — Job immutability would force three Flux stages per environment. Substance of
+  D-14 (in-cluster, before app start, no CI SSH step) is unchanged.
+- **D-13 clarified:** Traefik keeps **all three** Caddy-era rate-limit zones on the prod edge —
+  signin/signup, the general prod-path zone, and the Grafana-login zone (Phase 12). Nonprod stays
+  unlimited.
+
 ### Claude's Discretion
 - k3s install method and exact pinned version (and whether Flux or k3s's helm-controller owns
   third-party charts, per D-09).
