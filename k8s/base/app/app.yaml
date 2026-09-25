@@ -36,6 +36,38 @@ spec:
       securityContext:
         seccompProfile:
           type: RuntimeDefault
+      initContainers:
+        # Schema registration (D-14): runs the same AvroSchemaRegistrar invocation
+        # deploy.yml's register-schemas-production job already proves, now in-cluster and
+        # ordered before the app container by the kubelet's own initContainer contract -- a
+        # failing init blocks the main container from starting, a stronger guarantee than a
+        # Flux Kustomization dependsOn (which only orders reconciliation, not pod scheduling).
+        - name: register-schemas
+          # Same image as the app container -- Kustomize's images transformer rewrites
+          # initContainers too, so overlays only need to patch one image reference.
+          image: rudenkovladimir/kanban-board-backend
+          workingDir: /app
+          command:
+            - java
+            - -Dloader.main=com.vrudenko.kanban_board.config.AvroSchemaRegistrar
+            - -cp
+            - app.jar
+            - org.springframework.boot.loader.launch.PropertiesLauncher
+            - $(SCHEMA_REGISTRY_URL)
+          env:
+            - name: SCHEMA_REGISTRY_URL
+              value: http://redpanda:8081
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          # Same resources as the app container (overlays patch both identically), so the
+          # pod's effective scheduled request does not rise just because an initContainer
+          # exists -- initContainer and container resource requests are not summed by the
+          # scheduler when only one runs at a time, but keeping them equal avoids a surprise
+          # if that ever changes.
+          resources: {}
       containers:
         - name: app
           image: rudenkovladimir/kanban-board-backend
@@ -63,6 +95,9 @@ spec:
             capabilities:
               drop:
                 - ALL
+          # Set by the overlay's patches.yaml (measured, dated MEASURED comment there per D-07's
+          # own memory-cap discipline) -- empty here so the base carries no unmeasured guess.
+          resources: {}
           startupProbe:
             httpGet:
               path: /api/actuator/health

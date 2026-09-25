@@ -1,0 +1,121 @@
+# Redpanda workload base (Phase 13 plan 01, D-06). Analog: docker-compose.prod.yml `redpanda:` /
+# docker-compose.nonprod.yml `redpanda-nonprod:` service blocks. Fresh single-replica broker per
+# environment (namespaced per D-11), empty topics -- nothing durable is migrated from Compose.
+#
+# Headless Service, not ClusterIP: a StatefulSet pod needs a stable, individually-addressable DNS
+# name (13-RESEARCH.md Pitfall 4) -- `<pod-ordinal>.<headless-service>.<namespace>.svc.cluster.local`
+# -- not a load-balanced single address. `publishNotReadyAddresses: true` so the pod's DNS record
+# resolves even before its own readiness probe passes, which the StatefulSet's own startup ordering
+# already needs (the broker must be resolvable by its own advertised address during its own boot).
+apiVersion: v1
+kind: Service
+metadata:
+  name: redpanda
+  labels:
+    app.kubernetes.io/name: redpanda
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/name: redpanda
+  ports:
+    - name: kafka
+      port: 19092
+    - name: schema-registry
+      port: 8081
+    - name: admin
+      port: 9644
+    - name: rpc
+      port: 33145
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redpanda
+  labels:
+    app.kubernetes.io/name: redpanda
+spec:
+  serviceName: redpanda
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redpanda
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: redpanda
+    spec:
+      securityContext:
+        # Redpanda's own data directory ownership (matches the Compose-era image's expected UID);
+        # carried over unchanged, not re-derived.
+        fsGroup: 101
+      containers:
+        - name: redpanda
+          image: docker.redpanda.com/redpandadata/redpanda:v26.2.1
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          # Flags carried LITERALLY from the Compose measurement (docker-compose.nonprod.yml /
+          # docker-compose.prod.yml's own dated comments) -- overlays patch only --memory via
+          # Kustomize's JSON patch on this args list (see 13-RESEARCH.md Anti-Patterns: do not
+          # re-derive --smp/--memory from the official Redpanda Helm chart's auto-calculation).
+          # --advertise-kafka-addr / --advertise-rpc-addr use StatefulSet DNS
+          # ($(POD_NAME).redpanda.$(POD_NAMESPACE).svc.cluster.local), never the flat Compose
+          # service name redpanda:19092 a bare pod-name or pod-IP would break on any restart,
+          # since neither is stable or cluster-resolvable (Pitfall 4).
+          args:
+            - redpanda
+            - start
+            - --overprovisioned
+            - --smp
+            - "1"
+            - --memory
+            - 512M
+            - --schema-registry-addr
+            - 0.0.0.0:8081
+            - --kafka-addr
+            - internal://0.0.0.0:19092
+            - --advertise-kafka-addr
+            - internal://$(POD_NAME).redpanda.$(POD_NAMESPACE).svc.cluster.local:19092
+            - --rpc-addr
+            - 0.0.0.0:33145
+            - --advertise-rpc-addr
+            - $(POD_NAME).redpanda.$(POD_NAMESPACE).svc.cluster.local:33145
+            - --default-log-level=info
+          ports:
+            - name: kafka
+              containerPort: 19092
+            - name: schema-registry
+              containerPort: 8081
+            - name: admin
+              containerPort: 9644
+            - name: rpc
+              containerPort: 33145
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/redpanda/data
+          # Same command the Compose healthcheck used -- rpk cluster health, grep for a healthy
+          # cluster line.
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - "rpk cluster health | grep -E 'Healthy:.+true'"
+            periodSeconds: 5
+            failureThreshold: 8
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 2Gi

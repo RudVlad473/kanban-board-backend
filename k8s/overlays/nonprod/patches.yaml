@@ -1,0 +1,21 @@
+# MEASURED (carried from docker-compose.nonprod.yml's app-nonprod comment, Plan 11-03,
+# 2026-08-26) -- idle RSS ~460-465MiB, peak ~467.8MiB under a full burst+reset workload at the
+# then-adopted postgres floor. Requests rounded up from that peak to the next 64Mi multiple
+# (512Mi); limits carry the Compose mem_limit (1g) unchanged. Re-confirmed in 13-09.
+- op: replace
+  path: /spec/template/spec/containers/0/resources
+  value:
+    requests:
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+# Same figures as the app container above -- the registrar runs briefly, once, before the app
+# container starts (never concurrently with it), so it needs no independent measurement;
+# matching the app container's own cap keeps the pod's total possible footprint unchanged.
+- op: replace
+  path: /spec/template/spec/initContainers/0/resources
+  value:
+    requests:
+      memory: 512Mi
+    limits:
+      memory: 1Gi

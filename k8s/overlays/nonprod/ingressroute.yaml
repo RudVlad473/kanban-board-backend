@@ -1,0 +1,17 @@
+# Interim IngressRoute (Phase 13 plan 01). entryPoint `web` (plain HTTP), not `websecure` --
+# during the D-02 interim, Caddy (still on Compose) terminates TLS and reverse-proxies the
+# nonprod hostname to Traefik's in-cluster address (13-RESEARCH.md's interim topology diagram).
+# 13-06 switches this to `websecure` once Traefik itself owns 80/443 directly post-cutover.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: app
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`kanban-board-rud-vlad-473-nonprod.duckdns.org`)
+      kind: Rule
+      services:
+        - name: app
+          port: 8080

@@ -3,6 +3,17 @@ kind: Kustomization
 namespace: kanban-nonprod
 resources:
   - ../../base/app
+  - ../../base/redpanda
+  - ingressroute.yaml
+patches:
+  - path: patches.yaml
+    target:
+      kind: Deployment
+      name: app
+  - path: patches-redpanda.yaml
+    target:
+      kind: StatefulSet
+      name: redpanda
 images:
   - name: rudenkovladimir/kanban-board-backend
     newName: rudenkovladimir/kanban-board-backend-nonprod

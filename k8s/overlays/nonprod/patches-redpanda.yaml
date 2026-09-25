@@ -1,0 +1,12 @@
+# MEASURED (carried from docker-compose.nonprod.yml's redpanda-nonprod comment, superseded
+# 2026-09-11, quick task 260911-gkz) -- confirmed stable at RSS 290.6MiB against the ballooned
+# __consumer_offsets/_schemas backlog that crash-looped the original 128M/300m floor. Requests
+# rounded up from that RSS to the next 64Mi multiple (320Mi); limits carry the Compose mem_limit
+# (900m) unchanged. Re-confirmed in 13-09.
+- op: replace
+  path: /spec/template/spec/containers/0/resources
+  value:
+    requests:
+      memory: 320Mi
+    limits:
+      memory: 900Mi
