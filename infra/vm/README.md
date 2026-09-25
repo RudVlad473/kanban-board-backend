@@ -1,11 +1,18 @@
 # infra/vm/
 
-The `DOCKER-USER` inbound firewall policy for the production VM's Docker-published ports (80 and
-443 today), as a reviewed, version-controlled ruleset rather than a hand-typed `iptables` session
-that leaves no trace once the shell closes. See `docker-user-firewall.sh`'s own header for the
-design decisions (why a systemd unit instead of `netfilter-persistent save`, why
-`--ctorigdstport`, rule ordering, IPv4/TCP-only scope) and `docs/INFRA_RUNBOOK.md`'s Firewall
-Layer 3 section for the live evidence it works.
+VM-provisioning files for the production host, version-controlled rather than a hand-typed shell
+session that leaves no trace once it closes:
+
+- `docker-user-firewall.{sh,service}` — the `DOCKER-USER` inbound firewall policy for the
+  production VM's Docker-published ports (80 and 443 today). See `docker-user-firewall.sh`'s own
+  header for the design decisions (why a systemd unit instead of `netfilter-persistent save`, why
+  `--ctorigdstport`, rule ordering, IPv4/TCP-only scope) and `docs/INFRA_RUNBOOK.md`'s Firewall
+  Layer 3 section for the live evidence it works.
+- `k3s/{config.yaml,install.sh}` — the pinned, checksum-verified k3s install (Plan 13-02): server
+  config (secrets encryption, root-only kubeconfig, ServiceLB/metrics-server disabled for the
+  interim) plus the install wrapper that sha256-verifies its own downloaded copy of `get.k3s.io`
+  before running it. See `docs/INFRA_RUNBOOK.md`'s "k3s install and interim bridge — Plan 13-02"
+  section for the live evidence and findings from installing it.
 
 ## Install (manual — see "Why this is not wired into deploy.yml" below)
 
