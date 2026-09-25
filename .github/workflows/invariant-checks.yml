@@ -46,6 +46,12 @@
 # empty result -- no log line, no unhealthy container, just quiet panels. These dashboards are
 # vendored from grafana.com, where template variables are the norm, so each re-fetch reintroduces
 # it. See that script's own docstring for the measurements and its KNOWN HOLES.
+#
+# Fifth and sixth jobs added Phase 13 plan 01 (D-12): k8s-manifests-valid renders every k8s/
+# kustomization root with a pinned kubectl and validates the result against pinned Kubernetes/CRD
+# schemas via kubeconform (scripts/verify-k8s-manifests.sh). k8s-invariants is the k8s-native
+# successor of compose-published-ports above, added Task 3 -- see
+# scripts/verify-k8s-invariants.py's own docstring for its invariants.
 name: Invariant Checks
 
 on:
@@ -143,3 +149,34 @@ jobs:
 
       - name: Verify public dashboard invariants
         run: python3 scripts/verify-public-dashboards.py
+
+  k8s-manifests-valid:
+    name: Every k8s/ kustomization root validates against pinned Kubernetes/CRD schemas
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      # No separate dependency-install step: verify-k8s-manifests.sh downloads and sha256-verifies
+      # its own pinned kubectl/kubeconform binaries on demand (see that script's own header).
+      - name: Verify k8s manifest invariants
+        run: bash scripts/verify-k8s-manifests.sh
+
+  k8s-invariants:
+    name: k8s manifests carry only the edge as public, measured memory caps, no committed Secrets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install the gate's one dependency
+        run: python3 -m pip install --disable-pip-version-check --quiet pyyaml
+
+      # Runs ahead of the gate, matching every other job in this file: a gate edited into
+      # something that cannot fire must be reported as the failure here, not masked by a
+      # compliant tree.
+      - name: Verify the gate's invariants can fire
+        run: python3 scripts/verify-k8s-invariants-selftest.py
+
+      - name: Verify k8s invariants
+        run: python3 scripts/verify-k8s-invariants.py

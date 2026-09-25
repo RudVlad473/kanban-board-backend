@@ -1,0 +1,98 @@
+# App workload base (Phase 13 plan 01). Analog: docker-compose.prod.yml `app:`/
+# docker-compose.nonprod.yml `app-nonprod:` service blocks -- same env/resource-cap fields,
+# Kubernetes-native shape. Overlays set the image tag/repository and per-env resource requests
+# (see k8s/overlays/nonprod/kustomization.yaml and patches.yaml).
+#
+# `register-schemas` initContainer added Task 2 (D-14): schema registration runs in-cluster,
+# ordered before the app container starts, via an initContainer rather than a Job -- Job.spec.
+# template is immutable, so a second apply with a changed image tag (every deploy, per D-15)
+# would fail; an initContainer is part of the Pod template, which IS meant to change every
+# deploy (13-RESEARCH.md Pattern 3). Deviation from D-14's literal "Job" wording, flagged for
+# operator confirmation in the phase-level design record -- do not silently convert either way.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app
+  labels:
+    app.kubernetes.io/name: app
+spec:
+  replicas: 1
+  # Recreate, not RollingUpdate (phase-level design record): keeps the memory envelope at one
+  # app pod per env, matching the ~0.6 GiB steady-state headroom this phase's memory budget
+  # assumes. RollingUpdate's maxSurge 1 would add another app pod's requests transiently.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: app
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: app
+    spec:
+      # No in-cluster Kubernetes API access is needed by this workload -- closes T-13-03
+      # (Elevation of Privilege: app pod reaching the Kubernetes API).
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: app
+          image: rudenkovladimir/kanban-board-backend
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - secretRef:
+                # Created on the VM from env files, never committed, never handled by CI (D-10).
+                name: app-env
+          env:
+            # Cross-namespace K8s DNS, not Compose's flat service-name DNS (13-RESEARCH.md
+            # Pitfall 4 applies to Redpanda; the same DNS-shape correction applies here to
+            # Postgres). Overrides whatever DB_HOST value the Compose-era app-env Secret carries.
+            - name: DB_HOST
+              value: postgres.kanban-data.svc.cluster.local
+            - name: DB_PORT
+              value: "5432"
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: redpanda:19092
+            - name: SCHEMA_REGISTRY_URL
+              value: http://redpanda:8081
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          startupProbe:
+            httpGet:
+              path: /api/actuator/health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            httpGet:
+              path: /api/actuator/health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/actuator/health
+              port: http
+            periodSeconds: 10
+            # Matches the Compose healthcheck's own retries: 5.
+            failureThreshold: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app
+  labels:
+    app.kubernetes.io/name: app
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: app
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

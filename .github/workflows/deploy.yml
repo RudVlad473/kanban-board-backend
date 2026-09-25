@@ -10,10 +10,16 @@ on:
     # NOT ignoring .github/** as a whole -- a workflow or Dependabot config change genuinely
     # needs a real deploy-pipeline run to validate, so only the two known-inert path groups
     # below are excluded.
+    # k8s/** added Phase 13 plan 01 (D-15): Flux commits sortable tag bumps straight to k8s/
+    # overlay files on `main`. Without this exclusion, that commit would trigger a full image
+    # rebuild, producing a NEW tag Flux would then bump to again -- an infinite build/commit loop
+    # (Flux commit -> image build -> new tag -> another Flux commit -> ...). k8s/ manifests never
+    # need a fresh app image; only the tag reference inside them changes.
     paths-ignore:
       - "docs/**"
       - "**/*.md"
       - ".planning/**"
+      - "k8s/**"
 
 env:
   DOCKERHUB_USER: rudenkovladimir
@@ -123,10 +129,15 @@ jobs:
       - name: Log in to Docker Hub
         run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u $DOCKERHUB_USER --password-stdin
 
-      # need to add a tag to image to not cause name collisions on dockerhub when pushing
+      # Sortable tag scheme (Phase 13 plan 01, D-15): the bare 7-char SHA this used to emit cannot
+      # be numerically ordered, which a Flux ImagePolicy needs to pick "the newest" tag. run_number
+      # is GitHub's own monotonically increasing per-workflow-file counter -- free, no extra state
+      # to maintain -- so `main-<run_number>-<sha7>` sorts correctly by the ImagePolicy's numerical
+      # extraction (`^main-(?P<num>[0-9]+)-[a-f0-9]{7}$`) while the trailing sha7 keeps the tag
+      # traceable to the exact commit, matching this job's pre-existing convention.
       - name: Set image tag from commit
         id: set_image_tag_from_commit
-        run: echo "image_tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+        run: echo "image_tag=main-${{ github.run_number }}-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       - name: Set full image name
         id: set_full_image_name
