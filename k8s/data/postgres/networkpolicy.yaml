@@ -1,0 +1,44 @@
+# D-11: admits TCP 5432 to Postgres only from the two app namespaces and the labelled
+# postgres_exporter pod in monitoring -- least-privilege network boundary replacing Compose's
+# implicit "no published port" isolation (Phase 12's postgres_exporter never had a network
+# boundary of its own; this is new, not a port from an existing Compose control).
+#
+# A node-local source (the CI SSH forward used by flyway-verify* in 13-06) is NOT covered by
+# either peer below -- it relies on kube-router admitting node-originated traffic, which is not a
+# NetworkPolicy concern (a NetworkPolicy governs pod-to-pod/namespace traffic, not traffic
+# originating from the node's own network stack). 13-06 proves that path live during the cutover
+# window; this policy's own scope is unchanged by it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchExpressions:
+              - key: kubernetes.io/metadata.name
+                operator: In
+                values:
+                  - kanban-prod
+                  - kanban-nonprod
+        # The exporter peer is a SEPARATE list entry (not folded into the namespaceSelector
+        # above) so it AND-combines its own namespaceSelector with its own podSelector -- a peer
+        # entry with both fields set admits only traffic matching BOTH, never their union. Folding
+        # this into the same entry as the app namespaces above would incorrectly admit every pod
+        # in kanban-prod/kanban-nonprod that also happened to carry this label, or (worse) widen
+        # the monitoring namespace entry to admit every pod in it.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              kanban-board/postgres-client: "true"
+      ports:
+        - protocol: TCP
+          port: 5432
