@@ -19,3 +19,17 @@ configMapGenerator:
       labels:
         grafana_dashboard: "1"
       disableNameSuffixHash: true
+  - name: grafana-dashboard-cadvisor
+    files:
+      - dashboards/cadvisor.json
+    options:
+      labels:
+        grafana_dashboard: "1"
+      disableNameSuffixHash: true
+  - name: grafana-dashboard-postgres-exporter
+    files:
+      - dashboards/postgres-exporter.json
+    options:
+      labels:
+        grafana_dashboard: "1"
+      disableNameSuffixHash: true

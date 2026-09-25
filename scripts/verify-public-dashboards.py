@@ -103,11 +103,11 @@ PUBLIC_DASHBOARDS = {
     "postgres-exporter.json": "v5ciIbUZz",
 }
 
-# k8s-scope files not yet authored. Task 1 of this 3-task plan adds only node-exporter-full.json;
-# Tasks 2-3 add the remaining two and remove their names from this set. Listed explicitly so the
-# gate says exactly which files are still missing, rather than a scope silently passing with 1 of
-# 3 dashboards present.
-K8S_PENDING = {"cadvisor.json", "postgres-exporter.json"}
+# k8s-scope files not yet authored. Empty as of Task 3 -- all three dashboards now exist under
+# K8S_JSON_DIR. Kept as a named, documented mechanism (not deleted) so a future dashboard addition
+# has a place to land the same way, and so the "present pending" self-check in check_scope() stays
+# exercised.
+K8S_PENDING: set = set()
 
 # Not shared publicly: exempt from I2/I3 (they may use template variables freely), still subject
 # to I1. Empty today -- every provisioned dashboard is public. A future admin-only dashboard goes
