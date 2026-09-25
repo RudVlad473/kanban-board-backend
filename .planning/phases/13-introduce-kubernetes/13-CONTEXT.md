@@ -155,6 +155,22 @@ before any production-touching plan starts.
   Docker Hub repo (`kanban-board-backend`, `kanban-board-backend-nonprod`). No promotion gate,
   matching today's behaviour where `deploy-to-netcup` never waited on nonprod health.
 
+### Post-research decisions (2026-09-25, resolving 13-RESEARCH.md Open Questions 1–2)
+- **D-17:** The entire observability stack (kube-prometheus-stack, Loki, Alloy) moves to k3s
+  **at the prod cutover**, not with nonprod. During the D-02 interim the old Compose
+  Prometheus/Grafana/Loki stay authoritative and there are no in-cluster metrics. The operator
+  declined the recommended minimal-interim-Prometheus option. Consequence the planner MUST
+  handle: the nonprod "full deploy cycle" check (D-02) and any interim OOM/restart evidence come
+  from `kubectl` (`kubectl get pods` restart counts, `kubectl get events
+  --field-selector reason=OOMKilling`, `kubectl describe pod` last-state), not from dashboards.
+  Research's interim peak for this shape is ~3.6–4.0 GiB (the minimal scenario minus its
+  ~400 MiB mini-Prometheus). The D-08 24h zero-OOM/zero-restart gate runs after the full stack is
+  up in the prod window, so it can use kube-prometheus-stack.
+- **D-18:** Grafana public-dashboard continuity: **recreate the two public shares** on the new
+  Grafana and update both README links in the same commit. No `grafana.db` carry-over.
+  `scripts/verify-public-dashboards.py` must pass against the new links. This resolves D-07's
+  either/or.
+
 ### Claude's Discretion
 - k3s install method and exact pinned version (and whether Flux or k3s's helm-controller owns
   third-party charts, per D-09).
