@@ -1,0 +1,97 @@
+# Production edge (Phase 13 plan 04, D-13). Unlike the nonprod overlay's interim `entryPoints:
+# [web]` IngressRoute (Caddy still terminates TLS for nonprod during the D-02 interim), this root
+# is authored on `websecure` from day one and stays INERT (not reconciled, per this plan's own
+# objective) until 13-06's maintenance window flips the live edge over. There is no Caddy bridge
+# for prod -- prod cuts over in one window, not an interim.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: auth-rate-limit
+spec:
+  # PROVISIONAL translation of Caddy zone auth (events/window); re-derived from token-bucket
+  # semantics in 13-08. Numbers copied verbatim from the Caddyfile's own `zone auth` (events 20,
+  # window 5m) -- Traefik's token bucket refills continuously rather than resetting at a window
+  # boundary, so this is an approximation, not an identical translation (13-RESEARCH.md Pattern 2).
+  rateLimit:
+    average: 20
+    period: 5m
+    burst: 20
+    sourceCriterion:
+      ipStrategy:
+        ipv6Subnet: 56
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: general-rate-limit
+spec:
+  # PROVISIONAL translation of Caddy zone general (events/window); re-derived from token-bucket
+  # semantics in 13-08. Numbers copied verbatim from the Caddyfile's own `zone general` (events
+  # 120, window 1m). Scope matches Caddy exactly: this Middleware is attached only to the
+  # IngressRoute's prod-hostname route below -- nonprod carries no rate-limit Middleware at all
+  # (D-13: nonprod stays unlimited).
+  rateLimit:
+    average: 120
+    period: 1m
+    burst: 120
+    sourceCriterion:
+      ipStrategy:
+        ipv6Subnet: 56
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-https
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: app-https
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    # Order matters for readability only, not correctness -- Traefik's own rule-length priority
+    # already picks the more specific PathPrefix match over the bare Host match regardless of
+    # declaration order, but the auth route is listed first because it is materially more
+    # sensitive (rate limit floor) and easiest to review when adjacent to its own Middleware.
+    - match: Host(`kanban-board-rud-vlad-473.duckdns.org`) && (PathPrefix(`/api/signin`) || PathPrefix(`/api/signup`))
+      kind: Rule
+      middlewares:
+        - name: auth-rate-limit
+      services:
+        - name: app
+          port: 8080
+    - match: Host(`kanban-board-rud-vlad-473.duckdns.org`)
+      kind: Rule
+      middlewares:
+        - name: general-rate-limit
+      services:
+        - name: app
+          port: 8080
+  tls:
+    secretName: app-tls
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: app-http
+spec:
+  entryPoints:
+    - web
+  routes:
+    # The negation excludes cert-manager's HTTP-01 solver path from the redirect by construction.
+    # Traefik's implicit rule-length priority does not carry this guarantee on its own: an
+    # explicit `priority`, or a longer redirect rule added later, would silently invert it and
+    # send the ACME CA to HTTPS -- failing first issuance and every renewal after it (I10).
+    - match: Host(`kanban-board-rud-vlad-473.duckdns.org`) && !PathPrefix(`/.well-known/acme-challenge/`)
+      kind: Rule
+      middlewares:
+        - name: redirect-https
+      services:
+        - name: app
+          port: 8080

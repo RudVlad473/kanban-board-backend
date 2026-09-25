@@ -1,0 +1,19 @@
+# MEASURED (carried from docker-compose.prod.yml's redpanda comment, Plan 05-04, 2026-08-16) --
+# idle RSS 347.8MiB, RSS never moved off that figure across a 54-request burst (CPU peaked
+# 7.3-8.6% of the single `--smp 1` core). Requests rounded up from that peak to the next 64Mi
+# multiple (384Mi); limits carry the Compose cgroup backstop (2200m) unchanged. Re-confirmed in
+# 13-09.
+- op: replace
+  path: /spec/template/spec/containers/0/resources
+  value:
+    requests:
+      memory: 384Mi
+    limits:
+      memory: 2200Mi
+# JSON6902 arg replacement: the base's `--memory 512M` (nonprod-shaped default) becomes prod's
+# measured `2G`, matching docker-compose.prod.yml's redpanda `--memory 2G` flag exactly (same
+# comment: deliberately NOT numerically equal to the cgroup limit above -- Seastar's own probe
+# needs headroom past its requested usable memory to initialize, confirmed live on Compose).
+- op: replace
+  path: /spec/template/spec/containers/0/args/6
+  value: 2G

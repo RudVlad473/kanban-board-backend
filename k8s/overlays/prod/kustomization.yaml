@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: kanban-prod
+resources:
+  - ../../base/app
+  - ../../base/redpanda
+  - ingressroute.yaml
+  - certificate.yaml
+patches:
+  - path: patches.yaml
+    target:
+      kind: Deployment
+      name: app
+  - path: patches-redpanda.yaml
+    target:
+      kind: StatefulSet
+      name: redpanda
+images:
+  - name: rudenkovladimir/kanban-board-backend
+    newName: rudenkovladimir/kanban-board-backend
+    # Setter marker (D-16): Flux's ImagePolicy flux-system/kanban-board-backend-prod (13-02)
+    # rewrites this line's value in place on every new image it selects. Starting value copied
+    # from the nonprod overlay's own tag today (13-01) -- both track `main` independently
+    # (D-16: no promotion gate), so there is no "correct" starting tag beyond "a real one that
+    # exists on Docker Hub already".
+    newTag: main-1-0000000 # {"$imagepolicy": "flux-system:kanban-board-backend-prod:tag"}

@@ -1,0 +1,21 @@
+# MEASURED (carried from docker-compose.prod.yml's app comment, Plan 11-03/05-04,
+# 2026-08-26/2026-08-16) -- idle RSS ~428-436MiB, peak ~471.1MiB during a full burst+Flyway-
+# recreate workload. Requests rounded up from that peak to the next 64Mi multiple (512Mi);
+# limits carry the Compose mem_limit (3g) unchanged. Re-confirmed in 13-09.
+- op: replace
+  path: /spec/template/spec/containers/0/resources
+  value:
+    requests:
+      memory: 512Mi
+    limits:
+      memory: 3Gi
+# Same figures as the app container above -- the registrar runs briefly, once, before the app
+# container starts (never concurrently with it), so it needs no independent measurement;
+# matching the app container's own cap keeps the pod's total possible footprint unchanged.
+- op: replace
+  path: /spec/template/spec/initContainers/0/resources
+  value:
+    requests:
+      memory: 512Mi
+    limits:
+      memory: 3Gi
