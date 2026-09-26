@@ -23,4 +23,4 @@ images:
     # from the nonprod overlay's own tag today (13-01) -- both track `main` independently
     # (D-16: no promotion gate), so there is no "correct" starting tag beyond "a real one that
     # exists on Docker Hub already".
-    newTag: main-136-65ef8f5 # {"$imagepolicy": "flux-system:kanban-board-backend-prod:tag"}
+    newTag: main-137-414977e # {"$imagepolicy": "flux-system:kanban-board-backend-prod:tag"}
