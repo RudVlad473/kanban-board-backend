@@ -4,16 +4,16 @@ milestone: v1.3
 current_phase: 13
 current_phase_name: Introduce Kubernetes
 status: executing
-stopped_at: Phase 13 wave 3 (13-05) complete; deploy.yml caddy-reload-inode-bug fixed and live-verified
-last_updated: "2026-09-25T18:45:00.000Z"
+stopped_at: Completed 13-06-PLAN.md (production cutover to k3s, live window + incident recovery)
+last_updated: "2026-09-26T08:53:08.146Z"
 last_activity: 2026-09-25
 last_activity_desc: Fixed deploy.yml's caddy-reload-inode-bug (force-recreate over exec reload), live-verified via a real production deploy; resumed and completed 13-05 Task 3 (GitOps cycle proof, kubectl health evidence, interim memory budget PASS by 268 MiB thin margin)
-state_head: 31c36fb
+state_head: 819a8b588e54670a22db53b7d4b4b17c806840c0
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 24
-  completed_plans: 19
+  completed_plans: 20
 milestone_name: Nonprod Environment & CI Hardening
 ---
 
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-09-08)
 ## Current Position
 
 Phase: 13 (Introduce Kubernetes) — EXECUTING
-Plan: 5 of 10 (Wave 3, 13-05) — COMPLETE. Waves 1-3 (13-01 through 13-05) done, merged, verified. Waves 4-8 (13-06 through 13-10) not started.
-Status: Executing Phase 13
-Last activity: 2026-09-25 — Fixed a real production bug (deploy.yml's caddy-reload silently served stale config after a Caddyfile-only push, due to an inode mismatch), live-verified the fix (host/container Caddyfile md5sum match, ~1min container uptime confirming genuine recreation), then completed 13-05 Task 3: proved one full GitOps deploy cycle end to end, gathered kubectl-only health evidence, measured the interim memory budget (PASS, 5040 MiB projected vs 5308 MiB threshold — 268 MiB margin, flagged thin/provisional pending 13-06/13-07's real cert-manager/Prometheus-Operator/Alloy figures). One gap disclosed rather than hidden: 13-05 Task 2's verbatim rpk/reset-endpoint acceptance-criteria captures from a prior session are unreproducible from git history — logged as WINDOWS.md entry 9, open.
+Plan: 6 of 10 (Wave 4, 13-06) — COMPLETE. Waves 1-4 (13-01 through 13-06) done, merged, verified. Production is now live on k3s (D-01 executed). Waves 5-8 (13-07 through 13-10) not started.
+Status: Ready to execute
+Last activity: 2026-09-26 — Executed the production cutover to k3s in a live maintenance window (13-06). A mid-window operator error (pushing a staged multi-commit branch by tip instead of by per-gate SHA) landed W2/W3/W4 on `main` simultaneously, causing a real ~11-minute public 502 outage before the actual data migration had happened; no production data was lost (Compose's own Postgres was never stopped until after the real dump was taken). The executor stopped and reported on discovering this rather than improvising alone; the operator explicitly directed pushing forward rather than rolling back. Production now runs on k3s with verified zero-diff row-count parity, all three hostnames on real Let's Encrypt production certificates, Traefik/ServiceLB owning 80/443, and CI fully retargeted (Compose deploy jobs removed, Flyway verification through a fingerprint-pinned SSH forward, proven green via a live `deploy.yml` dispatch). Five real pre-existing gaps were found and fixed live against the cluster for the first time (a Postgres readinessProbe using unexpandable `$(POSTGRES_USER)` syntax, a cert-manager HelmRepository/HelmRelease missing `metadata.namespace`, no IngressRoute anywhere in the phase serving `grafana-tls` for the monitoring hostname, an SSH host-key fingerprint comparison bug, and a CNI/DNS pod-startup race). Full incident account and gap details in `docs/history/2026-09-26-production-cutover-to-k3s.md`; the generalizable lesson (push a staged multi-commit cutover by explicit SHA per gate, never by branch tip) is recorded in `docs/SESSION_LESSONS.md` lesson 8.
 
-Next: 13-06 (production cutover, one-way per D-04) — Wave 4. Read 13-05-SUMMARY.md and the runbook's new "Nonprod on k3s — Plan 13-05" section before starting; the memory margin is thin enough that 13-06 should not proceed on the assumption it's comfortable.
+Next: 13-07 (observability activation, D-17) — Wave 5. Note: 13-06 built a deliberate placeholder `IngressRoute grafana`/`IngressRoute grafana-http` pair (backed by an Endpoints-less Service, Traefik answers 503) in `k8s/platform/edge/ingressroute-monitoring.yaml`, using the exact object names 13-07's own plan text already expects — 13-07 should replace the backend Service reference, not recreate the IngressRoute objects. Compose is stopped but NOT deleted (D-04 gate is 13-10); all 8 Compose volumes remain intact.
 
 ## Performance Metrics
 
@@ -57,6 +57,7 @@ v1.0–v1.2 velocity/per-plan detail archived at milestone close — see `.plann
 | Phase 12 P04 | 123min | 2 tasks | 5 files |
 | Phase 12 P05 | 60min | 3 tasks | 2 files |
 | Phase 12 P06 | 55min | 3 tasks | 7 files |
+| Phase 13 P06 | ~59min window + ~30min post-window fixes/docs | 3 tasks | 23 files |
 
 ## Accumulated Context
 
@@ -104,6 +105,8 @@ authorization, given the real-traffic-interruption and Let's Encrypt cert-safety
 
 - [Phase 13]: 13-05 resume session: fixed deploy.yml's caddy-reload-inode-bug (replaced `caddy reload` inside the running container with `docker compose up -d --force-recreate caddy`) before continuing 13-05 Task 3 rather than deferring it -- appleboy/scp-action's rename-based file replacement gives the new Caddyfile a new inode, but Docker's bind mount is resolved once at container start and kept pointing at the old one, so the old mechanism was fail-closed-looking but actually silently stale; force-recreate sidesteps the inode problem structurally and trades that for a fail-loud failure mode instead. Live-verified via a real production deploy (host/container Caddyfile md5sum match, ~1min container uptime confirming genuine recreation), not just a green CI job -- the same md5sum-comparison discipline that caught the bug in the first place.
 - [Phase 13]: 13-05 Task 3's interrupted-executor resume: the prior session's worktree (`agent-a4f43b113ff7a0069`) had no live agent to SendMessage-resume, but was clean and un-reaped, so it was rebased onto current main and then discarded in favor of a fresh `isolation="worktree"` dispatch once the project's own dispatch-isolation guard rejected manually pointing an Agent() call at a pre-existing worktree path -- no work was lost since the manual worktree's commits were already on main.
+- [Phase 13]: 13-06: production cutover approved and executed; a mid-window push-by-branch-tip incident caused ~11min public 502 with zero data loss, operator directed push-forward-not-rollback recovery
+- [Phase 13]: 13-06: 5 real pre-existing gaps found and fixed live against the cluster for the first time (postgres readinessProbe syntax, cert-manager HelmRepository/HelmRelease namespace, missing monitoring IngressRoute, SSH fingerprint comparison, a CNI-readiness race) -- none introduced by the incident
 
 ### Pending Todos
 
@@ -178,13 +181,14 @@ The 46 pending todos are individually listed and categorized in this document's 
 
 ## Session Continuity
 
-Last session: 2026-09-25T18:45:00.000Z
-Stopped at: 13-05 fully complete (all 3 tasks, SUMMARY.md written, merged, pushed). No open checkpoint or handoff.
-Resume file: none — HANDOFF.json and both .continue-here.md checkpoints were consumed and deleted this session now that 13-05 is closed.
+Last session: 2026-09-26T08:53:08.010Z
+Stopped at: Completed 13-06-PLAN.md (production cutover to k3s, live window + incident recovery)
+Resume file: None
 
 ## Operator Next Steps
 
-- Phase 13 Wave 4 (13-06, production cutover) is next. It is a one-way decision per D-04 — read `.planning/phases/13-introduce-kubernetes/13-06-PLAN.md` and the 13-05-SUMMARY.md memory-budget verdict (PASS, but only a 268 MiB margin, explicitly flagged thin/provisional) before starting.
-- `deploy.yml`'s caddy-reload-inode-bug is fixed and live-verified (commit `37643d0`) — no longer a blocker for 13-06.
+- Phase 13 Wave 5 (13-07, observability activation, D-17) is next. Its own precondition text already assumes `k3s kubectl get ingressroute grafana -n monitoring` exists — it does, as a deliberate 13-06 placeholder (Endpoints-less `grafana-placeholder` Service, Traefik answers 503 for it). 13-07 should replace the backend Service reference on the existing `IngressRoute grafana`/`IngressRoute grafana-http` objects, not recreate them.
+- Read `docs/history/2026-09-26-production-cutover-to-k3s.md` before starting 13-07 or any later production-touching plan — it documents a real mid-window incident (a staged multi-commit branch pushed by tip instead of per-gate SHA, causing an ~11-minute public 502 with zero data loss) and 5 gaps found and fixed live. `docs/SESSION_LESSONS.md` lesson 8 generalizes the incident's root cause for any future staged multi-commit rollout in this repo.
+- Compose is stopped but NOT deleted (D-04 gate is 13-10) — all 8 Compose volumes remain intact on the VM. Do not delete them before 13-10's own gate passes.
 - WINDOWS.md entry 9 (13-05 Task 2's unreproducible verbatim rpk/reset-endpoint acceptance-criteria capture) is open, not blocking, worth closing opportunistically.
-- Deferred, user-requested: reorganize `/docs` (9 top-level .md files + demo/diagrams/incidents/learning/netcup-report/plans subdirs) — still deferred; `docs/INFRA_RUNBOOK.md` just grew again this session (now ~300KB) and is a prime candidate. Two untracked items found in the working tree this session, not cleaned up (unclear provenance, predate this session): `docs/netcup-report/netcup_network_diagnostics.txt` and `docs/learning/.review-431836/` (a completed multi-agent review's scratch output, 20 findings) — triage or delete before/during the docs reorg.
+- Deferred, user-requested: reorganize `/docs` (9 top-level .md files + demo/diagrams/incidents/learning/netcup-report/plans subdirs) — still deferred. Two untracked items found in the working tree in a prior session, not cleaned up (unclear provenance): `docs/netcup-report/netcup_network_diagnostics.txt` and `docs/learning/.review-431836/` (a completed multi-agent review's scratch output, 20 findings) — triage or delete before/during the docs reorg.
