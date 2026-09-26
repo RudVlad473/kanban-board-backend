@@ -17,17 +17,22 @@ Phase 12 onward. Confirmed live on the VM via `find -printf`: those four paths s
 deploys never caught it, because nothing compared the two lists. This gate makes that comparison a
 pure function of the commit, checkable per pull request.
 
-SCOPE: one (compose file, deploy job) pair, declared in DEPLOY_SCP_PAIRS below so a second
-deploy path cannot be added without touching this list:
-  - docker-compose.prod.yml <-> deploy-to-netcup
+SCOPE: zero (compose file, deploy job) pairs remain active -- DEPLOY_SCP_PAIRS is deliberately
+empty, not deleted, so a future SCP-based deploy job re-adds itself here rather than this gate
+being rediscovered from scratch.
 
 REMOVED Plan 13-05 (D-14, D-15): the docker-compose.nonprod.yml <-> deploy-to-nonprod pairing
 that used to sit here is gone along with the job itself -- nonprod no longer deploys over SSH via
-a Compose SCP step; Flux + image automation deploys it from k8s/overlays/nonprod instead. There is
-no longer an SCP step for this gate to check nonprod's bind mounts (of which it had none) against.
-If nonprod ever gains a k8s-native equivalent of this coverage question (e.g. a ConfigMap/Secret
-whose committed content must match what the cluster actually runs), that is a different gate,
-not a reason to resurrect this pairing.
+a Compose SCP step; Flux + image automation deploys it from k8s/overlays/nonprod instead.
+
+REMOVED Plan 13-06 (D-01, D-04): the docker-compose.prod.yml <-> deploy-to-netcup pairing is gone
+the same way -- production cut over to k3s, and deploy.yml's deploy-to-netcup,
+register-schemas-production and cleanup-unused-image jobs were deleted in that plan's W4 commit.
+docker-compose.prod.yml itself still exists in the repo (kept for the D-04 rollback window; its
+deletion is Plan 13-10's), but nothing in CI transfers it to a VM anymore, so there is no SCP step
+left for this gate to check its bind mounts against. If a k8s-native equivalent of this coverage
+question ever arises (e.g. a ConfigMap/Secret whose committed content must match what the cluster
+actually runs), that is a different gate, not a reason to resurrect this pairing.
 Each job's SCP step is located by its `uses:` containing `scp-action`, never by step name or
 position -- a renamed step still resolves, a renamed or removed scp-action step fails closed (I3).
 
@@ -80,9 +85,7 @@ KNOWN HOLES, enumerated now rather than left to be rediscovered:
 import os
 import sys
 
-DEPLOY_SCP_PAIRS = [
-    {"compose": "docker-compose.prod.yml", "job": "deploy-to-netcup"},
-]
+DEPLOY_SCP_PAIRS = []
 
 
 def normalize_host_path(raw):
@@ -301,6 +304,10 @@ def main():
         for line in all_fails:
             print(f"FAIL: {line}")
         return 1
+
+    if not DEPLOY_SCP_PAIRS:
+        print("invariants OK: DEPLOY_SCP_PAIRS is empty -- no SCP-based deploy path exists to check")
+        return 0
 
     pairs_desc = "; ".join(f"{p['compose']} <-> {p['job']}" for p in DEPLOY_SCP_PAIRS)
     print(
