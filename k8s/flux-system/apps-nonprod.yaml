@@ -1,4 +1,6 @@
 # Activated Plan 13-05 (D-02): nonprod cutover to k3s, Compose nonprod stopped in D-06 order.
+# `edge` dependsOn added Plan 13-06 (W1): the nonprod overlay's Certificate/websecure IngressRoute
+# now need cert-manager's ClusterIssuers and Traefik's LoadBalancer edge to exist first.
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
@@ -14,6 +16,7 @@ spec:
   dependsOn:
     - name: platform
     - name: data
+    - name: edge
   healthChecks:
     - apiVersion: apps/v1
       kind: Deployment

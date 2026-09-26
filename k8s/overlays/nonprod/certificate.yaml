@@ -1,0 +1,15 @@
+# D-13: every Certificate starts on the staging issuer. The production flip is a separate 13-06
+# commit (W3), made only after all three hostnames (prod, nonprod, monitoring) validate against
+# staging -- see k8s/platform/edge/clusterissuers.yaml for both ClusterIssuers, and
+# k8s/overlays/prod/certificate.yaml for the identically-shaped prod Certificate.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: app
+spec:
+  secretName: app-tls
+  dnsNames:
+    - kanban-board-rud-vlad-473-nonprod.duckdns.org
+  issuerRef:
+    name: letsencrypt-staging
+    kind: ClusterIssuer

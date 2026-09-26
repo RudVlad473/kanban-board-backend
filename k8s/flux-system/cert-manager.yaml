@@ -1,4 +1,4 @@
-# Suspended until 13-06's maintenance window (D-02, D-17). Plan 13-02.
+# Plan 13-02. Unsuspended Plan 13-06 (W1) at the start of the maintenance window (D-02, D-17).
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
@@ -9,7 +9,7 @@ spec:
   interval: 10m
   path: ./k8s/platform/cert-manager
   prune: true
-  suspend: true
+  suspend: false
   dependsOn:
     - name: platform
   sourceRef:

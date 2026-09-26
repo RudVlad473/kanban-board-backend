@@ -5,6 +5,13 @@ resources:
   - ../../base/app
   - ../../base/redpanda
   - ingressroute.yaml
+  - certificate.yaml
+# W1 (13-06): scale nonprod to 0 for the maintenance window so no app pod can run Flyway
+# against the freshly-restored-but-not-yet-verified in-cluster Postgres before the parity
+# check (T-13-27). W2 removes this entry once the restore + parity diff are both clean.
+replicas:
+  - name: app
+    count: 0
 patches:
   - path: patches.yaml
     target:

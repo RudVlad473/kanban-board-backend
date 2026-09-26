@@ -1,14 +1,16 @@
-# Interim Traefik config for the k3s-packaged Traefik chart. Plan 13-02 (D-13's edge controller,
-# interim NodePort topology per 13-RESEARCH.md's "Interim state" diagram).
+# Traefik config for the k3s-packaged Traefik chart. Plan 13-02 (D-13's edge controller) shipped
+# the interim NodePort topology (13-RESEARCH.md's "Interim state" diagram); Plan 13-06 (W1/W2)
+# moves it to the production edge shape.
 #
-# service.type NodePort + ports.web.nodePort: Traefik gets no host port of its own for the whole
-# interim -- Caddy remains the only process serving public 80/443 (ServiceLB is disabled in
-# infra/vm/k3s/config.yaml). Caddy's own reverse_proxy config points at
-# 127.0.0.1:30080 for the nonprod hostname (wired in 13-05).
-#
-# websecure not exposed: no TLS terminates in Traefik yet -- Caddy still owns TLS for every
-# hostname during the interim; cert-manager/ClusterIssuers land in 13-04 but stay inert
-# (Kustomizations suspended) until 13-06's cutover.
+# W1: service.type LoadBalancer + externalTrafficPolicy Local (D-13, Pitfall 2 -- k3s ServiceLB
+# would otherwise SNAT every client to one shared address, collapsing every client into one
+# rate-limit bucket). websecure now exposed: cert-manager/ClusterIssuers are live (edge.yaml
+# unsuspended this same commit) and the nonprod Certificate/websecure IngressRoute need it.
+# `ports.web.nodePort: 30080` is DELIBERATELY KEPT in W1 -- Caddy (still on Compose) proxies the
+# nonprod hostname to 172.17.0.1:30080 and is not stopped until window step 6, after W1 is live.
+# Removing the pin here, before Caddy stops, would break nonprod's only path to Traefik. W2
+# removes this pin once a `docker ps` guard (window step 11) confirms every Compose container,
+# Caddy included, is stopped.
 #
 # PROVISIONAL (restart-ladder in 13-09): resource values below are k3s chart defaults, not yet
 # measured on this host -- 13-09 replaces them with a measured figure the same way every other
@@ -24,13 +26,15 @@ metadata:
 spec:
   valuesContent: |-
     service:
-      type: NodePort
+      type: LoadBalancer
+      spec:
+        externalTrafficPolicy: Local
     ports:
       web:
         nodePort: 30080
       websecure:
         expose:
-          default: false
+          default: true
     logs:
       access:
         enabled: true

@@ -1,5 +1,8 @@
-# Flux Kustomization for k8s/data/postgres-bridge: the interim cross-runtime Postgres Service +
-# EndpointSlice (Pattern 1). Plan 13-02. Depends on platform for the kanban-data namespace.
+# Flux Kustomization for the in-cluster Postgres StatefulSet. Plan 13-02 pointed this at
+# k8s/data/postgres-bridge (the interim cross-runtime Service + EndpointSlice, Pattern 1); Plan
+# 13-06 (W1) switches the path to k8s/data/postgres -- the same Service name and pinned ClusterIP
+# (10.43.54.32), now backed by the real StatefulSet instead of the Compose bridge. Depends on
+# platform for the kanban-data namespace.
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
@@ -8,7 +11,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m
-  path: ./k8s/data/postgres-bridge
+  path: ./k8s/data/postgres
   prune: true
   wait: true
   dependsOn:

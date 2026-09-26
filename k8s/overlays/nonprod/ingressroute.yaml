@@ -1,17 +1,48 @@
-# Interim IngressRoute (Phase 13 plan 01). entryPoint `web` (plain HTTP), not `websecure` --
-# during the D-02 interim, Caddy (still on Compose) terminates TLS and reverse-proxies the
-# nonprod hostname to Traefik's in-cluster address (13-RESEARCH.md's interim topology diagram).
-# 13-06 switches this to `websecure` once Traefik itself owns 80/443 directly post-cutover.
+# Production-edge shape (Phase 13 plan 06, D-13). Replaces the plan-01 interim IngressRoute --
+# Traefik now owns 80/443 directly via ServiceLB (helmchartconfig.yaml, this same commit), and
+# Caddy is stopped inside the same maintenance window, so the interim entryPoint `web`-only route
+# is no longer needed.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-https
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
+---
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
-  name: app
+  name: app-https
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    # No rate limit on nonprod (D-13) -- unlike the prod overlay's app-https, this route carries
+    # no Middleware at all.
+    - match: Host(`kanban-board-rud-vlad-473-nonprod.duckdns.org`)
+      kind: Rule
+      services:
+        - name: app
+          port: 8080
+  tls:
+    secretName: app-tls
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: app-http
 spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`kanban-board-rud-vlad-473-nonprod.duckdns.org`)
+    # The negation excludes cert-manager's HTTP-01 solver path from the redirect by construction
+    # (I10), matching the prod overlay's own app-http route shape exactly.
+    - match: Host(`kanban-board-rud-vlad-473-nonprod.duckdns.org`) && !PathPrefix(`/.well-known/acme-challenge/`)
       kind: Rule
+      middlewares:
+        - name: redirect-https
       services:
         - name: app
           port: 8080
