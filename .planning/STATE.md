@@ -4,16 +4,16 @@ milestone: v1.3
 current_phase: 13
 current_phase_name: Introduce Kubernetes
 status: executing
-stopped_at: Completed 13-06-PLAN.md (production cutover to k3s, live window + incident recovery)
-last_updated: "2026-09-26T08:53:08.146Z"
-last_activity: 2026-09-25
+stopped_at: Completed 13-07-PLAN.md (observability activation on k3s, D-07/D-10/D-17/D-18)
+last_updated: "2026-09-26T20:40:04.499Z"
+last_activity: 2026-09-26
 last_activity_desc: Fixed deploy.yml's caddy-reload-inode-bug (force-recreate over exec reload), live-verified via a real production deploy; resumed and completed 13-05 Task 3 (GitOps cycle proof, kubectl health evidence, interim memory budget PASS by 268 MiB thin margin)
-state_head: 819a8b588e54670a22db53b7d4b4b17c806840c0
+state_head: 6eacda173237e26d43e419b99264bdf524cf9954
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 24
-  completed_plans: 20
+  completed_plans: 21
 milestone_name: Nonprod Environment & CI Hardening
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-08)
 ## Current Position
 
 Phase: 13 (Introduce Kubernetes) — EXECUTING
-Plan: 6 of 10 (Wave 4, 13-06) — COMPLETE. Waves 1-4 (13-01 through 13-06) done, merged, verified. Production is now live on k3s (D-01 executed). Waves 5-8 (13-07 through 13-10) not started.
+Plan: 7 of 10 (Wave 4, 13-06) — COMPLETE. Waves 1-4 (13-01 through 13-06) done, merged, verified. Production is now live on k3s (D-01 executed). Waves 5-8 (13-07 through 13-10) not started.
 Status: Ready to execute
 Last activity: 2026-09-26 — Executed the production cutover to k3s in a live maintenance window (13-06). A mid-window operator error (pushing a staged multi-commit branch by tip instead of by per-gate SHA) landed W2/W3/W4 on `main` simultaneously, causing a real ~11-minute public 502 outage before the actual data migration had happened; no production data was lost (Compose's own Postgres was never stopped until after the real dump was taken). The executor stopped and reported on discovering this rather than improvising alone; the operator explicitly directed pushing forward rather than rolling back. Production now runs on k3s with verified zero-diff row-count parity, all three hostnames on real Let's Encrypt production certificates, Traefik/ServiceLB owning 80/443, and CI fully retargeted (Compose deploy jobs removed, Flyway verification through a fingerprint-pinned SSH forward, proven green via a live `deploy.yml` dispatch). Five real pre-existing gaps were found and fixed live against the cluster for the first time (a Postgres readinessProbe using unexpandable `$(POSTGRES_USER)` syntax, a cert-manager HelmRepository/HelmRelease missing `metadata.namespace`, no IngressRoute anywhere in the phase serving `grafana-tls` for the monitoring hostname, an SSH host-key fingerprint comparison bug, and a CNI/DNS pod-startup race). Full incident account and gap details in `docs/history/2026-09-26-production-cutover-to-k3s.md`; the generalizable lesson (push a staged multi-commit cutover by explicit SHA per gate, never by branch tip) is recorded in `docs/SESSION_LESSONS.md` lesson 8.
 
@@ -58,6 +58,7 @@ v1.0–v1.2 velocity/per-plan detail archived at milestone close — see `.plann
 | Phase 12 P05 | 60min | 3 tasks | 2 files |
 | Phase 12 P06 | 55min | 3 tasks | 7 files |
 | Phase 13 P06 | ~59min window + ~30min post-window fixes/docs | 3 tasks | 23 files |
+| Phase 13 P07 | ~2h40m | 2 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -107,6 +108,8 @@ authorization, given the real-traffic-interruption and Let's Encrypt cert-safety
 - [Phase 13]: 13-05 Task 3's interrupted-executor resume: the prior session's worktree (`agent-a4f43b113ff7a0069`) had no live agent to SendMessage-resume, but was clean and un-reaped, so it was rebased onto current main and then discarded in favor of a fresh `isolation="worktree"` dispatch once the project's own dispatch-isolation guard rejected manually pointing an Agent() call at a pre-existing worktree path -- no work was lost since the manual worktree's commits were already on main.
 - [Phase 13]: 13-06: production cutover approved and executed; a mid-window push-by-branch-tip incident caused ~11min public 502 with zero data loss, operator directed push-forward-not-rollback recovery
 - [Phase 13]: 13-06: 5 real pre-existing gaps found and fixed live against the cluster for the first time (postgres readinessProbe syntax, cert-manager HelmRepository/HelmRelease namespace, missing monitoring IngressRoute, SSH fingerprint comparison, a CNI-readiness race) -- none introduced by the incident
+- [Phase 13]: 13-07: operator-authorized git commit --no-verify used 5 of 8 times after confirmed, sustained host memory pressure killed every local Gradle JVM fork regardless of heap size; the one push that also touched scripts/ triggered CI's real Java build/test workflow, which passed green
+- [Phase 13]: 13-07: a live-database GRANT CONNECT fix was applied directly against running Postgres, not through a manifest change -- the committed init script is correct for any future first boot; 13-06's incident recovery (drop/recreate kanban_prod/kanban_nonprod) silently reverted the grant it had already applied
 
 ### Pending Todos
 
@@ -181,8 +184,8 @@ The 46 pending todos are individually listed and categorized in this document's 
 
 ## Session Continuity
 
-Last session: 2026-09-26T08:53:08.010Z
-Stopped at: Completed 13-06-PLAN.md (production cutover to k3s, live window + incident recovery)
+Last session: 2026-09-26T20:40:04.351Z
+Stopped at: Completed 13-07-PLAN.md (observability activation on k3s, D-07/D-10/D-17/D-18)
 Resume file: None
 
 ## Operator Next Steps
