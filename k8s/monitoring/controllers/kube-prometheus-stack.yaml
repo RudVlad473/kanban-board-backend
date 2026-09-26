@@ -113,18 +113,35 @@ spec:
         limits:
           memory: 768Mi
 
-    sidecar:
-      dashboards:
-        enabled: true
-        # label defaults to grafana_dashboard (chart default, unchanged)
-      datasources:
-        enabled: true
-        # label defaults to grafana_datasource (chart default, unchanged)
-        # The ONLY Prometheus datasource is grafana-datasources (configs/datasources.yaml,
-        # literal UIDs carried from Compose) -- the chart's own auto-provisioned Prometheus
-        # datasource must not also exist, or the literal-UID dashboards below could silently
-        # resolve against the wrong one.
-        defaultDatasourceEnabled: false
+      # BUG FIXED live (13-07 Task 2): `sidecar:` must nest inside `grafana:`, not sit as its
+      # top-level sibling.
+      #
+      # A top-level `sidecar:` key here was silently ignored by the chart (Helm does not reject
+      # unknown values keys) -- the template actually reads
+      # `.Values.grafana.sidecar.datasources.defaultDatasourceEnabled`
+      # (kube-prometheus-stack/templates/grafana/configmaps-datasources.yaml), so with no
+      # nested override it fell back to the chart's own default
+      # (`defaultDatasourceEnabled: true`). That rendered a second datasource ConfigMap
+      # (`kps-grafana-datasource`, uid `prometheus`) also marked `isDefault: true`, alongside
+      # this task's own `grafana-datasources` ConfigMap (uid `PBFA97CFB590B2093`, also
+      # `isDefault: true`) -- Grafana refuses to start with two default datasources in one org
+      # ("Datasource provisioning error: ... Only one datasource per organization can be marked
+      # as default"), confirmed live via
+      # `k3s kubectl logs deployment/kube-prometheus-stack-grafana -c grafana`. Re-verified via
+      # `helm template` with `sidecar:` nested here: the chart-managed ConfigMap no longer
+      # renders at all.
+      sidecar:
+        dashboards:
+          enabled: true
+          # label defaults to grafana_dashboard (chart default, unchanged)
+        datasources:
+          enabled: true
+          # label defaults to grafana_datasource (chart default, unchanged)
+          # The ONLY Prometheus datasource is grafana-datasources (configs/datasources.yaml,
+          # literal UIDs carried from Compose) -- the chart's own auto-provisioned Prometheus
+          # datasource must not also exist, or the literal-UID dashboards below could silently
+          # resolve against the wrong one.
+          defaultDatasourceEnabled: false
 
     # node-exporter subchart (kube-prometheus-stack.charts.prometheus-node-exporter). Same
     # trade-off Phase 12's node-exporter Compose service already documents: host filesystems
