@@ -1,0 +1,36 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-09-26T21:07:48.233Z",
+  "phase": "13",
+  "phase_name": "Introduce Kubernetes",
+  "phase_dir": ".planning/phases/13-introduce-kubernetes",
+  "plan": 8,
+  "task": 3,
+  "total_tasks": 3,
+  "status": "paused",
+  "completed_tasks": [
+    {"id": 1, "name": "Authorize live edge changes (checkpoint:decision)", "status": "done", "commit": "no commit — decision recorded in SUMMARY per dispatch instructions"},
+    {"id": 2, "name": "Re-derive Traefik rate limits, prove via verify-rate-limit, prove per-client with two IPs", "status": "done", "commit": "54249e7, f7f89c5"},
+    {"id": 3, "name": "k3s-era ingress filter in mangle PREROUTING, proven by off-box probe + counter attribution", "status": "in_progress", "progress": "Firewall script (infra/vm/k3s-host-firewall.sh) and systemd unit (infra/vm/k3s-host-firewall.service) written, installed live on netcup-prod, verified via `check` (survives systemctl restart k3s, jump rule stays at PREROUTING position 1). No dead-man timer currently armed. Files exist on disk in the 13-08 worktree but are NOT YET COMMITTED, pending resolution of the blocker below."}
+  ],
+  "remaining_tasks": [],
+  "blockers": [
+    {"description": "The plan's own verify method for Task 3 requires an off-box `nc -z` probe against Traefik's NodePort (30104) to fail AND the new KANBAN-INGRESS mangle-table DROP counter to increase. Netcup's own outer Cloud Firewall (Layer 2, SCP-panel-managed, outside git/SSH/CLI access) already blocks port 30104 from the public internet before packets ever reach the VM's iptables — so the off-box probe times out for the RIGHT reason (Layer 2 blocks it) but the counter cannot increase, because a packet Layer 2 drops never reaches the Layer 3 rule being tested. This is a structural proof-method gap, not a firewall defect: the same problem happened once before (quick task 260906-feq, documented in docs/INFRA_RUNBOOK.md line 175) and was solved by temporarily opening a scoped Netcup console rule for the probe source IP, then closing it again immediately after.", "type": "human_action", "workaround": "Three options presented to operator: (1) operator opens a temporary Netcup SCP console rule for port 30104 from the executor's probe source IP, mirroring the 260906-feq precedent exactly — recommended, most faithful to the plan's actual proof method; (2) accept a weaker, explicitly-documented substitute proof (e.g. a same-VM synthetic packet injection instead of a genuine off-box probe); (3) operator personally runs the off-box probe from a network path Layer 2 already permits, while the executor watches the counter over SSH. Operator has not yet chosen between these — this is what /gsd-pause-work is being invoked to preserve."}
+  ],
+  "async_jobs": [],
+  "human_actions_pending": [
+    {"action": "Choose option 1, 2, or 3 above for resolving the off-box-probe-vs-Layer-2-firewall proof gap for 13-08 Task 3, OR (if choosing option 1) open the temporary Netcup SCP console rule yourself and tell the resumed session the probe source IP and that the rule is live.", "context": "Nothing production-affecting is at risk either way — the firewall rule is already live, correct, and verified via `check`; no dead-man timer is armed. This is purely about completing the plan's specified verification method so Task 3 can be committed and 13-08 can close, which is itself a prerequisite for 13-10 (Docker teardown) per D-04.", "blocking": true}
+  ],
+  "decisions": [
+    {"decision": "13-08 Task 1 (checkpoint:decision): proceed — both the rate-limit re-derivation AND the host firewall install, not the rate-limit-only fallback option.", "rationale": "Operator confirmed after reviewing consequences (own workstation IP receiving real 429s for up to 5 min during the probe; live mangle PREROUTING firewall change with a dead-man switch). Evidence gathered fresh before the decision: current INPUT allow-list (default-DROP + explicit ACCEPT for loopback/RELATED,ESTABLISHED/TCP 22,80,443), and Traefik's Service confirmed as the only non-ClusterIP Service in the cluster with NodePorts 30080/30104.", "phase": "13"}
+  ],
+  "uncommitted_files": [
+    "M .planning/config.json (main worktree — pre-existing session-local model-override scratch, not part of any plan)",
+    "?? .planning/phases/13-introduce-kubernetes/.gitkeep (main worktree — pre-existing, benign)",
+    "?? .zed/settings.json (main worktree — pre-existing, benign, editor config)",
+    "?? infra/vm/k3s-host-firewall.service (13-08 worktree, .claude/worktrees/agent-aec5816c784f9c8db — genuinely new, part of Task 3, awaiting the blocker's resolution before commit)",
+    "?? infra/vm/k3s-host-firewall.sh (13-08 worktree, .claude/worktrees/agent-aec5816c784f9c8db — genuinely new, part of Task 3, awaiting the blocker's resolution before commit)"
+  ],
+  "next_action": "Once the operator has answered the option 1/2/3 question (or opened the Netcup console rule and supplied the probe source IP + confirmation it's live), resume the 13-08 executor agent (SendMessage to agent id aec5816c784f9c8db, or re-dispatch a fresh gsd-executor into the same worktree path .claude/worktrees/agent-aec5816c784f9c8db if that agent is no longer resumable) with the operator's answer. The executor should then: complete the off-box probe + counter verification (or the substitute proof, documented as a deviation), commit Task 3's files (infra/vm/k3s-host-firewall.sh, infra/vm/k3s-host-firewall.service, plus docs/INFRA_RUNBOOK.md and infra/vm/README.md updates per the plan's files_modified list), write 13-08-SUMMARY.md covering all 3 tasks, then the orchestrator should fast-forward local main from origin/main and clean up the merged worktree (same pattern used after 13-06 and 13-07).",
+  "context_notes": "This is NOT a technical blocker in the sense of something broken — the firewall itself is live, correct, and already verified via the `check` subcommand including surviving a k3s restart. The blocker is purely evidentiary: the plan demands a specific proof method (off-box probe + packet-counter attribution) that Netcup's separate, outer Cloud Firewall (Layer 2, console-only, no API/CLI access from here) structurally prevents by blocking the same traffic one layer earlier. This exact situation already happened once before in this project (260906-feq) and has an established, low-risk resolution pattern (temporarily open a scoped console rule for the probe, close it right after) — so this is very likely a quick unblock once the operator either picks that option or opens the rule themselves, not a genuinely hard problem. Phase 13 progress: 7/10 plans complete (13-01 through 13-07 done and merged; 13-08 is 2/3 tasks done with Task 3 blocked as above; 13-09 and 13-10 not started). Two machine-tier learnings from earlier in this session (stale Gradle daemon logs mimicking live worktree collisions; WSL2 silent memory-pressure kills with no dmesg trace) were recorded via record-gotcha.js and are sitting in ~/.claude/learnings-inbox/, not yet run through /consolidate-learnings."
+}
