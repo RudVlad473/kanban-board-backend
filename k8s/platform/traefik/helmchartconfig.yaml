@@ -1,16 +1,18 @@
 # Traefik config for the k3s-packaged Traefik chart. Plan 13-02 (D-13's edge controller) shipped
 # the interim NodePort topology (13-RESEARCH.md's "Interim state" diagram); Plan 13-06 (W1/W2)
-# moves it to the production edge shape.
+# moved it to the production edge shape.
 #
 # W1: service.type LoadBalancer + externalTrafficPolicy Local (D-13, Pitfall 2 -- k3s ServiceLB
 # would otherwise SNAT every client to one shared address, collapsing every client into one
-# rate-limit bucket). websecure now exposed: cert-manager/ClusterIssuers are live (edge.yaml
-# unsuspended this same commit) and the nonprod Certificate/websecure IngressRoute need it.
-# `ports.web.nodePort: 30080` is DELIBERATELY KEPT in W1 -- Caddy (still on Compose) proxies the
-# nonprod hostname to 172.17.0.1:30080 and is not stopped until window step 6, after W1 is live.
-# Removing the pin here, before Caddy stops, would break nonprod's only path to Traefik. W2
-# removes this pin once a `docker ps` guard (window step 11) confirms every Compose container,
-# Caddy included, is stopped.
+# rate-limit bucket). websecure exposed: cert-manager/ClusterIssuers are live (edge.yaml
+# unsuspended in W1) and the nonprod Certificate/websecure IngressRoute need it.
+#
+# W2 (this commit): the interim `ports.web.nodePort: 30080` pin is REMOVED. Caddy's nonprod
+# upstream (172.17.0.1:30080) was its only consumer, kept alive through W1 specifically so Caddy
+# had somewhere to proxy to until window step 6 stopped it. Landing this removal here, gated on
+# window step 11's `docker ps` guard (every Compose container, Caddy included, confirmed stopped
+# first), is deliberate -- removing it any earlier would break nonprod's only path to Traefik
+# while Caddy was still running.
 #
 # PROVISIONAL (restart-ladder in 13-09): resource values below are k3s chart defaults, not yet
 # measured on this host -- 13-09 replaces them with a measured figure the same way every other
@@ -30,8 +32,6 @@ spec:
       spec:
         externalTrafficPolicy: Local
     ports:
-      web:
-        nodePort: 30080
       websecure:
         expose:
           default: true

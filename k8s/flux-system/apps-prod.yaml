@@ -1,6 +1,5 @@
-# Suspended until 13-06's maintenance window (D-02, D-17). Plan 13-02.
-# Bumping the prod overlay's image setter marker before 13-06 is harmless: this Kustomization is
-# suspended, so nothing reconciles the bump into a live object until 13-06 unsuspends it.
+# Plan 13-02. Unsuspended Plan 13-06 (W2), window step 11, only after the restore + parity diff
+# are both clean and a docker ps guard confirms every Compose container is stopped (T-13-27).
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
@@ -11,7 +10,8 @@ spec:
   interval: 10m
   path: ./k8s/overlays/prod
   prune: true
-  suspend: true
+  wait: true
+  suspend: false
   dependsOn:
     - name: data
     - name: edge
