@@ -46,15 +46,22 @@ spec:
       middlewares:
         - name: grafana-login-rate-limit
       services:
-        # Service name from kube-prometheus-stack.yaml's fullnameOverride: kps (grafana subchart
-        # default -- "kps" does not contain "grafana", so grafana.fullname falls back to
-        # "<release>-grafana"), verified via `helm template` in this task's own <verify> block.
-        - name: kps-grafana
+        # BUG FIXED live (13-07 Task 2): the real Service is kube-prometheus-stack-grafana, not
+        # kps-grafana as kube-prometheus-stack.yaml's header comment predicted.
+        #
+        # `fullnameOverride: kps` sets only the PARENT chart's own fullname (kps-prometheus,
+        # kps-operator); Grafana is a subchart whose `grafana.fullname` helper reads
+        # `.Release.Name` (the Helm release name, `kube-prometheus-stack` -- set by Flux from
+        # this HelmRelease's own `metadata.name`, not from the parent's fullnameOverride).
+        # Confirmed both via `helm template` and live (`k3s kubectl get svc -n monitoring`)
+        # after the placeholder name left this IngressRoute routing to a Service with zero
+        # Endpoints.
+        - name: kube-prometheus-stack-grafana
           port: 80
     - match: Host(`kanban-board-rud-vlad-473-monitoring.duckdns.org`)
       kind: Rule
       services:
-        - name: kps-grafana
+        - name: kube-prometheus-stack-grafana
           port: 80
   tls:
     secretName: grafana-tls
