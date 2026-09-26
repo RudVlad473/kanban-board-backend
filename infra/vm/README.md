@@ -9,10 +9,24 @@ session that leaves no trace once it closes:
   `--ctorigdstport`, rule ordering, IPv4/TCP-only scope) and `docs/INFRA_RUNBOOK.md`'s Firewall
   Layer 3 section for the live evidence it works.
 - `k3s/{config.yaml,install.sh}` — the pinned, checksum-verified k3s install (Plan 13-02): server
-  config (secrets encryption, root-only kubeconfig, ServiceLB/metrics-server disabled for the
-  interim) plus the install wrapper that sha256-verifies its own downloaded copy of `get.k3s.io`
-  before running it. See `docs/INFRA_RUNBOOK.md`'s "k3s install and interim bridge — Plan 13-02"
-  section for the live evidence and findings from installing it.
+  config (secrets encryption, root-only kubeconfig, metrics-server disabled) plus the install
+  wrapper that sha256-verifies its own downloaded copy of `get.k3s.io` before running it. ServiceLB
+  was disabled for the D-02 interim and re-enabled Plan 13-06 once Traefik took over the public
+  edge from Caddy — see `config.yaml`'s own comment. See `docs/INFRA_RUNBOOK.md`'s "k3s install and
+  interim bridge — Plan 13-02" section for the live evidence and findings from installing it.
+- `sshd/kanban-ci-tunnel.conf` — Plan 13-06 (D-14, T-13-28): the sshd `Match User` drop-in that
+  confines the `deploy`/`deploy-nonprod` CI identities' SSH sessions to a single TCP forward
+  destination (the in-cluster Postgres ClusterIP) once `deploy.yml`'s Flyway verification jobs
+  start tunneling through this VM instead of running Compose commands over SSH. Install:
+
+  ```bash
+  scp infra/vm/sshd/kanban-ci-tunnel.conf netcup-prod:/tmp/
+  ssh netcup-prod '
+    sudo install -o root -g root -m 0644 /tmp/kanban-ci-tunnel.conf /etc/ssh/sshd_config.d/kanban-ci-tunnel.conf
+    sudo sshd -t
+    sudo systemctl reload ssh
+  '
+  ```
 
 ## Install (manual — see "Why this is not wired into deploy.yml" below)
 

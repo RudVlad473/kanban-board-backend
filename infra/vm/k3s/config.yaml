@@ -1,6 +1,6 @@
 # k3s server config, installed to /etc/rancher/k3s/config.yaml by infra/vm/k3s/install.sh.
-# Plan 13-02 (D-10, D-12): secrets encryption on, root-only kubeconfig, and the two addons this
-# interim topology must not run.
+# Plan 13-02 (D-10, D-12): secrets encryption on, root-only kubeconfig, and the addons this
+# topology must not run.
 
 # D-10: encrypt Secrets at rest in the embedded sqlite datastore.
 secrets-encryption: true
@@ -9,13 +9,18 @@ secrets-encryption: true
 # deploy-nonprod SSH users must not be able to read cluster-admin credentials off disk.
 write-kubeconfig-mode: "0600"
 
-# D-12: neither addon runs during the interim (2026-09-25, Plan 13-02).
-#   - servicelb: k3s's bundled LoadBalancer controller would otherwise grab a hostPort for any
-#     LoadBalancer-type Service and fight Caddy for 80/443. Disabled for the WHOLE interim window;
-#     13-06 re-enables it only once Caddy stops owning the public edge and Traefik takes over
-#     80/443 directly.
-#   - metrics-server: kube-prometheus-stack's own Prometheus (13-03) supersedes it for this
-#     phase's purposes (no HPA in scope); running both wastes ~30-40MB for no consumer.
+# D-12: metrics-server stays disabled -- kube-prometheus-stack's own Prometheus (13-03)
+# supersedes it for this phase's purposes (no HPA in scope); running both wastes ~30-40MB for no
+# consumer.
+#
+# servicelb RE-ENABLED Plan 13-06 (2026-09-26, window step 7): it was disabled for the whole
+# D-02 interim (2026-09-25, Plan 13-02) because k3s's bundled LoadBalancer controller would
+# otherwise grab a hostPort for any LoadBalancer-type Service and fight Caddy for 80/443. Caddy
+# stopped owning the public edge in this same maintenance window (window step 6), so ServiceLB is
+# now the mechanism that actually publishes Traefik's LoadBalancer Service on 80/443
+# (k8s/platform/traefik/helmchartconfig.yaml, W1/W2) -- via hostPort DNAT, which opens no
+# listening socket of its own (`ss -ltn` shows nothing even while Traefik serves; see the
+# maintenance-window runbook section's edge-verification steps for how this was actually
+# confirmed live).
 disable:
-  - servicelb
   - metrics-server

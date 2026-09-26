@@ -1,6 +1,11 @@
 name: CI/CD with Docker
 
 on:
+  # Plan 13-06 (W4): a manual re-run path now that deploys are pull-based GitOps (D-14) --
+  # flyway-verify/flyway-verify-nonprod no longer have a paired live deploy job to re-trigger them
+  # automatically, so an operator needs a way to re-run the whole pipeline (image build + both
+  # Flyway verify jobs) without an empty commit.
+  workflow_dispatch: {}
   push:
     branches:
       - main
@@ -36,14 +41,19 @@ env:
 
 # Risk-acceptance (Phase 10, HARDEN-03, D-05): actions/checkout, actions/setup-java,
 # docker/setup-buildx-action, docker/build-push-action, actions/cache and actions/upload-artifact
-# remain trusted by tag, not digest. Digest-pinning was scoped deliberately to only the
-# appleboy/* actions below (deploy-to-netcup, register-schemas-production, flyway-verify,
-# flyway-verify-nonprod -- deploy-to-nonprod itself removed Plan 13-05, D-14/D-15: nonprod now
-# deploys via Flux, not SSH), which run with real SSH keys against production/staging VMs -- a
-# materially higher
-# publisher-compromise risk tier than these first-party GitHub/Docker actions. A digest pin needs
-# a two-step lookup-then-edit on every future version bump instead of a one-line tag edit; that
-# recurring maintenance cost is deliberately not paid for the first-party actions listed above.
+# remain trusted by tag, not digest.
+#
+# UPDATED Plan 13-06 (D-14, D-15): the appleboy/* actions this risk-acceptance used to name
+# (deploy-to-netcup, register-schemas-production, flyway-verify, flyway-verify-nonprod) are gone
+# from this workflow entirely -- deploy-to-netcup and register-schemas-production were deleted
+# (deploys are pull-based GitOps now; schema registration runs as an in-cluster initContainer),
+# deploy-to-nonprod was already removed in Plan 13-05, and flyway-verify/flyway-verify-nonprod
+# were rewritten to open their own raw `ssh` local forward (host-key-pinned by fingerprint
+# themselves, see each job's "Write SSH key and known_hosts" step) rather than going through an
+# action. No `uses: appleboy/*` line remains anywhere in this file. This paragraph is kept, not
+# deleted, as the historical record of why digest-pinning was ever scoped narrowly in the first
+# place -- the same reasoning would apply again if a future job reintroduces an action holding
+# real production SSH credentials.
 
 jobs:
   setup:
@@ -259,24 +269,28 @@ jobs:
       - name: Push Caddy image
         run: docker push "${{ steps.gate_and_derive_tag.outputs.caddy_image }}"
 
-  # INFRA-06 (Phase 5, plan 05-05 Task 2). REWRITTEN phase 11, plan 11-05 (D-13): the runner has
-  # no route to the self-hosted `postgres` service (D-03, no host port published), so this job no
-  # longer connects from the GitHub-hosted runner at all. Task 1's recorded decision (D-13,
-  # gate="blocking-human", answered "Option A: one-off container over SSH (recommended)") runs the
-  # official Flyway CLI image as a one-off container ON the VM, over SSH, attached to the shared
-  # `kanban-db` network -- the exact pattern `register-schemas-production` below already proves for
-  # schema registration, reusing the same digest-pinned actions and the same secret set. This still
-  # proves what INFRA-06 always proved -- migrations apply cleanly against the real,
-  # already-migrated instance before an image is allowed to reach a VM -- reached differently, not
-  # weakened (an ephemeral in-CI database was explicitly rejected by D-13: it would only prove
-  # migrations apply to an empty database, blind to the migration drift this gate exists to catch).
+  # INFRA-06 (Phase 5, plan 05-05 Task 2). This still proves what INFRA-06 always proved --
+  # migrations apply cleanly against the real, already-migrated instance before an image is
+  # allowed to reach a VM (an ephemeral in-CI database was explicitly rejected by D-13: it would
+  # only prove migrations apply to an empty database, blind to the migration drift this gate
+  # exists to catch).
   #
-  # DB_HOST/DB_NAME moved from GitHub Environment SECRETS to VARIABLES this plan (`postgres`/
-  # `kanban_prod` here, `postgres`/`kanban_nonprod` in the nonprod twin below) -- a database
+  # DB_HOST/DB_NAME are GitHub Environment VARIABLES, not secrets (`postgres`/`kanban_prod` here,
+  # `postgres`/`kanban_nonprod` in the nonprod twin below, both stale post-13-06 host references
+  # kept as historical variable names -- D-14 corrected the actual resolved values) -- a database
   # hostname/name is not sensitive, and GitHub masks any log line containing a registered secret's
-  # value regardless of where it came from. Task 3 requires reading the REAL resolved database name
-  # out of this job's own log, specifically so a wrong-environment scoping mistake (T-11-26) would
-  # be visible instead of silently redacted to `***`. DB_USER/DB_PASS remain real secrets.
+  # value regardless of where it came from, so keeping DB_NAME unmasked lets a wrong-environment
+  # scoping mistake (T-11-26) surface directly in the log instead of redacting to `***`. DB_USER/
+  # DB_PASS remain real secrets.
+  #
+  # REWRITTEN Plan 13-06 (D-14): deploys are pull-based GitOps now (Flux), so there is no more
+  # `deploy-to-netcup-vm` Compose network for this job to reach over `docker run --network
+  # kanban-db`. Postgres is in-cluster, reachable only via its pinned ClusterIP
+  # (10.43.54.32:5432, k8s/data/postgres/postgres.yaml) -- the runner cannot route to a ClusterIP
+  # directly, so this job opens a local SSH port-forward from the runner, through the VM, to that
+  # ClusterIP, and runs Flyway ON THE RUNNER against the forwarded local port. No Docker Engine or
+  # kubeconfig needed on the VM for this job; migrations come from the runner's own checkout (no
+  # SCP staging step, unlike the old version of this job).
   flyway-verify:
     needs: [ setup, run-tests ]
     runs-on: ubuntu-latest
@@ -288,60 +302,70 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      # A container running on the VM cannot see this runner's checkout -- unlike deploy-to-netcup
-      # (which SCPs docker-compose.prod.yml/Caddyfile/the postgres-init script), this job needs the
-      # actual migration SQL files present on the VM before the Flyway container can mount them.
-      # Target is DISTINCT from deploy-to-netcup's own SCP target
-      # (/opt/deploy/kanban-board-backend/) -- this job can run while a previous push's deploy still
-      # holds the deploy-to-netcup-vm concurrency lock, so staging here must never collide with what
-      # that job writes. `rm: true` clears any stale files from a prior run (e.g. a since-renamed
-      # migration) before copying, so this directory always mirrors exactly what was checked out.
-      - name: Stage migration files on the VM
-        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345  # v1.0.0
-        with:
-          host: ${{ secrets.NETCUP_HOST }}
-          username: ${{ secrets.NETCUP_DEPLOY_USER }}
-          key: ${{ secrets.NETCUP_SSH_KEY }}
-          fingerprint: ${{ secrets.NETCUP_HOST_FINGERPRINT }}
-          rm: true
-          source: "src/main/resources/db/migration"
-          target: "/opt/deploy/kanban-board-backend/ci-flyway-verify/production/"
+      # Host-key pinning by fingerprint (T-13-28): this job opens its own raw `ssh` process rather
+      # than going through an action (no appleboy/* action remains in this file as of Plan 13-06),
+      # so it verifies the host identity itself before ever connecting.
+      - name: Write SSH key and known_hosts
+        env:
+          NETCUP_SSH_KEY: ${{ secrets.NETCUP_SSH_KEY }}
+          NETCUP_HOST: ${{ secrets.NETCUP_HOST }}
+          NETCUP_HOST_FINGERPRINT: ${{ secrets.NETCUP_HOST_FINGERPRINT }}
+        run: |
+          set -e
+          install -m 0600 /dev/null "$RUNNER_TEMP/netcup_ssh_key"
+          printf '%s\n' "$NETCUP_SSH_KEY" > "$RUNNER_TEMP/netcup_ssh_key"
+          ssh-keyscan -H "$NETCUP_HOST" > "$RUNNER_TEMP/known_hosts" 2>/dev/null
+          SCANNED_FP=$(ssh-keygen -lf "$RUNNER_TEMP/known_hosts" | awk '{print $2}' | sort -u)
+          if [ "$SCANNED_FP" != "$NETCUP_HOST_FINGERPRINT" ]; then
+            echo "::error::ssh-keyscan fingerprint ($SCANNED_FP) does not match secrets.NETCUP_HOST_FINGERPRINT ($NETCUP_HOST_FINGERPRINT) -- refusing to connect to a host whose identity cannot be confirmed."
+            exit 1
+          fi
 
-      - name: Verify Flyway migrations apply cleanly (self-hosted instance, over SSH)
-        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2  # v1.2.5
+      # T-13-28: the VM-side sshd Match block (infra/vm/sshd/kanban-ci-tunnel.conf) restricts this
+      # user to AllowTcpForwarding local + PermitOpen 10.43.54.32:5432 only -- this job's forward
+      # target is exactly that pinned Postgres ClusterIP, never a bare hostname resolved at
+      # connect time.
+      - name: Open SSH forward to in-cluster Postgres
+        env:
+          NETCUP_HOST: ${{ secrets.NETCUP_HOST }}
+          NETCUP_DEPLOY_USER: ${{ secrets.NETCUP_DEPLOY_USER }}
+        run: |
+          set -e
+          ssh -f -N -o ExitOnForwardFailure=yes \
+            -i "$RUNNER_TEMP/netcup_ssh_key" -o UserKnownHostsFile="$RUNNER_TEMP/known_hosts" \
+            -L 15432:10.43.54.32:5432 \
+            "$NETCUP_DEPLOY_USER@$NETCUP_HOST"
+
+      - name: Precheck the forward is reachable
+        run: |
+          docker run --rm --network host postgres:16 pg_isready -h 127.0.0.1 -p 15432 -t 5 \
+            || { echo "::error::Cannot reach in-cluster Postgres through the SSH forward on 127.0.0.1:15432 -- refusing to run Flyway against an unreachable target."; exit 1; }
+
+      - name: Verify Flyway migrations apply cleanly (runner-side, through the SSH forward)
         env:
           DB_NAME: ${{ vars.DB_NAME }}
           DB_USER: ${{ secrets.DB_USER }}
           DB_PASS: ${{ secrets.DB_PASS }}
-        with:
-          host: ${{ secrets.NETCUP_HOST }}
-          username: ${{ secrets.NETCUP_DEPLOY_USER }}
-          key: ${{ secrets.NETCUP_SSH_KEY }}
-          fingerprint: ${{ secrets.NETCUP_HOST_FINGERPRINT }}
-          envs: DB_NAME,DB_USER,DB_PASS
-          script: |
-            set -e
-            # set -e (see deploy-to-netcup's full comment below): appleboy/ssh-action has no
-            # fail-fast input of its own -- a failing command mid-script would not otherwise stop
-            # later lines from running.
-            echo "Verifying Flyway migrations against database: ${DB_NAME}"
-            # Replaces the old endpoint-suffix guard, which inspected a hostname marker belonging
-            # to the retired managed provider's pooler -- a marker that can never appear on a
-            # Compose service name, so it was dead code. This asserts the property that
-            # actually matters against the new target: resolvable and reachable over the shared
-            # network, so a DNS/network failure surfaces as a clear, named error instead of an
-            # opaque JDBC connection exception three log lines later.
-            docker run --rm --network kanban-db postgres:16 pg_isready -h postgres -p 5432 -t 5 \
-              || { echo "::error::Cannot resolve/reach the postgres service over the kanban-db network -- refusing to run Flyway against an unreachable target."; exit 1; }
-            docker run --rm --network kanban-db \
-              -e FLYWAY_URL="jdbc:postgresql://postgres:5432/${DB_NAME}" \
-              -e FLYWAY_USER="${DB_USER}" \
-              -e FLYWAY_PASSWORD="${DB_PASS}" \
-              -v /opt/deploy/kanban-board-backend/ci-flyway-verify/production/src/main/resources/db/migration:/flyway/sql:ro \
-              flyway/flyway:11.7.2 migrate
-            # Flyway aborts on the first failed migration by design (recorded in
-            # flyway_schema_history, blocking all subsequent ones) -- no hand-rolled
-            # abort-on-first-failure logic needed here.
+        run: |
+          set -e
+          echo "Verifying Flyway migrations against database: ${DB_NAME}"
+          docker run --rm --network host \
+            -e FLYWAY_URL="jdbc:postgresql://127.0.0.1:15432/${DB_NAME}" \
+            -e FLYWAY_USER="${DB_USER}" \
+            -e FLYWAY_PASSWORD="${DB_PASS}" \
+            -v "$GITHUB_WORKSPACE/src/main/resources/db/migration:/flyway/sql:ro" \
+            flyway/flyway:11.7.2 migrate
+          # Flyway aborts on the first failed migration by design (recorded in
+          # flyway_schema_history, blocking all subsequent ones) -- no hand-rolled
+          # abort-on-first-failure logic needed here.
+
+      # Always closes the forward, win or lose -- an orphaned background ssh process on the
+      # runner is harmless (the runner is destroyed after the job either way), but closing it
+      # explicitly keeps this job's own resource lifecycle self-contained rather than relying on
+      # runner teardown to clean up after it.
+      - name: Close the SSH forward
+        if: always()
+        run: pkill -f "ssh .*-L 15432:10.43.54.32:5432" || true
 
   # Nonprod twin of flyway-verify (Phase 9, plan 09-01, part D; rewritten phase 11, plan 11-05).
   # A literal copy with the differing axes called out below -- this job declares the staging
@@ -357,276 +381,96 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      # Own staging path, under nonprod's own deploy user's directory -- DISTINCT from both
-      # production's verify staging path above and from deploy-to-nonprod's own SCP target
-      # (/opt/deploy/kanban-board-nonprod/, copying only docker-compose.nonprod.yml).
-      - name: Stage migration files on the VM
-        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345  # v1.0.0
-        with:
-          host: ${{ secrets.NETCUP_HOST }}
-          username: ${{ secrets.NETCUP_DEPLOY_USER }}
-          key: ${{ secrets.NETCUP_SSH_KEY }}
-          fingerprint: ${{ secrets.NETCUP_HOST_FINGERPRINT }}
-          rm: true
-          source: "src/main/resources/db/migration"
-          target: "/opt/deploy/kanban-board-nonprod/ci-flyway-verify/staging/"
+      - name: Write SSH key and known_hosts
+        env:
+          NETCUP_SSH_KEY: ${{ secrets.NETCUP_SSH_KEY }}
+          NETCUP_HOST: ${{ secrets.NETCUP_HOST }}
+          NETCUP_HOST_FINGERPRINT: ${{ secrets.NETCUP_HOST_FINGERPRINT }}
+        run: |
+          set -e
+          install -m 0600 /dev/null "$RUNNER_TEMP/netcup_ssh_key"
+          printf '%s\n' "$NETCUP_SSH_KEY" > "$RUNNER_TEMP/netcup_ssh_key"
+          ssh-keyscan -H "$NETCUP_HOST" > "$RUNNER_TEMP/known_hosts" 2>/dev/null
+          SCANNED_FP=$(ssh-keygen -lf "$RUNNER_TEMP/known_hosts" | awk '{print $2}' | sort -u)
+          if [ "$SCANNED_FP" != "$NETCUP_HOST_FINGERPRINT" ]; then
+            echo "::error::ssh-keyscan fingerprint ($SCANNED_FP) does not match secrets.NETCUP_HOST_FINGERPRINT ($NETCUP_HOST_FINGERPRINT) -- refusing to connect to a host whose identity cannot be confirmed."
+            exit 1
+          fi
 
-      - name: Verify Flyway migrations apply cleanly (self-hosted instance, over SSH)
-        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2  # v1.2.5
+      # Same pinned ClusterIP as flyway-verify above (production job) -- one shared Postgres
+      # instance serves both databases (Phase 11 D-01, D-11), so nonprod's forward target is
+      # identical; only the resolved DB_NAME/DB_USER/DB_PASS (via the `staging` environment)
+      # differ. The VM-side sshd Match block covers both this and the production CI user.
+      - name: Open SSH forward to in-cluster Postgres
+        env:
+          NETCUP_HOST: ${{ secrets.NETCUP_HOST }}
+          NETCUP_DEPLOY_USER: ${{ secrets.NETCUP_DEPLOY_USER }}
+        run: |
+          set -e
+          ssh -f -N -o ExitOnForwardFailure=yes \
+            -i "$RUNNER_TEMP/netcup_ssh_key" -o UserKnownHostsFile="$RUNNER_TEMP/known_hosts" \
+            -L 15432:10.43.54.32:5432 \
+            "$NETCUP_DEPLOY_USER@$NETCUP_HOST"
+
+      - name: Precheck the forward is reachable
+        run: |
+          docker run --rm --network host postgres:16 pg_isready -h 127.0.0.1 -p 15432 -t 5 \
+            || { echo "::error::Cannot reach in-cluster Postgres through the SSH forward on 127.0.0.1:15432 -- refusing to run Flyway against an unreachable target."; exit 1; }
+
+      - name: Verify Flyway migrations apply cleanly (runner-side, through the SSH forward)
         env:
           DB_NAME: ${{ vars.DB_NAME }}
           DB_USER: ${{ secrets.DB_USER }}
           DB_PASS: ${{ secrets.DB_PASS }}
-        with:
-          host: ${{ secrets.NETCUP_HOST }}
-          username: ${{ secrets.NETCUP_DEPLOY_USER }}
-          key: ${{ secrets.NETCUP_SSH_KEY }}
-          fingerprint: ${{ secrets.NETCUP_HOST_FINGERPRINT }}
-          envs: DB_NAME,DB_USER,DB_PASS
-          script: |
-            set -e
-            echo "Verifying Flyway migrations against database: ${DB_NAME}"
-            docker run --rm --network kanban-db postgres:16 pg_isready -h postgres -p 5432 -t 5 \
-              || { echo "::error::Cannot resolve/reach the postgres service over the kanban-db network -- refusing to run Flyway against an unreachable target."; exit 1; }
-            docker run --rm --network kanban-db \
-              -e FLYWAY_URL="jdbc:postgresql://postgres:5432/${DB_NAME}" \
-              -e FLYWAY_USER="${DB_USER}" \
-              -e FLYWAY_PASSWORD="${DB_PASS}" \
-              -v /opt/deploy/kanban-board-nonprod/ci-flyway-verify/staging/src/main/resources/db/migration:/flyway/sql:ro \
-              flyway/flyway:11.7.2 migrate
+        run: |
+          set -e
+          echo "Verifying Flyway migrations against database: ${DB_NAME}"
+          docker run --rm --network host \
+            -e FLYWAY_URL="jdbc:postgresql://127.0.0.1:15432/${DB_NAME}" \
+            -e FLYWAY_USER="${DB_USER}" \
+            -e FLYWAY_PASSWORD="${DB_PASS}" \
+            -v "$GITHUB_WORKSPACE/src/main/resources/db/migration:/flyway/sql:ro" \
+            flyway/flyway:11.7.2 migrate
 
-  # Rewritten for the v1.2 "Infra Migration" milestone (Phase 5, plan 05-05 Task 3).
-  # Targets the Netcup VPS provisioned in plan 05-03 -- the originally-planned Oracle
-  # Cloud A1 Flex target proved structurally capacity-constrained (200+ automated
-  # provisioning attempts, zero successes; see docs/INFRA_RUNBOOK.md's "Provider
-  # history" note) -- not the deleted AWS EC2 host the old job SSHed into. Freshly
-  # generated, dedicated SSH credentials (plan 05-05 Task 1) authenticate as a
-  # minimally-privileged, non-root `deploy` user (never root), and the connection's
-  # host key is pinned by fingerprint on both steps below -- the old job never verified
-  # the host key at all.
-  deploy-to-netcup:
-    needs: [ build-and-push-docker-image, flyway-verify, build-and-push-caddy-image ]
-    runs-on: ubuntu-latest
-    if: success()
-    # Phase 9, plan 09-01, part C: this job resolves secrets.NETCUP_* -- production's SSH
-    # identity -- so it now reads them through the `production` environment.
-    environment: production
-    # Serializes deploys against this one VM: a second push while a deploy is still
-    # in-flight QUEUES behind it rather than cancelling it (cancel-in-progress: false).
-    # Cancelling mid-deploy could interrupt the SCP step partway through, leaving a
-    # half-copied docker-compose.prod.yml/Caddyfile on the VM -- exactly the
-    # interleaving this control exists to prevent. Queuing costs a little wall-clock on
-    # a rapid double push, but every deploy that runs still leaves the VM in a complete,
-    # self-consistent state, and the last queued deploy always reflects the latest push
-    # (each deploy fully re-copies and re-applies whatever commit was current when it
-    # started).
-    concurrency:
-      group: deploy-to-netcup-vm
-      cancel-in-progress: false
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
+      - name: Close the SSH forward
+        if: always()
+        run: pkill -f "ssh .*-L 15432:10.43.54.32:5432" || true
 
-      - name: Copy Compose manifest and Caddyfile to the VM
-        # `rm` is deliberately NOT set: the target directory also holds .env.prod
-        # (plan 05-04's manual deploy, populated once, off-limits to this job's own
-        # explicit prohibition), which must never be recreated or deleted here -- only
-        # the seven named paths below are transferred.
-        #
-        # docker/postgres-init/01-create-databases-and-roles.sh added phase 11 (plan 11-01):
-        # appleboy/scp-action preserves the relative path structure by default, so this lands at
-        # /opt/deploy/kanban-board-backend/docker/postgres-init/01-create-databases-and-roles.sh
-        # -- the exact path the `postgres` service's bind mount expects. The script is transferred
-        # so a REBUILD of the `postgres` container from an empty volume can reprovision, but it is
-        # one-shot against a non-empty data directory (see the script's own dated comment), so a
-        # routine deploy re-copying it on every push is a no-op by design, not a reprovisioning
-        # risk.
-        #
-        # docker/grafana/provisioning, docker/prometheus/prometheus.yml, docker/loki/loki-config.yaml
-        # and docker/promtail/promtail-config.yaml added quick task 260908-sj9 (2026-09-08): these
-        # four repo-relative bind-mount sources were declared in docker-compose.prod.yml from
-        # Phase 12 onward but never added to this `source:` list, so production served
-        # configuration frozen at 2026-09-07 (hand-copied once) behind fourteen green deploys --
-        # only postgres-init above was ever kept in sync. scripts/verify-deploy-scp-coverage.py now
-        # holds this list and docker-compose.prod.yml's bind mounts to provable agreement per PR.
-        # Residual gap this fix does not close: `rm:` staying unset (required, see above) means a
-        # file DELETED from the repo is never removed from the VM -- copying is one-directional.
-        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345  # v1.0.0
-        with:
-          host: ${{ secrets.NETCUP_HOST }}
-          username: ${{ secrets.NETCUP_DEPLOY_USER }}
-          key: ${{ secrets.NETCUP_SSH_KEY }}
-          fingerprint: ${{ secrets.NETCUP_HOST_FINGERPRINT }}
-          source: "docker-compose.prod.yml,Caddyfile,docker/postgres-init/01-create-databases-and-roles.sh,docker/grafana/provisioning,docker/prometheus/prometheus.yml,docker/loki/loki-config.yaml,docker/promtail/promtail-config.yaml"
-          target: "/opt/deploy/kanban-board-backend/"
+  # REMOVED Plan 13-06 (D-14, D-15): deploy-to-netcup, register-schemas-production, and the
+  # old current-tag-based cleanup-unused-image are gone. Deploys are pull-based GitOps now (Flux
+  # watches Docker Hub via ImagePolicy and commits the tag bump itself) -- there is no SSH
+  # `docker compose up -d` step left for this job to run, no post-deploy schema-registration SSH
+  # step (schema registration now runs as an initContainer on the app pod, ordered before the app
+  # container starts -- Plan 13-01), and no "deploy failed, delete the tag we just pushed" job
+  # (nothing here ever deploys, so nothing here can fail a deploy). cleanup-old-images below is
+  # rewritten to prune by age instead of by "the tag this run built," matching its nonprod twin.
 
-      - name: Deploy via Docker Compose
-        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2  # v1.2.5
-        with:
-          host: ${{ secrets.NETCUP_HOST }}
-          username: ${{ secrets.NETCUP_DEPLOY_USER }}
-          key: ${{ secrets.NETCUP_SSH_KEY }}
-          fingerprint: ${{ secrets.NETCUP_HOST_FINGERPRINT }}
-          script: |
-            set -e
-            # set -e (Phase 9, plan 09-03, live-verification fix, corrected): appleboy/ssh-action
-            # v1.2.5 has NO `script_stop` input -- an earlier fix attempt added that key and it was
-            # silently ignored (unknown `with:` keys don't error in GitHub Actions), which is why the
-            # bug it was meant to fix reproduced identically on first re-test. The real mechanism is
-            # the script's own shell: appleboy/ssh-action runs `script:` as plain multi-line shell
-            # text with no `set -e` by default, so a failing command mid-script does NOT stop later
-            # lines from running. Confirmed live twice: deploy-to-nonprod's registration step threw
-            # the expected IllegalStateException and `docker compose run` exited 1 at the OS level
-            # (verified directly on the VM), yet `up -d app-nonprod` on the next line still ran both
-            # times -- once with no fix, once with the ineffective `script_stop: true`. `set -e` here
-            # is the actual fix, applied to every ssh-action script in this file for defense-in-depth.
-            cd /opt/deploy/kanban-board-backend
-            # Exported (not written into .env.prod) so this commit's freshly-built tag
-            # always wins over Compose's --env-file precedence -- shell environment
-            # variables take priority over --env-file values, and .env.prod itself is
-            # never touched by this job.
-            export IMAGE_TAG=${{ needs.build-and-push-docker-image.outputs.image_tag }}
-            # rudenkovladimir/kanban-board-backend is a public Docker Hub repository
-            # (confirmed live via the Docker Hub API during this plan's execution,
-            # is_private: false) -- no docker login/registry credential is needed here
-            # to pull it. Pull-and-up is idempotent: a push that changes nothing this
-            # deploy consumes still converges the VM to the pushed state (the app image
-            # tag always changes per commit) rather than erroring on there being
-            # nothing to do.
-            #
-            # `caddy` added to this pull (quick task 260903-dvp, D-3): rudenkovladimir/
-            # kanban-board-caddy must also be public on Docker Hub for this to succeed anonymously
-            # -- see this task's own user_setup requirement, verified before merge.
-            docker compose --env-file ./.env.prod -f docker-compose.prod.yml pull app caddy
-            docker compose --env-file ./.env.prod -f docker-compose.prod.yml up -d
-            # Force-recreate Caddy explicitly (F-1, quick task 260903-dvp; corrected 13-05 --
-            # caddy-reload-inode-bug): docker-compose.prod.yml bind-mounts ./Caddyfile read-only,
-            # and a bind-mounted file's CONTENT is not part of Compose's config hash -- so `up -d`
-            # above is a no-op for `caddy` whenever its image tag is unchanged (every deploy after
-            # the one that first ships this pinned image), and Caddy keeps serving whatever config
-            # it loaded at its own container start. Without this step, a new Caddyfile would have
-            # zero effect in production.
-            #
-            # `--force-recreate`, not `caddy reload` inside the running container: appleboy/
-            # scp-action replaces the Caddyfile via rename/untar, which gives the new file a new
-            # inode. Docker's bind mount is resolved once, at container start, and keeps pointing
-            # at the OLD inode -- so `exec caddy reload` reloads stale content even though the host
-            # file is current. Confirmed live 2026-09-25 (13-05): this caused a real ~2min public
-            # 502 on nonprod despite deploy-to-netcup reporting green throughout, undetected
-            # historically only because the deploy that first introduced the old reload mechanism
-            # also recreated the container for an unrelated reason (new image tag), masking the
-            # bug. `--force-recreate` sidesteps the inode problem entirely by discarding the
-            # container and its resolved bind mount along with it, re-resolving against the
-            # current file on every deploy regardless of whether the image tag changed.
-            #
-            # Ordering is still load-bearing: this MUST run AFTER `up -d`, never before, for the
-            # same reason as the mechanism it replaces. On the one deploy that first ships this
-            # pinned image, the container running at the top of this script is still stock
-            # `caddy:2` with no rate_limit module -- validating the new Caddyfile against IT before
-            # `up -d` has swapped the image would fail on an unrecognised directive. After `up -d`,
-            # the image reference has already changed, so this force-recreate is a no-op recreation
-            # against the same (new) image on that first deploy, and the load-bearing step on every
-            # deploy after, where the tag is unchanged and a plain `up -d` would otherwise leave
-            # Caddy alone.
-            #
-            # Failure semantics: if this fails, `set -e` (top of this script) reddens this job with
-            # `app` already swapped in -- the edge may be down or serving stale config, and a human
-            # looks. That is an accepted, disclosed trade against the previous mechanism's
-            # fail-closed-with-old-container-still-serving behavior: the previous mechanism was
-            # fail-closed but silently wrong (looked fine, served stale content); this one is
-            # fail-loud (a failed recreate is visibly red, not silently stale).
-            docker compose --env-file ./.env.prod -f docker-compose.prod.yml up -d --force-recreate caddy
-            # Read back the config Caddy is actually RUNNING, not the file that was copied -- the
-            # only thing that closes F-1 rather than assuming the recreate above worked. `-T` on
-            # both `exec` calls below is required: appleboy/ssh-action runs this script under a
-            # non-interactive shell, and `exec` defaulting to a TTY is a well-known way to turn a
-            # working command into a hard failure.
-            #
-            # 127.0.0.1, never `localhost` (2026-09-03 review, F1 -- this shipped as `localhost`
-            # and was caught before merge): Caddy's admin API binds IPv4-only, while the runtime
-            # image's /etc/hosts carries both `127.0.0.1 localhost` and `::1 localhost`. The
-            # image's wget is BusyBox, which tries the ::1 record and treats the refusal as
-            # terminal instead of falling back to the IPv4 record -- so `localhost` fails 5/5 and
-            # 127.0.0.1 succeeds, against the same listener. That failure is fail-CLOSED but it
-            # lands AFTER `up -d` has already swapped in the new app, so it would redden every
-            # deploy and let `cleanup-unused-image` (if: failure()) delete the app manifest that
-            # is at that moment running on the VM.
-            docker compose --env-file ./.env.prod -f docker-compose.prod.yml exec -T caddy \
-              wget -qO- http://127.0.0.1:2019/config/ | grep -q '"handler":"rate_limit"' \
-              || { echo "::error::Running Caddy config has no rate_limit handler after reload -- the edge is not rate-limited despite a green deploy."; exit 1; }
-
-  # CI-05 (Phase 9, plan 09-03): automates the last hand-run step in this project's deploy --
-  # registering the application's 14 Avro schemas against production's registry -- reusing the
-  # identical PropertiesLauncher one-off-container invocation already proven by hand
-  # (docs/INFRA_RUNBOOK.md "Manual deploy -- Plan 05-04 Task 1" step 3). Runs as its OWN job,
-  # immediately after deploy-to-netcup, rather than as a gate inside it (Task 1's checkpoint,
-  # option-a, human-decided): production already serves traffic before registration today --
-  # registration has been a hand-run post-deploy step since v1.2 Phase 5 -- and making the
-  # registry a precondition for `up -d` would introduce a NEW production failure mode (a
-  # registry outage blocking a deploy that would otherwise have succeeded), a change this
-  # phase deliberately does not make. This is still strictly better than the status quo: the
-  # unregistered window shrinks from "until an operator remembers the runbook" to "this job's
-  # own startup latency," and an incompatible schema still reddens the run via the same
-  # exit-code chain nonprod's own registration relies on
-  # (AvroSchemaRegistrar.registerThenSetCompatibility's IllegalStateException -> non-zero JVM
-  # exit -> `docker compose run` exit propagation -> appleboy/ssh-action step failure). No
-  # `|| true`, `set +e`, or `continue-on-error` anywhere near the invocation below.
-  register-schemas-production:
-    needs: [ deploy-to-netcup, build-and-push-docker-image ]
-    runs-on: ubuntu-latest
-    if: success()
-    # Resolves secrets.NETCUP_* through production's OWN identity -- this job's `needs:` names
-    # only deploy-to-netcup (plus build-and-push-docker-image for the image tag output), never
-    # a nonprod node, so this job neither gates nor is gated by the nonprod deploy path.
-    environment: production
-    # Deliberately no concurrency: block. deploy-to-netcup-vm's lock is already released by the
-    # time this job starts (it runs after that job succeeds), and this job neither copies files
-    # to the VM nor mutates the Compose project -- only runs one already-proven one-off
-    # container, so there is nothing here for a second concurrent run to race against.
-    steps:
-      - name: Register Avro schemas (production registry)
-        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2  # v1.2.5
-        with:
-          host: ${{ secrets.NETCUP_HOST }}
-          username: ${{ secrets.NETCUP_DEPLOY_USER }}
-          key: ${{ secrets.NETCUP_SSH_KEY }}
-          fingerprint: ${{ secrets.NETCUP_HOST_FINGERPRINT }}
-          script: |
-            set -e
-            # set -e: see deploy-to-netcup's identical comment (script_stop is not a real
-            # appleboy/ssh-action input). This script's only risky command is already last, so its
-            # exit code already propagated correctly -- set -e added for defense-in-depth against a
-            # future edit appending a line after it.
-            cd /opt/deploy/kanban-board-backend
-            # Exported, matching deploy-to-netcup's own precedence convention -- this commit's
-            # freshly-built tag always wins over Compose's --env-file precedence.
-            export IMAGE_TAG=${{ needs.build-and-push-docker-image.outputs.image_tag }}
-            echo "Registering Avro schemas against the production registry..."
-            docker compose --env-file ./.env.prod -f docker-compose.prod.yml run --rm --entrypoint java app \
-              -Dloader.main=com.vrudenko.kanban_board.config.AvroSchemaRegistrar \
-              -cp app.jar org.springframework.boot.loader.launch.PropertiesLauncher http://redpanda:8081
-
+  # REWRITTEN Plan 13-06 (D-15): keeps the same JWT-exchange and pagination fixes as before
+  # (2026-08-16/17), but the retention axis changes to match cleanup-old-images-nonprod's own
+  # shape below -- "keep the 5 newest tags matching main-<n>-<sha7>" instead of "keep only the tag
+  # this run built." There is no longer a single "current" tag to key off: Flux's ImagePolicy
+  # picks the newest tag independently of what this run built, and a `git revert`-driven rollback
+  # needs several recent tags to still exist in the registry.
   cleanup-old-images:
     runs-on: ubuntu-latest
-    needs: [ deploy-to-netcup, build-and-push-docker-image, setup ]
+    needs: [ setup, build-and-push-docker-image ]
     if: success()
     # Phase 9, plan 09-01, part C: this job resolves secrets.DOCKERHUB_TOKEN (production's copy).
     environment: production
     steps:
-      # we need to do that because we only want to have a single active prod deployment for that project
-      - name: Delete old Docker Hub images
+      - name: Delete old Docker Hub images (keep 5 newest sortable tags)
         run: |
           # BUG FIXED (todo 2026-08-16-cleanup-old-images-delete-calls-rejected-unauthorized.md):
-          # Docker Hub's Hub API v2 (hub.docker.com/v2, distinct from the Registry API v2 that
-          # cleanup-unused-image below correctly token-exchanges against) rejects HTTP Basic auth
-          # on mutating requests with {"message":"unauthorized"} -- confirmed live, run
-          # 31963539949, 2026-08-16, 29/29 deletes rejected. The prior GET-with-Basic-auth
-          # "succeeding" was not evidence Basic auth worked: this is a public repository, so an
-          # unauthenticated GET on its tag list succeeds regardless of -u. Fixed by exchanging
-          # credentials for a JWT via the documented /v2/users/login/ endpoint first, then sending
-          # that as `Authorization: JWT <token>` on every authenticated call. Both list and delete
-          # now check their HTTP status explicitly and fail loudly, rather than relying on a body
-          # inspection that a 404 (the original bug) or 401 (this bug) would both silently pass.
+          # Docker Hub's Hub API v2 (hub.docker.com/v2, distinct from the Registry API v2 the old
+          # cleanup-unused-image job correctly token-exchanged against) rejects HTTP Basic auth on
+          # mutating requests with {"message":"unauthorized"} -- confirmed live, run 31963539949,
+          # 2026-08-16, 29/29 deletes rejected. The prior GET-with-Basic-auth "succeeding" was not
+          # evidence Basic auth worked: this is a public repository, so an unauthenticated GET on
+          # its tag list succeeds regardless of -u. Fixed by exchanging credentials for a JWT via
+          # the documented /v2/users/login/ endpoint first, then sending that as
+          # `Authorization: JWT <token>` on every authenticated call. Both list and delete check
+          # their HTTP status explicitly and fail loudly, rather than relying on a body inspection
+          # that a 404 (the original bug) or 401 (this bug) would both silently pass.
           HUB_TOKEN=$(curl -s -H "Content-Type: application/json" -X POST \
             -d "{\"username\": \"$DOCKERHUB_USER\", \"password\": \"${{ secrets.DOCKERHUB_TOKEN }}\"}" \
             "https://hub.docker.com/v2/users/login/" | jq -r .token)
@@ -656,10 +500,19 @@ jobs:
             NEXT_URL=$(jq -r '.next' /tmp/tags.json)
           done
 
-          # Delete all tags except the current one
+          # Keep the 5 newest tags matching main-<run_number>-<sha7> (D-15's sortable scheme),
+          # ordered NUMERICALLY by run_number (a lexical sort would put main-9-... after
+          # main-100-... -- wrong), matching cleanup-old-images-nonprod's own retention logic
+          # below. Legacy bare-SHA tags (pre-13-01, no main-N- prefix) never match this pattern,
+          # so they fall straight into the delete set.
+          KEEP=$(printf '%s\n' $TAGS \
+            | grep -E '^main-[0-9]+-[0-9a-f]{7}$' \
+            | sort -t- -k2,2n \
+            | tail -n 5)
+
           FAILED=0
           for TAG in $TAGS; do
-            if [ "$TAG" != "${{ needs.build-and-push-docker-image.outputs.image_tag }}" ]; then
+            if ! printf '%s\n' "$KEEP" | grep -qx "$TAG"; then
               echo "Deleting tag: $TAG"
               DELETE_HTTP_STATUS=$(curl -s -o /tmp/delete-response.json -w "%{http_code}" -X DELETE \
                 -H "Authorization: JWT ${HUB_TOKEN}" \
@@ -675,48 +528,10 @@ jobs:
             exit 1
           fi
 
-  # if deployment failed, we need to cleanup the image we pushed, because it won't be used
-  cleanup-unused-image:
-    runs-on: ubuntu-latest
-    needs: [ deploy-to-netcup, build-and-push-docker-image, setup ]
-    if: failure()
-    # Phase 9, plan 09-01, part C: production's environment declaration, matching its sibling
-    # jobs in this file (see PATTERNS.md / Task 3's mechanical environment-scoping assertion).
-    environment: production
-    steps:
-      - name: Remove just-pushed image
-        run: |
-          echo "Deleting failed tag: ${{ needs.build-and-push-docker-image.outputs.image_tag }}"
-          TOKEN=$(curl -s "https://auth.docker.io/token?service=registry.docker.io&scope=repository:${{ needs.setup.outputs.base_image_name }}:pull,push" \
-            | jq -r .token)
-          DIGEST=$(curl -sI \
-            -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
-            -H "Authorization: Bearer $TOKEN" \
-            "https://registry-1.docker.io/v2/${{ needs.setup.outputs.base_image_name }}/manifests/${{ needs.build-and-push-docker-image.outputs.image_tag }}" \
-            | awk '/Docker-Content-Digest/ {print $2}' | tr -d $'\r')
-          # Completes the previously-truncated command (todo
-          # 2026-08-04-re-enable-and-rewrite-the-disabled-deploy-job-after-phase-5.md):
-          # deletion is by DIGEST here (this job's own variable, resolved above via the
-          # manifest HEAD request), not by tag+basic-auth like cleanup-old-images --
-          # the Docker Registry v2 API's DELETE-manifest endpoint at this host requires
-          # the digest reference, which is exactly what TOKEN/DIGEST were computed for.
-          #
-          # Status check added (Phase 10, HARDEN item, this job's own comment previously flagged
-          # this as Phase 10 scope -- cleanup-unused-image-nonprod carried an identical,
-          # already-fixed copy of this check before it was removed Plan 13-05, D-14/D-15, along
-          # with the nonprod SSH deploy path it existed to clean up after). Before this, production
-          # issued this DELETE with no status inspection at all, so whether it ever actually deleted
-          # anything was unproven in this repo's history. Warn-only: this job already runs on an
-          # already-failing workflow (if: failure()), and turning it red here would mask the
-          # original deploy failure it exists to clean up after -- never ::error::, never a
-          # non-zero exit.
-          DELETE_HTTP_STATUS=$(curl -s -o /tmp/delete-response-unused.json -w "%{http_code}" -X DELETE \
-            -H "Authorization: Bearer $TOKEN" \
-            "https://registry-1.docker.io/v2/${{ needs.setup.outputs.base_image_name }}/manifests/$DIGEST")
-          case "$DELETE_HTTP_STATUS" in
-            2??) echo "Manifest delete returned HTTP $DELETE_HTTP_STATUS." ;;
-            *) echo "::warning::Manifest delete returned non-2xx HTTP $DELETE_HTTP_STATUS: $(cat /tmp/delete-response-unused.json)" ;;
-          esac
+  # REMOVED Plan 13-06 (D-14, D-15): cleanup-unused-image deleted the tag a just-failed
+  # deploy-to-netcup had pushed. There is no deploy-to-netcup left to fail -- Flux decides
+  # independently, on its own schedule, whether to roll a given tag out, so "this run's own
+  # deploy failed" is no longer a concept this workflow can observe.
 
   # Nonprod twin of cleanup-old-images -- REWRITTEN Plan 13-05 (D-14, D-15): nonprod no longer
   # deploys via SSH (Flux + image automation deploys it now, see apps-nonprod Kustomization), so
