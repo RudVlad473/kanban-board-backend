@@ -8,16 +8,19 @@ metadata:
   name: grafana-login-rate-limit
   namespace: monitoring
 spec:
-  # PROVISIONAL translation of Caddy zone grafana_login; re-derived from token-bucket semantics
-  # in 13-08. average/period match the Caddy zone's own events/window (20 per 5m, Phase 12); burst
-  # equal to average is the closest single-parameter analog to a fixed window's "allow the full
-  # budget up front" behavior a token bucket has (13-RESEARCH.md Pattern 2). ipv6Subnet: 56 groups
-  # a /56 as one client, matching how a residential/mobile IPv6 allocation typically rotates
-  # within a single subnet -- the same intent Caddy's {remote_host} keying had for IPv4.
+  # worst case over 5m = 10 + 10*300/300 = 20 <= Caddy's 20 (zone grafana_login, events 20,
+  # window 5m, Phase 12's Caddyfile).
+  #
+  # Re-derived 2026-09-26 (Plan 13-08, D-13) from Traefik's own token-bucket semantics
+  # (`burst + average * W / period`, same shape and same Caddy budget as kanban-prod's
+  # auth-rate-limit), not copied verbatim from the Caddyfile as the PROVISIONAL 13-03 placeholder
+  # was. ipv6Subnet: 56 groups a /56 as one client, matching how a residential/mobile IPv6
+  # allocation typically rotates within a single subnet -- the same intent Caddy's {remote_host}
+  # keying had for IPv4.
   rateLimit:
-    average: 20
+    average: 10
     period: 5m
-    burst: 20
+    burst: 10
     sourceCriterion:
       ipStrategy:
         ipv6Subnet: 56
