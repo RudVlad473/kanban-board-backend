@@ -315,9 +315,18 @@ jobs:
           install -m 0600 /dev/null "$RUNNER_TEMP/netcup_ssh_key"
           printf '%s\n' "$NETCUP_SSH_KEY" > "$RUNNER_TEMP/netcup_ssh_key"
           ssh-keyscan -H "$NETCUP_HOST" > "$RUNNER_TEMP/known_hosts" 2>/dev/null
-          SCANNED_FP=$(ssh-keygen -lf "$RUNNER_TEMP/known_hosts" | awk '{print $2}' | sort -u)
-          if [ "$SCANNED_FP" != "$NETCUP_HOST_FINGERPRINT" ]; then
-            echo "::error::ssh-keyscan fingerprint ($SCANNED_FP) does not match secrets.NETCUP_HOST_FINGERPRINT ($NETCUP_HOST_FINGERPRINT) -- refusing to connect to a host whose identity cannot be confirmed."
+          # BUG FIXED live during 13-06's maintenance window (2026-09-26): `ssh-keyscan -H` with
+          # no `-t` scans every host key algorithm the server offers (RSA, ED25519, ECDSA), so
+          # `ssh-keygen -lf` prints one fingerprint PER algorithm -- `sort -u` collapsed them into
+          # a multi-line set, and the original `[ "$SCANNED_FP" != "$NETCUP_HOST_FINGERPRINT" ]`
+          # exact-string comparison against a single pinned fingerprint always failed, even
+          # against the correct host (confirmed live: deploy.yml run 36229677270, both
+          # flyway-verify jobs red on this check). Fixed to check whether the pinned fingerprint
+          # is ONE of the scanned lines (`grep -qxF`), which is what "pinned" actually means when
+          # multiple host key types legitimately coexist.
+          if ! ssh-keygen -lf "$RUNNER_TEMP/known_hosts" | awk '{print $2}' | grep -qxF "$NETCUP_HOST_FINGERPRINT"; then
+            echo "::error::No scanned host key fingerprint matches secrets.NETCUP_HOST_FINGERPRINT ($NETCUP_HOST_FINGERPRINT) -- refusing to connect to a host whose identity cannot be confirmed. Scanned:"
+            ssh-keygen -lf "$RUNNER_TEMP/known_hosts"
             exit 1
           fi
 
@@ -391,9 +400,13 @@ jobs:
           install -m 0600 /dev/null "$RUNNER_TEMP/netcup_ssh_key"
           printf '%s\n' "$NETCUP_SSH_KEY" > "$RUNNER_TEMP/netcup_ssh_key"
           ssh-keyscan -H "$NETCUP_HOST" > "$RUNNER_TEMP/known_hosts" 2>/dev/null
-          SCANNED_FP=$(ssh-keygen -lf "$RUNNER_TEMP/known_hosts" | awk '{print $2}' | sort -u)
-          if [ "$SCANNED_FP" != "$NETCUP_HOST_FINGERPRINT" ]; then
-            echo "::error::ssh-keyscan fingerprint ($SCANNED_FP) does not match secrets.NETCUP_HOST_FINGERPRINT ($NETCUP_HOST_FINGERPRINT) -- refusing to connect to a host whose identity cannot be confirmed."
+          # BUG FIXED live during 13-06's maintenance window (2026-09-26): see flyway-verify's
+          # identical fix above for the full root cause (ssh-keyscan -H scans every host key
+          # algorithm, producing multiple fingerprints; the original exact-string comparison
+          # against one pinned fingerprint always failed).
+          if ! ssh-keygen -lf "$RUNNER_TEMP/known_hosts" | awk '{print $2}' | grep -qxF "$NETCUP_HOST_FINGERPRINT"; then
+            echo "::error::No scanned host key fingerprint matches secrets.NETCUP_HOST_FINGERPRINT ($NETCUP_HOST_FINGERPRINT) -- refusing to connect to a host whose identity cannot be confirmed. Scanned:"
+            ssh-keygen -lf "$RUNNER_TEMP/known_hosts"
             exit 1
           fi
 
