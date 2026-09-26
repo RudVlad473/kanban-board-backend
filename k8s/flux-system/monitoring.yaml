@@ -1,4 +1,4 @@
-# Suspended until 13-07 activates observability (D-02, D-17). Plan 13-02.
+# Activated at the prod cutover (D-02, D-17), Plan 13-07 Task 1.
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
@@ -9,7 +9,7 @@ spec:
   interval: 10m
   path: ./k8s/monitoring/configs
   prune: true
-  suspend: true
+  suspend: false
   dependsOn:
     - name: monitoring-controllers
   sourceRef:

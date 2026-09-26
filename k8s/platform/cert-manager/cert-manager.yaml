@@ -49,9 +49,13 @@ spec:
       enabled: true
       keep: true
     prometheus:
-      # No ServiceMonitor CRD exists before 13-07 (kube-prometheus-stack, which provides it) --
-      # enabling this here would leave a permanently-unsatisfiable CRD reference.
-      enabled: false
+      # Enabled now that 13-07 Task 1 activates kube-prometheus-stack, which provides the
+      # ServiceMonitor CRD this needs. Left disabled from 13-03 through 13-06 specifically
+      # because that CRD did not exist yet -- enabling it earlier would have left a
+      # permanently-unsatisfiable CRD reference.
+      enabled: true
+      servicemonitor:
+        enabled: true
     # PROVISIONAL (13-09): controller/webhook/cainjector resource requests/limits are the
     # chart's own defaults, not yet measured against this box via the restart-ladder method --
     # every other workload in this phase carries a MEASURED figure; cert-manager's three
