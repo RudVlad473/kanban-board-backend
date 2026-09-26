@@ -172,7 +172,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "time()-(pg_postmaster_start_time_seconds{instance=\"netcup-prod-node\"})",
+          "expr": "time()-(pg_postmaster_start_time_seconds{instance=\"v2202608397723499373\"})",
           "legendFormat": "",
           "refId": "A"
         }
@@ -251,7 +251,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "max(pg_replication_lag_seconds{instance=\"netcup-prod-node\"})",
+          "expr": "max(pg_replication_lag_seconds{instance=\"v2202608397723499373\"})",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
@@ -355,7 +355,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "max(pg_replication_lag_seconds{instance=\"netcup-prod-node\"})",
+          "expr": "max(pg_replication_lag_seconds{instance=\"v2202608397723499373\"})",
           "instant": false,
           "intervalFactor": 1,
           "legendFormat": "lag ",
@@ -448,7 +448,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "sum(pg_stat_activity_count{state=\"active\",instance=\"netcup-prod-node\"})",
+          "expr": "sum(pg_stat_activity_count{state=\"active\",instance=\"v2202608397723499373\"})",
           "refId": "A"
         }
       ],
@@ -611,7 +611,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "max(pg_settings_max_connections{instance=\"netcup-prod-node\"})",
+          "expr": "max(pg_settings_max_connections{instance=\"v2202608397723499373\"})",
           "legendFormat": "",
           "refId": "A"
         }
@@ -763,7 +763,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "sum by (state) (pg_stat_activity_count{instance=\"netcup-prod-node\"})",
+          "expr": "sum by (state) (pg_stat_activity_count{instance=\"v2202608397723499373\"})",
           "legendFormat": "{{state}}",
           "refId": "A"
         }
@@ -915,7 +915,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "sum by (datname) (pg_stat_activity_count{instance=\"netcup-prod-node\"})",
+          "expr": "sum by (datname) (pg_stat_activity_count{instance=\"v2202608397723499373\"})",
           "legendFormat": "{{datname}}",
           "refId": "A"
         }
@@ -1006,7 +1006,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "sum((rate(pg_stat_statements_calls_total{instance=\"netcup-prod-node\"}[10m])))",
+          "expr": "sum((rate(pg_stat_statements_calls_total{instance=\"v2202608397723499373\"}[10m])))",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
@@ -1086,7 +1086,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "sum((rate(pg_stat_database_xact_commit{instance=\"netcup-prod-node\"}[10m])))+sum((rate(pg_stat_database_xact_rollback{instance=\"netcup-prod-node\"}[10m])))",
+          "expr": "sum((rate(pg_stat_database_xact_commit{instance=\"v2202608397723499373\"}[10m])))+sum((rate(pg_stat_database_xact_rollback{instance=\"v2202608397723499373\"}[10m])))",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
@@ -1166,7 +1166,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "sum((delta(pg_stat_statements_seconds_total{instance=\"netcup-prod-node\"}[10m])))/sum((delta(pg_stat_statements_calls_total{instance=\"netcup-prod-node\"}[10m])))",
+          "expr": "sum((delta(pg_stat_statements_seconds_total{instance=\"v2202608397723499373\"}[10m])))/sum((delta(pg_stat_statements_calls_total{instance=\"v2202608397723499373\"}[10m])))",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
@@ -1381,7 +1381,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "sum((rate(pg_stat_database_tup_inserted{instance=\"netcup-prod-node\"}[10m])))",
+          "expr": "sum((rate(pg_stat_database_tup_inserted{instance=\"v2202608397723499373\"}[10m])))",
           "interval": "",
           "legendFormat": "Inserts",
           "refId": "A"
@@ -1391,7 +1391,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "sum((rate(pg_stat_database_tup_updated{instance=\"netcup-prod-node\"}[10m])))",
+          "expr": "sum((rate(pg_stat_database_tup_updated{instance=\"v2202608397723499373\"}[10m])))",
           "interval": "",
           "legendFormat": "Updates",
           "refId": "B"
@@ -1401,7 +1401,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "sum((rate(pg_stat_database_tup_deleted{instance=\"netcup-prod-node\"}[10m])))",
+          "expr": "sum((rate(pg_stat_database_tup_deleted{instance=\"v2202608397723499373\"}[10m])))",
           "interval": "",
           "legendFormat": "Deletes",
           "refId": "C"
@@ -1504,7 +1504,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "sum((rate(pg_stat_database_tup_fetched{instance=\"netcup-prod-node\"}[10m])))",
+          "expr": "sum((rate(pg_stat_database_tup_fetched{instance=\"v2202608397723499373\"}[10m])))",
           "interval": "",
           "legendFormat": "Fetched",
           "refId": "A"
@@ -1514,7 +1514,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "sum((rate(pg_stat_database_tup_returned{instance=\"netcup-prod-node\"}[10m])))",
+          "expr": "sum((rate(pg_stat_database_tup_returned{instance=\"v2202608397723499373\"}[10m])))",
           "interval": "",
           "legendFormat": "Returned",
           "refId": "B"
@@ -1607,7 +1607,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "sum(pg_database_size_bytes{instance=\"netcup-prod-node\"})",
+          "expr": "sum(pg_database_size_bytes{instance=\"v2202608397723499373\"})",
           "refId": "A"
         }
       ],
@@ -1679,7 +1679,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "max(pg_settings_shared_buffers_bytes{instance=\"netcup-prod-node\"})",
+          "expr": "max(pg_settings_shared_buffers_bytes{instance=\"v2202608397723499373\"})",
           "legendFormat": "",
           "refId": "A"
         }
@@ -1771,7 +1771,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "sum(pg_stat_database_blks_hit{instance=~\"netcup-prod-node\"})/(sum(pg_stat_database_blks_hit{instance=~\"netcup-prod-node\"})+sum(pg_stat_database_blks_read{instance=~\"netcup-prod-node\"}))*100",
+          "expr": "sum(pg_stat_database_blks_hit{instance=~\"v2202608397723499373\"})/(sum(pg_stat_database_blks_hit{instance=~\"v2202608397723499373\"})+sum(pg_stat_database_blks_read{instance=~\"v2202608397723499373\"}))*100",
           "refId": "A"
         }
       ],
@@ -1862,7 +1862,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "sum(pg_stat_database_xact_commit{instance=\"netcup-prod-node\"})/(sum(pg_stat_database_xact_commit{instance=\"netcup-prod-node\"}) + sum(pg_stat_database_xact_rollback{instance=\"netcup-prod-node\"}))",
+          "expr": "sum(pg_stat_database_xact_commit{instance=\"v2202608397723499373\"})/(sum(pg_stat_database_xact_commit{instance=\"v2202608397723499373\"}) + sum(pg_stat_database_xact_rollback{instance=\"v2202608397723499373\"}))",
           "refId": "A"
         }
       ],
@@ -1963,7 +1963,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "sum ((rate(pg_stat_database_blk_read_time{instance=\"netcup-prod-node\"}[10m])))",
+          "expr": "sum ((rate(pg_stat_database_blk_read_time{instance=\"v2202608397723499373\"}[10m])))",
           "interval": "",
           "legendFormat": "blk_read_time",
           "refId": "A"
@@ -1973,7 +1973,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "sum ((rate(pg_stat_database_blk_write_time{instance=\"netcup-prod-node\"}[10m])))",
+          "expr": "sum ((rate(pg_stat_database_blk_write_time{instance=\"v2202608397723499373\"}[10m])))",
           "interval": "",
           "legendFormat": "blk_read_time",
           "refId": "B"
@@ -2124,7 +2124,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "sum by (datname) ((rate(pg_stat_database_temp_files{instance=\"netcup-prod-node\"}[10m])))",
+          "expr": "sum by (datname) ((rate(pg_stat_database_temp_files{instance=\"v2202608397723499373\"}[10m])))",
           "interval": "",
           "legendFormat": "{{datname}}",
           "refId": "A"
@@ -2244,7 +2244,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "sum by (mode) (pg_locks_count{instance=\"netcup-prod-node\"})",
+          "expr": "sum by (mode) (pg_locks_count{instance=\"v2202608397723499373\"})",
           "legendFormat": "{{mode}}",
           "refId": "A"
         }
@@ -2394,7 +2394,7 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "sum by (datname) ((rate(pg_stat_database_deadlocks{instance=\"netcup-prod-node\"}[10m])))",
+          "expr": "sum by (datname) ((rate(pg_stat_database_deadlocks{instance=\"v2202608397723499373\"}[10m])))",
           "interval": "",
           "legendFormat": "{{datname}}",
           "refId": "A"
@@ -2434,7 +2434,7 @@
                 "type": "prometheus",
                 "uid": "PBFA97CFB590B2093"
               },
-              "expr": "pg_stat_activity_count{state=\"active\",instance=\"netcup-prod-node\",datname=~\".+\"}",
+              "expr": "pg_stat_activity_count{state=\"active\",instance=\"v2202608397723499373\",datname=~\".+\"}",
               "refId": "A"
             }
           ],
@@ -2462,7 +2462,7 @@
                 "type": "prometheus",
                 "uid": "PBFA97CFB590B2093"
               },
-              "expr": "pg_database_size_bytes{instance=\"netcup-prod-node\",datname=~\".+\"}",
+              "expr": "pg_database_size_bytes{instance=\"v2202608397723499373\",datname=~\".+\"}",
               "refId": "A"
             }
           ],
@@ -2535,7 +2535,7 @@
                 "type": "prometheus",
                 "uid": "PBFA97CFB590B2093"
               },
-              "expr": "pg_stat_database_blks_hit{instance=~\"netcup-prod-node\",datname=~\".+\"}/(pg_stat_database_blks_hit{instance=~\"netcup-prod-node\",datname=~\".+\"}+pg_stat_database_blks_read{instance=~\"netcup-prod-node\",datname=~\".+\"})",
+              "expr": "pg_stat_database_blks_hit{instance=~\"v2202608397723499373\",datname=~\".+\"}/(pg_stat_database_blks_hit{instance=~\"v2202608397723499373\",datname=~\".+\"}+pg_stat_database_blks_read{instance=~\"v2202608397723499373\",datname=~\".+\"})",
               "refId": "A"
             }
           ],
@@ -2608,7 +2608,7 @@
                 "type": "prometheus",
                 "uid": "PBFA97CFB590B2093"
               },
-              "expr": "pg_stat_database_xact_commit{instance=\"netcup-prod-node\",datname=~\".+\"}/(pg_stat_database_xact_commit{instance=\"netcup-prod-node\",datname=~\".+\"} + pg_stat_database_xact_rollback{instance=\"netcup-prod-node\",datname=~\".+\"})",
+              "expr": "pg_stat_database_xact_commit{instance=\"v2202608397723499373\",datname=~\".+\"}/(pg_stat_database_xact_commit{instance=\"v2202608397723499373\",datname=~\".+\"} + pg_stat_database_xact_rollback{instance=\"v2202608397723499373\",datname=~\".+\"})",
               "refId": "A"
             }
           ],
@@ -2637,7 +2637,7 @@
                 "type": "prometheus",
                 "uid": "PBFA97CFB590B2093"
               },
-              "expr": "sum((rate(pg_stat_database_xact_commit{instance=\"netcup-prod-node\",datname=~\".+\"}[10m])))+sum((rate(pg_stat_database_xact_rollback{instance=\"netcup-prod-node\",datname=~\".+\"}[10m])))",
+              "expr": "sum((rate(pg_stat_database_xact_commit{instance=\"v2202608397723499373\",datname=~\".+\"}[10m])))+sum((rate(pg_stat_database_xact_rollback{instance=\"v2202608397723499373\",datname=~\".+\"}[10m])))",
               "interval": "",
               "legendFormat": "",
               "refId": "A"
@@ -2677,7 +2677,7 @@
                 "type": "prometheus",
                 "uid": "PBFA97CFB590B2093"
               },
-              "expr": "sum by (state) (pg_stat_activity_count{instance=\"netcup-prod-node\",datname=~\".+\"})",
+              "expr": "sum by (state) (pg_stat_activity_count{instance=\"v2202608397723499373\",datname=~\".+\"})",
               "legendFormat": "{{state}}",
               "refId": "A"
             }
@@ -2708,7 +2708,7 @@
                 "type": "prometheus",
                 "uid": "PBFA97CFB590B2093"
               },
-              "expr": "rate(pg_stat_database_xact_commit{instance=\"netcup-prod-node\",datname=~\".+\"}[10m])",
+              "expr": "rate(pg_stat_database_xact_commit{instance=\"v2202608397723499373\",datname=~\".+\"}[10m])",
               "interval": "",
               "legendFormat": "committed",
               "refId": "A"
@@ -2718,7 +2718,7 @@
                 "type": "prometheus",
                 "uid": "PBFA97CFB590B2093"
               },
-              "expr": "rate(pg_stat_database_xact_rollback{instance=\"netcup-prod-node\",datname=~\".+\"}[10m])",
+              "expr": "rate(pg_stat_database_xact_rollback{instance=\"v2202608397723499373\",datname=~\".+\"}[10m])",
               "interval": "",
               "legendFormat": "rollback",
               "refId": "B"
@@ -2750,7 +2750,7 @@
                 "type": "prometheus",
                 "uid": "PBFA97CFB590B2093"
               },
-              "expr": "rate(pg_stat_database_tup_inserted{instance=\"netcup-prod-node\",datname=~\".+\"}[10m])",
+              "expr": "rate(pg_stat_database_tup_inserted{instance=\"v2202608397723499373\",datname=~\".+\"}[10m])",
               "interval": "",
               "legendFormat": "Inserts",
               "refId": "A"
@@ -2760,7 +2760,7 @@
                 "type": "prometheus",
                 "uid": "PBFA97CFB590B2093"
               },
-              "expr": "rate(pg_stat_database_tup_updated{instance=\"netcup-prod-node\",datname=~\".+\"}[10m])",
+              "expr": "rate(pg_stat_database_tup_updated{instance=\"v2202608397723499373\",datname=~\".+\"}[10m])",
               "interval": "",
               "legendFormat": "Updates",
               "refId": "B"
@@ -2770,7 +2770,7 @@
                 "type": "prometheus",
                 "uid": "PBFA97CFB590B2093"
               },
-              "expr": "rate(pg_stat_database_tup_deleted{instance=\"netcup-prod-node\",datname=~\".+\"}[10m])",
+              "expr": "rate(pg_stat_database_tup_deleted{instance=\"v2202608397723499373\",datname=~\".+\"}[10m])",
               "interval": "",
               "legendFormat": "Deletes",
               "refId": "C"
@@ -2802,7 +2802,7 @@
                 "type": "prometheus",
                 "uid": "PBFA97CFB590B2093"
               },
-              "expr": "rate(pg_stat_database_tup_fetched{instance=\"netcup-prod-node\",datname=~\".+\"}[10m])",
+              "expr": "rate(pg_stat_database_tup_fetched{instance=\"v2202608397723499373\",datname=~\".+\"}[10m])",
               "interval": "",
               "legendFormat": "Fetched",
               "refId": "A"
@@ -2812,7 +2812,7 @@
                 "type": "prometheus",
                 "uid": "PBFA97CFB590B2093"
               },
-              "expr": "rate(pg_stat_database_tup_returned{instance=\"netcup-prod-node\",datname=~\".+\"}[10m])",
+              "expr": "rate(pg_stat_database_tup_returned{instance=\"v2202608397723499373\",datname=~\".+\"}[10m])",
               "interval": "",
               "legendFormat": "Returned",
               "refId": "B"
@@ -2850,7 +2850,7 @@
                 "type": "prometheus",
                 "uid": "PBFA97CFB590B2093"
               },
-              "expr": "sum by (mode) (pg_locks_count{instance=\"netcup-prod-node\",datname=~\".+\"})",
+              "expr": "sum by (mode) (pg_locks_count{instance=\"v2202608397723499373\",datname=~\".+\"})",
               "legendFormat": "{{mode}}",
               "refId": "A"
             }
@@ -2887,7 +2887,7 @@
                 "type": "prometheus",
                 "uid": "PBFA97CFB590B2093"
               },
-              "expr": "rate(pg_stat_database_deadlocks{instance=\"netcup-prod-node\",datname=~\".+\"}[10m])",
+              "expr": "rate(pg_stat_database_deadlocks{instance=\"v2202608397723499373\",datname=~\".+\"}[10m])",
               "interval": "",
               "legendFormat": "deadlocks",
               "refId": "A"
@@ -2925,7 +2925,7 @@
                 "type": "prometheus",
                 "uid": "PBFA97CFB590B2093"
               },
-              "expr": "rate(pg_stat_database_temp_files{instance=\"netcup-prod-node\",datname=~\".+\"}[10m])",
+              "expr": "rate(pg_stat_database_temp_files{instance=\"v2202608397723499373\",datname=~\".+\"}[10m])",
               "interval": "",
               "legendFormat": "temp_files",
               "refId": "A"

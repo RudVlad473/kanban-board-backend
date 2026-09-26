@@ -444,9 +444,9 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "sum(rate(container_network_receive_bytes_total{job=\"kubelet\",metrics_path=\"/metrics/cadvisor\",container!=\"\",container!=\"POD\"}[5m])) by (namespace, pod, container)",
+          "expr": "sum(rate(container_network_receive_bytes_total{job=\"kubelet\",metrics_path=\"/metrics/cadvisor\"}[5m])) by (namespace, pod)",
           "interval": "",
-          "legendFormat": "{{container}}",
+          "legendFormat": "{{namespace}}/{{pod}}",
           "refId": "A"
         }
       ],
@@ -544,9 +544,9 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
-          "expr": "sum(rate(container_network_transmit_bytes_total{job=\"kubelet\",metrics_path=\"/metrics/cadvisor\",container!=\"\",container!=\"POD\"}[5m])) by (namespace, pod, container)",
+          "expr": "sum(rate(container_network_transmit_bytes_total{job=\"kubelet\",metrics_path=\"/metrics/cadvisor\"}[5m])) by (namespace, pod)",
           "interval": "",
-          "legendFormat": "{{container}}",
+          "legendFormat": "{{namespace}}/{{pod}}",
           "refId": "A"
         }
       ],

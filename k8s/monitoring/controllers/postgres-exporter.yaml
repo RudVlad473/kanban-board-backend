@@ -46,11 +46,22 @@ spec:
         passwordSecret:
           name: postgres-exporter
           key: password
-
-    extraArgs:
-      - --auto-discover-databases
-      - --collector.postmaster
-      - --collector.stat_statements
+      # BUG FIXED live (13-07 Task 2): extraArgs must nest under config:, not sit at the values
+      # top level.
+      #
+      # A top-level `extraArgs:` key is a real key elsewhere in this chart's values.yaml (line
+      # 226 area, next to logLevel/logFormat) but the Deployment template
+      # (templates/deployment.yaml) reads `.Values.config.extraArgs`, not `.Values.extraArgs` --
+      # the wrong nesting is silently ignored (Helm does not reject unknown values keys), so the
+      # rendered container args were only `--config.file=... --web.listen-address=...`, with
+      # neither flag below ever reaching the exporter binary. Confirmed live via
+      # `k3s kubectl get deployment ... -o jsonpath='{.spec.template.spec.containers[0].args}'`,
+      # which showed the two flags missing entirely; the postgres-exporter dashboard's "PostgreSQL
+      # Uptime"/"Query rate"/"Average query runtime" panels stayed empty as a direct result.
+      extraArgs:
+        - --auto-discover-databases
+        - --collector.postmaster
+        - --collector.stat_statements
 
     # The NetworkPolicy contract (13-04, D-11): only a pod carrying this label may reach Postgres
     # port 5432 from the monitoring namespace.
