@@ -87,5 +87,6 @@ spec:
       middlewares:
         - name: redirect-https
       services:
-        - name: kps-grafana
+        # Same fix as the `grafana` IngressRoute above -- see that block's comment.
+        - name: kube-prometheus-stack-grafana
           port: 80

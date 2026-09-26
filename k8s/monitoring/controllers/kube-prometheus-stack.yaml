@@ -7,14 +7,17 @@
 # latest release on the prometheus-community/helm-charts index as of 2026-09-25 -- recorded here,
 # not "latest", per D-12's pinning discipline.
 #
-# fullnameOverride: kps -- Service names are deterministic and independent of the Flux
-# HelmRelease's own release name. Rendered Service names (verified via `helm template` against
-# this exact chart/version/values, recorded so a later plan does not have to re-derive them):
-#   - Prometheus:        kps-prometheus (port 9090)
-#   - Grafana:            kps-grafana (chart default: release "kps" does not contain "grafana",
-#                          so grafana.fullname falls back to "<release>-grafana"; port 80 -> 3000)
-#   - kube-state-metrics: kps-kube-state-metrics
-#   - node-exporter:      kps-prometheus-node-exporter (DaemonSet)
+# fullnameOverride: kps -- CORRECTED live (13-07 Task 2): this ONLY renames objects the PARENT
+# chart templates directly. Grafana is a subchart, and its own `grafana.fullname` helper reads
+# `.Release.Name` (the Flux HelmRelease's `metadata.name`, `kube-prometheus-stack`) instead --
+# fullnameOverride does not propagate into a subchart's own naming unless that subchart is given
+# its own fullnameOverride too. Rendered Service names (re-verified via `helm template` against
+# this exact chart/version/values after the original claim below proved wrong live -- the
+# Grafana IngressRoute routed to a Service with zero Endpoints for ~12 hours before this fix):
+#   - Prometheus:        kps-prometheus (port 9090) -- parent chart, fullnameOverride applies
+#   - Grafana:            kube-prometheus-stack-grafana (subchart; port 80 -> 3000)
+#   - kube-state-metrics: kube-prometheus-stack-kube-state-metrics (subchart, same reason)
+#   - node-exporter:      kube-prometheus-stack-prometheus-node-exporter (subchart DaemonSet, same reason)
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
