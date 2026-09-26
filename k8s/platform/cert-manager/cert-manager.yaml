@@ -1,10 +1,23 @@
 # cert-manager, deployed via Flux HelmRelease (D-13, D-09: third-party charts go through
 # HelmRepository/HelmRelease rather than hand-written manifests). Owns the ACME certificate
 # lifecycle for all three hostnames (prod, nonprod's own overlay in 13-06, monitoring below).
+#
+# BUG FIXED live during 13-06's maintenance window (2026-09-26): neither object below carried an
+# explicit `metadata.namespace`, and this directory's own kustomization.yaml sets no top-level
+# `namespace:` either -- so `kubectl apply` rejected the HelmRepository outright with
+# "HelmRepository/jetstack namespace not specified: the server could not find the requested
+# resource", confirmed live via `kubectl describe kustomization cert-manager -n flux-system`.
+# Fixed to the same convention k8s/monitoring/controllers/repositories.yaml and
+# kube-prometheus-stack.yaml already establish: HelmRepository objects (the reconciled Flux
+# Source, not the chart's own release namespace) live in `flux-system`, cross-referenced by the
+# HelmRelease's `sourceRef.namespace`. HelmRelease itself also needs its own `metadata.namespace`
+# for the same reason; `spec.targetNamespace: cert-manager` (unchanged) is a separate field --
+# where the CHART's rendered objects land, not where this HelmRelease object itself lives.
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: HelmRepository
 metadata:
   name: jetstack
+  namespace: flux-system
 spec:
   interval: 1h
   url: https://charts.jetstack.io
@@ -13,6 +26,7 @@ apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
   name: cert-manager
+  namespace: flux-system
 spec:
   interval: 1h
   chart:
@@ -26,6 +40,7 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: jetstack
+        namespace: flux-system
   install:
     createNamespace: true
   targetNamespace: cert-manager
