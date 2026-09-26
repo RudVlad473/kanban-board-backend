@@ -103,12 +103,23 @@ spec:
           # ready while the init scripts are still running. Forcing TCP means ready cannot be
           # reached until the real server is listening -- same rationale as the Compose
           # healthcheck this readiness probe replaces.
+          # BUG FIXED live during 13-06's maintenance window (2026-09-26): `$(POSTGRES_USER)`
+          # inside an exec probe's command string is NOT expanded by Kubernetes -- that
+          # `$(VAR)` field-reference syntax only expands inside `command`/`args`/`env.value`
+          # fields, never inside a probe's own shell string. The container's `sh -c` shell
+          # instead parsed it as command substitution (run `POSTGRES_USER` as a command),
+          # which failed with "POSTGRES_USER: not found" and substituted nothing, producing
+          # `pg_isready: error: too many command-line arguments (first is "postgres")` --
+          # confirmed live via `kubectl describe pod postgres-0`. `$POSTGRES_USER` (real shell
+          # variable expansion, no parens) is correct here: the container's own environment
+          # already carries POSTGRES_USER via `envFrom: postgres-init` (confirmed via
+          # `kubectl exec ... env`), so the shell expands it directly.
           readinessProbe:
             exec:
               command:
                 - sh
                 - -c
-                - "pg_isready -h 127.0.0.1 -U $(POSTGRES_USER) -d postgres"
+                - "pg_isready -h 127.0.0.1 -U $POSTGRES_USER -d postgres"
             periodSeconds: 5
             failureThreshold: 8
           # MEASURED (carried from docker-compose.prod.yml's postgres comment, Plan 11-03/11-08,
