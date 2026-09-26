@@ -38,3 +38,9 @@ spec:
     logs:
       access:
         enabled: true
+        # format: json added Plan 13-08 (D-13 acceptance criterion) -- 13-02's original
+        # `enabled: true` alone left the chart on its own default (Common Log Format), discovered
+        # live while parsing the access log for the two-IP rate-limit proof: real lines came back
+        # as `<ip> - - [date] "GET / HTTP/1.1" 404 ...`, not JSON, so a ClientHost/DownstreamStatus
+        # field lookup silently matched nothing rather than erroring.
+        format: json
