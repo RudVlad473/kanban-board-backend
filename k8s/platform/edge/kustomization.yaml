@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - clusterissuers.yaml
   - certificate-monitoring.yaml
+  - ingressroute-monitoring.yaml
