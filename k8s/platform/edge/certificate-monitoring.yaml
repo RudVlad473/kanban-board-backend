@@ -1,7 +1,8 @@
 # Lives here (k8s/platform/edge), not in a future k8s/monitoring/, so the monitoring hostname can
-# validate against letsencrypt-staging in the 13-06 window before Grafana itself exists in-cluster
+# validate against Let's Encrypt in the 13-06 window before Grafana itself exists in-cluster
 # (D-13's "all three hostnames" requirement; D-17 moves the observability stack to k3s only at the
-# prod cutover). issuerRef is the staging issuer, matching every other Certificate in this phase.
+# prod cutover). 13-06's W3 flips this to the production issuer, after validating against staging
+# in the same window as the other two Certificates.
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -12,5 +13,5 @@ spec:
   dnsNames:
     - kanban-board-rud-vlad-473-monitoring.duckdns.org
   issuerRef:
-    name: letsencrypt-staging
+    name: letsencrypt-production
     kind: ClusterIssuer
