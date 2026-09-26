@@ -31,4 +31,14 @@ credential needs to be shared with an agent again for verification, prefer havin
 that specific check themselves, or generate a short-lived credential for the session rather than
 reusing a long-lived one.
 
-Not started.
+## Resolution
+
+Superseded by the Phase 13 k3s cutover, not by rotating the leaked password directly: the new
+kube-prometheus-stack Grafana (13-03/13-07) starts from a fresh, empty `grafana.db` (persisted via
+its own PVC, D-18 explicitly chose "no grafana.db carry-over" over migrating Compose's SQLite
+state) with only the `admin` account provisioned via Secret `monitoring/grafana-admin` (D-10).
+Confirmed live (13-07 Task 2): `GET /api/org/users` on the new Grafana lists exactly one user
+(`admin`) — no `viewer` account exists, so the leaked credential from the 2026-09-07 session no
+longer authenticates against anything. The old Compose Grafana instance the credential belonged to
+is stopped (13-06) and will be deleted outright once 13-10's D-08 gate passes, permanently retiring
+the account the leak concerned.

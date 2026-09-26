@@ -37,3 +37,18 @@ Option 1 is simpler and doesn't require guessing the current live value. After f
 an actual authenticated login through the public Grafana URL (`https://<monitoring-hostname>/login`)
 and confirm all three dashboards render real data — closing the gap Phase 12's verification left
 open.
+
+## Resolution
+
+Superseded rather than fixed in place: Phase 13's k3s cutover replaces the whole Grafana instance
+this todo describes (Compose's `grafana-data` named volume and its persisted admin account are
+gone entirely once 13-10 deletes the Compose stack). The new Grafana (kube-prometheus-stack, plan
+13-03/13-07) takes its admin password from Kubernetes Secret `monitoring/grafana-admin`, built
+directly from `.env.prod`'s `GRAFANA_ADMIN_PASSWORD` at activation time (13-07 Task 1, D-10) — there
+is no first-boot-only persisted account to drift out of sync with `.env.prod` going forward,
+because the Secret is the single source of truth on every reconcile.
+
+Verified live (13-07 Task 1): authenticated `GET /api/user` against the new Grafana with the
+`.env.prod` password returned `"login":"admin","isGrafanaAdmin":true` — closing this todo's own
+stated verification bar (an actual authenticated login, all three dashboards rendering real data,
+confirmed again in 13-07 Task 2's per-panel diagnosis pass).

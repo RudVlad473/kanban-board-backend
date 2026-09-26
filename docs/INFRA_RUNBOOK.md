@@ -323,10 +323,134 @@ plan — D-12 defers it explicitly.
 Not yet attempted: certificate issuance — that's plan 05-04's job once Caddy is actually deployed
 and can run its own HTTP-01 challenge against this hostname.
 
+## Observability on k3s — Plan 13-07 (2026-09-26)
+
+The observability stack (kube-prometheus-stack, Loki, Alloy, postgres-exporter) is live in the
+`monitoring` namespace, activated at the prod cutover per D-17. This section records current
+state; the live activation session itself, including three real bugs found and fixed only once
+the stack reconciled against the actual cluster for the first time, is `docs/history/` material —
+see the plan's own commit history (`13-07`-prefixed commits on `main`) for the full account.
+
+### 1. Activation
+
+Both monitoring Kustomizations (`monitoring-controllers`, `monitoring`) unsuspended in 13-07 Task
+1. Secrets `monitoring/grafana-admin` (keys `admin-user`/`admin-password`) and
+`monitoring/postgres-exporter` (key `password`) created directly on the VM via `kubectl`, built
+from `.env.prod`, never committed. All four HelmReleases (`kube-prometheus-stack`, `loki`,
+`alloy`, `postgres-exporter`) report `Ready`.
+
+### 2. Targets
+
+17 active Prometheus targets, 0 down, at last verification. No `kube-controller-manager`,
+`kube-scheduler`, `kube-etcd` or `kube-proxy` job exists (k3s runs these in-process; Phase
+13-RESEARCH.md Pitfall 5). Present: `node-exporter`, `kubelet` (three sub-targets, including
+`/metrics/cadvisor`), `kube-state-metrics`, `postgres-exporter-prometheus-postgres-exporter`, and
+`monitoring/redpanda` scraped from **both** `kanban-prod` and `kanban-nonprod` namespaces (`env`
+label `prod`/`nonprod` respectively, via the PodMonitor's relabeling).
+
+### 3. Log namespaces
+
+`GET /loki/api/v1/label/namespace/values` returns `cert-manager`, `flux-system`, `kanban-data`,
+`kanban-nonprod`, `kanban-prod`, `kube-system`, `monitoring` — all six namespaces the must-haves
+require, plus `cert-manager` as a bonus.
+
+### 4. Panel diagnosis
+
+Every panel across all three dashboards was queried directly against live Prometheus
+(`/api/v1/query`, macros substituted) and, for the public shares, via `/api/ds/query` /
+`/api/public/dashboards/<token>/panels/<id>/query`.
+
+| Dashboard | Panels | Data-OK | Diagnosed |
+|---|---|---|---|
+| VM Host Metrics (node-exporter-full) | 124 | 104 | 20 (below) |
+| CPU/Memory & Network Usage (cAdvisor) | 6 | 6 | 0 |
+| Postgres Internals | 35 | 35 | 0 |
+
+Three real bugs were found and fixed live, none of them a runtime data problem — all three were
+manifest/dashboard-JSON defects that only manifested once the stack ran for real:
+
+1. **Grafana crash-looped on activation** — `sidecar:` sat at the values top level instead of
+   nested under `grafana:`, so the chart's own default (`defaultDatasourceEnabled: true`)
+   rendered a second, chart-managed datasource ConfigMap also marked `isDefault: true` alongside
+   this task's own literal-UID one. Fixed by nesting `sidecar:` under `grafana:`
+   (`k8s/monitoring/controllers/kube-prometheus-stack.yaml`).
+2. **Grafana's public IngressRoutes 404'd** — the real rendered Service name is
+   `kube-prometheus-stack-grafana`, not `kps-grafana` as the header comment assumed;
+   `fullnameOverride: kps` only renames objects the parent chart templates directly, not a
+   subchart's own naming (`grafana.fullname` reads `.Release.Name`). Fixed in
+   `k8s/monitoring/configs/ingressroute.yaml` (all three routes across both IngressRoute
+   objects).
+3. **postgres-exporter never actually connected**, then never collected `pg_stat_statements`/
+   postmaster metrics once it did:
+   - The `monitoring` role's `GRANT CONNECT` on `kanban_prod`/`kanban_nonprod` (from
+     `k8s/data/postgres/init/02-create-monitoring-role.sh`, which runs only once against an empty
+     PGDATA) was silently reverted when 13-06's incident recovery dropped and recreated both
+     databases mid-window — a `CREATE DATABASE` resets ACLs to Postgres defaults. Fixed by
+     re-applying `GRANT CONNECT ON DATABASE kanban_prod|kanban_nonprod TO monitoring;` directly
+     against the running instance (not a manifest change — the init script itself is correct for
+     any future first boot).
+   - The HelmRelease's `extraArgs` (`--auto-discover-databases`, `--collector.postmaster`,
+     `--collector.stat_statements`) sat at the values top level; the chart's Deployment template
+     reads `.Values.config.extraArgs`, so none of the three flags ever reached the exporter
+     binary. Fixed by nesting `extraArgs` under `config:`
+     (`k8s/monitoring/controllers/postgres-exporter.yaml`).
+
+Two label-mismatch bugs in the dashboard JSON itself (Rule 1, not infra):
+
+4. **node-exporter-full + Postgres Internals**: the `instance` label was a placeholder
+   (`netcup-prod-node`) that was never the real k3s node name (`v2202608397723499373`). Every
+   panel using it returned empty until the literal was corrected in both dashboard JSON files.
+5. **node-exporter-full**: every panel's `job` label read `prometheus-node-exporter`; the chart
+   deliberately sets `jobLabel: node-exporter` on the ServiceMonitor ("to match standard common
+   usage in rules and grafana dashboards" — the chart's own comment). Corrected to `node-exporter`
+   across all 284 occurrences.
+6. **cAdvisor's two network-traffic panels** filtered on `container!=""`/`container!="POD"`, but
+   `container_network_*` metrics are reported per-pod (the pod's shared network namespace), never
+   carrying a `container` label — the filter matched zero series by construction. Removed the
+   filter, grouped by `namespace`/`pod` instead.
+
+The 20 diagnosed-but-not-fixed node-exporter-full panels (43 individual empty query-targets across
+them — several panels overlay multiple series, only some of which are affected) are all genuine,
+accepted uncollected-metric gaps — none is a label mismatch or a fixable bug:
+- **Kernel/hardware capability absent**: `node_processes_*` (processes collector not compiled
+  in/registered), `hwmon`/power-supply/fan-speed metrics (collector runs successfully but finds
+  no physical sensors — this is a virtualized VPS), `node_pressure_irq_stalled_seconds_total`
+  (IRQ PSI support absent on this kernel; the other four PSI metrics — CPU, memory ×2, IO ×2 —
+  all exist and render).
+- **Collector never enabled**: `systemd` (units/sockets), `interrupts` (per-IRQ detail),
+  `cpufreq` scaling detail, `tcpstat` (`node_tcp_connection_states`, feeds three of the four TCP
+  panels — the fourth, TCP Connections, is mostly populated via `netstat`, only its `MaxConn`
+  series is absent) — none of these collectors are turned on by the chart's node-exporter
+  subchart values, matching the Compose-era deployment's own scope.
+
+### 5. Public shares
+
+All three PUBLIC_DASHBOARDS uids recreated as public shares on the new Grafana (D-18, corrected
+to three), verified via `GET /api/dashboards/public-dashboards` and each token's own
+`/api/public/dashboards/<token>` (200) plus a real panel query returning data:
+
+| Dashboard uid | README label | Notes |
+|---|---|---|
+| `rYdddlPWk` (node-exporter-full / VM Host Metrics) | Network & OS | linked in README |
+| `pMEd7m0Mz` (cadvisor) | CPU & Memory metrics | linked in README |
+| `v5ciIbUZz` (postgres-exporter / Postgres Internals) | — | no README link; URL in `13-07-SUMMARY.md` |
+
+No token beyond what README already publishes is recorded here.
+
+### 6. Todo closures
+
+`2026-09-08-grafana-admin-password-drift-from-env-prod.md` → completed: superseded by the new
+Grafana's Secret-sourced admin password (D-10), which has no first-boot-only persisted account to
+drift from `.env.prod`. `2026-09-07-rotate-grafana-viewer-password-leaked-in-session.md` →
+completed: the new Grafana starts from a fresh `grafana.db` with only `admin` provisioned — no
+`viewer` account exists for the leaked credential to still authenticate against.
+
 ## Maintenance note
 
 If the provider, IP, OS, spec, or firewall policy changes, update this document in the same
 change — it is the single checked-in description of what the production host actually is, as
 opposed to what any given plan intended it to be. **File list (13-02 addition):** `infra/vm/k3s/`
 (k3s config + pinned install wrapper) now sits alongside `infra/vm/docker-user-firewall.*` as the
-VM-provisioning files this document describes.
+VM-provisioning files this document describes. **File list (13-07 addition):** the "Observability
+on k3s" section above now describes `k8s/monitoring/{controllers,configs}/` as the live-reconciled
+observability manifests.

@@ -94,9 +94,11 @@ K8S_DATASOURCES = "k8s/monitoring/configs/datasources.yaml"
 K8S_HELMRELEASE = "k8s/monitoring/controllers/kube-prometheus-stack.yaml"
 
 # Shared through Grafana's public-dashboard feature, so subject to every invariant below.
-# Verified against GET /api/dashboards/public-dashboards on the VM, 2026-09-12. Same file names,
-# same uids, in both scopes -- the k8s copies are a runtime-label rewrite of the identical
-# dashboard, not a new one.
+# Verified against GET /api/dashboards/public-dashboards on the new k8s Grafana
+# (kube-prometheus-stack, image 13.2.1), 2026-09-26 (Phase 13 plan 07 Task 2 -- three shares
+# recreated on the new Grafana after the prod cutover; D-18 corrected). Same file names, same
+# uids, in both scopes -- the k8s copies are a runtime-label rewrite of the identical dashboard,
+# not a new one.
 PUBLIC_DASHBOARDS = {
     "node-exporter-full.json": "rYdddlPWk",
     "cadvisor.json": "pMEd7m0Mz",

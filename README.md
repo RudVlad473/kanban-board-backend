@@ -49,8 +49,8 @@ to replace this placeholder link.
 [**Watch the dashboards**](./docs/demo/kanban-board-backend-dashboards-demo.mp4) — a walkthrough
 of the live Grafana dashboards below, both public and reachable with no login.
 
-- [Network & OS](https://kanban-board-rud-vlad-473-monitoring.duckdns.org/public-dashboards/7db62007a2114c988c21c4cf6eac9776)
-- [CPU & Memory metrics](https://kanban-board-rud-vlad-473-monitoring.duckdns.org/public-dashboards/5a72e5df7fd54618ae28972cabcd8846)
+- [Network & OS](https://kanban-board-rud-vlad-473-monitoring.duckdns.org/public-dashboards/9b5bf7c8d3c743e1868eed84c9d3e5df)
+- [CPU & Memory metrics](https://kanban-board-rud-vlad-473-monitoring.duckdns.org/public-dashboards/cb7a5fc49fcb43108ba637fee7639b6d)
 
 ## Local development
 
