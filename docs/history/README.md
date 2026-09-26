@@ -51,6 +51,7 @@ single event: a deploy, an incident, a resource measurement, or a cutover.
 
 - [2026-09-25 k3s install and interim bridge — Plan 13-02](2026-09-25-k3s-install-and-interim-bridge.md)
 - [2026-09-25 Nonprod on k3s — Plan 13-05](2026-09-25-nonprod-on-k3s.md)
+- [2026-09-26 Production cutover to k3s — Plan 13-06](2026-09-26-production-cutover-to-k3s.md)
 
 ## Ungrouped
 

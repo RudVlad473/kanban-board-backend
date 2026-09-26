@@ -68,6 +68,40 @@ No further concrete harm was observed: no commits were lost, and nothing beyond 
 
 **The rule:** for inspecting live/generated output — OpenAPI docs, an actual HTTP response shape, anything you'd otherwise print-and-eyeball from a throwaway test — bring up the local dev stack and `curl` it directly instead of writing a probe test class. See `.claude/CLAUDE.md`'s "Local Development Server" section for the exact commands (env vars, ports, the `/api/docs` path gotcha). Reserve a real test class for an assertion that should live on permanently as regression coverage, not for one-off manual inspection.
 
+### 8. Push a staged multi-commit cutover by explicit SHA per gate, never by branch tip
+
+**What happened:** a plan (13-06, production cutover to k3s) staged four sequentially-dependent
+commits (W1→W2→W3→W4) on one local branch, deliberately so each could be pushed to `main`
+individually at its own gated point during a live maintenance window — W2 only after a `docker
+ps` empty-guard proved Compose was fully stopped, W3 only after certificate staging-validation,
+W4 only at the CI-retarget step. After pushing W1 alone and building a bug fix on top of it, the
+fix was pushed with `git push origin <fix-sha>:main` — but `<fix-sha>` resolved to the tip of the
+whole local branch, which by then already contained W2, W3 and W4 committed on top (built that
+way deliberately for the plan's own gate-checking in the prior task). The push silently included
+all three later commits. Flux reconciled everything within seconds: production's app pod started
+against an empty, freshly-`initdb`'d database and ran Flyway against it before any real
+data had been dumped or restored, and the public edge briefly served HTTP 502. See
+`docs/history/2026-09-26-production-cutover-to-k3s.md`'s "Incident: premature multi-window push"
+for the full account and recovery.
+
+**Why:** a git branch tip is the accumulation of everything committed on it, not a marker for "the
+next thing I meant to push." Staging W1→W2→W3→W4 sequentially on one branch is the right way to
+build them (each later commit's diff review, and Task 2's own per-commit gate-checking, depend on
+seeing the cumulative state), but that same sequencing means `<branch>` and `<branch's tip SHA>`
+both name every commit on the branch, not just the one intended for this push. Nothing about `git
+push origin <sha>:main` warns that `<sha>` might resolve further than expected — it is exactly as
+valid a ref whether it names the commit meant for this gate or three gates further along.
+
+**The rule:** when a plan stages multiple sequentially-dependent commits on one local branch
+specifically so they can be pushed individually at separate gated points, push each one by its
+own **explicit commit SHA** captured at the moment that gate is reached (`git push origin
+<w1-sha>:main`, then later `git push origin <w2-sha>:main`, etc.), never by branch tip or `HEAD`.
+Before every gated push, run `git log --oneline <last-pushed-sha>..<intended-sha>` and confirm the
+list shown is exactly what that gate authorizes — if it shows more than one commit, or a commit
+touching files outside that gate's scope, stop before pushing. This generalizes past this specific
+cutover: any staged multi-commit rollout with sequential dependencies (a schema migration split
+into gated steps, a feature flag rollout with per-stage commits) has the same failure mode.
+
 ## Adding a lesson
 
 New lessons are appended as a new `###` section under `## Lessons`, numbered with the next integer. Each lesson carries exactly three bolded labels, in this order: **What happened**, **Why**, **The rule**. This differs from `CODE_STYLE.md`'s rule shape, which requires a bad-vs-good Java code example — that contract does not apply here, since these lessons describe process, not code. Do not copy the code-example requirement from the sibling file when adding a lesson.
