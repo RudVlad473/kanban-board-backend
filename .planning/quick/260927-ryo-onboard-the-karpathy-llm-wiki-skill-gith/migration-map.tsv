@@ -1,0 +1,72 @@
+src	dest	kind	summary
+docs/ARCHITECTURE.md	docs/wiki/architecture/application-architecture.md	wiki	Engineering mechanisms behind the README summary, each claim tied to the class, task, migration or test that proves it.
+docs/AUTH_FLOWS.md	docs/wiki/architecture/auth-flows.md	wiki	What a client observes on the signup and signin routes, and what silently breaks an automated test suite driving them.
+docs/CODE_STYLE.md	docs/wiki/conventions/code-style.md	wiki	Append-only Java code-style rules that agents and contributors follow in this repository.
+docs/DIAGRAM_CONVENTIONS.md	docs/wiki/conventions/diagram-conventions.md	wiki	How architecture diagrams snap to Kruchten's 4+1 view model, plus flowchart layout rules.
+docs/SESSION_LESSONS.md	docs/wiki/conventions/session-lessons.md	wiki	Append-only operational lessons from running GSD workflows here: git hygiene, push cadence, hooks, host memory contention.
+docs/INFRA_ARCHITECTURE.md	docs/wiki/infra/infra-architecture.md	wiki	Production deployment topology after the k3s cutover: single-node k3s on a Netcup VPS, Flux, Traefik, cert-manager, self-hosted Postgres and Redpanda.
+docs/INFRA_RUNBOOK.md	docs/wiki/infra/infra-runbook.md	wiki	The actual provisioned state of the production VM and how it is locked down, with no secrets recorded.
+docs/LOCAL_DEV.md	docs/wiki/infra/local-dev-stack.md	wiki	Running the local docker-compose development stack, why it is shaped that way, and what it is not.
+docs/learning/00-README.md	docs/wiki/learning/00-README.md	wiki	How to read the learning guide: audience, chapter order and the Simplified Technical English it uses.
+docs/learning/01-domain-model-and-schema.md	docs/wiki/learning/01-domain-model-and-schema.md	wiki	The five domain entities, their relationships, primary keys and PostgreSQL schema.
+docs/learning/02-persistence-and-queries.md	docs/wiki/learning/02-persistence-and-queries.md	wiki	Reading and writing the Kanban graph through Spring Data JPA and Hibernate, where request cost is a count of SQL statements.
+docs/learning/03-optimistic-locking.md	docs/wiki/learning/03-optimistic-locking.md	wiki	Detecting conflicting writes with versions: stale writes get 409, truly parallel losers get 500 (a known gap).
+docs/learning/04-service-layer-and-access-control.md	docs/wiki/learning/04-service-layer-and-access-control.md	wiki	Where every business rule and the only access control live: ownership checks, ordering, uniqueness, cascades, event publication.
+docs/learning/05-api-layer.md	docs/wiki/learning/05-api-layer.md	wiki	Turning HTTP into service calls and results into JSON; the status-code and error-code contract the frontend reads.
+docs/learning/06-security-and-sessions.md	docs/wiki/learning/06-security-and-sessions.md	wiki	Caller identity, server-side sessions, refusing unauthenticated requests and limiting password attempts.
+docs/learning/07-events-and-activity-feed.md	docs/wiki/learning/07-events-and-activity-feed.md	wiki	Domain events to Kafka and their consumption into each board's activity log: delivery semantics, idempotency, schema evolution.
+docs/learning/08-testing-strategy.md	docs/wiki/learning/08-testing-strategy.md	wiki	Proving every layer against real Postgres, a real Spring context and a real Kafka-protocol broker instead of mocks.
+docs/learning/09-build-quality-and-ci.md	docs/wiki/learning/09-build-quality-and-ci.md	wiki	From source tree to a tested, scanned, pinned Docker image, and the gates deciding what reaches production.
+docs/learning/10-infrastructure-and-deployment.md	docs/wiki/learning/10-infrastructure-and-deployment.md	wiki	The physical deployment on one Netcup VPS, and the guarantees and limits of that box.
+docs/learning/11-observability.md	docs/wiki/learning/11-observability.md	wiki	Host, container, Postgres and Redpanda metrics and container logs, shown in self-hosted Grafana.
+docs/history/2026-08-16-automated-deploy-task-2-and-task-3.md	docs/raw/infra-history/2026-08-16-automated-deploy-task-2-and-task-3.md	raw-md
+docs/history/2026-08-16-deploy-user-setup-task-1.md	docs/raw/infra-history/2026-08-16-deploy-user-setup-task-1.md	raw-md
+docs/history/2026-08-16-manual-deploy-task-1.md	docs/raw/infra-history/2026-08-16-manual-deploy-task-1.md	raw-md
+docs/history/2026-08-16-manual-deploy-task-2-schema-registry-cutover-verification.md	docs/raw/infra-history/2026-08-16-manual-deploy-task-2-schema-registry-cutover-verification.md	raw-md
+docs/history/2026-08-16-manual-deploy-task-3-redpanda-resource-caps-measured.md	docs/raw/infra-history/2026-08-16-manual-deploy-task-3-redpanda-resource-caps-measured.md	raw-md
+docs/history/2026-08-17-decommission-record-task-3.md	docs/raw/infra-history/2026-08-17-decommission-record-task-3.md	raw-md
+docs/history/2026-08-17-external-network-audit-task-1.md	docs/raw/infra-history/2026-08-17-external-network-audit-task-1.md	raw-md
+docs/history/2026-08-17-log-rotation-observation-task-2.md	docs/raw/infra-history/2026-08-17-log-rotation-observation-task-2.md	raw-md
+docs/history/2026-08-18-nonprod-bring-up.md	docs/raw/infra-history/2026-08-18-nonprod-bring-up.md	raw-md
+docs/history/2026-08-18-nonprod-ci-deploy-identity-and-environment-scoped-secrets.md	docs/raw/infra-history/2026-08-18-nonprod-ci-deploy-identity-and-environment-scoped-secrets.md	raw-md
+docs/history/2026-08-18-nonprod-ci-health-gate-and-image-retention.md	docs/raw/infra-history/2026-08-18-nonprod-ci-health-gate-and-image-retention.md	raw-md
+docs/history/2026-08-18-nonprod-reset-endpoint.md	docs/raw/infra-history/2026-08-18-nonprod-reset-endpoint.md	raw-md
+docs/history/2026-08-18-nonprod-resource-measurement.md	docs/raw/infra-history/2026-08-18-nonprod-resource-measurement.md	raw-md
+docs/history/2026-08-19-automated-avro-schema-registration.md	docs/raw/infra-history/2026-08-19-automated-avro-schema-registration.md	raw-md
+docs/history/2026-08-20-digest-pinned-deploy-actions-task-1-live-tracer.md	docs/raw/infra-history/2026-08-20-digest-pinned-deploy-actions-task-1-live-tracer.md	raw-md
+docs/history/2026-08-26-ci-flyway-verification-over-ssh.md	docs/raw/infra-history/2026-08-26-ci-flyway-verification-over-ssh.md	raw-md
+docs/history/2026-08-26-decommission-record-neon.md	docs/raw/infra-history/2026-08-26-decommission-record-neon.md	raw-md
+docs/history/2026-08-26-postgres-memory-profile-correction.md	docs/raw/infra-history/2026-08-26-postgres-memory-profile-correction.md	raw-md
+docs/history/2026-08-26-provisioning-script-hardening.md	docs/raw/infra-history/2026-08-26-provisioning-script-hardening.md	raw-md
+docs/history/2026-08-26-self-hosted-postgres-cutover.md	docs/raw/infra-history/2026-08-26-self-hosted-postgres-cutover.md	raw-md
+docs/history/2026-08-26-self-hosted-postgres-resource-measurement.md	docs/raw/infra-history/2026-08-26-self-hosted-postgres-resource-measurement.md	raw-md
+docs/history/2026-09-02-triage-netcup-scp-screen-console.md	docs/raw/infra-history/2026-09-02-triage-netcup-scp-screen-console.md	raw-md
+docs/history/2026-09-07-log-aggregation.md	docs/raw/infra-history/2026-09-07-log-aggregation.md	raw-md
+docs/history/2026-09-07-monitoring-role-and-metrics-targets.md	docs/raw/infra-history/2026-09-07-monitoring-role-and-metrics-targets.md	raw-md
+docs/history/2026-09-08-caddy-resource-measurement.md	docs/raw/infra-history/2026-09-08-caddy-resource-measurement.md	raw-md
+docs/history/2026-09-08-deploy-scp-coverage-gap-quick-task-260908-sj9.md	docs/raw/infra-history/2026-09-08-deploy-scp-coverage-gap-quick-task-260908-sj9.md	raw-md
+docs/history/2026-09-08-observability-stack-resource-measurement.md	docs/raw/infra-history/2026-09-08-observability-stack-resource-measurement.md	raw-md
+docs/history/2026-09-12-public-grafana-dashboards-rendered-no-data-debug-session.md	docs/raw/infra-history/2026-09-12-public-grafana-dashboards-rendered-no-data-debug-session.md	raw-md
+docs/history/2026-09-25-k3s-install-and-interim-bridge.md	docs/raw/infra-history/2026-09-25-k3s-install-and-interim-bridge.md	raw-md
+docs/history/2026-09-25-nonprod-on-k3s.md	docs/raw/infra-history/2026-09-25-nonprod-on-k3s.md	raw-md
+docs/history/2026-09-26-production-cutover-to-k3s.md	docs/raw/infra-history/2026-09-26-production-cutover-to-k3s.md	raw-md
+docs/history/README.md	docs/raw/infra-history/2026-09-25-infrastructure-history-index.md	raw-md
+docs/incidents/2026-09-05-nonprod-syn-loss/README.md	docs/raw/incidents/2026-09-05-nonprod-syn-loss.md	raw-md
+docs/incidents/2026-09-05-nonprod-syn-loss/netcup-ticket.txt	docs/raw/incidents/2026-09-05-nonprod-syn-loss-netcup-ticket.md	raw-code
+docs/incidents/2026-09-05-nonprod-syn-loss/probe.csv	docs/raw/incidents/2026-09-05-nonprod-syn-loss-probe-results.md	raw-code
+docs/incidents/2026-09-05-nonprod-syn-loss/probe.sh	docs/raw/incidents/2026-09-05-nonprod-syn-loss-probe-script.md	raw-code
+docs/incidents/2026-09-24-netcup-network-diagnostics/README.md	docs/raw/incidents/2026-09-24-netcup-network-diagnostics.md	raw-md
+docs/incidents/2026-09-24-netcup-network-diagnostics/diagnostics.txt	docs/raw/incidents/2026-09-24-netcup-network-diagnostics-output.md	raw-code
+docs/plans/backend-modernization/01-kafka-activity-feed.md	docs/raw/backend-modernization-plan/2026-08-09-01-kafka-activity-feed.md	raw-md
+docs/plans/backend-modernization/02-n-plus-one-optimistic-locking.md	docs/raw/backend-modernization-plan/2026-08-01-02-n-plus-one-optimistic-locking.md	raw-md
+docs/plans/backend-modernization/02-optimistic-locking-ddl.sql	docs/raw/backend-modernization-plan/2026-08-17-02-optimistic-locking-ddl.md	raw-code
+docs/plans/backend-modernization/03-activity-log-ddl.sql	docs/raw/backend-modernization-plan/2026-08-05-03-activity-log-ddl.md	raw-code
+docs/plans/backend-modernization/03-flyway-openapi.md	docs/raw/backend-modernization-plan/2026-08-05-03-flyway-openapi.md	raw-md
+docs/plans/backend-modernization/04-password-hash-not-null-ddl.sql	docs/raw/backend-modernization-plan/2026-08-05-04-password-hash-not-null-ddl.md	raw-code
+docs/plans/backend-modernization/04-redis.md	docs/raw/backend-modernization-plan/2026-08-01-04-redis.md	raw-md
+docs/plans/backend-modernization/05-testcontainers.md	docs/raw/backend-modernization-plan/2026-08-06-05-testcontainers.md	raw-md
+docs/plans/backend-modernization/06-observability.md	docs/raw/backend-modernization-plan/2026-08-01-06-observability.md	raw-md
+docs/plans/backend-modernization/07-kubernetes-stretch.md	docs/raw/backend-modernization-plan/2026-08-01-07-kubernetes-stretch.md	raw-md
+docs/plans/backend-modernization/README.md	docs/raw/backend-modernization-plan/2026-08-17-backend-modernization-plan-overview.md	raw-md
+docs/plans/backend-modernization/STATUS.md	docs/raw/backend-modernization-plan/2026-08-17-backend-modernization-status.md	raw-md
+docs/MOCKUP_FEATURE_GAP.md	docs/raw/product/2026-08-08-mockup-vs-backend-feature-gap.md	raw-md
