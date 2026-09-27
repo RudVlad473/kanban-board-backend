@@ -572,6 +572,173 @@ drift from `.env.prod`. `2026-09-07-rotate-grafana-viewer-password-leaked-in-ses
 completed: the new Grafana starts from a fresh `grafana.db` with only `admin` provisioned — no
 `viewer` account exists for the leaked credential to still authenticate against.
 
+## k3s resource measurement — Plan 13-09 (2026-09-27)
+
+Every provisional memory value shipped since Phase 13 started (Traefik, Flux's 6 controllers,
+cert-manager's 3 components, kube-prometheus-stack, Loki, Alloy, postgres-exporter) is replaced
+here with a real restart-ladder measurement on this VM, using the same method Plan 12-05
+("Observability stack resource measurement") and Plan 12-06 ("Caddy resource measurement")
+established — halve from the provisional starting point, confirm `RestartCount=0` plus a clean
+`dmesg`/`lastState` across a full workload cycle at each rung, adopt with headroom, independently
+re-verify from a fresh recreate. `verify-k8s-invariants.py --no-provisional` now enforces that no
+value in `k8s/` regresses to an unmeasured guess.
+
+### Workload
+
+One cycle, fired at every rung: (1) the repository's established 54-request burst through the
+public HTTPS API against both environments (6 columns + 24 tasks + 24 subtasks, after
+signup+board); (2) all three Grafana dashboards fetched at once; (3) a wide Loki query across
+every namespace; (4) a self-signed Issuer+Certificate issued and deleted in scratch namespace
+`ladder-scratch`, exercising cert-manager without ACME rate limits; (5) at least 20s of settle.
+Traefik's own ladder additionally ran the repository's adversarial rate-limit workload
+(`scripts/loadtest/run-rate-limit-verification.sh`) at every rung, since that is its real peak
+path. Flux was suspended for the entire window (root Kustomization first, then every affected
+Kustomization/HelmRelease, resumed in reverse order once every value was committed).
+
+**A step the plan's own workload description assumed but this session could not perform**: the
+nonprod full reset (`POST /api/admin/reset?fullReset=true`) requires a shared-secret
+`X-Reset-Token` header (`APP_RESET_TOKEN`, never committed) that this session did not have and did
+not attempt to extract or guess — every other workload step ran as specified. This does not weaken
+the ladder's pass/fail signal (restartCount/dmesg/lastState), since the reset step's role in prior
+ladders was to exercise Postgres's own peak path, not any of the components measured here.
+
+### Iteration ladder
+
+| Component | Rungs (✓/✗) | Failure signal | Adopted |
+|---|---|---|---|
+| Traefik | 256Mi✓ → 128Mi✓ → 64Mi✓ → 32Mi✓ → 16Mi✗ | OOMKilled, anon-rss ~14.7MiB + file-rss ~75.3MiB vs 16Mi cap | **64Mi/32Mi** |
+| source-controller | 1Gi✓ → 512Mi✓ → 256Mi✓ → 128Mi✗ | OOMKilled, anon-rss ~126.7MiB + file-rss ~57.5MiB vs 128Mi cap | **256Mi/64Mi** |
+| kustomize-controller | shared rung with source-controller; clean through 256Mi | — (never failed at a tried rung) | **256Mi/64Mi** |
+| helm-controller | shared rung with source-controller; clean through 256Mi | — (never failed at a tried rung) | **256Mi/64Mi** |
+| notification-controller | shared rung with source-controller; clean through 256Mi | — (never failed at a tried rung) | **256Mi/64Mi** |
+| image-reflector-controller | shared rung with source-controller; clean through 256Mi | — (never failed at a tried rung) | **256Mi/64Mi** |
+| image-automation-controller | shared rung with source-controller; clean through 256Mi | — (never failed at a tried rung) | **256Mi/64Mi** |
+| cert-manager (controller) | shared rung with cainjector; clean through 64Mi | — (never failed at a tried rung) | **64Mi/16Mi** |
+| webhook | shared rung with cainjector; clean through 64Mi | — (never failed at a tried rung) | **64Mi/16Mi** |
+| cainjector | 128Mi✓ → 64Mi✓ → 32Mi✗ | OOMKilled, anon-rss ~31.7MiB + file-rss ~25.8MiB vs 32Mi cap | **64Mi/16Mi** |
+| prometheus-operator | 64Mi✓ → 32Mi✓ → 16Mi✗ | OOMKilled, anon-rss ~15.1MiB + file-rss ~43.5MiB vs 16Mi cap | **32Mi/25Mi** |
+| kube-state-metrics | 64Mi✓ → 32Mi✗ | OOMKilled, anon-rss ~31.5MiB + file-rss ~16.1MiB vs 32Mi cap | **64Mi/32Mi** |
+| node-exporter | 16Mi✓ → 8Mi✗ | OOMKilled, anon-rss ~7MiB + file-rss ~10MiB vs 8Mi cap | **16Mi/10Mi** |
+| Alloy | 75Mi✓ → 40Mi✗ | OOMKilled, anon-rss ~39.6MiB + file-rss ~108.2MiB vs 40Mi cap | **75Mi/40Mi** |
+| postgres-exporter | 16Mi✓ → 8Mi✗ | OOMKilled, both anon+file exceeding the 8Mi cap | **16Mi/10Mi** |
+| Prometheus | 512Mi✓ → 384Mi✓ → 320Mi✓ → 288Mi✓ → 256Mi✗ (confirmed live at session start) | OOMKilled, anon-rss climbing to the cap before being killed | **384Mi/288Mi** |
+| Grafana | 384Mi✓ → 256Mi✗ | OOMKilled | **768Mi/400Mi** (adopted directly, see below) |
+| Loki | 128Mi✓ → 64Mi✗ | OOMKilled, anon-rss ~62.9MiB + file-rss ~75.6MiB vs 64Mi cap | **192Mi/96Mi** |
+
+Loki's 128Mi/192Mi both initially appeared to fail the wide-query function check via HTTP 000; both
+were traced to a stale `kubectl port-forward` tunnel pointing at an already-deleted pod sandbox on
+this operator's side, not a Loki-side fault — confirmed by re-querying the same endpoint
+immediately after re-establishing the tunnel (HTTP 200, real log lines returned) with no
+intervening change to Loki itself. Recorded here so a future reader hitting an identical
+ambiguous signal checks the tunnel before re-running the ladder.
+
+Prometheus's real floor sits well above its Compose-era same-binary predecessor's 256Mi cap
+(Plan 12-05) because it now scrapes the whole k3s cluster (kube-apiserver, etcd, kubelet,
+cAdvisor) rather than just app-level metrics — `headStats` at measurement time showed 123,106
+series / 217,214 chunks, roughly 7x Plan 12-05's 18,523/56,568. Confirmed failing at 256Mi with
+**live evidence gathered before this ladder even began**: `dmesg` on this VM already showed
+repeated Prometheus OOM kills at its provisional cap, independent of any action this session took.
+
+Grafana repeated the exact pattern Plan 12-05's own same-day addendum documented for this same
+binary: a synthetic burst passes cleanly at 384Mi (anon usage ~297MiB, filling whatever headroom
+the cap allows), but that addendum recorded TWO real OOM kills under sustained concurrent
+dashboard/API load at that same adopted value, corrected same-day to 768Mi. Rather than repeat
+that mistake, 768Mi/400Mi was adopted directly from the historical corrected figure.
+
+### Carried values, re-confirmed
+
+App/Postgres/Redpanda keep their Compose-ladder `limits`; `requests` were re-confirmed from
+`max_over_time(container_memory_working_set_bytes{namespace=~"kanban-.*",container!=""}[24h])`
+against the now-live kube-prometheus-stack, filtered to currently-running pods:
+
+| Component | 24h peak (live) | Prior request | Action |
+|---|---|---|---|
+| app (prod) | 532.9MiB | 512Mi | Raised to **576Mi** (peak now exceeds the prior figure) |
+| app (nonprod) | 465.3MiB | 512Mi | Unchanged — still correct |
+| postgres | 65.5MiB | 128Mi | Unchanged — still correct |
+| redpanda (prod) | 370.0MiB | 384Mi | Unchanged — still correct |
+| redpanda (nonprod) | 179.9MiB | 320Mi | Unchanged deliberately — 320Mi is anchored to a documented ballooned-`__consumer_offsets`/`_schemas`-backlog crash-loop incident (quick task 260911-gkz), a worst case this 24h calm-load figure does not reproduce and cannot supersede |
+
+### Host coexistence
+
+`free -m` immediately after the full ladder session, all live workloads running:
+
+```
+               total        used        free      shared  buff/cache   available
+Mem:            7945        5659         398          42        2255        2286
+```
+
+Node allocatable memory: `8136004Ki` (≈7945Mi). Sum of every container's memory *request* across
+the cluster: **3405Mi (~3.33Gi)**, well under allocatable — roughly 43% utilization at requests,
+leaving genuine headroom for burst usage up to each container's own `limits`.
+
+### T0 — the D-08 24h observation clock
+
+Recorded once every measured value was live (Flux resumed, all 9 Kustomizations and 5
+HelmReleases `Ready`, `ladder-scratch` deleted) and the cluster held stable for 10+ minutes with
+zero restarts across every container:
+
+**T0 = `2026-09-27T10:44:46Z`**
+
+Restart-count snapshot at T0 (`k3s kubectl get pods -A -o json` reduced to
+namespace/pod/container=count), all 32 containers at **0**:
+
+```
+cert-manager/cert-manager-cert-manager-6dc76c98c4-pzrxx/cert-manager-controller=0
+cert-manager/cert-manager-cert-manager-cainjector-86b4d9d65-q5kmq/cert-manager-cainjector=0
+cert-manager/cert-manager-cert-manager-webhook-5494776bb-5dzwn/cert-manager-webhook=0
+flux-system/helm-controller-6cfc4b5569-cjjv6/manager=0
+flux-system/image-automation-controller-547964959d-hvdjv/manager=0
+flux-system/image-reflector-controller-698f4f4774-db6ph/manager=0
+flux-system/kustomize-controller-78bcd696c4-qhgjq/manager=0
+flux-system/notification-controller-6dfdff5777-qnrr7/manager=0
+flux-system/source-controller-64cb4f9f98-v74xd/manager=0
+kanban-data/postgres-0/postgres=0
+kanban-nonprod/app-86bf7556b8-fzb2q/app=0
+kanban-nonprod/redpanda-0/redpanda=0
+kanban-prod/app-75675978-88hlp/app=0
+kanban-prod/redpanda-0/redpanda=0
+kube-system/coredns-54996dc9b4-qpgjp/coredns=0
+kube-system/helm-install-traefik-5245k/helm=0
+kube-system/helm-install-traefik-crd-pxznn/helm=0
+kube-system/local-path-provisioner-77b9867795-mt4bn/local-path-provisioner=0
+kube-system/svclb-traefik-b5a1f81f-lhg6d/lb-tcp-443=0
+kube-system/svclb-traefik-b5a1f81f-lhg6d/lb-tcp-80=0
+kube-system/traefik-7fbf6755c7-scxcf/traefik=0
+monitoring/alloy-r4fr4/alloy=0
+monitoring/alloy-r4fr4/config-reloader=0
+monitoring/kps-operator-6bb88fd477-b7kkd/kube-prometheus-stack=0
+monitoring/kube-prometheus-stack-grafana-69ff8968bb-jnhkp/grafana=0
+monitoring/kube-prometheus-stack-grafana-69ff8968bb-jnhkp/grafana-sc-dashboard=0
+monitoring/kube-prometheus-stack-grafana-69ff8968bb-jnhkp/grafana-sc-datasources=0
+monitoring/kube-prometheus-stack-kube-state-metrics-77dbff459c-8mf8m/kube-state-metrics=0
+monitoring/kube-prometheus-stack-prometheus-node-exporter-s62rw/node-exporter=0
+monitoring/loki-0/loki=0
+monitoring/loki-0/loki-sc-rules=0
+monitoring/postgres-exporter-prometheus-postgres-exporter-7f47ddd5c8-6x4jp/prometheus-postgres-exporter=0
+monitoring/prometheus-kps-prometheus-0/config-reloader=0
+monitoring/prometheus-kps-prometheus-0/prometheus=0
+```
+
+Plan 13-10 should evaluate D-08.3 against the window `[T0, T0+24h]` = `[2026-09-27T10:44:46Z,
+2026-09-28T10:44:46Z]`.
+
+### A pre-existing, unrelated bug surfaced by this session
+
+Resuming Flux exposed a real, pre-existing defect this plan did not introduce and does not own:
+`k8s/platform/edge/ingressroute-monitoring.yaml` (13-06) and `k8s/monitoring/configs/ingressroute.yaml`
+(13-07) both define an `IngressRoute` named `grafana` in namespace `monitoring` — the first a
+deliberate placeholder routing to a Service with no Endpoints, the second the real fix routing to
+`kube-prometheus-stack-grafana`. Both Kustomizations (`edge`, `monitoring`) are independently
+`Ready`; whichever reconciles most recently wins ownership of the live object via server-side
+apply, and Flux's periodic reconcile means this can flap indefinitely. Observed live during this
+session: `edge` won the race first (public monitoring endpoint returned 503 "no available server"
+for a period), corrected by forcing `monitoring` to reconcile again — but nothing prevents `edge`
+from winning again on its own 10-minute schedule. Filed as a todo rather than fixed here, since
+resolving it requires removing the now-redundant placeholder from `platform/edge` — outside this
+plan's `files_modified` scope and a real, if small, architectural decision (which Kustomization
+should own this object).
+
 ## Maintenance note
 
 If the provider, IP, OS, spec, or firewall policy changes, update this document in the same
@@ -580,4 +747,6 @@ opposed to what any given plan intended it to be. **File list (13-02 addition):*
 (k3s config + pinned install wrapper) now sits alongside `infra/vm/docker-user-firewall.*` as the
 VM-provisioning files this document describes. **File list (13-07 addition):** the "Observability
 on k3s" section above now describes `k8s/monitoring/{controllers,configs}/` as the live-reconciled
-observability manifests.
+observability manifests. **File list (13-09 addition):** `k8s/flux-system/controller-resources.yaml`
+now joins `k8s/flux-system/gotk-components.yaml` as the manifests describing Flux's own controller
+resources -- the former is a strategic-merge patch, the latter stays generator-owned.
