@@ -63,16 +63,23 @@ spec:
     prometheus:
       prometheusSpec:
         retention: 30d
-        # PROVISIONAL (restart-ladder in 13-09) -- starting point matches the same-binary
-        # Compose predecessor's measured cap (docker-compose.prod.yml prometheus: mem_limit
-        # 256Mi), not re-derived here. Requests set conservatively below the Compose peak
-        # (~108MiB measured, Plan 12-05) with headroom for the Operator's own overhead.
+        # MEASURED (restart-ladder, 13-09, 2026-09-27): passing rungs 512Mi -> 384Mi -> 320Mi ->
+        # 288Mi, failed at 256Mi (dmesg OOMKilled, confirmed live at the start of this ladder
+        # session -- anon-rss climbing to the cap before being killed). Scraping the whole k3s
+        # cluster (kube-apiserver, etcd, kubelet, cAdvisor) drove the real floor well above the
+        # Compose-era same-binary predecessor's 256Mi cap -- headStats showed 123,106 series /
+        # 217,214 chunks at measurement time, ~7x the Plan 12-05 app-only figure (18,523/56,568).
+        # Anon usage tracked ~253-356MiB across rungs, filling whatever headroom the cap allowed
+        # (the same day-one pattern Plan 12-05 documented for this same binary) -- adopted 384Mi,
+        # not the bare-passing 288Mi, for growth headroom over the 30-day retention window (D-07).
+        # Falsifier: if OOM-killed weeks from now with no config change, re-derive against the
+        # then-current series/chunk count, not this measurement.
         resources:
           requests:
-            memory: 200Mi
+            memory: 288Mi
             cpu: 50m
           limits:
-            memory: 256Mi
+            memory: 384Mi
         storageSpec:
           volumeClaimTemplate:
             spec:
@@ -106,9 +113,12 @@ spec:
         type: pvc
         storageClassName: local-path
         size: 1Gi
-      # PROVISIONAL (restart-ladder in 13-09) -- starting point matches the same-binary Compose
-      # predecessor's measured cap (docker-compose.prod.yml grafana: mem_limit 768Mi, raised
-      # same-day at Phase 12 close under real sustained load -- see that file's own comment).
+      # MEASURED (restart-ladder, 13-09, 2026-09-27): passing rung 384Mi, failed at 256Mi (dmesg
+      # OOMKilled). Anon usage measured ~297MiB at the 384Mi rung, filling the cap the same way
+      # Prometheus above does -- the identical pattern the Plan 12-05 addendum already documented
+      # for this exact binary (TWO OOM kills at an adopted 384m under real sustained load, same-day
+      # corrected to 768Mi). Adopted 768Mi here directly rather than repeat that same-day
+      # correction: a synthetic burst under-measures Grafana's real concurrent dashboard/API peak.
       resources:
         requests:
           memory: 400Mi
@@ -157,14 +167,16 @@ spec:
       hostPID: false
       hostRootFsMount:
         enabled: true
-      # PROVISIONAL (restart-ladder in 13-09) -- starting point matches the same-binary Compose
-      # predecessor's measured cap (docker-compose.prod.yml node-exporter: mem_limit 32Mi).
+      # MEASURED (restart-ladder, 13-09, 2026-09-27): shared rung with kube-state-metrics/
+      # prometheusOperator/alloy/postgres-exporter. Passing rung 16Mi, failed at 8Mi (dmesg
+      # OOMKilled, anon-rss ~7MiB + file-rss ~10MiB against the 8Mi cap). Adopted 16Mi/10Mi --
+      # verified clean (RestartCount=0, full workload cycle) from a fresh recreate.
       resources:
         requests:
-          memory: 20Mi
+          memory: 10Mi
           cpu: 10m
         limits:
-          memory: 32Mi
+          memory: 16Mi
       prometheus:
         monitor:
           enabled: true
@@ -177,9 +189,10 @@ spec:
               targetLabel: instance
 
     kube-state-metrics:
-      # PROVISIONAL (restart-ladder in 13-09) -- no same-binary Compose predecessor existed;
-      # starting point taken from 13-RESEARCH.md's Q8 ranges for a small-cluster kube-state-metrics
-      # install.
+      # MEASURED (restart-ladder, 13-09, 2026-09-27): shared rung with node-exporter/
+      # prometheusOperator/alloy/postgres-exporter. Passing rung 64Mi, failed at 32Mi (dmesg
+      # OOMKilled, anon-rss ~31.5MiB + file-rss ~16.1MiB against the 32Mi cap). Adopted 64Mi/32Mi
+      # -- verified clean (RestartCount=0, full workload cycle) from a fresh recreate.
       resources:
         requests:
           memory: 32Mi
@@ -188,12 +201,13 @@ spec:
           memory: 64Mi
 
     prometheusOperator:
-      # PROVISIONAL (restart-ladder in 13-09) -- 13-RESEARCH.md Q8 range for Prometheus Operator +
-      # kube-state-metrics combined (~130MiB requests / ~250MiB limits); operator's own share
-      # taken as roughly half.
+      # MEASURED (restart-ladder, 13-09, 2026-09-27): shared rung with kube-state-metrics/
+      # node-exporter/alloy/postgres-exporter. Passing rung 32Mi, failed at 16Mi (dmesg
+      # OOMKilled, anon-rss ~15.1MiB + file-rss ~43.5MiB against the 16Mi cap). Adopted 32Mi/25Mi
+      # -- verified clean (RestartCount=0, full workload cycle) from a fresh recreate.
       resources:
         requests:
-          memory: 64Mi
+          memory: 25Mi
           cpu: 25m
         limits:
-          memory: 128Mi
+          memory: 32Mi

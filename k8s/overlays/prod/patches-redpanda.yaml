@@ -1,8 +1,9 @@
-# MEASURED (carried from docker-compose.prod.yml's redpanda comment, Plan 05-04, 2026-08-16) --
-# idle RSS 347.8MiB, RSS never moved off that figure across a 54-request burst (CPU peaked
-# 7.3-8.6% of the single `--smp 1` core). Requests rounded up from that peak to the next 64Mi
-# multiple (384Mi); limits carry the Compose cgroup backstop (2200m) unchanged. Re-confirmed in
-# 13-09.
+# MEASURED (13-09, 2026-09-27): re-confirmed via
+# max_over_time(container_memory_working_set_bytes{namespace="kanban-prod",container="redpanda"}[24h])
+# against kube-prometheus-stack -- 370.0MiB peak working set on the live k3s pod, still under the
+# existing 384Mi request (carried from docker-compose.prod.yml's redpanda comment, Plan 05-04,
+# 2026-08-16, idle RSS 347.8MiB) -- unchanged. Limits carry the Compose cgroup backstop (2200m)
+# unchanged.
 - op: replace
   path: /spec/template/spec/containers/0/resources
   value:

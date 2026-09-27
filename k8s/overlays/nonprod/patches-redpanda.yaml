@@ -2,7 +2,12 @@
 # 2026-09-11, quick task 260911-gkz) -- confirmed stable at RSS 290.6MiB against the ballooned
 # __consumer_offsets/_schemas backlog that crash-looped the original 128M/300m floor. Requests
 # rounded up from that RSS to the next 64Mi multiple (320Mi); limits carry the Compose mem_limit
-# (900m) unchanged. Re-confirmed in 13-09.
+# (900m) unchanged. Re-confirmed in 13-09 (2026-09-27): live 24h peak working set on k3s measured
+# only 179.9MiB under normal (non-ballooned) load via
+# max_over_time(container_memory_working_set_bytes{namespace="kanban-nonprod",container="redpanda"}[24h])
+# -- kept at 320Mi rather than lowered, since that figure is anchored to the documented
+# ballooned-backlog crash-loop incident above, a worst case normal-load peak data cannot
+# supersede.
 - op: replace
   path: /spec/template/spec/containers/0/resources
   value:

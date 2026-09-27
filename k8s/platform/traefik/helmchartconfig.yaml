@@ -14,9 +14,13 @@
 # first), is deliberate -- removing it any earlier would break nonprod's only path to Traefik
 # while Caddy was still running.
 #
-# PROVISIONAL (restart-ladder in 13-09): resource values below are k3s chart defaults, not yet
-# measured on this host -- 13-09 replaces them with a measured figure the same way every other
-# workload in this phase carries a MEASURED comment.
+# MEASURED (restart-ladder, 13-09, 2026-09-27): passing rungs 256Mi -> 128Mi -> 64Mi -> 32Mi,
+# failed at 16Mi (dmesg: OOMKilled, anon-rss ~14.7MiB + file-rss ~75.3MiB against the 16Mi cap).
+# Adopted 64Mi/32Mi -- one rung above the bare-passing 32Mi (only ~6.4MiB headroom there, ~25%
+# margin) for the same reason Caddy's own 12-06 ladder did not adopt its bare-passing 16m: this is
+# the only public ingress. Verified clean (RestartCount=0, both the standard workload cycle and
+# scripts/loadtest/run-rate-limit-verification.sh's adversarial burst) at every rung, independently
+# re-verified from a fresh recreate at the adopted value.
 #
 # resources.requests/limits keys confirmed against the packaged chart version via
 # `k3s kubectl get helmchart traefik -n kube-system -o yaml` at install time (Task 2, VM steps).
@@ -35,6 +39,12 @@ spec:
       websecure:
         expose:
           default: true
+    # MEASURED (restart-ladder, 13-09, 2026-09-27) -- see this file's header for the full ladder.
+    resources:
+      requests:
+        memory: 32Mi
+      limits:
+        memory: 64Mi
     logs:
       access:
         enabled: true

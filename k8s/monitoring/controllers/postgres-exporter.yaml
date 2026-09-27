@@ -77,11 +77,13 @@ spec:
         - sourceLabels: [__meta_kubernetes_pod_node_name]
           targetLabel: instance
 
-    # PROVISIONAL (restart-ladder in 13-09) -- starting point matches the same-binary Compose
-    # predecessor's measured cap (docker-compose.prod.yml postgres-exporter: mem_limit 32Mi).
+    # MEASURED (restart-ladder, 13-09, 2026-09-27): shared rung with kube-state-metrics/
+    # node-exporter/prometheusOperator/alloy. Passing rung 16Mi, failed at 8Mi (dmesg OOMKilled).
+    # Adopted 16Mi/10Mi -- verified clean (RestartCount=0, full workload cycle) from a fresh
+    # recreate.
     resources:
       requests:
-        memory: 16Mi
+        memory: 10Mi
         cpu: 10m
       limits:
-        memory: 32Mi
+        memory: 16Mi

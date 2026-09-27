@@ -34,15 +34,16 @@ spec:
         # task's own requirement rather than relying on the unstated default.
         varlog: false
         dockercontainers: false
-      # PROVISIONAL (restart-ladder in 13-09) -- 13-RESEARCH.md Q8 range for Alloy (~80MiB
-      # requests / ~150MiB limits, "successor to Promtail's 60Mi, more featureful"); no
-      # same-binary Compose predecessor to anchor a tighter starting point.
+      # MEASURED (restart-ladder, 13-09, 2026-09-27): shared rung with kube-state-metrics/
+      # node-exporter/prometheusOperator/postgres-exporter. Passing rung 75Mi, failed at 40Mi
+      # (dmesg OOMKilled, anon-rss ~39.6MiB + file-rss ~108.2MiB against the 40Mi cap). Adopted
+      # 75Mi/40Mi -- verified clean (RestartCount=0, full workload cycle) from a fresh recreate.
       resources:
         requests:
           memory: 40Mi
           cpu: 10m
         limits:
-          memory: 150Mi
+          memory: 75Mi
       configMap:
         create: true
         content: |

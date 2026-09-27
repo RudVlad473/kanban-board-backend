@@ -56,24 +56,27 @@ spec:
       enabled: true
       servicemonitor:
         enabled: true
-    # PROVISIONAL (13-09): controller/webhook/cainjector resource requests/limits are the
-    # chart's own defaults, not yet measured against this box via the restart-ladder method --
-    # every other workload in this phase carries a MEASURED figure; cert-manager's three
-    # components are new surface with no Compose-era baseline to carry over.
+    # MEASURED (restart-ladder, 13-09, 2026-09-27): all 3 components share rungs (OOMKilled is
+    # reported per-container). Passing rungs 128Mi -> 64Mi, failed at 32Mi (cainjector only:
+    # dmesg OOMKilled, anon-rss ~31.7MiB + file-rss ~25.8MiB against the 32Mi cap; controller and
+    # webhook stayed at RestartCount=0 through that same rung). Adopted 64Mi/16Mi for all three --
+    # cainjector's own live cgroup usage measured ~36MiB against this cap immediately after
+    # independent re-verify. Verified clean (RestartCount=0, full workload cycle, a self-signed
+    # Issuer+Certificate issued and deleted in scratch namespace ladder-scratch) at every rung.
     resources:
       requests:
-        memory: 32Mi # PROVISIONAL, chart default order of magnitude; re-measured in 13-09
+        memory: 16Mi
       limits:
-        memory: 128Mi # PROVISIONAL, re-measured in 13-09
+        memory: 64Mi
     webhook:
       resources:
         requests:
-          memory: 32Mi # PROVISIONAL, re-measured in 13-09
+          memory: 16Mi
         limits:
-          memory: 128Mi # PROVISIONAL, re-measured in 13-09
+          memory: 64Mi
     cainjector:
       resources:
         requests:
-          memory: 32Mi # PROVISIONAL, re-measured in 13-09
+          memory: 16Mi
         limits:
-          memory: 128Mi # PROVISIONAL, re-measured in 13-09
+          memory: 64Mi

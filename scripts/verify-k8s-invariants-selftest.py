@@ -153,6 +153,22 @@ def run_cases():
     measured_text = "# MEASURED (fixture, 2026-01-01)\n    memory: 512Mi"
     expect_clean("I4 (measured, clean)", _gate.check_i4_source_file("fixture.yaml", measured_text))
 
+    # I4 -- --no-provisional (13-09): a PROVISIONAL label passes without the flag, fails with it.
+    provisional_text = "# PROVISIONAL (fixture, 2026-01-01)\n    memory: 512Mi"
+    expect_clean(
+        "I4 (provisional, no flag)",
+        _gate.check_i4_source_file("fixture.yaml", provisional_text, no_provisional=False),
+    )
+    expect_violation(
+        "I4 (provisional, --no-provisional)",
+        _gate.check_i4_source_file("fixture.yaml", provisional_text, no_provisional=True),
+        "I4:",
+    )
+    expect_clean(
+        "I4 (measured, --no-provisional)",
+        _gate.check_i4_source_file("fixture.yaml", measured_text, no_provisional=True),
+    )
+
     # I5 -- untagged image.
     doc = clean_app_deployment()
     doc["spec"]["template"]["spec"]["containers"][0]["image"] = "rudenkovladimir/kanban-board-backend"

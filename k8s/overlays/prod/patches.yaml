@@ -1,12 +1,14 @@
-# MEASURED (carried from docker-compose.prod.yml's app comment, Plan 11-03/05-04,
-# 2026-08-26/2026-08-16) -- idle RSS ~428-436MiB, peak ~471.1MiB during a full burst+Flyway-
-# recreate workload. Requests rounded up from that peak to the next 64Mi multiple (512Mi);
-# limits carry the Compose mem_limit (3g) unchanged. Re-confirmed in 13-09.
+# MEASURED (13-09, 2026-09-27): re-confirmed via
+# max_over_time(container_memory_working_set_bytes{namespace="kanban-prod",container="app"}[24h])
+# against kube-prometheus-stack -- 532.9MiB peak working set on the live k3s pod, exceeding the
+# prior 512Mi request (carried from docker-compose.prod.yml's app comment, Plan 11-03/05-04,
+# 2026-08-26/2026-08-16, ~471.1MiB peak). Rounded up from the new peak to the next 64Mi multiple
+# (576Mi); limits carry the Compose mem_limit (3g) unchanged.
 - op: replace
   path: /spec/template/spec/containers/0/resources
   value:
     requests:
-      memory: 512Mi
+      memory: 576Mi
     limits:
       memory: 3Gi
 # Same figures as the app container above -- the registrar runs briefly, once, before the app
@@ -16,6 +18,6 @@
   path: /spec/template/spec/initContainers/0/resources
   value:
     requests:
-      memory: 512Mi
+      memory: 576Mi
     limits:
       memory: 3Gi

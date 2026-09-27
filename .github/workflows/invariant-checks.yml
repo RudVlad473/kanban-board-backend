@@ -179,4 +179,4 @@ jobs:
         run: python3 scripts/verify-k8s-invariants-selftest.py
 
       - name: Verify k8s invariants
-        run: python3 scripts/verify-k8s-invariants.py
+        run: python3 scripts/verify-k8s-invariants.py --no-provisional

@@ -12,3 +12,7 @@ resources:
   - monitoring-controllers.yaml
   - monitoring.yaml
   - image-automation.yaml
+# Measured Flux controller memory caps (Plan 13-09, D-07) -- a strategic-merge patch rather than
+# editing gotk-components.yaml directly, which stays generator-owned (see its own "DO NOT EDIT").
+patches:
+  - path: controller-resources.yaml

@@ -385,10 +385,16 @@ def check_rendered_doc(doc, label, is_base_root=False):
     return violations
 
 
-def check_i4_source_file(path, text):
+def check_i4_source_file(path, text, no_provisional=False):
     """I4: every hand-written source YAML `memory:` line carries a MEASURED/PROVISIONAL comment
     within the 25 lines immediately above it. Pure function of a (path, text) pair -- no disk
-    access here, so a selftest can feed it a literal string."""
+    access here, so a selftest can feed it a literal string.
+
+    `no_provisional` (13-09, D-07): once every value in the tree is measured, a PROVISIONAL label
+    is itself a regression -- flip this on to fail any line whose nearest label is PROVISIONAL
+    rather than MEASURED, closing the loophole a provisional-forever value could otherwise hide
+    behind indefinitely.
+    """
     if path in GENERATED:
         return []
     violations = []
@@ -400,10 +406,21 @@ def check_i4_source_file(path, text):
         if not re.search(r"\bmemory:\s*\S", stripped):
             continue
         window = lines[max(0, i - 25) : i]
-        if not any(MEASURED_RE.search(w) for w in window):
+        nearest_label = None
+        for w in reversed(window):
+            m = MEASURED_RE.search(w)
+            if m:
+                nearest_label = m.group(1)
+                break
+        if nearest_label is None:
             violations.append(
                 f"I4: {path}:{i + 1}: {stripped!r} has no MEASURED/PROVISIONAL comment in the "
                 f"25 lines above it"
+            )
+        elif no_provisional and nearest_label == "PROVISIONAL":
+            violations.append(
+                f"I4: {path}:{i + 1}: {stripped!r} is still labelled PROVISIONAL -- "
+                f"--no-provisional requires MEASURED"
             )
     return violations
 
@@ -460,6 +477,16 @@ def discover_roots():
 
 
 def main():
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--no-provisional",
+        action="store_true",
+        help="I4 also fails a PROVISIONAL-labelled memory line, not just a missing label (13-09).",
+    )
+    args = parser.parse_args()
+
     try:
         import yaml
     except ImportError:
@@ -512,7 +539,7 @@ def main():
         rel = os.path.relpath(path, REPO_ROOT)
         with open(path) as f:
             text = f.read()
-        all_violations += check_i4_source_file(rel, text)
+        all_violations += check_i4_source_file(rel, text, no_provisional=args.no_provisional)
         if os.path.basename(path) == "kustomization.yaml":
             all_violations += check_i5_overlay_kustomization(rel, text)
 

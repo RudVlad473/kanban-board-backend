@@ -122,12 +122,13 @@ spec:
                 - "pg_isready -h 127.0.0.1 -U $POSTGRES_USER -d postgres"
             periodSeconds: 5
             failureThreshold: 8
-          # MEASURED (carried from docker-compose.prod.yml's postgres comment, Plan 11-03/11-08,
-          # 2026-08-26) -- anon+shmem (the only irreclaimable memory that can actually force an
-          # OOM-kill) held constant at ~84MiB regardless of cap or dataset size under a combined
-          # worst-case workload (24 concurrent backends, ~127MB pgbench dataset). Requests rounded
-          # up from that figure to the next 64Mi multiple (128Mi); limits carry the Compose
-          # mem_limit (256m) unchanged. Re-confirmed in 13-09.
+          # MEASURED (13-09, 2026-09-27): re-confirmed via
+          # max_over_time(container_memory_working_set_bytes{namespace="kanban-data",container="postgres"}[24h])
+          # against kube-prometheus-stack -- 65.5MiB peak working set on the live k3s pod, well
+          # under the existing 128Mi request (carried from docker-compose.prod.yml's postgres
+          # comment, Plan 11-03/11-08, 2026-08-26 -- anon+shmem held ~84MiB under a combined
+          # worst-case workload of 24 concurrent backends / ~127MB pgbench dataset) -- unchanged.
+          # Limits carry the Compose mem_limit (256m) unchanged.
           resources:
             requests:
               memory: 128Mi
