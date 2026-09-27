@@ -2,61 +2,39 @@ sequenceDiagram
     actor Dev as Developer
     participant GH as GitHub Actions runner<br/>(x86_64, ubuntu-latest)
     participant DH as Docker Hub
+    participant IR as Flux ImageRepository<br/>+ ImagePolicy
+    participant Bot as fluxcdbot<br/>(ImageUpdateAutomation)
+    participant Main as main branch<br/>(GitHub)
+    participant KC as kustomize-controller<br/>(in-cluster)
+    participant Pod as app Pod<br/>(kanban-prod / kanban-nonprod)
 
-    box Netcup VPS -- x86_64, Vienna
-    participant Comp as Docker Compose CLI<br/>(project: kanban-board-backend)
-    participant App as app
-    participant Caddy as caddy
-    participant RP as redpanda
-    participant PG as postgres 16<br/>(kanban-db network)
-    end
+    Dev->>GH: push to main (k8s/** and docs/** paths-ignore --<br/>a Flux tag-bump commit never re-triggers this workflow)
 
-    Dev->>GH: push to master (the workflow's only trigger)
-
-    GH->>GH: setup -- derive base_image_name from<br/>DOCKERHUB_USER/DOCKERHUB_REPOSITORY
-
-    GH->>GH: run-tests (needs: setup)<br/>./gradlew test, then ./gradlew spotlessCheck<br/>Temurin JDK 21
-    Note over GH: run-tests gates every job below --<br/>nothing downstream runs unless this succeeds
+    GH->>GH: setup, run-tests (./gradlew test, spotlessCheck)
+    Note over GH: run-tests gates every job below
 
     par build-and-push-docker-image (needs: [setup, run-tests])
-        GH->>GH: derive IMAGE_TAG from commit short SHA<br/>(${GITHUB_SHA::7})
-        GH->>DH: build linux/amd64 natively (no QEMU --<br/>runner and VM share x86_64) and push image
-    and flyway-verify (needs: [setup, run-tests])
-        GH->>PG: scp migration scripts to the VM, then over SSH<br/>run pg_isready on the kanban-db network --<br/>refuse if postgres is unresolvable or unreachable
-        GH->>PG: Flyway CLI container `migrate` ON THE VM,<br/>attached to kanban-db, reaching host `postgres`
-        Note over GH,PG: applies this commit's migrations to the REAL<br/>production database now -- before the new image<br/>ever reaches the VM. Schema change and the code<br/>that consumes it are not deployed atomically.
-    and build-and-push-caddy-image (needs: [setup, run-tests])
-        GH->>GH: derive tag from scripts/verify-caddy-image-tag.py,<br/>assert it agrees with docker-compose.prod.yml's literal
-        GH->>GH: build linux/amd64, then prove `caddy version`<br/>and `caddy list-modules` on the built artifact
-        GH->>GH: adapt the committed Caddyfile against<br/>this build (throwaway domain values)
-        GH->>DH: push image -- only after the module and<br/>the Caddyfile are both proven against it
+        GH->>GH: derive tag main-<run_number>-<sha7><br/>(D-15's sortable scheme -- ImagePolicy needs<br/>numerical ordering, a bare sha7 cannot sort)
+        GH->>DH: build linux/amd64 natively, push BOTH tags<br/>(app + app-nonprod repos, one build, one manifest write each)
+    and flyway-verify / flyway-verify-nonprod (needs: [setup, run-tests])
+        GH->>GH: open a raw SSH connection, host-key pinned<br/>by fingerprint (no appleboy/* action, D-14/D-15)
+        GH->>Pod: SSH forward to the postgres ClusterIP --<br/>Flyway CLI container `migrate` applies this<br/>commit's migrations to the REAL database now --<br/>before the new image ever reaches the cluster
     end
 
-    GH->>Comp: deploy-to-netcup (needs: [build-and-push-docker-image, flyway-verify, build-and-push-caddy-image])<br/>scp docker-compose.prod.yml, Caddyfile over SSH<br/>(host key pinned by fingerprint)
-    Note right of Comp: no --remove-orphans/rm -- the VM's<br/>never-committed .env.prod survives untouched
-    Note over GH,Comp: concurrency group "deploy-to-netcup-vm":<br/>a second push mid-deploy QUEUES rather than cancels,<br/>so this scp step is never interrupted half-copied
-    GH->>Comp: export IMAGE_TAG (commit short SHA) into the SSH shell<br/>(a shell var outranks --env-file precedence,<br/>so this commit's freshly built tag always wins)
-    GH->>Comp: docker compose pull app caddy
-    Comp->>DH: pull app + caddy images<br/>(the VM pulls, never builds -- D-3)
+    Note over GH,DH: deploys are pull-based GitOps (D-14) --<br/>this workflow ends at image push. No deploy-to-netcup,<br/>no register-schemas-production job exists anymore.
 
-    GH->>Comp: docker compose up -d
-    Note over Comp: top-level `name: kanban-board-backend` pins project<br/>identity, and every named volume's project-prefixed name,<br/>independent of the working directory this runs from --<br/>Compose resolves to the ALREADY-RUNNING stack<br/>instead of starting a second, unrelated one
-    Comp->>Comp: diff each service's resolved config<br/>against what is currently running
-    Comp->>App: recreate (image reference resolves to a new<br/>tag every deploy), started only once redpanda's<br/>service_healthy condition is met (already true,<br/>redpanda untouched)
-    Comp--xCaddy: left running while its content-derived tag (D-5)<br/>is unchanged -- every app-only deploy, recreated<br/>only when the edge itself changes (no-op, not a restart)
-    Comp--xRP: left running -- resolved config is<br/>byte-identical to what's already up (no-op, not a restart)
-    Note over Caddy,RP: preserves caddy's Let's Encrypt certificate<br/>(no rate-limited re-request) and redpanda's Kafka log<br/>and registered Avro subjects
-    Note over Comp,RP: exactly the outcome the project-name pin buys --<br/>the fixed state of the incident in docs/INFRA_RUNBOOK.md,<br/>where a directory-derived project name produced a<br/>fresh, empty volume namespace
-    Note over GH,App: honest limit: `up -d` returns once app is STARTED,<br/>not once its healthcheck passes -- nothing in this<br/>pipeline waits on that healthcheck, so a green deploy<br/>job is not by itself proof the new container reached UP
+    IR->>DH: poll every 5m, list tags matching<br/>^main-(?P<num>[0-9]+)-[a-f0-9]{7}$
+    IR->>IR: ImagePolicy resolves the numerically<br/>highest tag as Latest
 
-    GH->>Comp: docker compose exec -T caddy caddy reload<br/>--config /etc/caddy/Caddyfile --adapter caddyfile
-    Note over Comp,Caddy: F-1: the Caddyfile is a read-only BIND MOUNT, and a<br/>bind-mounted file's CONTENT is not part of Compose's<br/>config hash -- so `up -d` above never applies a<br/>Caddyfile edit by itself. This reload is what does.<br/>True of every prior Caddyfile edit in this repo's history.
-    GH->>Comp: docker compose exec -T caddy wget -qO-<br/>http://127.0.0.1:2019/config/ | grep rate_limit
-    Note over GH,Comp: reads the config Caddy is actually RUNNING, not the<br/>file that was copied -- fails the job loudly (::error::,<br/>set -e) if the handler is missing after reload
+    Bot->>IR: poll every 5m for a policy change
+    Bot->>Main: commit "chore(flux): bump images"<br/>(author fluxcdbot@users.noreply.github.com),<br/>Setters-strategy edit to k8s/overlays/*/kustomization.yaml
+    Note over Bot,Main: k8s/** is in deploy.yml's paths-ignore --<br/>this commit does NOT trigger a new CI run
 
-    alt run succeeded
-        GH->>DH: cleanup-old-images -- deletes every tag<br/>except the one just deployed
-        Note over GH,DH: fixed 2026-08-17 (Hub API v2 rejected Basic auth on<br/>deletes with a 401 until then -- needs a token exchange<br/>instead, plus following pagination past page 1). Both<br/>fixes are load-bearing today: token exchange and the<br/>follow-`next`-until-null pagination loop.
-    else run failed
-        GH->>DH: cleanup-unused-image -- resolves the just-pushed<br/>manifest's digest and deletes that image by digest
-    end
+    KC->>Main: poll GitRepository every interval,<br/>SSH deploy key
+    KC->>KC: render kustomization, detect the new<br/>image tag setter value changed
+    KC->>Pod: apply -- Deployment strategy Recreate<br/>(not RollingUpdate, keeps one app pod's<br/>memory envelope steady)
+
+    Pod->>Pod: initContainer register-schemas runs first<br/>(same AvroSchemaRegistrar invocation deploy.yml's<br/>old register-schemas-production job proved,<br/>now in-cluster, ordered by the kubelet's own<br/>initContainer contract -- a failing init blocks<br/>the app container from starting at all)
+    Pod->>Pod: app container starts once register-schemas<br/>exits 0 -- startupProbe/readinessProbe against<br/>/api/actuator/health gate traffic
+
+    Note over KC,Pod: prod and nonprod reconcile independently<br/>(separate Kustomizations, separate overlays, D-16) --<br/>a nonprod-only image bump never touches prod's pod
