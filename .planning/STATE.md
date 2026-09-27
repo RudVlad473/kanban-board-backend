@@ -4,16 +4,16 @@ milestone: v1.3
 current_phase: 13
 current_phase_name: Introduce Kubernetes
 status: executing
-stopped_at: Completed 13-08-PLAN.md (edge hardening on k3s -- rate limits re-derived, KANBAN-INGRESS firewall installed, D-04/D-08/D-11/D-13)
-last_updated: "2026-09-27T08:52:00.000Z"
+stopped_at: Completed 13-09-PLAN.md (k3s restart-ladder resource measurement + final-state docs -- D-07/D-08/D-13/D-15) -- awaiting operator merge/push, execution paused per dispatch instructions before 13-10
+last_updated: "2026-09-27T11:10:00.000Z"
 last_activity: 2026-09-27
-last_activity_desc: Resumed 13-08 Task 3 from a paused mid-task handoff (worktree/HANDOFF mismatch required recovering two uncommitted files byte-for-byte into a fresh worktree); resolved the off-box-probe-vs-outer-firewall proof gap via the 260906-feq precedent (temporary scoped Netcup console rule), measured the KANBAN-INGRESS DROP counter move live (5 -> 10 packets), committed under fresh operator-authorized --no-verify after confirmed host memory contention, and closed the plan
-state_head: 26a1e319a8ad9edc1b01313c614d9d2e2f91b6dd
+last_activity_desc: Completed 13-09 -- ladder-measured 18 k3s components (Traefik, Flux's 6 controllers, cert-manager's 3, kube-prometheus-stack, Loki, Alloy, postgres-exporter) with dmesg/lastState OOM evidence per failing rung, implemented verify-k8s-invariants.py --no-provisional, resumed Flux and recorded T0 = 2026-09-27T10:44:46Z for D-08's 24h window, then redrew all three infra diagrams plus INFRA_ARCHITECTURE.md/README.md for the k3s reality. Found and filed (not fixed) a real pre-existing IngressRoute-name collision between the edge and monitoring Kustomizations. Two git-branching conflicts (commits needing to reach main for Flux to see them, this session prohibited from merging main itself) resolved by the operator merging directly, once also reconciling a concurrent fluxcdbot image-bump. Three fresh, single-commit-scoped --no-verify authorizations used under confirmed host memory contention. Full account in `.planning/phases/13-introduce-kubernetes/13-09-SUMMARY.md`.
+state_head: 06cf6c1
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 24
-  completed_plans: 22
+  completed_plans: 23
 milestone_name: Nonprod Environment & CI Hardening
 ---
 
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-09-08)
 ## Current Position
 
 Phase: 13 (Introduce Kubernetes) — EXECUTING
-Plan: 8 of 10 (Wave 6, 13-08) — COMPLETE. Waves 1-6 (13-01 through 13-08) done, merged, verified. Production is now live on k3s (D-01 executed) with re-derived, proven-per-client Traefik rate limits and a Docker-independent host firewall (KANBAN-INGRESS). Waves 7-8 (13-09, 13-10) not started.
-Status: Ready to execute
-Last activity: 2026-09-27 — Completed 13-08 (edge hardening on k3s): Task 1's checkpoint resolved as proceed; Task 2 re-derived Traefik's three rate-limit Middlewares from token-bucket arithmetic and proved per-client bucketing with two distinct public IPs against a live access log (fixing a real bug along the way -- Traefik's access log was CLF, not JSON); Task 3 installed `KANBAN-INGRESS`, a `mangle PREROUTING` firewall independent of Docker's `DOCKER-USER` chain, and proved it off-box after resolving the same outer-firewall-masks-inner-layer proof gap quick task 260906-feq first hit (operator opened a temporary, scoped Netcup console rule so the probe could reach Layer 3; DROP counter measurably moved 5 -> 10 packets). This session also resumed from a paused mid-task handoff whose HANDOFF.json pointed at a different, no-longer-dispatchable worktree than the one this session ran in -- recovered by reading and recreating the two uncommitted firewall files byte-for-byte from the original worktree's still-live path. Full account in `.planning/phases/13-introduce-kubernetes/13-08-SUMMARY.md`.
+Plan: 9 of 10 (Wave 7, 13-09) — COMPLETE. Waves 1-7 (13-01 through 13-09) done; 13-09's commits are on this worktree's branch, awaiting operator merge/push to `main` (per this plan's own dispatch instructions, the executing session does not merge/push main itself). Every k8s/ memory value is now a real restart-ladder measurement, D-08's 24h zero-OOM/zero-restart window is running from T0 = 2026-09-27T10:44:46Z. Wave 8 (13-10) not started.
+Status: Paused for operator merge/push -- not ready to execute 13-10 until D-08's window elapses regardless
+Last activity: 2026-09-27 — Completed 13-09 (k3s restart-ladder resource measurement + final-state docs): Task 1 recorded the pre-authorized "all" decision; Task 2 ladder-measured 18 components (Traefik at 64Mi/32Mi, Flux's 6 controllers at 256Mi/64Mi, cert-manager's 3 at 64Mi/16Mi, kube-prometheus-stack's 5 pieces, Loki at 192Mi/96Mi, Alloy at 75Mi/40Mi, postgres-exporter at 16Mi/10Mi) with dmesg/lastState OOM evidence per failing rung, implemented `verify-k8s-invariants.py --no-provisional`, resumed Flux and recorded T0; Task 3 redrew all three infra diagrams and rewrote INFRA_ARCHITECTURE.md/README.md for k3s, verifying every claim against live cluster state first. Prometheus was found live-OOMing at its provisional cap before this session even began; Grafana repeated a known Plan-12-05 under-measurement pattern, resolved by adopting the already-known corrected value directly. A real, pre-existing IngressRoute-name collision (edge vs monitoring Kustomizations racing for `grafana`) was found and filed as a todo rather than fixed out-of-scope. Full account in `.planning/phases/13-introduce-kubernetes/13-09-SUMMARY.md`.
 
-Next: 13-09 (restart-ladder memory measurement) — Wave 7. D-04's Docker teardown (13-10) can now proceed safely once 13-09 completes, since 13-08 closed the gap DOCKER-USER's removal would otherwise have opened on k3s's NodePorts/hostPorts. Compose is stopped but NOT deleted (D-04 gate is 13-10); all 8 Compose volumes remain intact.
+Next: operator to merge/push 13-09's commits to `main`, then 13-10 (D-08's 24h evaluation window, Docker/Caddy teardown) — Wave 8, the final wave of Phase 13. 13-10 cannot start its own D-08.3 evaluation until `[T0, T0+24h]` = `[2026-09-27T10:44:46Z, 2026-09-28T10:44:46Z]` has actually elapsed, independent of any merge timing. D-04's Docker teardown in 13-10 is also a natural point to resolve the filed IngressRoute-collision todo, since it already touches `k8s/platform/edge/`'s neighborhood.
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ v1.0–v1.2 velocity/per-plan detail archived at milestone close — see `.plann
 | Phase 13 P06 | ~59min window + ~30min post-window fixes/docs | 3 tasks | 23 files |
 | Phase 13 P07 | ~2h40m | 2 tasks | 15 files |
 | Phase 13 P08 | ~2h across two sessions | 3 tasks | 10 files |
+| Phase 13 P09 | ~2.5h, one session | 3 tasks | 26 files |
 
 ## Accumulated Context
 
@@ -114,12 +115,22 @@ authorization, given the real-traffic-interruption and Let's Encrypt cert-safety
 - [Phase 13]: 13-08 Task 1 (checkpoint:decision): proceed -- both the rate-limit re-derivation and the KANBAN-INGRESS host firewall install, not the rate-limit-only fallback -- after reviewing the live INPUT allow-list and confirming Traefik as the cluster's only non-ClusterIP Service
 - [Phase 13]: 13-08 Task 3: the off-box-probe-vs-counter-attribution proof method hit the identical structural gap quick task 260906-feq already solved for DOCKER-USER -- Netcup's console-only outer Cloud Firewall blocked the probed NodePort before packets reached the VM's own iptables, so an unmodified probe could never move the Layer 3 counter under test. Resolved the same way: operator opened a temporary, scoped console rule (this workstation's IP only, destination port 30104) so the probe reaches Layer 3 without bypassing the rule under test; DROP counter measurably moved 5 -> 10 packets, the probed NodePort itself still timed out
 - [Phase 13]: 13-08 Task 3's commit: operator-authorized git commit --no-verify (fresh, this commit only) after the local pre-commit hook's fastTest step killed its own Gradle daemon twice under confirmed host-wide memory contention (~400Mi free, three concurrent Claude Code sessions plus unrelated processes) -- gitleaks had already scanned the exact staged diff clean on both failed attempts
+- [Phase 13]: 13-09 Task 1 (checkpoint:decision): "all" -- pre-authorized by the operator before this session's dispatch, recorded rather than re-asked
+- [Phase 13]: 13-09 Task 2: Prometheus adopted at 384Mi/288Mi (not the bare-passing 288Mi) -- the real floor sits between confirmed-passing 288Mi and confirmed-failing 256Mi (live OOM observed at session start, before any ladder action), and the whole-cluster scrape target (123,106 series vs. Plan 12-05's 18,523 app-only figure) means the Compose-era predecessor's cap was never a valid basis for this successor
+- [Phase 13]: 13-09 Task 2: Grafana adopted at 768Mi/400Mi directly, bypassing its own ladder's bare-passing 384Mi -- repeated the exact under-measurement pattern Plan 12-05's own addendum already documented for this binary (synthetic burst passes at a value that OOMs under real sustained load), so the already-known corrected figure was adopted rather than re-discovering it live
+- [Phase 13]: 13-09 Task 2: nonprod redpanda's request (320Mi) deliberately NOT lowered to match its calmer 24h peak (179.9MiB) -- 320Mi is anchored to a documented ballooned-backlog crash-loop incident (quick task 260911-gkz) that normal-load data cannot supersede
+- [Phase 13]: 13-09 Task 2: found and filed (not fixed) a real, pre-existing bug the Flux resume surfaced -- edge and monitoring Kustomizations both define IngressRoute grafana, racing for ownership on reconcile; out of this plan's files_modified scope and a real architectural decision, so filed as a todo with full reproduction instead
+- [Phase 13]: 13-09: two git-branching conflicts (commits needing to reach main for Flux's GitRepository to see them, this session prohibited from merging/pushing main itself) resolved by the operator merging cd2e98d and 06cf6c1 directly, once also reconciling a concurrent fluxcdbot image-bump commit that had landed on origin/main at the same time
+- [Phase 13]: 13-09: operator-authorized git commit --no-verify used 3 times (once per task's commit -- cd2e98d, b764148, 06cf6c1), each freshly requested in-session under confirmed host-wide memory contention (~320-536Mi free, swap active); gitleaks scanned each exact staged diff clean before every use
 
 ### Pending Todos
 
-60 pending todos in `.planning/todos/pending/` as of 2026-09-25 (count drifted from this
+59 pending todos in `.planning/todos/pending/` as of 2026-09-27 (count drifted from this
 section's earlier "~46" since v1.3 close and was not tracked incrementally; not re-audited here,
-just corrected to the current `ls | wc -l`). Newest: `2026-09-24-netcup-vps-intermittent-tcp-retransmits-under-sustained-throughput.md`
+just corrected to the current `ls | wc -l`). Newest: `2026-09-27-two-kustomizations-race-for-the-grafana-ingressroute-name.md`
+(moderate, infra — the edge/monitoring Kustomization IngressRoute-name collision found live during
+13-09's Flux resume, filed rather than fixed since it is out of that plan's scope). Also recent:
+`2026-09-24-netcup-vps-intermittent-tcp-retransmits-under-sustained-throughput.md`
 (minor, infra — a real but thin iperf3 retransmit/bitrate-dip signal found while triaging an
 orphaned diagnostics file during the 2026-09-25 docs cleanup). Full inventory in this document's
 Deferred Items table below, acknowledged and carried forward at v1.3 close. None block the next
@@ -188,14 +199,16 @@ The 46 pending todos are individually listed and categorized in this document's 
 
 ## Session Continuity
 
-Last session: 2026-09-26T20:40:04.351Z
-Stopped at: Completed 13-07-PLAN.md (observability activation on k3s, D-07/D-10/D-17/D-18)
+Last session: 2026-09-27T11:10:00.000Z
+Stopped at: Completed 13-09-PLAN.md (k3s restart-ladder resource measurement + final-state docs, D-07/D-08/D-13/D-15) -- awaiting operator merge/push of the executing worktree's commits to main; execution paused before 13-10 per this plan's own dispatch instructions
 Resume file: None
 
 ## Operator Next Steps
 
-- Phase 13 Wave 5 (13-07, observability activation, D-17) is next. Its own precondition text already assumes `k3s kubectl get ingressroute grafana -n monitoring` exists — it does, as a deliberate 13-06 placeholder (Endpoints-less `grafana-placeholder` Service, Traefik answers 503 for it). 13-07 should replace the backend Service reference on the existing `IngressRoute grafana`/`IngressRoute grafana-http` objects, not recreate them.
-- Read `docs/history/2026-09-26-production-cutover-to-k3s.md` before starting 13-07 or any later production-touching plan — it documents a real mid-window incident (a staged multi-commit branch pushed by tip instead of per-gate SHA, causing an ~11-minute public 502 with zero data loss) and 5 gaps found and fixed live. `docs/SESSION_LESSONS.md` lesson 8 generalizes the incident's root cause for any future staged multi-commit rollout in this repo.
+- **Merge/push 13-09's commits (`cd2e98d`, `b764148`, `06cf6c1`) from the executing worktree's branch to `main`** — the executing session was instructed not to do this itself, matching the pattern already established for these same commits during the session (twice resolved this way, once also reconciling a concurrent `fluxcdbot` image-bump commit that landed on `origin/main` concurrently).
+- **13-10 cannot start its own D-08.3 evaluation until `[T0, T0+24h]` has actually elapsed** — T0 = `2026-09-27T10:44:46Z`, so the window closes at `2026-09-28T10:44:46Z`. This is independent of merge timing; even a same-day merge does not let 13-10 begin its evaluation early.
+- **The filed todo** (`.planning/todos/pending/2026-09-27-two-kustomizations-race-for-the-grafana-ingressroute-name.md`) is not blocking but worth resolving during 13-10, since that plan's own D-04 Docker teardown already touches `k8s/platform/edge/`'s neighborhood — a natural point to also remove the now-fully-redundant placeholder IngressRoute.
 - Compose is stopped but NOT deleted (D-04 gate is 13-10) — all 8 Compose volumes remain intact on the VM. Do not delete them before 13-10's own gate passes.
+- Read `docs/history/2026-09-26-production-cutover-to-k3s.md` before starting 13-10 or any later production-touching plan — it documents a real mid-window incident (a staged multi-commit branch pushed by tip instead of per-gate SHA, causing an ~11-minute public 502 with zero data loss) and 5 gaps found and fixed live. `docs/SESSION_LESSONS.md` lesson 8 generalizes the incident's root cause for any future staged multi-commit rollout in this repo.
 - WINDOWS.md entry 9 (13-05 Task 2's unreproducible verbatim rpk/reset-endpoint acceptance-criteria capture) is open, not blocking, worth closing opportunistically.
 - Deferred, user-requested: reorganize `/docs` (9 top-level .md files + demo/diagrams/incidents/learning/netcup-report/plans subdirs) — still deferred. Two untracked items found in the working tree in a prior session, not cleaned up (unclear provenance): `docs/netcup-report/netcup_network_diagnostics.txt` and `docs/learning/.review-431836/` (a completed multi-agent review's scratch output, 20 findings) — triage or delete before/during the docs reorg.

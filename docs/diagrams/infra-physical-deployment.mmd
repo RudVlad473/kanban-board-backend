@@ -7,56 +7,89 @@ flowchart TB
         netcup_fw["Netcup Cloud Firewall"]
     end
 
-    subgraph netcup["Netcup VPS Lite 2 G12s — x86_64<br/>Vienna, Austria — [2] VM host network boundary"]
+    subgraph netcup["Netcup VPS Lite 2 G12s — x86_64<br/>Vienna, Austria — [2] KANBAN-INGRESS mangle-table filter"]
         direction TB
 
         netcup_spacer[" "]
         style netcup_spacer height:1px,fill:none,stroke:none
 
-        subgraph caddy_box["Docker container: caddy — [3] public TLS termination edge"]
-            caddy["caddy 2.11.4 + SHA-pinned<br/>rate-limit module (linux/amd64)<br/>ports 80, 443<br/>per-client-IP limit, production<br/>hostname's site block only:<br/>auth 20/5m, general 120/1m"]
-        end
-        netcup_spacer ~~~ caddy_box
-        subgraph app_box["Docker container: app"]
-            app["app<br/>(Spring Boot, port 8080,<br/>no host port published)"]
-        end
-        subgraph redpanda_box["Docker container: redpanda"]
-            redpanda["redpanda<br/>(Kafka broker + Schema Registry,<br/>no host port published)"]
-        end
-        subgraph postgres_box["Docker container: postgres"]
-            postgres["postgres 16<br/>(system of record, named volume,<br/>no host port published)"]
-        end
-
-        subgraph obs_box["Observability stack — Phase 12, single shared instance for both environments"]
+        subgraph k3s_box["k3s v1.36.4+k3s1 — single-node cluster"]
             direction TB
-            prometheus["prometheus<br/>(scrapes exporters + this VM)"]
-            grafana["grafana<br/>(dashboards, sole login gate,<br/>monitoring hostname's site block)"]
-            loki["loki<br/>(30-day log store)"]
-            promtail["promtail<br/>[6] read-only docker.sock grant"]
-            cadvisor["cadvisor<br/>[6] read-only docker.sock grant"]
-            node_exp["node-exporter<br/>(read-only host-root bind)"]
-            pg_exp["postgres-exporter"]
+
+            subgraph traefik_box["namespace kube-system"]
+                traefik["Traefik<br/>(k3s-packaged, ServiceLB<br/>LoadBalancer, ETP Local)<br/>[3] public edge — only Service<br/>with hostPort/NodePort"]
+            end
+            netcup_spacer ~~~ traefik_box
+
+            subgraph cm_box["namespace cert-manager"]
+                cert_manager["cert-manager<br/>(HTTP-01 ClusterIssuers,<br/>controller+webhook+cainjector)"]
+            end
+
+            subgraph prod_box["namespace kanban-prod"]
+                app_prod["app<br/>(Spring Boot, port 8080)"]
+                redpanda_prod["redpanda<br/>(Kafka broker + Schema Registry)"]
+            end
+
+            subgraph nonprod_box["namespace kanban-nonprod"]
+                app_nonprod["app<br/>(Spring Boot, port 8080)"]
+                redpanda_nonprod["redpanda<br/>(Kafka broker + Schema Registry)"]
+            end
+
+            subgraph data_box["namespace kanban-data — [4] NetworkPolicy-gated"]
+                postgres["postgres 16<br/>(shared instance, two databases,<br/>PVC-backed)"]
+            end
+
+            subgraph monitoring_box["namespace monitoring"]
+                direction TB
+                prometheus["Prometheus<br/>(kube-prometheus-stack,<br/>scrapes cluster + exporters)"]
+                grafana["Grafana<br/>(dashboards, sole login gate,<br/>monitoring hostname)"]
+                loki["Loki<br/>(30-day log store,<br/>single-binary mode)"]
+                alloy["Alloy<br/>(Kubernetes-API log tailing,<br/>DaemonSet — no docker.sock)"]
+                node_exp["node-exporter<br/>(DaemonSet, host-root<br/>read-only bind)"]
+                pg_exp["postgres-exporter"]
+            end
+
+            subgraph flux_box["namespace flux-system"]
+                flux["Flux (6 controllers)<br/>GitOps reconciliation +<br/>image automation"]
+            end
         end
 
-        caddy -- "HTTP :8080<br/>[4] Compose-internal Docker network" --> app
-        caddy -- "HTTP :3000, third site block<br/>[4] Compose-internal Docker network" --> grafana
-        app -- "Kafka wire protocol :19092<br/>[4] Compose-internal Docker network" --> redpanda
-        app -- "Schema Registry HTTP :8081<br/>[4] Compose-internal Docker network" --> redpanda
-        app -- "JDBC :5432, no TLS<br/>[5] kanban-db Docker network" --> postgres
-        prometheus -- "scrape<br/>[4] Compose-internal Docker network" --> node_exp
-        prometheus -- "scrape<br/>[4] Compose-internal Docker network" --> cadvisor
-        prometheus -- "scrape<br/>[4] Compose-internal Docker network" --> pg_exp
-        pg_exp -- "least-privilege monitoring role<br/>[5] kanban-db Docker network" --> postgres
-        promtail -- "ship logs<br/>[4] Compose-internal Docker network" --> loki
-        grafana -- "query<br/>[4] Compose-internal Docker network" --> prometheus
-        grafana -- "query<br/>[4] Compose-internal Docker network" --> loki
+        traefik -- "HTTP :8080" --> app_prod
+        traefik -- "HTTP :8080" --> app_nonprod
+        traefik -- "HTTP :80, third route<br/>monitoring hostname" --> grafana
+        app_prod -- "Kafka wire protocol :19092<br/>+ Schema Registry :8081" --> redpanda_prod
+        app_nonprod -- "Kafka wire protocol :19092<br/>+ Schema Registry :8081" --> redpanda_nonprod
+        app_prod -- "JDBC :5432, no TLS<br/>[4] cross-namespace, K8s DNS" --> postgres
+        app_nonprod -- "JDBC :5432, no TLS<br/>[4] cross-namespace, K8s DNS" --> postgres
+        prometheus -- "scrape" --> node_exp
+        prometheus -- "scrape" --> pg_exp
+        prometheus -- "scrape" --> redpanda_prod
+        prometheus -- "scrape" --> redpanda_nonprod
+        pg_exp -- "least-privilege monitoring role<br/>[4] cross-namespace, K8s DNS" --> postgres
+        alloy -- "ship logs<br/>Kubernetes API, no hostPath" --> loki
+        grafana -- "query" --> prometheus
+        grafana -- "query" --> loki
+        cert_manager -- "issues Certificates for<br/>Traefik's websecure entryPoint" --> traefik
     end
 
-    subgraph nonprod_box["kanban-nonprod Compose project — SAME VM, different project"]
+    subgraph gha["GitHub Actions runner — x86_64<br/>ubuntu-latest"]
         direction TB
-        redpanda_nonprod["redpanda-nonprod"]
+        gha_ci["deploy.yml<br/>(build, test, push, Flyway verify)"]
     end
-    prometheus -- "scrape nonprod broker metrics<br/>[7] kanban-metrics Docker network<br/>(crosses Compose-project boundary)" --> redpanda_nonprod
+    subgraph dh["Docker Hub"]
+        direction TB
+        dh_repo["app image repositories<br/>(prod + nonprod tags)"]
+    end
+    subgraph gh_repo["GitHub — this repository"]
+        direction TB
+        gh_main["main branch<br/>k8s/ manifests + image tags"]
+    end
 
     client --> netcup_fw
-    netcup_fw -- "HTTPS :443 via kanban-board-rud-vlad-473.duckdns.org<br/>(crosses VM boundary)" --> caddy
+    netcup_fw -- "HTTPS :443 via duckdns.org<br/>hostnames (crosses VM boundary)" --> netcup
+    gha_ci -- "push image, sortable tag<br/>main-<run_number>-<sha7>" --> dh_repo
+    gha_ci -- "SSH forward, host-key pinned<br/>[5] Flyway pre-merge verify" --> postgres
+    flux -- "poll GitRepository :443<br/>SSH deploy key" --> gh_main
+    flux -- "scan tags via ImageRepository" --> dh_repo
+    flux -- "commit sortable tag bumps<br/>(fluxcdbot), k8s/** ignored<br/>by deploy.yml" --> gh_main
+    flux -- "reconcile Kustomizations,<br/>HelmReleases into k3s" --> k3s_box

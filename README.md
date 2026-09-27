@@ -132,143 +132,143 @@ flowchart TB
         netcup_fw["Netcup Cloud Firewall"]
     end
 
-    subgraph netcup["Netcup VPS Lite 2 G12s — x86_64<br/>Vienna, Austria — [2] VM host network boundary"]
+    subgraph netcup["Netcup VPS Lite 2 G12s — x86_64<br/>Vienna, Austria — [2] KANBAN-INGRESS mangle-table filter"]
         direction TB
 
         netcup_spacer[" "]
         style netcup_spacer height:1px,fill:none,stroke:none
 
-        subgraph caddy_box["Docker container: caddy — [3] public TLS termination edge"]
-            caddy["caddy 2.11.4 + SHA-pinned<br/>rate-limit module (linux/amd64)<br/>ports 80, 443<br/>per-client-IP limit, production<br/>hostname's site block only:<br/>auth 20/5m, general 120/1m"]
-        end
-        netcup_spacer ~~~ caddy_box
-        subgraph app_box["Docker container: app"]
-            app["app<br/>(Spring Boot, port 8080,<br/>no host port published)"]
-        end
-        subgraph redpanda_box["Docker container: redpanda"]
-            redpanda["redpanda<br/>(Kafka broker + Schema Registry,<br/>no host port published)"]
-        end
-        subgraph postgres_box["Docker container: postgres"]
-            postgres["postgres 16<br/>(system of record, named volume,<br/>no host port published)"]
-        end
-
-        subgraph obs_box["Observability stack — Phase 12, single shared instance for both environments"]
+        subgraph k3s_box["k3s v1.36.4+k3s1 — single-node cluster"]
             direction TB
-            prometheus["prometheus<br/>(scrapes exporters + this VM)"]
-            grafana["grafana<br/>(dashboards, sole login gate,<br/>monitoring hostname's site block)"]
-            loki["loki<br/>(30-day log store)"]
-            promtail["promtail<br/>[6] read-only docker.sock grant"]
-            cadvisor["cadvisor<br/>[6] read-only docker.sock grant"]
-            node_exp["node-exporter<br/>(read-only host-root bind)"]
-            pg_exp["postgres-exporter"]
+
+            subgraph traefik_box["namespace kube-system"]
+                traefik["Traefik<br/>(k3s-packaged, ServiceLB<br/>LoadBalancer, ETP Local)<br/>[3] public edge — only Service<br/>with hostPort/NodePort"]
+            end
+            netcup_spacer ~~~ traefik_box
+
+            subgraph cm_box["namespace cert-manager"]
+                cert_manager["cert-manager<br/>(HTTP-01 ClusterIssuers,<br/>controller+webhook+cainjector)"]
+            end
+
+            subgraph prod_box["namespace kanban-prod"]
+                app_prod["app<br/>(Spring Boot, port 8080)"]
+                redpanda_prod["redpanda<br/>(Kafka broker + Schema Registry)"]
+            end
+
+            subgraph nonprod_box["namespace kanban-nonprod"]
+                app_nonprod["app<br/>(Spring Boot, port 8080)"]
+                redpanda_nonprod["redpanda<br/>(Kafka broker + Schema Registry)"]
+            end
+
+            subgraph data_box["namespace kanban-data — [4] NetworkPolicy-gated"]
+                postgres["postgres 16<br/>(shared instance, two databases,<br/>PVC-backed)"]
+            end
+
+            subgraph monitoring_box["namespace monitoring"]
+                direction TB
+                prometheus["Prometheus<br/>(kube-prometheus-stack)"]
+                grafana["Grafana<br/>(sole login gate,<br/>monitoring hostname)"]
+                loki["Loki<br/>(30-day log store)"]
+                alloy["Alloy<br/>(Kubernetes-API log tailing)"]
+            end
+
+            subgraph flux_box["namespace flux-system"]
+                flux["Flux (6 controllers)<br/>GitOps + image automation"]
+            end
         end
 
-        caddy -- "HTTP :8080<br/>[4] Compose-internal Docker network" --> app
-        caddy -- "HTTP :3000, third site block<br/>[4] Compose-internal Docker network" --> grafana
-        app -- "Kafka wire protocol :19092<br/>[4] Compose-internal Docker network" --> redpanda
-        app -- "Schema Registry HTTP :8081<br/>[4] Compose-internal Docker network" --> redpanda
-        app -- "JDBC :5432, no TLS<br/>[5] kanban-db Docker network" --> postgres
-        prometheus -- "scrape<br/>[4] Compose-internal Docker network" --> node_exp
-        prometheus -- "scrape<br/>[4] Compose-internal Docker network" --> cadvisor
-        prometheus -- "scrape<br/>[4] Compose-internal Docker network" --> pg_exp
-        pg_exp -- "least-privilege monitoring role<br/>[5] kanban-db Docker network" --> postgres
-        promtail -- "ship logs<br/>[4] Compose-internal Docker network" --> loki
-        grafana -- "query<br/>[4] Compose-internal Docker network" --> prometheus
-        grafana -- "query<br/>[4] Compose-internal Docker network" --> loki
+        traefik -- "HTTP :8080" --> app_prod
+        traefik -- "HTTP :8080" --> app_nonprod
+        traefik -- "HTTP, third route" --> grafana
+        app_prod -- "Kafka + Schema Registry" --> redpanda_prod
+        app_nonprod -- "Kafka + Schema Registry" --> redpanda_nonprod
+        app_prod -- "JDBC :5432, no TLS<br/>[4] cross-namespace, K8s DNS" --> postgres
+        app_nonprod -- "JDBC :5432, no TLS<br/>[4] cross-namespace, K8s DNS" --> postgres
+        prometheus -- "scrape" --> redpanda_prod
+        alloy -- "ship logs" --> loki
+        grafana -- "query" --> prometheus
+        grafana -- "query" --> loki
+        cert_manager -- "issues Certificates for<br/>Traefik's websecure entryPoint" --> traefik
     end
-
-    subgraph nonprod_box["kanban-nonprod Compose project — SAME VM, different project"]
-        direction TB
-        redpanda_nonprod["redpanda-nonprod"]
-    end
-    prometheus -- "scrape nonprod broker metrics<br/>[7] kanban-metrics Docker network<br/>(crosses Compose-project boundary)" --> redpanda_nonprod
 
     client --> netcup_fw
-    netcup_fw -- "HTTPS :443 via kanban-board-rud-vlad-473.duckdns.org<br/>(crosses VM boundary)" --> caddy
+    netcup_fw -- "HTTPS :443 via duckdns.org<br/>hostnames (crosses VM boundary)" --> netcup
+    flux -- "reconcile Kustomizations,<br/>HelmReleases into k3s" --> k3s_box
 ```
 
 <sub>Source: [docs/diagrams/infra-physical-deployment.mmd](docs/diagrams/infra-physical-deployment.mmd)
 — the Physical/Deployment view per [docs/DIAGRAM_CONVENTIONS.md](docs/DIAGRAM_CONVENTIONS.md). This
-is a rendering of that file; if the two ever disagree, the `.mmd` source is canonical.</sub>
+is a simplified rendering of that file for README readability; the full diagram (Docker Hub, GitHub
+Actions, Flux's GitOps loop in full) lives at the source path, and if the two ever disagree, the
+`.mmd` source is canonical.</sub>
 
-Production runs on a **Netcup VPS Lite 2 G12s** (Vienna, x86_64) via Docker Compose, behind the
-Netcup Cloud Firewall: `caddy` terminates public TLS with an automatically renewed Let's Encrypt
-certificate and is the only container with a published host port (80/443 — 80 exists solely for
-the ACME challenge and the HTTP→HTTPS redirect), and now also carries a SHA-pinned rate-limit
-module scoping login attempts on the production hostname. `app`, a self-hosted `redpanda` broker
-(Kafka wire protocol plus its built-in Schema Registry), and a self-hosted **Postgres 16** instance
-— the system of record since Phase 11 replaced Neon serverless Postgres — sit behind Caddy with no
-host port of their own, reachable only on the internal Compose network (Postgres specifically on
-its own `kanban-db` network). A single shared Prometheus/Grafana/Loki/Promtail stack (Phase 12)
-monitors both environments from inside this same Compose project, with Grafana as the only one of
-those four publicly reachable, gated by its own login on a separate Caddy site block. See
+Production runs on a **k3s v1.36.4+k3s1** single-node cluster, on the same **Netcup VPS Lite 2
+G12s** (Vienna, x86_64) as before, behind the Netcup Cloud Firewall and a Docker-independent
+`mangle`-table firewall (`KANBAN-INGRESS`, Plan 13-08): **Traefik** (the k3s-packaged edge)
+terminates public TLS with cert-manager-issued Let's Encrypt certificates and is the only
+component with a published host port (80/443, via k3s's ServiceLB) — confirmed live via `k3s
+kubectl get svc -A` (the cluster's only non-`ClusterIP` Service) and `k3s kubectl get pods -A`
+(the only Pods carrying `hostPort` are `svclb-traefik-*`). `app`, a self-hosted `redpanda` broker
+per environment (Kafka wire protocol plus its built-in Schema Registry), and a self-hosted
+**Postgres 16** StatefulSet — the system of record since Phase 11 replaced Neon serverless
+Postgres — sit behind Traefik with no host port of their own, reachable only via `ClusterIP`
+Services inside the cluster's own pod network (Postgres specifically gated by a `NetworkPolicy` in
+its own `kanban-data` namespace). **Flux** reconciles every manifest from this repository's `main`
+branch pull-based GitOps, no push-based deploy step. A shared kube-prometheus-stack/Loki/Alloy
+stack monitors both environments from the `monitoring` namespace, with Grafana as the only
+publicly reachable piece, gated by its own login through its own `IngressRoute`. See
 [docs/INFRA_ARCHITECTURE.md](docs/INFRA_ARCHITECTURE.md) for the full numbered-trust-boundary
 breakdown and [docs/INFRA_RUNBOOK.md](docs/INFRA_RUNBOOK.md) for the provider pivot history (from
-Oracle Cloud's Always Free A1 Flex, ARM64 capacity that proved structurally unavailable) and the
-VM's live firewall/DNS state.
+Oracle Cloud's Always Free A1 Flex, ARM64 capacity that proved structurally unavailable), the
+`KANBAN-INGRESS` firewall evidence, and the live k3s resource-measurement session.
 
-**Nonprod** is a second, fully isolated deployment colocated on the same VM: originally its own
-Compose project (`kanban-board-nonprod`), its own database (`kanban_nonprod`) on that same shared
-self-hosted Postgres instance — never holding a production row — its own Redpanda broker with an
+**Nonprod** is a second, fully isolated deployment colocated on the same cluster: its own
+namespace (`kanban-nonprod`), its own database (`kanban_nonprod`) on that same shared self-hosted
+Postgres instance — never holding a production row — its own Redpanda broker with an
 independently-populated Avro Schema Registry, and its own publicly trusted HTTPS host
-(`kanban-board-rud-vlad-473-nonprod.duckdns.org`) — bridged to production by exactly one shared
-Docker network (`kanban-edge`) joining only the two edge pieces that must talk to each other. It
+(`kanban-board-rud-vlad-473-nonprod.duckdns.org`) reconciled by its own, independent Flux
+`Kustomization` (D-16) — a nonprod-only image bump never touches prod's Pod, and vice versa. It
 exists so a change can be proven against a real broker, a real registry, and real TLS before it
-ever reaches production data. Full isolation proof (container/volume/network identity, a live
-signup-then-board-create that left production's row counts unchanged) is in
+ever reaches production data. The Compose-era isolation proof (container/volume/network identity,
+a live signup-then-board-create that left production's row counts unchanged) is in
 [docs/history/2026-08-18-nonprod-bring-up.md](docs/history/2026-08-18-nonprod-bring-up.md)'s
-"Nonprod bring-up" and later sections.
-
-**Interim note (Plan 13-05, 2026-09-25):** nonprod now runs on a k3s cluster on this same VM,
-behind the unchanged Caddy edge (Caddy proxies to Traefik's NodePort rather than directly to the
-Compose `app-nonprod` container) — production stays on Docker Compose until Plan 13-06's cutover.
-The Compose nonprod containers described above are stopped, not removed (cheap rollback until
-13-06). See [docs/history/2026-09-25-nonprod-on-k3s.md](docs/history/2026-09-25-nonprod-on-k3s.md)'s
-"Nonprod on k3s — Plan 13-05" section for the full cutover evidence, the GitOps deploy-cycle proof, and the measured interim memory
-budget. The diagram above still shows nonprod's old Compose-only topology; the full redraw
-covering both runtimes happens in Plan 13-09.
+"Nonprod bring-up" section, historical background for a mechanism the k3s cutover replaced with
+namespace isolation and independent Kustomizations instead.
 
 ## CI/CD pipeline & deploy strategy
 
-Every push to `master` runs [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) — there
-is no other trigger, so nothing reaches production without going through this file. Nonprod no
-longer deploys through CI at all as of Plan 13-05 (see the interim note below). `run-tests`
-(`./gradlew test`, then `spotlessCheck`) gates everything below it; nothing else runs unless it's
-green. From there the graph fans out and back in:
+Every push to `main` runs [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) — there
+is no other trigger. **CI ends at image push (D-14).** Neither production nor nonprod deploys
+through this pipeline anymore — Flux deploys both environments independently, entirely through
+GitOps (D-16). `run-tests` (`./gradlew test`, then `spotlessCheck`) gates everything below it;
+nothing else runs unless it's green. From there the graph fans out and back in:
 
-- **In parallel:** the Docker image builds and pushes to Docker Hub, tagged with a sortable scheme
-  (`main-<run_number>-<short SHA>`, D-15) so Flux's image-automation controller can pick the
-  numerically newest tag deterministically — `linux/amd64` natively, the runner and the VM share
-  the same architecture, no QEMU needed — and a Flyway migration-verification job runs **on the VM
-  itself** (the runner SCPs the migration scripts over, then runs the pinned Flyway CLI over SSH
-  against the self-hosted Postgres container on the internal `kanban-db` network — not against a
-  runner-side connection to a managed provider), with an identical job verifying nonprod's own
-  database on that same shared instance (this job stays: nonprod's data still lives in Compose
-  Postgres until Plan 13-06).
-- **Then:** `deploy-to-netcup` ships the new image to production over SSH (host key pinned by
-  fingerprint) once the build and production's Flyway job both succeed, and also
-  `register-schemas-production` re-registers Avro schemas against the production registry
-  immediately after.
-- **Cleanup, gated by outcome:** a successful production deploy prunes older Docker Hub tags; a
-  failed one deletes only the just-pushed manifest by digest instead, so a broken deploy never
-  strands an unreferenced image. `cleanup-old-images-nonprod` runs independently of any deploy
-  job's outcome (there is no nonprod deploy job left to gate on) and keeps the five newest
-  sortable-tag images, since Flux needs recent tags available for a `git revert`-based rollback.
+- **In parallel:** the Docker image builds once and pushes to BOTH the prod and nonprod Docker Hub
+  repositories, tagged with a sortable scheme (`main-<run_number>-<short SHA>`, D-15) so each
+  environment's own Flux `ImagePolicy` can pick the numerically newest tag deterministically —
+  `linux/amd64` natively, the runner and the VM share the same architecture, no QEMU needed — and
+  two Flyway migration-verification jobs run **on the VM itself** (the runner SCPs the migration
+  scripts over, then runs the pinned Flyway CLI over SSH against Postgres's `ClusterIP` directly —
+  not against a runner-side connection to a managed provider), one per environment's own database
+  on that same shared self-hosted instance.
+- **Then: nothing in this pipeline.** There is no `deploy-to-netcup`, no
+  `register-schemas-production`, no SSH-based deploy job of any kind. Each environment's own Flux
+  `ImageRepository`/`ImagePolicy` (5m poll) picks up the newly pushed tag, `ImageUpdateAutomation`
+  (author `fluxcdbot`) commits a `Setters`-strategy bump to that environment's own overlay
+  `kustomization.yaml` on `main` (`k8s/**` sits on this workflow's own paths-ignore, so that commit
+  does not re-trigger a build), and `kustomize-controller` applies it — the app `Deployment`'s
+  `register-schemas` `initContainer` re-registers Avro schemas in-cluster, ordered before the app
+  container starts by the kubelet's own contract, replacing the CI job entirely.
+- **Cleanup, per environment:** `cleanup-old-images`/`cleanup-old-images-nonprod` each keep the
+  five newest sortable-tag images in their own Docker Hub repository, run independently of any
+  deploy outcome (there is no deploy job left in this pipeline to gate on) — Flux needs recent tags
+  available for a `git revert`-based rollback either way.
 
-**Interim note (Plan 13-05, 2026-09-25):** nonprod no longer deploys through this pipeline at all.
-A Flux `ImageUpdateAutomation` running in the k3s cluster polls Docker Hub directly, commits a tag
-bump to `k8s/overlays/nonprod/kustomization.yaml` on `main` when it finds a newer sortable tag, and
-Flux's own `Kustomization` reconciler applies the change — no SSH, no CI job, no `deploy.yml` run
-at all for that commit (`k8s/**` is on this workflow's paths-ignore list specifically to prevent a
-rebuild loop). `docs/history/2026-09-25-nonprod-on-k3s.md`'s "Nonprod on k3s — Plan 13-05" section has the full cycle
-proven end to end with SHAs and timestamps. Production is unaffected by this change and keeps
-deploying exactly as described above until Plan 13-06's cutover.
-
-Full delivery-path detail, including the exact honest limits (e.g. `up -d` not waiting on the
-healthcheck), is in [docs/INFRA_ARCHITECTURE.md](docs/INFRA_ARCHITECTURE.md); the same path is
-drawn as a sequence diagram at
-[docs/diagrams/infra-delivery-scenario.mmd](docs/diagrams/infra-delivery-scenario.mmd) — that
-diagram still reflects the pre-13-05 dual-SSH-deploy shape and is due for a redraw in Plan 13-09.
+Full delivery-path detail, including the exact mechanism for the image-tag bump and the
+independent per-environment reconciliation (D-16), is in
+[docs/INFRA_ARCHITECTURE.md](docs/INFRA_ARCHITECTURE.md); the same path is drawn as a sequence
+diagram at
+[docs/diagrams/infra-delivery-scenario.mmd](docs/diagrams/infra-delivery-scenario.mmd).
 
 ## Quality & security gates
 

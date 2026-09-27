@@ -1,19 +1,23 @@
 # Infrastructure Architecture
 
-This document describes the production deployment topology introduced by v1.2's Infra Migration
-milestone (Phase 5) and amended by v1.3's Phase 11: a Netcup VPS Lite 2 G12s VM (Vienna, x86_64)
-running the application, a self-hosted PostgreSQL 16 instance, a self-hosted Redpanda broker, and
-Caddy for automatic public HTTPS, delivered via GitHub Actions. The original target was Oracle
-Cloud's Always Free A1 Flex (ARM64); it was replaced after Oracle's free-tier capacity in the
-planned region proved structurally unavailable — see `docs/INFRA_RUNBOOK.md` and Phase 5 Plan
-05-03's SUMMARY for the pivot rationale.
+This document describes the production deployment topology as of Phase 13's k3s cutover: a
+single-node k3s v1.36.4+k3s1 cluster on a Netcup VPS Lite 2 G12s VM (Vienna, x86_64), reconciled by
+Flux (GitOps, pull-based), fronted by Traefik (the k3s-packaged edge), with cert-manager issuing
+Let's Encrypt certificates, a self-hosted PostgreSQL 16 StatefulSet, self-hosted Redpanda
+StatefulSets per environment, and kube-prometheus-stack/Loki/Alloy for observability. Docker
+Compose is retired from the production request path as of Plan 13-06's cutover (2026-09-26) — it
+is stopped but not yet deleted on the VM, pending Plan 13-10's D-04 teardown gate. The original
+deploy target was Oracle Cloud's Always Free A1 Flex (ARM64); it was replaced after Oracle's
+free-tier capacity in the planned region proved structurally unavailable — see
+`docs/INFRA_RUNBOOK.md` and Phase 5 Plan 05-03's SUMMARY for that earlier pivot rationale.
 
-**The database moved onto the VM in Phase 11 (2026-08-26).** Neon serverless Postgres (Frankfurt)
-was the system of record through v1.2 and this document described it as such until 2026-09-03; the
-Neon project has since been deleted. Every claim below about where data lives, what crosses the VM
-boundary, and how migrations reach the database changed with that move, which is why the
-correction is called out here rather than silently applied — a reader who remembers the Neon
-topology needs to know the difference is real and not a documentation slip.
+**The database moved onto the VM in Phase 11 (2026-08-26)** and has stayed there through the k3s
+cutover — Postgres runs as a StatefulSet in namespace `kanban-data` now, reached by both app
+namespaces cross-namespace via Kubernetes DNS
+(`postgres.kanban-data.svc.cluster.local`), not via a Compose container name. Neon serverless
+Postgres (Frankfurt) was the system of record through v1.2; that project has since been deleted.
+Every claim below about where data lives, what crosses the VM boundary, and how migrations reach
+the database reflects this VM-hosted, now-Kubernetes-native, reality.
 
 Per [`docs/DIAGRAM_CONVENTIONS.md`](DIAGRAM_CONVENTIONS.md), each diagram below is one deliberate
 Kruchten 4+1 view, not an ad hoc mix of concerns. Three views are drawn — one Physical/Deployment
@@ -35,267 +39,231 @@ deploy target (see `DIAGRAM_CONVENTIONS.md`'s own note on this).
 ![Flowchart: physical/deployment view of the production topology](diagrams/infra-physical-deployment.png)
 <sub>[diagram source](diagrams/infra-physical-deployment.mmd)</sub>
 
-**Externally reachable vs. internal-only:** only Caddy's ports 80 and 443 are published on the
-VM's host network and reachable from the internet (443 serves traffic, 80 exists solely for the
-Let's Encrypt HTTP-01 challenge and Caddy's automatic HTTP→HTTPS redirect). The app's port 8080
-and Redpanda's Kafka (`19092`) and Schema Registry (`8081`) listeners publish no host port at all
-— every edge among `caddy`, `app`, and `redpanda` stays on the Compose-internal Docker network and
-never crosses the VM's trust boundary. This is the entirety of INFRA-08: the only two host ports
-punched through the VM's network layers by Docker are 80 and 443.
+**Externally reachable vs. internal-only:** `svclb-traefik-*` is the ONLY Pod in the cluster
+carrying a `hostPort` (80, 443) — confirmed live via `k3s kubectl get pods -A -o json` filtered for
+`hostNetwork`/`hostPort`, and the only non-`ClusterIP` `Service` is `kube-system/traefik`
+(`type: LoadBalancer`, k3s's own ServiceLB). Every app, Postgres, and Redpanda Service is
+`ClusterIP` — reachable only from inside the cluster's own pod network (`10.42.0.0/16`), never
+from the VM's host network directly. This is the k3s-era form of the same invariant Compose-era
+INFRA-08 stated: exactly two host-level entry points (80, 443), both owned by the one edge
+component.
 
-**Where TLS terminates:** Caddy terminates public TLS at the VM boundary using an automatically
-obtained, publicly trusted Let's Encrypt certificate (no self-signed/internal TLS). Traffic from
-Caddy to the app inside the VM is plain HTTP — safe only because that hop never leaves the
-internal Docker network. **There is no second TLS hop.** The app reaches Postgres at
-`jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}` with `DB_HOST=postgres` — a container name on
-the internal `kanban-db` Docker network — and the JDBC URL in `application.properties` carries no
-`sslmode` and no `channel_binding` parameter. That is safe for the same reason the Caddy→app hop
-is: it never leaves the VM. It is worth stating explicitly because the pre-Phase-11 version of this
-document described an encrypted app→Neon hop over the public internet, and someone reading the
-absence of TLS here as an oversight would be re-introducing a requirement that no longer applies.
+**Where TLS terminates:** Traefik terminates public TLS at the VM boundary using
+cert-manager-issued, publicly trusted Let's Encrypt certificates (HTTP-01 challenge, one
+`ClusterIssuer` per environment). Traffic from Traefik to any backend Service inside the cluster is
+plain HTTP — safe only because that hop never leaves the cluster's own pod network. **There is no
+second TLS hop.** The app reaches Postgres at
+`jdbc:postgresql://postgres.kanban-data.svc.cluster.local:5432/${DB_NAME}`, and that JDBC URL
+carries no `sslmode`/`channel_binding` parameter — safe for the identical reason the Traefik→app
+hop is: cross-namespace Kubernetes DNS never leaves the cluster.
 
-**Stateful components and where state lives:** the VM holds the system of record. This is the
-single biggest consequence of Phase 11 and inverts what this section said before: durable
-application state now lives in the `postgres` container's named volume on this VM, not in a managed
-provider. Alongside it sit two volumes scoped to operational/transport concerns — Redpanda's data
-volume (the Kafka log and Schema Registry's internal topics: replayable operational state, not the
-source of truth) and Caddy's certificate/state volume (so container recreation reuses the existing
-Let's Encrypt certificate instead of triggering a rate-limited re-request). Losing either of those
-two loses operational continuity; **losing the Postgres volume loses user data outright.**
+**Stateful components and where state lives:** the VM still holds the system of record, now as
+Kubernetes-native storage. Durable application state lives in Postgres's `PersistentVolumeClaim`
+(`local-path` StorageClass, 5Gi) in namespace `kanban-data`. Alongside it sit PVCs scoped to
+operational/transport concerns — each Redpanda StatefulSet's own volume (the Kafka log and Schema
+Registry's internal topics, per environment: replayable operational state, not the source of
+truth), Prometheus's (10Gi) and Loki's (10Gi) retention-window stores, and Grafana's (1Gi)
+dashboard/session store. Losing any of the observability PVCs loses history, not correctness;
+**losing the Postgres PVC loses user data outright.**
 
-That raises a real, currently-open exposure rather than a theoretical one: there is no backup. See
-`docs/INFRA_RUNBOOK.md`'s "Backups and restore" section, which documents a `pg_dump`/`pg_restore`
-procedure that has been written but never executed, and the todo
+That raises a real, currently-open exposure rather than a theoretical one: there is still no
+backup. See `docs/INFRA_RUNBOOK.md`'s "Backups and restore" section, which documents a
+`pg_dump`/`pg_restore` procedure that has been written but never executed, and the todo
 `.planning/todos/pending/2026-08-20-no-documented-backup-restore-runbook-for-prod-db.md`, which is
 deliberately still open for the scheduled dump, off-host storage, retention policy and one proven
-test restore.
+test restore — this gap did not close with the k3s cutover.
 
-**Numbered trust boundaries (added 2026-09-05, extended 2026-09-08 by Phase 12):** the diagram's
-subgraph and edge labels now carry consistent numbers, `[1]` through `[7]`, so this diagram and the
-packet-path Scenario below can be read together against the same boundary set rather than two
-diagrams inventing their own vocabulary. `[1]` is deliberately marked `(external — not in this
-repo)` — the Netcup Cloud Firewall is a control-panel setting on Netcup's infrastructure, not a
-file in this repository, so it is reviewed in no pull request here and its actual ruleset cannot be
-confirmed from the code. `[2]`–`[5]` are boundaries this repository DOES define and
-version-control: the VM's own host network, Caddy's public TLS termination edge, the
-Compose-internal Docker network, and the `kanban-db` network. As of 2026-09-06 (quick task
-260906-feq), `[1]` is no longer the only layer governing traffic to a published container port:
-`DOCKER-USER`, inside `[2]`, now carries a version-controlled default-drop policy of its own — see
-the Scenario below for the ruleset and the evidence it works. `[6]` and `[7]`, added by Phase 12
-(plan 12-06): `[6]` marks the read-only `docker.sock` grants held by `cadvisor` and `promtail` —
-API-level privilege exceeding what a read-only mount alone implies, a scoped and accepted
-exception rather than an oversight; `[7]` marks the `kanban-metrics` network edge from `prometheus`
-to `redpanda-nonprod`, the ONE edge in this diagram that crosses the Compose-project boundary
-between the production stack and the `kanban-nonprod` project running on this same VM.
+**Numbered trust boundaries (renumbered for k3s, Plan 13-09):** `[1]` is deliberately marked
+`(external — not in this repo)` — the Netcup Cloud Firewall is a control-panel setting on Netcup's
+infrastructure, not a file in this repository, so it is reviewed in no pull request here and its
+actual ruleset cannot be confirmed from the code. `[2]` marks `KANBAN-INGRESS`, the `mangle
+PREROUTING` firewall installed in Plan 13-08 specifically because k3s's NodePort/hostPort DNAT
+(via kube-router's `KUBE-NODEPORTS` and the CNI's `CNI-HOSTPORT-DNAT`) never traverses
+`DOCKER-USER` at all — the old Compose-era chain governs nothing on this cluster; `mangle
+PREROUTING` is the one hook point both DNAT paths share, regardless of which eventually claims the
+packet. `[3]` marks Traefik's public edge (websecure entryPoint, `externalTrafficPolicy: Local`
+so ServiceLB preserves the real client address instead of collapsing every client into one
+rate-limit bucket). `[4]` marks the cross-namespace Kubernetes-DNS boundary every app→Postgres and
+exporter→Postgres edge crosses, gated by a `NetworkPolicy` in `kanban-data` limiting reachability
+to pods carrying the `kanban-board/postgres-client: "true"` label. `[5]` marks the CI-to-VM SSH
+forward `flyway-verify`/`flyway-verify-nonprod` open, host-key pinned by fingerprint, used only for
+pre-merge migration verification — it never carries application traffic.
 
-**The observability stack (Phase 12, D-01/D-04):** a single shared instance of Prometheus, Grafana,
-Loki and Promtail, plus three scrapers (`node-exporter`, `cadvisor`, `postgres-exporter`), monitors
-BOTH environments from inside the production Compose project — there is no separate nonprod
-monitoring stack. Grafana is the ONLY one of these seven publicly reachable, and only through
-Caddy's third site block; its own login is the sole AUTHENTICATION gate in front of every metric
-this stack collects, backed by a login-path-scoped rate limiter (D-03 as amended in plan 12-01) —
-distinct from an IP allowlist or `basic_auth`, which remain forbidden. `cadvisor` and `promtail`
-each hold a read-only `docker.sock` mount (`[6]` above): read-only removes the ability to write
-different bytes to the socket file, but the Docker API's dangerous operations (creating a
-privileged container, mounting the host filesystem into one) are HTTP requests over that socket,
-not filesystem writes — a real, accepted exception, not a control that fully closes the risk it
-sounds like it closes. `cadvisor`'s actual deployed mount set is a dated, disclosed amendment to
-D-05's literal list (plan 12-03; full reasoning in
-`docs/history/2026-09-07-monitoring-role-and-metrics-targets.md`'s "cAdvisor mount posture"). `node-exporter` holds a read-only bind of the host's root filesystem
-(`/:/host:ro,rslave`) to reach real host CPU/memory/disk metrics without `network_mode: host` or
-`pid: host` (both forbidden or unneeded) — with one disclosed consequence: `node_network_*` series
-report the HOST's full interface set, not just this container's own namespace, because sysfs's
-network-class entries are pinned to whichever netns was active when the read-only bind was created
-(plan 12-01 Task 3, live-verified).
+**The observability stack (Phase 13, D-07/D-17):** kube-prometheus-stack (Prometheus + Grafana +
+kube-state-metrics + node-exporter), Loki, and Alloy monitor BOTH environments from the shared
+`monitoring` namespace — there is no separate nonprod monitoring stack, matching the Compose-era
+single-shared-instance model. Grafana is the ONLY one of these publicly reachable, through its own
+`IngressRoute` on the monitoring hostname; its own login remains the sole AUTHENTICATION gate in
+front of every metric this stack collects, backed by a login-path-scoped `rateLimit` Middleware
+(`grafana-login-rate-limit`, re-derived from Traefik's own token-bucket semantics in Plan 13-08).
+Alloy replaces Promtail — it tails pod logs through the Kubernetes API (`loki.source.kubernetes`),
+not a `docker.sock`/hostPath mount, closing the read-only-`docker.sock`-grant exception the
+Compose-era `cadvisor`/`promtail` pair needed. `node-exporter` runs as a DaemonSet with
+`hostRootFsMount` (a scoped, Kubernetes-native equivalent of the Compose-era `/:/host:ro,rslave`
+bind), `hostNetwork: false`, `hostPID: false` — the same host-visibility trade-off as before, made
+without needing the host-networking escape hatch Compose's node-exporter required.
 
-**Host-wide container count — THIRTEEN, not eleven.** This VM runs two Compose projects
-simultaneously: the production project's eleven services (`caddy`, `postgres`, `app`, `redpanda`,
-`node-exporter`, `prometheus`, `grafana`, `loki`, `promtail`, `cadvisor`, `postgres-exporter`,
-confirmed via `docker compose ps` from `/opt/deploy/kanban-board-backend`) plus the
-`kanban-nonprod` project's two (`app-nonprod`, `redpanda-nonprod`). Confirmed host-wide via `docker
-ps` on the VM, not `docker compose ps`, which is scoped to whichever project's directory it runs
-from and would silently undercount by omitting the other project entirely. A Physical/Deployment
-view that counts one Compose project is not a physical view — that is precisely the distinction the
-4+1 model draws between the Development view (what a repository's own build produces) and this one
-(what actually runs on the hardware) — so this document states the host-wide figure and the
-per-project split explicitly rather than leaving a reader to assume the diagram's own subgraph
-boundary is also the host boundary.
+**Host-wide container count.** Every environment's workloads and the entire observability/platform
+stack now run as Kubernetes Pods inside the single k3s cluster rather than as two separate Compose
+projects — confirmed via `k3s kubectl get pods -A -o json` reduced to a per-container count (34
+containers across 7 namespaces at last count, Plan 13-09's T0 snapshot: `cert-manager` ×3,
+`flux-system` ×6, `kanban-data` ×1, `kanban-nonprod` ×2, `kanban-prod` ×2, `kube-system` ×7,
+`monitoring` ×13). Docker Compose's process-isolation boundary (one Compose project's `docker
+compose ps` silently excluding the other project's containers, the exact failure mode the
+pre-cutover version of this document warned about) no longer applies — a single `k3s kubectl get
+pods -A` enumerates the entire host-wide workload set by construction.
 
 ## Scenario (+1) View — Delivery Path
 
-Traces one key end-to-end scenario — push to `master` through to a running deploy — across the
-other views, confirming they stay consistent with each other. `deploy.yml` holds 14 jobs as of
-quick task 260903-dvp (2026-09-03, up from 7 when this note was first written); this diagram
-traces the **production** delivery path only (`setup` → `run-tests` →
-`{build-and-push-docker-image, flyway-verify, build-and-push-caddy-image}` →
-`deploy-to-netcup` → `register-schemas-production` / `cleanup-old-images` /
-`cleanup-unused-image`) — the nonprod jobs (`flyway-verify-nonprod`, `deploy-to-nonprod`,
-`health-check-nonprod`, `cleanup-old-images-nonprod`, `cleanup-unused-image-nonprod`) exist and
-are deliberately not drawn here; that is this diagram's known limit, not an omission to fix.
+Traces one key end-to-end scenario — push to `main` through to a running deploy — across the
+other views, confirming they stay consistent with each other. `deploy.yml` holds 8 jobs as of
+Plan 13-06 (D-14, D-15): `setup`, `run-tests`, `build-and-push-docker-image`,
+`build-and-push-caddy-image` (persists until Plan 13-10's D-04 teardown — the Caddy image is
+still built, just no longer deployed to anything in the request path), `flyway-verify`,
+`flyway-verify-nonprod`, `cleanup-old-images`, `cleanup-old-images-nonprod`. **Deploys are now
+pull-based GitOps (D-14)** — this workflow ends at image push. There is no `deploy-to-netcup`,
+`deploy-to-nonprod`, `register-schemas-production`, or `health-check-nonprod` job anymore; Flux's
+image-automation controllers and `kustomize-controller` own the rest of the path, entirely inside
+the cluster.
 
-![Sequence diagram: delivery path from push to master to a running deploy](diagrams/infra-delivery-scenario.png)
+![Sequence diagram: delivery path from push to main to a running deploy](diagrams/infra-delivery-scenario.png)
 <sub>[diagram source](diagrams/infra-delivery-scenario.mmd)</sub>
 
 **Externally reachable vs. internal-only (delivery path):** the GitHub Actions runner reaches
-Docker Hub over the public internet, and nothing else — since Phase 11 there is no managed database
-endpoint for it to reach. The SSH hop to the VM is authenticated via a pinned host-key fingerprint,
-not left to `StrictHostKeyChecking` defaults. None of these delivery-path connections touch
-Redpanda, Postgres or the app's internal-only listeners: the pipeline talks to Docker Hub and the
-VM's SSH port, and Caddy's public HTTPS is not part of the delivery path at all.
+Docker Hub over the public internet to push images, and nothing else in the delivery path touches
+the cluster directly except `flyway-verify`/`flyway-verify-nonprod`'s own SSH forward (host-key
+pinned by fingerprint, `[5]` above) to Postgres's `ClusterIP` for pre-merge migration
+verification. Flux itself initiates every connection FROM the cluster outward — it polls GitHub
+(the `GitRepository` source, SSH deploy key) and Docker Hub (the `ImageRepository` scan) on its
+own interval; nothing external ever pushes into the cluster.
 
-**Where TLS terminates (delivery path):** the SSH connection from the runner to the VM is
-encrypted end-to-end by SSH itself, independent of Caddy's certificate — and it is now the *only*
-encrypted delivery-path hop that carries database access, because the migration no longer travels
-over the public internet at all.
+**Where TLS terminates (delivery path):** the SSH connection from the runner to the VM (for
+Flyway verification) is encrypted end-to-end by SSH itself. Flux's poll of GitHub uses its own SSH
+deploy key, independent of Traefik's certificate. Neither touches the public HTTPS edge at all.
 
-`flyway-verify` runs **on the VM**, not on the runner. The runner SCPs this repo's
-`src/main/resources/db/migration` scripts to the VM and then, over SSH, runs the pinned Flyway CLI
-container attached to the internal `kanban-db` Docker network, reaching the database as the
-container name `postgres`. A guard step first runs `pg_isready` against that same network and
-refuses to proceed if the target cannot be resolved or reached, rather than letting Flyway fail
-against an unreachable host. Pre-Phase-11 this job ran on the runner against Neon's direct
-(non-pooled) endpoint and its guard refused a `-pooler` hostname; both that endpoint and that
-failure mode are gone.
+`flyway-verify` runs **on the VM**, not on the runner and not in-cluster — this mechanism is
+unchanged by the k3s cutover. The runner SCPs this repo's `src/main/resources/db/migration`
+scripts to the VM and then, over SSH, runs the pinned Flyway CLI container reaching the database
+at Postgres's `ClusterIP` directly (not through Kubernetes DNS, since the runner's SSH session has
+no in-cluster resolver) — this still applies migrations to the REAL database before the new image
+ever reaches the cluster.
 
 **Stateful components (delivery path):** Docker Hub holds the built image tags (build artifacts,
-not user data); GitHub Actions itself holds no durable state between runs. No step in this
-pipeline writes application data — `flyway-verify` only applies this repo's own Flyway migrations,
-and the deploy step only replaces running containers.
+not user data); GitHub Actions itself holds no durable state between runs; Flux's own state (which
+tag is Latest per `ImagePolicy`, the last-applied revision per `Kustomization`) lives entirely
+in-cluster, not in the pipeline. No step in the GitHub Actions pipeline writes application data —
+`flyway-verify`/`flyway-verify-nonprod` only apply this repo's own Flyway migrations.
 
-**The VM-side container switch:** `docker compose up -d` recreates `app` every deploy, because its
-`image:` reference (`rudenkovladimir/kanban-board-backend:${IMAGE_TAG}`) resolves to a new tag on
-every commit. `caddy` (quick task 260903-dvp, D-5) and `redpanda` are left running while their
-resolved configuration is byte-identical to what is already up — a no-op for them, not a restart
-— but this is a *conditional* outcome for `caddy`, not an unconditional one: its `image:` is now a
-content-derived literal (`rudenkovladimir/kanban-board-caddy:2.11.4-rl5625512f`) that only changes
-when `docker/caddy/Dockerfile` itself changes, so a routine app-only deploy leaves it running,
-while a Caddy-affecting change recreates it. This outcome depends on `docker-compose.prod.yml`'s
-top-level `name: kanban-board-backend` pin: it makes project identity, and every named volume's
-project-prefixed name, independent of the directory the command runs from, so Compose converges
-the already-running stack instead of starting a second, unrelated one against fresh, empty
-volumes — see `docs/INFRA_RUNBOOK.md` for the incident that motivated the pin, where a
-directory-derived project name did exactly that and briefly lost the registered Avro schemas.
-Honest limit: nothing in this pipeline waits for the new `app` container's healthcheck — `up -d`
-returns once the container is started, not once it is healthy — so a green `deploy-to-netcup` job
-is not by itself proof the new container reached `UP`.
+**The image-tag bump and the reconcile it triggers (D-15, D-16):** `build-and-push-docker-image`
+derives a sortable tag, `main-<run_number>-<sha7>`, and pushes it to BOTH the prod and nonprod
+Docker Hub repositories from one build. Each repository has its own Flux `ImageRepository` (5m
+poll) and `ImagePolicy` (`^main-(?P<num>[0-9]+)-[a-f0-9]{7}$`, numerical order on `$num` — a bare
+sha7 cannot sort, which is exactly why the tag scheme changed from Compose-era's bare short-SHA).
+Once an `ImagePolicy` resolves a new Latest tag, `ImageUpdateAutomation` (author `fluxcdbot`)
+commits a `Setters`-strategy edit to the matching overlay's `kustomization.yaml` on `main` --
+`deploy.yml`'s own `paths-ignore` excludes `k8s/**`, so this commit does not re-trigger a build
+(the exact infinite-loop guard the Compose-era pipeline never needed). `kustomize-controller`
+polls `main` independently and applies the new tag once it sees the commit; the app `Deployment`'s
+`strategy: Recreate` (not `RollingUpdate`) discards the old Pod before starting the new one,
+keeping one app Pod's memory envelope steady rather than transiently doubling it.
 
-**The Caddy config refresh (F-1, quick task 260903-dvp; mechanism corrected 13-05,
-caddy-reload-inode-bug):** `Caddyfile` is bind-mounted read-only into the `caddy` container, and a
-bind-mounted file's *content* is not part of Compose's config hash — so `up -d` alone is a no-op
-for `caddy` on every deploy where its `image:` tag is unchanged, which means a Caddyfile edit had
-zero effect in production until this change. `deploy-to-netcup` originally ran
-`docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile`
-immediately after `up -d`, but this proved structurally broken: `appleboy/scp-action` replaces
-`Caddyfile` on the VM via rename/untar, which gives the new file a new inode, while Docker's bind
-mount is resolved once at container start and keeps pointing at the old one — so `caddy reload`
-silently reloaded stale content even though the host file was current. Confirmed live 2026-09-25
-(caused a real ~2min public 502 on nonprod despite a green `deploy-to-netcup` run). `deploy-to-netcup`
-now runs `docker compose ... up -d --force-recreate caddy` instead, which discards the container
-and its resolved bind mount together and re-resolves against the current file on every deploy,
-sidestepping the inode problem entirely. It then reads the config Caddy is actually *running* back
-from its admin API (`http://127.0.0.1:2019/config/`) and fails the job loudly if the expected
-handler is absent — this is what actually proves the new config took effect, rather than assuming
-it from a copied file.
+**Schema registration moved in-cluster (D-14).** The Compose-era `register-schemas-production`
+CI job is gone. In its place, the app `Deployment`'s own `register-schemas` `initContainer` runs
+the identical `AvroSchemaRegistrar` invocation that job used to prove, now ordered by the
+kubelet's own initContainer contract before every deploy's `app` container starts — a stronger
+guarantee than a CI job that ran once, separately, and could drift from what actually deployed.
 
-That readback address must stay `127.0.0.1` and must never be written as `localhost` (observed
-2026-09-03, `caddy:2.11.4`): Caddy's admin API binds IPv4 only, while the image's `/etc/hosts`
-carries both a `127.0.0.1 localhost` and a `::1 localhost` record, and the image's BusyBox `wget`
-tries the IPv6 record and treats the connection refusal as terminal instead of falling back. The
-`localhost` form therefore fails every time against a perfectly healthy listener. It is
-fail-closed, but it lands *after* `up -d` has already swapped in the new `app` image, so it would
-redden every deploy and let `cleanup-unused-image` (`if: failure()`) delete the app manifest then
-running on the VM. Falsifier: if a future base image ships a `wget` that falls back to the second
-address record, or Caddy's admin API starts binding dual-stack, this constraint dissolves.
-
-**Where the Caddy image-tag invariant is enforced:** `.github/workflows/invariant-checks.yml` runs
-`scripts/verify-caddy-image-tag.py` on pull requests and on pushes to `main` — both triggers carry
-the same `docs/**`, `**/*.md`, `.planning/**` `paths-ignore` groups `deploy.yml` uses, which cannot
-skip a PR touching `docker/caddy/Dockerfile` or `docker-compose.prod.yml`. `deploy.yml`'s
-`build-and-push-caddy-image` job runs it again before building. The PR trigger is the one that
-makes tag drift unmergeable — `deploy.yml` fires on push-to-`main` only, so on its own it can block
-a deploy but never a merge.
+**Independent prod/nonprod reconciliation (D-16):** prod and nonprod each have their own
+`Kustomization`, `ImageRepository`, and `ImagePolicy` — a nonprod-only image tag bump reconciles
+only the `kanban-nonprod` namespace's `Deployment`; prod's own Pod is untouched, and vice versa.
+This replaces the Compose-era single-`docker compose up -d`-per-project model with two
+independently-reconciling GitOps loops that happen to share one physical VM.
 
 ## Scenario (+1) View — Inbound Packet Path
 
 Traces one inbound packet, from an internet client through the Netcup Cloud Firewall, the VM's
-network stack, and into the Caddy and app containers — a different Scenario from the one above,
-which traces a *deploy*; this one traces a *request*. Added 2026-09-05 after quick task 260905-qxi
-found that this VM's OS-level firewall does not govern container-published ports at all, a fact
-this document had no diagram to express.
+network stack, and into Traefik and the target Service/Pod — a different Scenario from the one
+above, which traces a *deploy*; this one traces a *request*. Redrawn for k3s in Plan 13-09 — the
+Compose-era `DOCKER-USER` chain this section used to describe governs nothing on this cluster at
+all (k3s's NodePort/hostPort DNAT never traverses it); `KANBAN-INGRESS` (Plan 13-08) is its
+Docker-independent replacement.
 
 ![Flowchart: inbound packet path through the VM's network layers](diagrams/infra-packet-path-scenario.png)
 <sub>[diagram source](diagrams/infra-packet-path-scenario.mmd)</sub>
 
-**Reproduce this yourself on the VM** with the same three commands that found the gap:
-`iptables -t nat -S PREROUTING`, `iptables -S INPUT`, `iptables -S DOCKER-USER` (see
-`docs/INFRA_RUNBOOK.md`'s Firewall section for the full output and context).
+**Reproduce this yourself on the VM** with the command that proves the ruleset:
+`iptables -t mangle -S PREROUTING` (should show `-A PREROUTING -i eth0 -j KANBAN-INGRESS` as the
+first rule) and `iptables -t mangle -S KANBAN-INGRESS` (see `docs/INFRA_RUNBOOK.md`'s "Edge
+hardening on k3s — Plan 13-08" section for the full output and context).
 
-**The `DOCKER-USER` chain carries a real policy as of 2026-09-06.** Docker's own `-A PREROUTING -m
-addrtype --dst-type LOCAL -j DOCKER` rule DNATs published-port traffic before routing decisions are
-made, so that traffic traverses `FORWARD`, never `INPUT` — the diagram draws this explicitly because
-a packet-path diagram routing container traffic through `INPUT` would draw the exact misconception
-this Scenario exists to correct. `filter INPUT`'s `-P INPUT DROP` policy plus its 22/80/443 ACCEPTs
-still governs host-level daemons only (sshd on :22) and remains decorative for anything Docker
-publishes — that part of the picture is unchanged.
+**Why `mangle PREROUTING`, not `DOCKER-USER`.** `DOCKER-USER` only ever sees Docker's own DNAT'd
+traffic. k3s's NodePorts and hostPorts are DNAT'd by kube-router's `KUBE-NODEPORTS` (`nat` table)
+and the CNI's `CNI-HOSTPORT-DNAT` — neither passes through `DOCKER-USER` at all, so the
+Compose-era chain this section used to describe is now dead weight, not a security control. The
+one hook point that runs before both DNAT paths, regardless of which eventually claims the packet,
+is `mangle PREROUTING` — `KANBAN-INGRESS` (Plan 13-08) installs there instead.
 
-What changed is `DOCKER-USER` itself. It now carries five rules, defined in
-`infra/vm/docker-user-firewall.sh` and installed via `infra/vm/docker-user-firewall.service`
-(`PartOf=docker.service`, so the policy reapplies on every dockerd restart, not just at boot): allow
-`RELATED,ESTABLISHED` traffic and non-`eth0` traffic first (container egress and inter-container
-traffic must not be caught by the final DROP), allow TCP to the two published host ports (80 and
-443, matched by `--ctorigdstport` so the rule reads the pre-DNAT host port rather than the
-post-DNAT container port), then drop everything else arriving from the internet for a container.
+**`KANBAN-INGRESS`'s ruleset**, defined in `infra/vm/k3s-host-firewall.sh` and installed via
+`infra/vm/k3s-host-firewall.service` (`Type=oneshot`, `RemainAfterExit=yes` — neither Docker nor
+k3s itself ever touches `mangle PREROUTING`, so nothing races this chain's own state, unlike
+`DOCKER-USER`'s dependency on `PartOf=docker.service`): allow `RELATED,ESTABLISHED` traffic first,
+allow NEW TCP to 22/80/443 (a literal copy of the live `filter INPUT` allow-list captured at
+install time — INPUT governs host daemons, a slower-changing, separately-reviewed surface from
+what k3s exposes via Services), allow ICMP, then drop every other NEW connection.
 
-**Proven, not merely stated (quick task 260906-feq, 2026-09-06):** a throwaway canary container
-published a host port (49999) with no legitimate reason to be reachable. Off-box (never on-box —
-a loopback probe cannot see a DNAT bypass), that port answered `200` with the canary body before the
-rules were applied and timed out (`curl` exit 28) after — the exact inversion a real policy change
-should produce. The chain's own DROP-rule packet counter incremented by exactly the number of SYNs
-the after-probe generated, while the 80/443 RETURN rules' counters kept rising under concurrent real
-site traffic — proving the drop was attributable to `DOCKER-USER` specifically, not to the packet
-never arriving at all. Both public health endpoints stayed at `200` and `ssh` access was unaffected
-throughout. The policy was then re-verified to survive both a `systemctl restart docker` (which
-cycles every container) and a full VM reboot, re-running the same `iptables -t nat -S PREROUTING` /
-`iptables -S INPUT` / `iptables -S DOCKER-USER` triad that originally found the gap — no manual
-reapplication was needed either time.
+**Proven, not merely stated (Plan 13-08, 2026-09-27).** Netcup's own Cloud Firewall (`[1]` above)
+already blocks Traefik's `websecure` NodePort (30104) from the public internet before packets
+reach this VM's own iptables at all — so an unmodified off-box probe times out for the *right
+general reason* but can never move the `KANBAN-INGRESS` counter under test, since a packet Layer 2
+drops never reaches this layer. Resolved the same way quick task 260906-feq proved `DOCKER-USER`:
+a temporary, scoped Netcup console rule let one probe source IP reach the VM's own iptables
+without bypassing the rule under test. Measured: the chain's DROP-rule packet counter moved 5 → 10
+packets across one probe against the NodePort, while the probe against the NodePort itself still
+timed out (the required inversion), and `nc -z` against 443 and 22 both connected immediately
+throughout. `systemctl restart k3s` was confirmed not to disturb `mangle PREROUTING` either — full
+detail and the exact commands in `docs/INFRA_RUNBOOK.md`'s "Edge hardening on k3s" section.
 
-**What this layer deliberately does not cover: IPv6.** `ip6tables -P INPUT ACCEPT` remains the
-policy on this VM, and Docker's `docker-proxy` binds `[::]:80` and `[::]:443` directly — because the
-containers hold no IPv6 address, inbound IPv6 to a published port terminates on that host socket and
-is evaluated by `ip6tables INPUT`, never by `FORWARD`, so the `DOCKER-USER` policy above cannot reach
-it at all. Every published port is reachable over IPv6 with no host-level filtering today. This was
-measured, not assumed, during 260906-feq's planning and is deliberately out of that task's scope
-(unverifiable from a box with no IPv6 egress) — tracked in a dedicated todo rather than folded
-silently into this "closed" state. See `docs/INFRA_RUNBOOK.md`'s Firewall section for the full
-Layer 3 writeup and the todo reference.
+**Runtime exposure inventory, confirmed the same day:** `k3s kubectl get svc -A` shows exactly one
+non-`ClusterIP` Service (`kube-system/traefik`), and the only Pods carrying `hostNetwork` or any
+`hostPort` are `svclb-traefik-*` — both match the "only Traefik is public" invariant this chain
+exists to enforce.
 
-The originating tracked item, `.planning/todos/completed/2026-09-05-docker-user-chain-empty-on-the-vm.md`,
-closed with this change — see its Resolution section for the full evidence trail and which of its
-two requirements (persistence, re-verification) were met by which mechanism.
+**What this layer deliberately does not cover: IPv6**, unchanged from the Compose-era finding.
+`ip6tables -P INPUT ACCEPT` remains this VM's live policy; `KANBAN-INGRESS` is IPv4-only by design
+(see `infra/vm/k3s-host-firewall.sh`'s own header for the scope decision). This carries forward
+from the `DOCKER-USER`-era gap rather than reopening it — the underlying IPv6 exposure was never
+closed, only re-described against the new chain that replaced its IPv4 sibling.
+
+`DOCKER-USER` and `infra/vm/docker-user-firewall.*` remain installed on this VM as of this
+writing — D-04's Docker teardown (Plan 13-10) is what retires them, not this plan. Until then, both
+chains coexist: `DOCKER-USER` governs nothing (no Docker container publishes a host port anymore,
+since Compose is stopped), while `KANBAN-INGRESS` governs everything k3s exposes.
 
 ## Maintenance Note
 
-**Interim note (Plan 13-05, 2026-09-25):** nonprod now runs on a k3s cluster on this same VM,
-GitOps-deployed by Flux, behind the unchanged Caddy edge — Caddy proxies to Traefik's NodePort
-rather than directly to a Compose container. Production stays on Docker Compose, described
-accurately by the diagram and job graph below, until Plan 13-06's cutover. The diagram above and
-the job-graph description below both still describe nonprod's pre-13-05, Compose-only,
-SSH-deployed shape — they are accurate for production and stale for nonprod until Plan 13-09's
-redraw. See `docs/history/2026-09-25-nonprod-on-k3s.md`'s "Nonprod on k3s — Plan 13-05" section for the current
-nonprod topology, the GitOps deploy-cycle proof, and the measured interim memory budget.
+**Compose/Caddy status (Plan 13-09):** Docker Compose and Caddy are marked **removed in 13-10**
+throughout this document rather than deleted outright before that plan actually runs — Compose is
+stopped on the VM but its containers/volumes still exist pending Plan 13-10's D-04 teardown gate.
+Do not delete any mention of `docker-compose.prod.yml`/`Caddyfile`/`docker/caddy/Dockerfile` from
+this list until that teardown has actually landed; doing so earlier would silently stop tracking
+files that still exist on disk and could still need a fix before they're gone for good.
 
-This document describes `docker-compose.prod.yml`, `Caddyfile`, `docker/caddy/Dockerfile`,
-`.github/workflows/invariant-checks.yml`, and
+This document now describes: `k8s/**` (every Kustomize root — `flux-system`, `platform`,
+`platform/cert-manager`, `platform/edge`, `data`, `data/postgres(-bridge)`, `base/app`,
+`base/redpanda`, `monitoring/{controllers,configs}`, `overlays/{prod,nonprod}`), `infra/vm/k3s/`
+(k3s config + pinned install wrapper), `infra/vm/k3s-host-firewall.*` (the `KANBAN-INGRESS`
+ruleset + systemd unit), and `infra/vm/sshd/` (the sshd hardening this VM already carried forward
+from Phase 5, unchanged by the k3s cutover but now cited here alongside its k3s-era siblings).
+Also still tracked, pending D-04: `docker-compose.prod.yml`, `Caddyfile`,
+`docker/caddy/Dockerfile`, `.github/workflows/invariant-checks.yml`, and
 `.github/workflows/deploy.yml` — specifically the `build-and-push-docker-image` and
 `build-and-push-caddy-image` jobs' `linux/amd64` platform target (the deploy target pivoted from
-Oracle A1 Flex/ARM64 to Netcup/x86_64 in Phase 5), the 11 job names (reduced from 14 by Plan
-13-05's removal of `deploy-to-nonprod`, `health-check-nonprod` and `cleanup-unused-image-nonprod`
-— nonprod deploys via Flux now, not SSH) and the job graph (`needs:` edges) in `deploy.yml`, and
-`docker-compose.prod.yml`'s top-level `name: kanban-board-backend`
-project pin plus the `app`, `caddy` and `postgres` services' `image:` references. If any of those
-facts changes — a job renamed or added, a build platform changed, or any of those
-`docker-compose.prod.yml` lines changed — update this document, and the diagrams it links to, in
-the same change: it is the single checked-in description of what actually runs where.
+Oracle A1 Flex/ARM64 to Netcup/x86_64 in Phase 5) and the 8 job names (reduced from 14 across
+Plans 13-05/13-06's removal of every SSH-based deploy/health-check/cleanup-unused-image job — GitOps
+replaced all of them). If any of those facts changes — a job renamed or added, a build platform
+changed, a new `k8s/` root added, or Compose/Caddy actually removed in 13-10 — update this
+document, and the diagrams it links to, in the same change: it is the single checked-in
+description of what actually runs where.
 
 **Also on this list, added 2026-09-08 (Phase 12, plan 12-06):** `docker/prometheus/prometheus.yml`,
 `docker/loki/loki-config.yaml`, `docker/promtail/promtail-config.yaml`,
@@ -326,14 +294,14 @@ document's own Physical/Deployment facts change.
   script's own header. Goes stale if a `.mmd` is hand-edited without re-running the script (its
   `--check` mode catches exactly that), or if the pinned digest is bumped without re-verifying it
   against the registry (see the script's own header for how).
-- **The VM's iptables facts — specifically `DOCKER-USER`'s contents.** The source of truth is now
-  `infra/vm/docker-user-firewall.sh` (installed on the VM per `infra/vm/README.md`), not this
-  document's prose. Run `ssh netcup-prod '/usr/local/sbin/docker-user-firewall.sh check'` to detect
-  drift between the committed ruleset and the live chain — it exits non-zero and prints the
-  expected-vs-live diff on any mismatch. This document's packet-path Scenario still describes the
-  policy in force and the evidence it works, and must be updated again if the script's ruleset ever
-  changes (a new published port, an IPv6 closure) — the same discipline that closed the prior
-  "empty as of 2026-09-05" staleness applies to whatever replaces today's five-rule policy.
+- **The VM's iptables facts — `KANBAN-INGRESS`'s contents (Plan 13-08, superseding
+  `DOCKER-USER` as the packet-path Scenario's subject in Plan 13-09).** The source of truth is
+  `infra/vm/k3s-host-firewall.sh` (installed on the VM per `infra/vm/README.md`'s convention),
+  not this document's prose. This document's packet-path Scenario describes the policy in force
+  and the evidence it works, and must be updated again if the script's ruleset ever changes (a new
+  published port, an IPv6 closure, D-04's eventual removal of the now-inert `DOCKER-USER` sibling)
+  — the same discipline that closed the prior `DOCKER-USER`-era staleness applies to whatever
+  replaces today's seven-rule `mangle` policy.
 - **The Netcup Cloud Firewall's policy, flagged as external state this repository cannot verify.**
   Both diagrams above mark it `[1] (external — not in this repo)` for exactly this reason: its
   ruleset lives in Netcup's control panel, not in a file this document can point at, so this
