@@ -475,6 +475,18 @@ curl -s http://localhost:8080/api/docs | python3 -m json.tool
 docker compose down   # stop bootRun's process separately (it's not part of the compose stack)
 ```
 
+## Wiki (karpathy-llm-wiki)
+
+The vendored `karpathy-llm-wiki` skill (`.claude/skills/karpathy-llm-wiki/`) is rooted at `docs/`:
+its raw/ is `docs/raw/`, its wiki/ is `docs/wiki/`. Never create raw/ or wiki/ at the repository
+root. Lint: `python3 .claude/skills/karpathy-llm-wiki/scripts/check_evidence.py docs`.
+
+Until a follow-on cleanup deletes the originals, everything under docs/ outside raw/ and wiki/
+(top-level `*.md`, `learning/`, `history/`, `incidents/`, `plans/`) stays authoritative — edit
+those, not the copies. The migrated articles carry no Raw links by design (a one-time,
+operator-approved exception), so one "article has no Raw field" lint error per migrated article
+is the expected baseline, not a regression to fix.
+
 ## GSD Execution Directives
 
 - Source `.dev/gsd-run.sh` instead of re-pasting the runtime resolver in bash blocks: `. ./.dev/gsd-run.sh && gsd_run query ...`.
