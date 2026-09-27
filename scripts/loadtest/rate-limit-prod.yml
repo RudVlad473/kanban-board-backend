@@ -38,10 +38,14 @@ config:
   # against a working one. `conditions` takes a filtrex expression and is the only form here that
   # can express a lower bound.
   #
-  # `http.codes.429 > 0` is the load-bearing claim: the limiter is actually in the request path on
-  # this hostname. The 401 floor guards the inverse failure -- if the very first request were 429
-  # the run would "pass" on 429s alone while actually indicating a limiter far tighter than
-  # intended, or a budget already spent by an earlier run inside the same 5-minute window.
+  # Re-derived 2026-09-26 (Plan 13-08, D-13) against Traefik's auth-rate-limit Middleware
+  # (average=10, period=5m, burst=10 -- k8s/overlays/prod/ingressroute.yaml). This run's 25
+  # sequential requests complete in well under 5m, so negligible refill happens mid-run: the
+  # bucket starts full at `burst` and is spent by the 11th request, so exactly `burst`=10 are
+  # accepted (401) and the remaining 15 are rejected (429). `>= 10` and `> 0`, not exact equality,
+  # to tolerate a small amount of real refill if the run happens to take slightly longer than
+  # instantaneous -- the load-bearing claim either way is "the limiter is in the request path and
+  # its floor is at least the derived burst", not "the count is exactly 10".
   ensure:
     conditions:
       - expression: "http.codes.429 > 0"

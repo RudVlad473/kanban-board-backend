@@ -4,16 +4,16 @@ milestone: v1.3
 current_phase: 13
 current_phase_name: Introduce Kubernetes
 status: executing
-stopped_at: Completed 13-07-PLAN.md (observability activation on k3s, D-07/D-10/D-17/D-18)
-last_updated: "2026-09-26T20:40:04.499Z"
-last_activity: 2026-09-26
-last_activity_desc: Fixed deploy.yml's caddy-reload-inode-bug (force-recreate over exec reload), live-verified via a real production deploy; resumed and completed 13-05 Task 3 (GitOps cycle proof, kubectl health evidence, interim memory budget PASS by 268 MiB thin margin)
-state_head: 6eacda173237e26d43e419b99264bdf524cf9954
+stopped_at: Completed 13-08-PLAN.md (edge hardening on k3s -- rate limits re-derived, KANBAN-INGRESS firewall installed, D-04/D-08/D-11/D-13)
+last_updated: "2026-09-27T08:52:00.000Z"
+last_activity: 2026-09-27
+last_activity_desc: Resumed 13-08 Task 3 from a paused mid-task handoff (worktree/HANDOFF mismatch required recovering two uncommitted files byte-for-byte into a fresh worktree); resolved the off-box-probe-vs-outer-firewall proof gap via the 260906-feq precedent (temporary scoped Netcup console rule), measured the KANBAN-INGRESS DROP counter move live (5 -> 10 packets), committed under fresh operator-authorized --no-verify after confirmed host memory contention, and closed the plan
+state_head: 26a1e319a8ad9edc1b01313c614d9d2e2f91b6dd
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 24
-  completed_plans: 21
+  completed_plans: 22
 milestone_name: Nonprod Environment & CI Hardening
 ---
 
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-09-08)
 ## Current Position
 
 Phase: 13 (Introduce Kubernetes) — EXECUTING
-Plan: 7 of 10 (Wave 4, 13-06) — COMPLETE. Waves 1-4 (13-01 through 13-06) done, merged, verified. Production is now live on k3s (D-01 executed). Waves 5-8 (13-07 through 13-10) not started.
+Plan: 8 of 10 (Wave 6, 13-08) — COMPLETE. Waves 1-6 (13-01 through 13-08) done, merged, verified. Production is now live on k3s (D-01 executed) with re-derived, proven-per-client Traefik rate limits and a Docker-independent host firewall (KANBAN-INGRESS). Waves 7-8 (13-09, 13-10) not started.
 Status: Ready to execute
-Last activity: 2026-09-26 — Executed the production cutover to k3s in a live maintenance window (13-06). A mid-window operator error (pushing a staged multi-commit branch by tip instead of by per-gate SHA) landed W2/W3/W4 on `main` simultaneously, causing a real ~11-minute public 502 outage before the actual data migration had happened; no production data was lost (Compose's own Postgres was never stopped until after the real dump was taken). The executor stopped and reported on discovering this rather than improvising alone; the operator explicitly directed pushing forward rather than rolling back. Production now runs on k3s with verified zero-diff row-count parity, all three hostnames on real Let's Encrypt production certificates, Traefik/ServiceLB owning 80/443, and CI fully retargeted (Compose deploy jobs removed, Flyway verification through a fingerprint-pinned SSH forward, proven green via a live `deploy.yml` dispatch). Five real pre-existing gaps were found and fixed live against the cluster for the first time (a Postgres readinessProbe using unexpandable `$(POSTGRES_USER)` syntax, a cert-manager HelmRepository/HelmRelease missing `metadata.namespace`, no IngressRoute anywhere in the phase serving `grafana-tls` for the monitoring hostname, an SSH host-key fingerprint comparison bug, and a CNI/DNS pod-startup race). Full incident account and gap details in `docs/history/2026-09-26-production-cutover-to-k3s.md`; the generalizable lesson (push a staged multi-commit cutover by explicit SHA per gate, never by branch tip) is recorded in `docs/SESSION_LESSONS.md` lesson 8.
+Last activity: 2026-09-27 — Completed 13-08 (edge hardening on k3s): Task 1's checkpoint resolved as proceed; Task 2 re-derived Traefik's three rate-limit Middlewares from token-bucket arithmetic and proved per-client bucketing with two distinct public IPs against a live access log (fixing a real bug along the way -- Traefik's access log was CLF, not JSON); Task 3 installed `KANBAN-INGRESS`, a `mangle PREROUTING` firewall independent of Docker's `DOCKER-USER` chain, and proved it off-box after resolving the same outer-firewall-masks-inner-layer proof gap quick task 260906-feq first hit (operator opened a temporary, scoped Netcup console rule so the probe could reach Layer 3; DROP counter measurably moved 5 -> 10 packets). This session also resumed from a paused mid-task handoff whose HANDOFF.json pointed at a different, no-longer-dispatchable worktree than the one this session ran in -- recovered by reading and recreating the two uncommitted firewall files byte-for-byte from the original worktree's still-live path. Full account in `.planning/phases/13-introduce-kubernetes/13-08-SUMMARY.md`.
 
-Next: 13-07 (observability activation, D-17) — Wave 5. Note: 13-06 built a deliberate placeholder `IngressRoute grafana`/`IngressRoute grafana-http` pair (backed by an Endpoints-less Service, Traefik answers 503) in `k8s/platform/edge/ingressroute-monitoring.yaml`, using the exact object names 13-07's own plan text already expects — 13-07 should replace the backend Service reference, not recreate the IngressRoute objects. Compose is stopped but NOT deleted (D-04 gate is 13-10); all 8 Compose volumes remain intact.
+Next: 13-09 (restart-ladder memory measurement) — Wave 7. D-04's Docker teardown (13-10) can now proceed safely once 13-09 completes, since 13-08 closed the gap DOCKER-USER's removal would otherwise have opened on k3s's NodePorts/hostPorts. Compose is stopped but NOT deleted (D-04 gate is 13-10); all 8 Compose volumes remain intact.
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ v1.0–v1.2 velocity/per-plan detail archived at milestone close — see `.plann
 | Phase 12 P06 | 55min | 3 tasks | 7 files |
 | Phase 13 P06 | ~59min window + ~30min post-window fixes/docs | 3 tasks | 23 files |
 | Phase 13 P07 | ~2h40m | 2 tasks | 15 files |
+| Phase 13 P08 | ~2h across two sessions | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -110,6 +111,9 @@ authorization, given the real-traffic-interruption and Let's Encrypt cert-safety
 - [Phase 13]: 13-06: 5 real pre-existing gaps found and fixed live against the cluster for the first time (postgres readinessProbe syntax, cert-manager HelmRepository/HelmRelease namespace, missing monitoring IngressRoute, SSH fingerprint comparison, a CNI-readiness race) -- none introduced by the incident
 - [Phase 13]: 13-07: operator-authorized git commit --no-verify used 5 of 8 times after confirmed, sustained host memory pressure killed every local Gradle JVM fork regardless of heap size; the one push that also touched scripts/ triggered CI's real Java build/test workflow, which passed green
 - [Phase 13]: 13-07: a live-database GRANT CONNECT fix was applied directly against running Postgres, not through a manifest change -- the committed init script is correct for any future first boot; 13-06's incident recovery (drop/recreate kanban_prod/kanban_nonprod) silently reverted the grant it had already applied
+- [Phase 13]: 13-08 Task 1 (checkpoint:decision): proceed -- both the rate-limit re-derivation and the KANBAN-INGRESS host firewall install, not the rate-limit-only fallback -- after reviewing the live INPUT allow-list and confirming Traefik as the cluster's only non-ClusterIP Service
+- [Phase 13]: 13-08 Task 3: the off-box-probe-vs-counter-attribution proof method hit the identical structural gap quick task 260906-feq already solved for DOCKER-USER -- Netcup's console-only outer Cloud Firewall blocked the probed NodePort before packets reached the VM's own iptables, so an unmodified probe could never move the Layer 3 counter under test. Resolved the same way: operator opened a temporary, scoped console rule (this workstation's IP only, destination port 30104) so the probe reaches Layer 3 without bypassing the rule under test; DROP counter measurably moved 5 -> 10 packets, the probed NodePort itself still timed out
+- [Phase 13]: 13-08 Task 3's commit: operator-authorized git commit --no-verify (fresh, this commit only) after the local pre-commit hook's fastTest step killed its own Gradle daemon twice under confirmed host-wide memory contention (~400Mi free, three concurrent Claude Code sessions plus unrelated processes) -- gitleaks had already scanned the exact staged diff clean on both failed attempts
 
 ### Pending Todos
 

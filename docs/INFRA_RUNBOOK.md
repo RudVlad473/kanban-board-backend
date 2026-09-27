@@ -208,6 +208,133 @@ empty, no default v6 route), so a change here could not be proven working the wa
 was. Tracked in a dedicated todo carrying these measured values rather than folded silently into
 this "closed" gap.
 
+## Edge hardening on k3s — Plan 13-08 (2026-09-26)
+
+D-13 required the new Traefik edge (13-06's cutover) to be no weaker than the Caddy edge it
+replaced, and D-04's later Docker teardown will retire `DOCKER-USER` (Layer 3 above) along with
+it — so this plan also had to give k3s's NodePorts/hostPorts a host-level filter that does not
+depend on Docker at all. Both obligations closed on evidence below.
+
+### Task 1 — authorization checkpoint
+
+Operator chose **proceed** (both the rate-limit re-derivation and the host firewall install, not
+the rate-limit-only fallback) after reviewing the consequences: brief 429s on the operator's own
+workstation IP during the probe, and a live `mangle PREROUTING` change protected by a dead-man
+switch. Evidence gathered before the decision:
+
+- Live `iptables -S INPUT` allow-list: default-DROP policy, explicit ACCEPT for loopback,
+  RELATED/ESTABLISHED, and TCP 22/80/443 — the three ports `k3s-host-firewall.sh` hard-codes.
+- Traefik's Service (`kube-system/traefik`) was confirmed as the cluster's only non-ClusterIP
+  Service, publishing NodePorts 30080 (web) and 30104 (websecure).
+
+### Task 2 — re-derived Traefik rate limits, proven per-client with two public IPs
+
+**Re-derivation.** Traefik's token bucket starts full at `burst` and refills `average` tokens
+per `period`, so the worst-case number of requests one client can get accepted in any window W
+is `burst + average × W / period`. Each zone was re-derived to keep that worst case at or under
+Caddy's own budget for the equivalent window (`k8s/overlays/prod/ingressroute.yaml`,
+`k8s/monitoring/configs/ingressroute.yaml` carry the dated per-Middleware derivation comments):
+
+| Middleware | average | period | burst | worst case | Caddy budget |
+|---|---|---|---|---|---|
+| `auth-rate-limit` | 10 | 5m | 10 | 10 + 10×300/300 = 20 | 20 / 5m |
+| `general-rate-limit` | 60 | 1m | 60 | 60 + 60×60/60 = 120 | 120 / 1m |
+| `grafana-login-rate-limit` | 10 | 5m | 10 | 10 + 10×300/300 = 20 | 20 / 5m |
+
+**Fixed along the way (Rule 1):** Traefik's access log was still Common Log Format —
+13-02's `logs.access.enabled: true` left the chart on its own default, not JSON — which meant a
+`ClientHost`/`DownstreamStatus` field lookup against the real log silently matched nothing rather
+than erroring. `k8s/platform/traefik/helmchartconfig.yaml` now sets `logs.access.format: json`
+(commit `f7f89c5`).
+
+**Proof A — `verify-rate-limit.yml` green:** run
+[36271337736](https://github.com/RudVlad473/kanban-board-backend/actions/runs/36271337736)
+(`workflow_dispatch`, head `f7f89c5`), concluded `success` — 25 sequential nonprod signins with
+zero 429s, confirming the negative control is unaffected by the prod-only Middleware scoping.
+
+**Proof B — two distinct public client IPs**, read from Traefik's own access log
+(`k3s kubectl logs -n kube-system deploy/traefik`) for `/api/signin` around the same run:
+
+| Client IP (/24) | Requests | Status split |
+|---|---|---|
+| `84.40.156.0/24` (operator workstation) | 1 | 401 ×1 |
+| `172.215.209.0/24` (GitHub-hosted runner) | 50 | 401 ×35, 429 ×15 |
+
+Both addresses are public (neither in `10.42.0.0/16` nor the node's own IP), the runner IP alone
+took every 429, and the workstation IP's one request returned 401 — proving the rate limit buckets
+per client address rather than sharing one bucket across all traffic, and that a legitimately
+authenticating client on a different IP is unaffected by another client being throttled.
+
+### Task 3 — `KANBAN-INGRESS`: a k3s-era ingress filter independent of Docker
+
+**Why a new chain, not `DOCKER-USER`.** `DOCKER-USER` only ever sees Docker's own DNAT'd traffic.
+k3s's NodePorts and hostPorts are DNAT'd by kube-router's `KUBE-NODEPORTS` (`nat` table) and the
+CNI's `CNI-HOSTPORT-DNAT` — neither passes through `DOCKER-USER` at all. The one hook point that
+runs before both, regardless of which eventually claims the packet, is `mangle PREROUTING`. See
+`infra/vm/k3s-host-firewall.sh`'s own header for the full decision record (why position 1, why
+`mangle`, the dead-man switch, IPv4-only scope, and what this script deliberately does not check).
+
+**The ruleset** (source of truth: `infra/vm/k3s-host-firewall.sh`), applied in this order:
+
+```
+iptables -t mangle -A KANBAN-INGRESS -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
+iptables -t mangle -A KANBAN-INGRESS -p tcp -m conntrack --ctstate NEW -m tcp --dport 22  -j RETURN
+iptables -t mangle -A KANBAN-INGRESS -p tcp -m conntrack --ctstate NEW -m tcp --dport 80  -j RETURN
+iptables -t mangle -A KANBAN-INGRESS -p tcp -m conntrack --ctstate NEW -m tcp --dport 443 -j RETURN
+iptables -t mangle -A KANBAN-INGRESS -p icmp -j RETURN
+iptables -t mangle -A KANBAN-INGRESS -m conntrack --ctstate NEW -j DROP
+iptables -t mangle -A KANBAN-INGRESS -j RETURN
+iptables -t mangle -I PREROUTING 1 -i eth0 -j KANBAN-INGRESS
+```
+
+The 22/80/443 allow-list is a literal copy of the live `iptables -S INPUT` allow-list captured
+2026-09-26 (Task 1's checkpoint evidence above), not re-derived at apply time — INPUT governs
+host daemons, a slower-changing, separately-reviewed surface from what k3s exposes via Services.
+
+**Install and dead-man switch.** The script and unit were copied to the VM, `apply --dead-man 10`
+armed a 10-minute `systemd-run` rollback timer, a **fresh** SSH session confirmed login still
+worked, and only then was the timer disarmed — the same discipline as quick task 260906-feq's
+`DOCKER-USER` install. `k3s-host-firewall.service` (`Type=oneshot`, `RemainAfterExit=yes`) was
+then enabled. No dead-man timer is armed in the current, closed state.
+
+**`systemctl restart k3s` survival.** `iptables -t mangle -S PREROUTING` before and after a full
+k3s restart both showed the jump first, with no reapplication needed — neither Docker nor k3s
+itself ever touches `mangle PREROUTING`, so nothing races this chain's own state.
+
+**Off-box probe and counter attribution — the proof method's actual gap and resolution.** The
+plan's verify method needs an off-box `nc -z` probe against Traefik's `websecure` NodePort
+(30104) to fail AND the `KANBAN-INGRESS` DROP counter to increase for that same probe. Netcup's
+separate, console-only outer Cloud Firewall (Layer 2 above) already blocks 30104 from the public
+internet before packets reach this VM's own iptables at all — so an unmodified off-box probe times
+out for the *right general reason* but can never move the Layer 3 counter, since a packet Layer 2
+drops never reaches Layer 3. This is the identical structural gap quick task 260906-feq hit
+proving `DOCKER-USER` (Layer 3, line ~171 above), resolved the same way: the operator opened a
+temporary, scoped Netcup console rule (INCOMING TCP, source `45.134.212.94/32`, destination port
+`30104`, ACCEPT) that lets the probe traffic reach the VM's own iptables without bypassing the
+rule under test, closed again immediately after this evidence was captured.
+
+Measured with that rule live, 2026-09-27:
+
+- `iptables -t mangle -L KANBAN-INGRESS -v -n -x` DROP counter: **5 → 10 packets** (+5) across
+  one `nc -z -w 5 159.195.114.230 30104` probe from the operator's workstation.
+- The same probe against NodePort 30104 itself failed (connection timed out) — the required
+  inversion, now genuinely attributable to `KANBAN-INGRESS` rather than to Layer 2.
+- `nc -z -w 5 159.195.114.230 443` and `nc -z -w 5 159.195.114.230 22` both connected immediately.
+- Both public health endpoints stayed `{"status":"UP"}` throughout
+  (`kanban-board-rud-vlad-473.duckdns.org` and the `-nonprod` counterpart).
+
+**Runtime exposure inventory**, confirmed the same day:
+
+- `k3s kubectl get svc -A`: the only non-ClusterIP Service in the cluster is `kube-system/traefik`.
+- Pods with `hostNetwork` or any `hostPort`: exactly `svclb-traefik-*`.
+
+Both match the "only Traefik is public" invariant this plan set out to prove.
+
+**File list.** `infra/vm/k3s-host-firewall.sh` + `k3s-host-firewall.service` join
+`infra/vm/docker-user-firewall.*` as VM-provisioning files this document describes — see
+`infra/vm/README.md` for the install convention. D-04's Docker teardown (13-10) can now proceed
+without leaving k3s's NodePorts/hostPorts newly exposed.
+
 ## Verified state (2026-08-14)
 
 - Docker: `29.7.2` (`docker-ce`, official `download.docker.com/linux/debian` apt repo, not the

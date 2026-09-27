@@ -8,14 +8,20 @@ kind: Middleware
 metadata:
   name: auth-rate-limit
 spec:
-  # PROVISIONAL translation of Caddy zone auth (events/window); re-derived from token-bucket
-  # semantics in 13-08. Numbers copied verbatim from the Caddyfile's own `zone auth` (events 20,
-  # window 5m) -- Traefik's token bucket refills continuously rather than resetting at a window
-  # boundary, so this is an approximation, not an identical translation (13-RESEARCH.md Pattern 2).
+  # worst case over 5m = 10 + 10*300/300 = 20 <= Caddy's 20 (zone auth: events 20, window 5m).
+  #
+  # Re-derived 2026-09-26 (Plan 13-08, D-13) from Traefik's own token-bucket semantics, not
+  # copied verbatim from the Caddyfile as the PROVISIONAL 13-04 placeholder was. Traefik's bucket
+  # starts full at `burst` and refills `average` tokens per `period`, so the worst-case number of
+  # requests one client can get accepted in any window W is `burst + average * W / period`. Bound
+  # chosen so that worst case over Caddy's own window does not exceed Caddy's own budget, while
+  # burst is still large enough to admit a legitimate retry burst (a user re-typing a password a
+  # few times): burst=10 (half the budget up front), average=10/period=5m (the other half
+  # refilling continuously across the same window Caddy used).
   rateLimit:
-    average: 20
+    average: 10
     period: 5m
-    burst: 20
+    burst: 10
     sourceCriterion:
       ipStrategy:
         ipv6Subnet: 56
@@ -25,15 +31,17 @@ kind: Middleware
 metadata:
   name: general-rate-limit
 spec:
-  # PROVISIONAL translation of Caddy zone general (events/window); re-derived from token-bucket
-  # semantics in 13-08. Numbers copied verbatim from the Caddyfile's own `zone general` (events
-  # 120, window 1m). Scope matches Caddy exactly: this Middleware is attached only to the
-  # IngressRoute's prod-hostname route below -- nonprod carries no rate-limit Middleware at all
-  # (D-13: nonprod stays unlimited).
+  # worst case over 1m = 60 + 60*60/60 = 120 <= Caddy's 120 (zone general: events 120, window 1m).
+  #
+  # Re-derived 2026-09-26 (Plan 13-08, D-13) from Traefik's own token-bucket semantics
+  # (`burst + average * W / period`, see auth-rate-limit's comment above for the full derivation),
+  # not copied verbatim from the Caddyfile as the PROVISIONAL 13-04 placeholder was. Scope matches
+  # Caddy exactly: this Middleware is attached only to the IngressRoute's prod-hostname route
+  # below -- nonprod carries no rate-limit Middleware at all (D-13: nonprod stays unlimited).
   rateLimit:
-    average: 120
+    average: 60
     period: 1m
-    burst: 120
+    burst: 60
     sourceCriterion:
       ipStrategy:
         ipv6Subnet: 56

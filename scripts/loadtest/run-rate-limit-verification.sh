@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Post-deploy verification that the Caddy edge rate limiter is live AND correctly scoped
-# (quick task 260903-dvp, Task 7). Run this against the real deployment after a deploy lands.
+# Post-deploy verification that the edge rate limiter is live AND correctly scoped (quick task
+# 260903-dvp, Task 7; retargeted from Caddy to Traefik in Plan 13-08, D-13). Run this against the
+# real deployment after a deploy lands.
 #
 #   ./scripts/loadtest/run-rate-limit-verification.sh
 #   ./scripts/loadtest/run-rate-limit-verification.sh <prod-url> <nonprod-url>
@@ -93,10 +94,11 @@ for pair in "production:$PROD_URL" "nonprod:$NONPROD_URL"; do
   label="${pair%%:*}"; url="${pair#*:}"
   host="${url#*://}"; host="${host%%/*}"; host="${host%%:*}"
   if ! getent hosts "$host" >/dev/null 2>&1; then
-    echo "FAIL: the $label hostname '$host' does not resolve. Check it against the two site blocks"
-    echo "      in the Caddyfile and docs/INFRA_RUNBOOK.md before assuming anything about the"
-    echo "      limiter -- an unresolvable nonprod host yields a 429 count of 0, which is"
-    echo "      indistinguishable from a negative control that genuinely passed."
+    echo "FAIL: the $label hostname '$host' does not resolve. Check it against the Traefik"
+    echo "      IngressRoutes (k8s/overlays/prod/, k8s/overlays/nonprod/) and docs/INFRA_RUNBOOK.md"
+    echo "      before assuming anything about the limiter -- an unresolvable nonprod host yields"
+    echo "      a 429 count of 0, which is indistinguishable from a negative control that"
+    echo "      genuinely passed."
     exit 1
   fi
 done

@@ -1,24 +1,28 @@
-# Post-deploy verification that the Caddy edge rate limiter is live and correctly scoped
-# (quick task 260903-dvp, Task 7). Runs scripts/loadtest/run-rate-limit-verification.sh.
+# Post-deploy verification that the edge rate limiter is live and correctly scoped (quick task
+# 260903-dvp, Task 7; retargeted from Caddy to Traefik in Plan 13-08, D-13). Runs
+# scripts/loadtest/run-rate-limit-verification.sh.
 #
 # Why this exists as a workflow rather than "run the script on your laptop": the limiter keys on
-# {remote_host}, the TCP peer address, so running the harness SPENDS THE RUNNER'S OWN IP BUDGET --
-# 20 signin attempts, then 429s for the rest of the 5-minute window, for everyone behind that
-# address. Run from a laptop that is the developer's own address, and back-to-back runs collide
-# with each other and lock the developer out of signin meanwhile. A GitHub-hosted runner gets a
-# different egress address per run, so runs neither collide nor touch anyone's real address.
+# the direct connecting IP (sourceCriterion.ipStrategy with no `depth`/`excludedIPs`, i.e. no
+# trusted-proxy header parsing), so running the harness SPENDS THE RUNNER'S OWN IP BUDGET -- the
+# derived `burst` worth of signin attempts, then 429s for the rest of the 5-minute window, for
+# everyone behind that address. Run from a laptop that is the developer's own address, and
+# back-to-back runs collide with each other and lock the developer out of signin meanwhile. A
+# GitHub-hosted runner gets a different egress address per run, so runs neither collide nor touch
+# anyone's real address.
 #
 # The rejected alternative is worth naming so nobody re-proposes it: spoofing the source via
-# X-Forwarded-For. It cannot work and must not be made to work -- {remote_host} was chosen over
-# {client_ip} precisely so the limiter's key is the unforgeable TCP peer rather than a header, and
-# configuring `trusted_proxies` to honour XFF would let any attacker choose their own bucket key.
-# Convenience for testing is not worth deleting the control being tested.
+# X-Forwarded-For. It cannot work and must not be made to work -- the direct connecting IP was
+# chosen over an XFF-derived one precisely so the limiter's key is the unforgeable TCP peer rather
+# than a header, and configuring Traefik's `ipStrategy.depth`/`excludedIPs` to honour XFF would
+# let any attacker choose their own bucket key. Convenience for testing is not worth deleting the
+# control being tested.
 #
 # workflow_dispatch ONLY, deliberately. It is tempting to chain this to deploy.yml with
-# `workflow_run` so every deploy self-verifies, but each run costs ~20 bcrypt hashes on a 2 GB VPS
-# and rate-limits the runner's address for five minutes. Verification of a control that changes
-# only when the Caddyfile changes does not belong on every app deploy. Run it after a deploy that
-# touched the edge, and after any Caddyfile change.
+# `workflow_run` so every deploy self-verifies, but each run costs bcrypt hashes on a memory-
+# constrained VPS and rate-limits the runner's address for five minutes. Verification of a control
+# that changes only when the Middleware manifests change does not belong on every app deploy. Run
+# it after a deploy that touched the edge, and after any rate-limit Middleware change.
 name: Verify Rate Limit
 
 on:
