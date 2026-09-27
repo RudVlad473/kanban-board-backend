@@ -494,7 +494,10 @@ def check_links(row, body_start_idx, lookup, dir_lookup, only):
 
 
 def check_originals_untouched(rows):
-    subjects = git(["log", "--format=%s"]).split("\n")
+    """Assert (6): every src is byte-identical to HEAD, and no commit that
+    touched a src path (not the whole repo) carries this task's own tag —
+    a commit elsewhere in history mentioning the tag is expected (this
+    task's own commits) and is not evidence of a touched original."""
     for row in rows:
         src = row["src"]
         try:
@@ -505,9 +508,6 @@ def check_originals_untouched(rows):
         wt_bytes = (ROOT / src).read_bytes()
         if wt_bytes != head_bytes:
             fail(src, "originals", "working tree differs from HEAD")
-    for subj in subjects:
-        if "260927-ryo" in subj:
-            fail("git log", "originals", f"commit subject touches this task's own tag: {subj!r}")
     for row in rows:
         touching = git(["log", "--format=%s", "--", row["src"]]).split("\n")
         for subj in touching:
@@ -522,11 +522,11 @@ def check_index(rows, only):
         return
     text = index_path.read_text(encoding="utf-8")
 
-    wiki_rows = [r for r in rows if r["kind"] == "wiki"]
-    if only is not None:
-        wiki_rows = [r for r in wiki_rows if r["src"] in only and (ROOT / r["dest"]).is_file()]
-    else:
-        wiki_rows = [r for r in wiki_rows if (ROOT / r["dest"]).is_file()]
+    # index.md always reflects every wiki dest present on disk, not just the
+    # --only subset just processed: migrate_docs.py's regenerate_index does
+    # the same (it globs existing dests, ignoring --only), so re-running a
+    # narrow --only after a full migration must not shrink the index.
+    wiki_rows = [r for r in rows if r["kind"] == "wiki" and (ROOT / r["dest"]).is_file()]
 
     linked = set(re.findall(r"\]\(([^)]+\.md)\)", text))
     linked = {str((index_path.parent / p).resolve().relative_to(ROOT).as_posix()) for p in linked}
