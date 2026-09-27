@@ -138,7 +138,7 @@ Plans:
 **Goal:** Both environments run on a single-node k3s cluster on the existing Netcup VPS instead of Docker Compose. Nonprod moves first and completes a full GitOps deploy cycle; production follows in one announced maintenance window. Deploys are pull-based: Flux applies sortable `main-<run>-<sha7>` image tags. Traefik + cert-manager front both environments, with the Caddy-era rate limits re-derived and proven per client. Postgres runs in-cluster, restored from `pg_dump` with row-count parity. kube-prometheus-stack + Loki/Alloy provide observability, with the public dashboard links recreated. Compose (files, deploy jobs, volumes) is deleted only after the strict D-08 gate passes: automated checks, parity, 24h with zero OOMKilled/restarts, dump retained.
 **Requirements**: D-01..D-18 (CONTEXT.md decisions — no REQUIREMENTS.md for this not-yet-scoped milestone)
 **Depends on:** Phase 12
-**Plans:** 7/10 plans executed
+**Plans:** 8/10 plans executed
 
 Plans:
 **Wave 1**
@@ -165,7 +165,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 13-08-PLAN.md — Edge hardening: re-derived rate limits + two-IP proof, k3s-era host ingress filter (D-13)
+- [x] 13-08-PLAN.md — Edge hardening: re-derived rate limits + two-IP proof, k3s-era host ingress filter (D-04, D-08, D-11, D-13)
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
