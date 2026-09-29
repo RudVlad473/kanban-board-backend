@@ -72,14 +72,21 @@ spec:
         # Anon usage tracked ~253-356MiB across rungs, filling whatever headroom the cap allowed
         # (the same day-one pattern Plan 12-05 documented for this same binary) -- adopted 384Mi,
         # not the bare-passing 288Mi, for growth headroom over the 30-day retention window (D-07).
-        # Falsifier: if OOM-killed weeks from now with no config change, re-derive against the
-        # then-current series/chunk count, not this measurement.
+        # CORRECTED (quick 260929-fwf, 2026-09-29): 384Mi did NOT hold. The kernel journal shows
+        # three OOM kills within 6.3h of the D-08 window opening (2026-09-27T11:00, 13:00, 17:00Z,
+        # anon-rss ~390MB), each on a 2-hourly TSDB head-compaction boundary. The ladder above
+        # ran minutes per rung, shorter than that cycle, so it never sampled the spike. Live
+        # 3-day peak working set is 431 MiB (Prometheus max_over_time, container="prometheus").
+        # Adopted 640Mi (peak x1.5), request 384Mi (the old limit). Verification is the D-08.3
+        # 24h zero-restart window re-opened after this rollout, not another ladder.
+        # Falsifier: any OOMKilled on this container inside that window, or weeks later with no
+        # config change, means re-derive against the then-current series/chunk count.
         resources:
           requests:
-            memory: 288Mi
+            memory: 384Mi
             cpu: 50m
           limits:
-            memory: 384Mi
+            memory: 640Mi
         storageSpec:
           volumeClaimTemplate:
             spec:
@@ -171,12 +178,17 @@ spec:
       # prometheusOperator/alloy/postgres-exporter. Passing rung 16Mi, failed at 8Mi (dmesg
       # OOMKilled, anon-rss ~7MiB + file-rss ~10MiB against the 8Mi cap). Adopted 16Mi/10Mi --
       # verified clean (RestartCount=0, full workload cycle) from a fresh recreate.
+      # CORRECTED (quick 260929-fwf, 2026-09-29): 16Mi did NOT hold. node-exporter was OOM-killed
+      # twice inside the D-08 window (2026-09-27T23:51Z, 2026-09-28T13:16Z; anon ~14.6MB + file
+      # ~5.5MB = ~20MB) and the surviving pod's 3-day peak working set is 15.8 MiB -- no headroom.
+      # Adopted 32Mi, the shared ladder's other passing rung. Falsifier: any OOMKilled on this
+      # container inside the re-opened D-08.3 window.
       resources:
         requests:
-          memory: 10Mi
+          memory: 16Mi
           cpu: 10m
         limits:
-          memory: 16Mi
+          memory: 32Mi
       prometheus:
         monitor:
           enabled: true

@@ -800,6 +800,24 @@ journalctl -k --since "2026-09-27 10:44:46 UTC" | grep -c "Memory cgroup out of 
 - Unaffected and passing: health endpoints, rate limits, public dashboards, GitOps push deploy,
   row-count parity, dump integrity.
 
+### Follow-up — 2026-09-29 (quick task 260929-fwf, operator decision "1 and 1")
+
+The table above is the evidence for the gate as written on 2026-09-29 and is not edited.
+
+- **D-08.3 — limits raised, window to be re-opened.** `kube-prometheus-stack.yaml` now sets
+  Prometheus to 384Mi request / 640Mi limit (was 288Mi / 384Mi) and node-exporter to 16Mi / 32Mi
+  (was 10Mi / 16Mi). Sizing came from the live 3-day working-set peak (Prometheus 431 MiB,
+  node-exporter 15.8 MiB), not from a new restart ladder: the 13-09 ladder ran minutes per rung,
+  shorter than Prometheus's 2-hourly head-compaction cycle, which is exactly where all three
+  Prometheus kills landed. The re-opened 24 h window is the verification. **New T0: not yet
+  recorded** — it is set when the change has been pushed and Flux has rolled the release, and
+  will be added here.
+- **D-08.1b — threshold amended to "every run succeeded and count >= 10"**, counted over
+  `[2026-09-27T10:44:46Z, now]` (the original T0), not the re-opened window. At the observed ~5
+  runs/24h a floor of 10 from a new T0 would fail again at T0+24h by construction, and this item
+  tests application availability, which the limit change does not touch. The old result
+  (10 runs, all success) meets the amended floor today. Recorded in `13-10-PLAN.md` § Task 1.
+
 ## Maintenance note
 
 If the provider, IP, OS, spec, or firewall policy changes, update this document in the same
