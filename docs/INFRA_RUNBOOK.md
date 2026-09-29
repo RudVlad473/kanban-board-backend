@@ -739,6 +739,67 @@ resolving it requires removing the now-redundant placeholder from `platform/edge
 plan's `files_modified` scope and a real, if small, architectural decision (which Kustomization
 should own this object).
 
+## D-08 gate — Plan 13-10 (2026-09-29)
+
+**Verdict: FAIL — D-04 (Compose deletion) is NOT cleared.** Evaluated 2026-09-29T09:17Z to
+09:21Z, about 46.5 h after T0 (`2026-09-27T10:44:46Z`, see "k3s resource measurement — Plan
+13-09"). Two items fail on evidence: D-08.1(b) (10 uptime-check runs against a threshold of 90)
+and D-08.3 (5 container restarts, all OOMKills, inside the observation window). No threshold was
+relaxed. Everything read on the VM was read-only; the only state change was
+`gh workflow run verify-rate-limit.yml`.
+
+| Item | Check | Evidence | PASS/FAIL |
+|---|---|---|---|
+| D-08.1a | Both public health endpoints UP now | `curl` at 09:18Z: prod `{"status":"UP","groups":["liveness","readiness"]}` HTTP 200; nonprod identical, HTTP 200 | PASS |
+| D-08.1b | `uptime-check.yml`: every run in [T0, now] succeeded, count >= 90 at the 15-min cadence | `gh run list --workflow uptime-check.yml --created ">=2026-09-27"` gives 10 runs with `createdAt >= T0`, all 10 `success` (event `schedule`), first 2026-09-27T11:31:02Z, last 2026-09-29T06:54:16Z. Count is 10, not >= 90. Gaps between consecutive runs are 2.6 h to 8.2 h, never 15 min; the previous 50 runs back to 2026-09-19 show the same 2-5 h cadence, and the one failure in that history (2026-09-24T11:12:42Z) predates T0. The workflow's own header (a) says GitHub's cron is a floor, not a guarantee. That explains the shortfall but is not a GitHub-side outage shown in a run's log, so the plan's rule says FAIL | FAIL |
+| D-08.1c | `gh workflow run verify-rate-limit.yml`, watched, green | Dispatched 2026-09-29T09:18:58Z, run 36548367065 (`workflow_dispatch`), conclusion `success`, job "Production limits signin, nonprod does not" `success` | PASS |
+| D-08.1d | `python3 scripts/verify-public-dashboards.py` | Output: `invariants OK -- compose: 3 dashboard(s) checked; k8s: 3 dashboard(s) checked`, rc 0 | PASS |
+| D-08.1e | GitOps: pod image equals ImagePolicy latest; tag reached the overlay via fluxcdbot; build run event `push`; pod Ready | ImagePolicy `kanban-board-backend-prod` latestRef tag `main-142-f424526`. Running pod `kanban-prod/app-5f47756674-smvsl`, 1/1 Running, image `rudenkovladimir/kanban-board-backend:main-142-f424526`, started 2026-09-27T10:49:42Z. Overlay bump: fluxcdbot commit `3ac4b68` ("chore(flux): bump images", 2026-09-27T10:47:58Z, `main-141-54249e7` to `main-142-f424526` in the prod and nonprod overlays). Build: deploy.yml run **36313018824** (#142), event `push`, head `f42452679b164e27d44bde63127791eec22e95c8`, all 8 jobs `success`. Nonprod ImagePolicy resolves to the same tag | PASS |
+| D-08.2 | `diff` of the 13-06 counts files, both databases | `/root/k3s-cutover-20260926/`: `diff counts-kanban_prod-before.txt counts-kanban_prod-after.txt` empty (activity_log 2261, boards 43, columns 249, subtasks 983, tasks 984, users 49); `kanban_nonprod` diff empty (all six tables 0, so nonprod parity is trivially true) | PASS |
+| D-08.3a | Prometheus: `sum(increase(kube_pod_container_status_restarts_total[24h]))` = 0 | At `time=2026-09-28T10:44:46Z` (T0+24h): **4.00** (prometheus 3.00, node-exporter 1.00). At now (2026-09-29T09:19:48Z): 1.00 (node-exporter). The second window still holds a restart, so the last-24h view is not clean either | FAIL |
+| D-08.3b | Prometheus: `count(max_over_time(kube_pod_container_status_last_terminated_reason{reason="OOMKilled"}[24h]))` is empty | At T0+24h: **2** series (`monitoring/prometheus-kps-prometheus-0/prometheus`, `monitoring/kube-prometheus-stack-prometheus-node-exporter-s62rw/node-exporter`). At now: 2, same two | FAIL |
+| D-08.3c | Kernel journal: `journalctl -k --since "2026-09-27 10:44:46 UTC"` count of "Memory cgroup out of memory" = 0 | **10** lines, i.e. 5 distinct killed processes (each kill is logged twice). Prometheus 3x (2026-09-27T11:00:07Z, 13:00:05Z, 17:00:04Z, anon-rss ~390 MB against a 384Mi limit), node_exporter 2x (2026-09-27T23:51:33Z, 2026-09-28T13:16:33Z, anon-rss ~14.6 MB + file-rss ~5.5 MB against a 16Mi limit). All five are after T0; the last is after T0+24h | FAIL |
+| D-08.3d | Every current container's `restartCount` equals the T0 snapshot | 34 containers now; the T0 snapshot lists 34 lines (its prose says 32), of which 32 persist (the two `app` containers were replaced, below) and 30 of those 32 are unchanged. Changed: `prometheus` 0 to 3 (lastState OOMKilled, finished 2026-09-27T17:00:04Z), `node-exporter` 0 to 2 (lastState OOMKilled, finished 2026-09-28T13:16:33Z). Not restarts: the two `app` pods were replaced by the GitOps rollout to `main-142-f424526` at 2026-09-27T10:49:42Z (prod) after T0, restartCount 0 on the new pods | FAIL |
+| D-08.4 | Dump directory exists and `sha256sum -c SHA256SUMS` passes | `/root/k3s-cutover-20260926/` mode 0700, 152K total. `sha256sum -c SHA256SUMS`: kanban_prod.dump OK, kanban_nonprod.dump OK, globals.sql OK, four counts files OK, rc 0. The plan text expects ~30 MB; the real size is 152K (kanban_prod.dump 103,928 bytes, kanban_nonprod.dump 16,573 bytes) | PASS |
+
+### Queries, verbatim
+
+Prometheus, port-forward to `svc/kps-prometheus` (9090), instant queries at `time=2026-09-28T10:44:46Z`
+and at the evaluation time:
+
+```
+sum(increase(kube_pod_container_status_restarts_total[24h]))
+count(max_over_time(kube_pod_container_status_last_terminated_reason{reason="OOMKilled"}[24h]))
+increase(kube_pod_container_status_restarts_total[24h]) > 0
+max_over_time(kube_pod_container_status_last_terminated_reason{reason="OOMKilled"}[24h]) > 0
+```
+
+Kernel journal on the VM (journalctl, not dmesg: dmesg timestamps are boot-relative):
+
+```
+journalctl -k --since "2026-09-27 10:44:46 UTC" | grep -c "Memory cgroup out of memory"
+```
+
+### What the failure means
+
+- **The 13-09 ladder-adopted limits for Prometheus (384Mi) and node-exporter (16Mi) do not hold
+  under real load.** Both containers were killed at their own cap. Prometheus died three times in
+  the first ~6.3 h after T0, each on a 2-hourly TSDB head-compaction boundary, and has run clean
+  for the ~40 h since (last kill 2026-09-27T17:00:04Z). node-exporter died at 2026-09-27T23:51Z
+  and 2026-09-28T13:16Z. Both are non-workload monitoring containers: no application, Postgres or
+  Redpanda container restarted.
+- **D-08.3 needs a fresh clean 24 h window.** T0 is spent. Clearing it needs the two limits
+  raised and re-measured, then a new T0, then this gate re-run. That is a monitoring-limit
+  change plus a 24 h wait, not an edit to this record.
+- **D-08.1b cannot pass as written.** A 15-min cadence gives ~176 runs over 46.5 h, and GitHub
+  delivered 10. The same throttling is visible back to 2026-09-19, so a threshold of 90 was not
+  reachable with this workflow at any window length under ~10 days. The threshold is unchanged
+  here. Whether the gate should instead count health probes from Prometheus/Blackbox, or accept a
+  different floor, is an operator decision for the gate's owner, not something this record
+  substitutes.
+- Unaffected and passing: health endpoints, rate limits, public dashboards, GitOps push deploy,
+  row-count parity, dump integrity.
+
 ## Maintenance note
 
 If the provider, IP, OS, spec, or firewall policy changes, update this document in the same
