@@ -809,9 +809,15 @@ The table above is the evidence for the gate as written on 2026-09-29 and is not
   (was 10Mi / 16Mi). Sizing came from the live 3-day working-set peak (Prometheus 431 MiB,
   node-exporter 15.8 MiB), not from a new restart ladder: the 13-09 ladder ran minutes per rung,
   shorter than Prometheus's 2-hourly head-compaction cycle, which is exactly where all three
-  Prometheus kills landed. The re-opened 24 h window is the verification. **New T0: not yet
-  recorded** — it is set when the change has been pushed and Flux has rolled the release, and
-  will be added here.
+  Prometheus kills landed. The re-opened 24 h window is the verification.
+  **New T0 = `2026-09-29T09:58:50Z`** (the change reached `origin/main` as `37ee83f`; Flux rolled
+  `kube-prometheus-stack` to revision 4; `prometheus-kps-prometheus-0` and the node-exporter pod
+  both started 09:58:31Z and were Ready with restartCount 0 at 09:58:50Z; both public health
+  endpoints 200 and every pod Running/Completed at that time). Baseline at 09:59:04Z: no
+  container in any namespace has restartCount > 0. The window closes at `2026-09-30T09:58:50Z`.
+  Live limits confirmed on the objects, not just in git: Prometheus `640Mi`, node-exporter
+  `32Mi`. The D-08.3 queries are evaluated against this T0; the original T0 stays the anchor for
+  D-08.1b, D-08.2 and D-08.4.
 - **D-08.1b — threshold amended to "every run succeeded and count >= 10"**, counted over
   `[2026-09-27T10:44:46Z, now]` (the original T0), not the re-opened window. At the observed ~5
   runs/24h a floor of 10 from a new T0 would fail again at T0+24h by construction, and this item
