@@ -4,10 +4,15 @@ title: Audit the codebase for places property-based testing (jqwik) would pay of
 area: testing
 severity: minor
 files:
+
   - build.gradle
   - src/test/java/com/vrudenko/kanban_board/config/ComposedConstraintPropertyCustomizerTest.java
   - src/main/java/com/vrudenko/kanban_board/config/ComposedConstraintPropertyCustomizer.java
   - src/main/java/com/vrudenko/kanban_board/service/TaskService.java
+
+audit_acknowledged:
+  milestone: v1.4
+  at: 2026-09-30
 ---
 
 ## Problem
@@ -134,6 +139,7 @@ none of them declares `includeEngines`, so they currently run every discovered e
 `includeEngines 'jqwik', 'junit-jupiter'`.
 
 Two further build interactions to check rather than assume:
+
 - All three blocks use tag-based exclusion (`rehearsal`, `kafka`, `realSocket`). Confirm jqwik
   properties honour JUnit 5 `@Tag` the same way, or the pre-commit `fastTest` gate could start
   running container-backed properties it was built to skip.

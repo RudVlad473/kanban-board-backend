@@ -4,10 +4,15 @@ title: "Fix direct-@Pattern bypass and UTF-16 length-oracle blind spot in constr
 area: api
 severity: major
 files:
+
   - src/main/java/com/vrudenko/kanban_board/config/ComposedConstraintPropertyCustomizer.java:156-164
   - src/main/java/com/vrudenko/kanban_board/config/ComposedConstraintPropertyCustomizer.java:494
   - src/test/java/com/vrudenko/kanban_board/config/ComposedConstraintPropertyCustomizerTest.java:174-176
   - src/test/java/com/vrudenko/kanban_board/config/ComposedConstraintPropertyCustomizerTest.java:697
+
+audit_acknowledged:
+  milestone: v1.4
+  at: 2026-09-30
 ---
 
 ## Problem
@@ -38,10 +43,12 @@ exact class of defect this whole bean exists to prevent).
 **N2 — the equivalence test suite's own oracle counts UTF-16 units, so it structurally cannot
 catch the live GT1 defect (minLength published in UTF-16 units on 7 properties).**
 `ComposedConstraintPropertyCustomizerTest.java:174-176`, `valueSatisfiesPublishedConstraints`:
+
 ```java
 if (minLength != null && value.length() < minLength) { return false; }
 if (maxLength != null && value.length() > maxLength) { return false; }
 ```
+
 `value.length()` is Java's UTF-16 code-unit count — the *enforcer's* unit — not JSON Schema's
 (Unicode code points). Since the oracle models the published document using the same counting
 rule as what it's compared against, the two can never disagree on length by construction. That is

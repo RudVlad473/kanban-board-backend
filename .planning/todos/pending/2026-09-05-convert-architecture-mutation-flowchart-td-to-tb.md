@@ -4,8 +4,13 @@ title: "Convert architecture-mutation-flowchart.mmd from flowchart TD to flowcha
 area: docs
 severity: minor
 files:
+
   - docs/diagrams/architecture-mutation-flowchart.mmd
   - docs/diagrams/architecture-mutation-flowchart.png
+
+audit_acknowledged:
+  milestone: v1.4
+  at: 2026-09-30
 ---
 
 ## Problem

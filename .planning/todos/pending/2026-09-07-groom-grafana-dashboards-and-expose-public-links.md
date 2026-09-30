@@ -9,6 +9,9 @@ files:
   - docker/grafana/provisioning/dashboards/json/cadvisor.json
   - docker/grafana/provisioning/dashboards/json/postgres-exporter.json
 
+audit_acknowledged:
+  milestone: v1.4
+  at: 2026-09-30
 ---
 
 ## Problem

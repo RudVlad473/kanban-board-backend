@@ -4,8 +4,13 @@ title: "edge and monitoring Kustomizations both define IngressRoute grafana in n
 area: infra
 severity: moderate
 files:
+
   - k8s/platform/edge/ingressroute-monitoring.yaml
   - k8s/monitoring/configs/ingressroute.yaml
+
+audit_acknowledged:
+  milestone: v1.4
+  at: 2026-09-30
 ---
 
 ## Problem

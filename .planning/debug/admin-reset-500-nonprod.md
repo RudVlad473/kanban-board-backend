@@ -3,9 +3,14 @@ status: awaiting_human_verify
 trigger: "admin reset endpoint fails in nonprod, can you try and debug and see why frontend fails to call it?"
 created: 2026-08-26T10:47:16Z
 updated: 2026-08-26T12:52:00Z
+audit_acknowledged:
+  milestone: v1.4
+  at: 2026-09-30
+  status: awaiting_human_verify
 ---
 
 ## Current Focus
+
 <!-- OVERWRITE on each update - always reflects NOW -->
 
 hypothesis: CONFIRMED via Neon MCP (list_projects, org-red-moon-37279582): project kanban-board-db (floral-union-23715140) shows quota_reset_at=2026-09-01T00:00:00Z and compute_last_active_at=2026-08-26T10:11:59Z — the compute has been unable to activate since almost the exact second the outage began. User independently confirmed: "neon is done, we've used all the monthly allowance." Root cause is hypothesis (A): Neon Free-tier's 100 CU-h/month allowance is per-PROJECT (shared across every branch), and this repo's spring.datasource.hikari.minimum-idle=1 + keepalive-time=120000 (application.properties:90-95, both nonprod and prod share this one properties file) ping every pooled connection every 2 minutes specifically to defeat Neon's scale-to-zero (documented intent: INFRA-02, avoid cold-start latency) — so BOTH the nonprod and production computes bill continuously, 24/7, against the one shared allowance, instead of suspending when idle.
@@ -32,6 +37,7 @@ reasoning_checkpoint:
 tdd_checkpoint: null
 
 ## Symptoms
+
 <!-- Written during gathering, then immutable -->
 
 expected: Frontend's Playwright E2E global-setup (and a standalone CI step) POST to https://kanban-board-rud-vlad-473-nonprod.duckdns.org/api/admin/reset with header X-Reset-Token, and receive 204 No Content, wiping nonprod Postgres + the two Kafka activity topics.
@@ -43,6 +49,7 @@ reproduction: gh run view 32956845835 --repo RudVlad473/kanban-board-frontend --
 started: User reports it "worked before, broke recently" — no code changes to ResetController/ResetService/ResetTruncateService themselves in this repo's git history since their introduction (commits 65e3370, 818c14a). Most recent related change is V8__add_boards_created_at.sql (Flyway migration, applied 2026-08-25), adding a NOT NULL created_at column to boards — reviewed and does not appear to break the hardcoded TRUNCATE table list (table names match V1/V3 CREATE TABLE statements exactly: users, boards, columns, tasks, subtasks, activity_log, spring_session_attributes, spring_session).
 
 ## Eliminated
+
 <!-- APPEND only - prevents re-investigating after /clear -->
 
 - hypothesis: Frontend fails to call the endpoint due to a CORS misconfiguration (NonprodResetSecurityConfiguration's resetEndpointFilterChain doesn't call .cors(), unlike the main SecurityConfiguration chain) or a shared-secret token mismatch (403).
@@ -70,6 +77,7 @@ started: User reports it "worked before, broke recently" — no code changes to 
   timestamp: 2026-08-26T11:31:30Z
 
 ## Evidence
+
 <!-- APPEND only - facts discovered during investigation -->
 
 - timestamp: 2026-08-26T10:47:00Z
@@ -168,6 +176,7 @@ started: User reports it "worked before, broke recently" — no code changes to 
   implication: GUARDRAIL CAUGHT A NO-OP FIX. Deleting the keepalive-time line would have left the 2-minute ping running unchanged, so the outage would have recurred next billing cycle with the repo looking fixed. Corrected to an explicit `keepalive-time=0`. Also confirms the two mechanisms claimed in the fix rationale are real in this version: minimum-idle=0 survives validation and permanently disables the refill path (the suspend/reconnect wake loop), and idle connections are reaped to zero via HikariPool:830 (`idleTimeout > 0 && minIdle < maxPoolSize`).
 
 ## Resolution
+
 <!-- OVERWRITE as understanding evolves -->
 
 root_cause: |
@@ -256,6 +265,7 @@ verification: |
 oracle_type: derived (contract-level — verified the fix against HikariCP's own documented and
   source-level gating conditions; no assertable runtime oracle exists for a billing-rate outcome)
 files_changed:
+
   - src/main/resources/application.properties: minimum-idle 1->0, keepalive-time 120000->0, plus a
     dated Decisions record superseding INFRA-02's always-warm rationale and warning that deleting
     either line silently restores the old behavior.

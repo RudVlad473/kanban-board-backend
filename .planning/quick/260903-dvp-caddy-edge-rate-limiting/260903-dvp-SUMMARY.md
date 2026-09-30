@@ -5,6 +5,10 @@ status: partial
 tasks_completed: 6
 review_rounds: 3
 tasks_total: 7
+audit_acknowledged:
+  milestone: v1.4
+  at: 2026-09-30
+  status: partial
 ---
 
 # Caddy edge rate limiting — Summary (Tasks 1-6)

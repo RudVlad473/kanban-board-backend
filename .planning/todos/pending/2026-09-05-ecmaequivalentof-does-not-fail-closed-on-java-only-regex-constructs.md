@@ -4,8 +4,13 @@ title: ecmaEquivalentOf does not fail closed on Java-only regex constructs
 area: api
 severity: minor
 files:
+
   - src/main/java/com/vrudenko/kanban_board/config/ComposedConstraintPropertyCustomizer.java
   - src/test/java/com/vrudenko/kanban_board/config/ComposedConstraintPropertyCustomizerTest.java
+
+audit_acknowledged:
+  milestone: v1.4
+  at: 2026-09-30
 ---
 
 ## Problem

@@ -4,9 +4,14 @@ title: "SCP'd config changes do not reach the running container without a restar
 area: infra
 severity: moderate
 files:
+
   - .github/workflows/deploy.yml
   - docker-compose.prod.yml
   - docs/INFRA_RUNBOOK.md
+
+audit_acknowledged:
+  milestone: v1.4
+  at: 2026-09-30
 ---
 
 ## Problem
@@ -49,6 +54,7 @@ introduces this step, the containers already running are whatever the *previous*
 reload issued before `up -d` would target the wrong process generation.
 
 Concrete shape, mirroring the existing Caddy reload pattern:
+
 - `docker compose ... restart grafana` (or a Grafana API-based datasource reload, if one exists for
   this image tag — check before assuming) to pick up `datasources.yaml` changes.
 - `docker compose ... restart prometheus` for `prometheus.yml` changes. (Adding

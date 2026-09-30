@@ -4,9 +4,14 @@ title: "IPv6 published ports have no host-level firewall — DOCKER-USER's new p
 area: security
 severity: moderate
 files:
+
   - docs/INFRA_RUNBOOK.md
   - docs/INFRA_ARCHITECTURE.md
   - infra/vm/docker-user-firewall.sh
+
+audit_acknowledged:
+  milestone: v1.4
+  at: 2026-09-30
 ---
 
 ## Problem

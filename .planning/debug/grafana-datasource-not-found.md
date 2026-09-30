@@ -3,6 +3,10 @@ status: awaiting_human_verify
 trigger: "shared links for observability from this repo aren't working: https://github.com/RudVlad473/kanban-board-backend (check readme). Screenshot of Grafana 'VM Host Metrics' dashboard: every panel shows No data/N/A, tooltip 'Datasource was not found'."
 created: 2026-09-12T00:00:00Z
 updated: 2026-09-12T00:00:00Z
+audit_acknowledged:
+  milestone: v1.4
+  at: 2026-09-30
+  status: awaiting_human_verify
 ---
 
 ## Symptoms
@@ -210,6 +214,7 @@ root_cause: |
   deterministically from its name (a fresh container produced byte-identical UIDs to production's).
 
 fix: |
+
   - datasources.yaml: pinned `uid: PBFA97CFB590B2093` (Prometheus) and `uid: P8E80F9AEF21F6940`
     (Loki) — DELIBERATELY the values Grafana had already derived, with a decision-record comment.
     Measured: provisioning a DIFFERENT uid onto an existing datasource aborts Grafana startup with
@@ -223,6 +228,7 @@ fix: |
   - Documented the incident in docs/INFRA_RUNBOOK.md.
 
 verification:
+
   - signal: "Local reproduction (grafana/grafana:13.2.1 + repo provisioning + request-recording
       datasource stub) — BEFORE: HTTP 500, no query reaches the datasource. AFTER: HTTP 200 on all
       three dashboards with fully interpolated PromQL."
@@ -252,6 +258,7 @@ verification:
     result: deferred
 
 files_changed:
+
   - docker/grafana/provisioning/datasources/datasources.yaml
   - docker/grafana/provisioning/dashboards/json/node-exporter-full.json
   - docker/grafana/provisioning/dashboards/json/cadvisor.json
@@ -262,6 +269,7 @@ files_changed:
   - docs/INFRA_RUNBOOK.md
 
 open_items:
+
   - "Postgres Internals (token 8939df8f9d0d4c358f9a0fd422d1f385) is publicly shared but linked
      nowhere in the README. Fixed alongside the other two, but whether it SHOULD be public is a
      decision for the owner, not a debugging finding."

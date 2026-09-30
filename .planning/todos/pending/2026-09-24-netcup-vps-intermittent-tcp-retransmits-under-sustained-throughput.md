@@ -4,8 +4,13 @@ title: "Netcup VPS shows intermittent TCP retransmits and a bitrate dip under su
 area: infra
 severity: minor
 files:
+
   - docs/incidents/2026-09-24-netcup-network-diagnostics/diagnostics.txt
   - docs/incidents/2026-09-24-netcup-network-diagnostics/README.md
+
+audit_acknowledged:
+  milestone: v1.4
+  at: 2026-09-30
 ---
 
 ## Problem

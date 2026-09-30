@@ -4,9 +4,14 @@ title: Allow editing a column's color after creation
 area: api
 severity: minor
 files:
+
   - src/main/java/com/vrudenko/kanban_board/dto/column_dto/UpdateColumnRequestDTO.java
   - src/main/java/com/vrudenko/kanban_board/mapper/ColumnMapper.java
   - src/main/java/com/vrudenko/kanban_board/service/ColumnService.java
+
+audit_acknowledged:
+  milestone: v1.4
+  at: 2026-09-30
 ---
 
 ## Problem

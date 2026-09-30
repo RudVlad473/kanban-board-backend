@@ -1,3 +1,9 @@
+---
+audit_acknowledged:
+  milestone: v1.4
+  at: 2026-09-30
+---
+
 # Prove KANBAN-INGRESS DROP counter after Docker stop
 
 Phase 13 closed with this unproven. Chain and PREROUTING position-1 jump are present and survive reboot, NodePorts 30080/30104 are unreachable off-box, but the Netcup Cloud Firewall drops the probe before the DROP counter can move.

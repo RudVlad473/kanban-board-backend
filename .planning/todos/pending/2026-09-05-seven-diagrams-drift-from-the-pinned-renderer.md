@@ -4,6 +4,7 @@ title: "Seven committed diagrams (auth-*, architecture-*) drift from scripts/ren
 area: docs
 severity: minor
 files:
+
   - docs/diagrams/auth-signin-scenario.png
   - docs/diagrams/auth-signup-scenario.png
   - docs/diagrams/architecture-activity-feed-read.png
@@ -11,6 +12,10 @@ files:
   - docs/diagrams/architecture-mutation-flowchart.png
   - docs/diagrams/architecture-mutation-sequence.png
   - docs/diagrams/architecture-signin-scenario.png
+
+audit_acknowledged:
+  milestone: v1.4
+  at: 2026-09-30
 ---
 
 ## Problem
