@@ -1,19 +1,19 @@
 ---
 gsd_state_version: "1.0"
 milestone: v1.3
-current_phase: 13
-status: completed
+status: Awaiting next milestone
 stopped_at: Phase 13 complete — all phases complete
-last_updated: "2026-09-30T15:17:57.531Z"
+last_updated: "2026-09-30T17:25:42.056Z"
 last_activity: 2026-09-30
-last_activity_desc: Phase 13 complete
-state_head: 0ccb811d0dd85a65bdf66240a6f12deed3f704e9
+last_activity_desc: Milestone v1.4 completed and archived
+state_head: 7dc642096f3d8a1e5d2fa8dd1e39e68dc4a56f14
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 24
   completed_plans: 24
 milestone_name: Nonprod Environment & CI Hardening
+current_phase: 13
 ---
 
 # Project State
@@ -27,12 +27,10 @@ See: .planning/PROJECT.md (updated 2026-09-08)
 
 ## Current Position
 
-Phase: 13
-Plan: Not started
-Status: All phases complete
-Last activity: 2026-09-30 — Phase 13 complete
-
-Next: operator to merge/push 13-09's commits to `main`, then 13-10 (D-08's 24h evaluation window, Docker/Caddy teardown) — Wave 8, the final wave of Phase 13. 13-10 cannot start its own D-08.3 evaluation until `[T0, T0+24h]` = `[2026-09-27T10:44:46Z, 2026-09-28T10:44:46Z]` has actually elapsed, independent of any merge timing. D-04's Docker teardown in 13-10 is also a natural point to resolve the filed IngressRoute-collision todo, since it already touches `k8s/platform/edge/`'s neighborhood.
+Phase: Milestone v1.4 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-09-30 — Milestone v1.4 completed and archived
 
 ## Performance Metrics
 
@@ -205,10 +203,4 @@ Resume file: None
 
 ## Operator Next Steps
 
-- **Merge/push 13-09's commits (`cd2e98d`, `b764148`, `06cf6c1`) from the executing worktree's branch to `main`** — the executing session was instructed not to do this itself, matching the pattern already established for these same commits during the session (twice resolved this way, once also reconciling a concurrent `fluxcdbot` image-bump commit that landed on `origin/main` concurrently).
-- **13-10 cannot start its own D-08.3 evaluation until `[T0, T0+24h]` has actually elapsed** — T0 = `2026-09-27T10:44:46Z`, so the window closes at `2026-09-28T10:44:46Z`. This is independent of merge timing; even a same-day merge does not let 13-10 begin its evaluation early.
-- **The filed todo** (`.planning/todos/pending/2026-09-27-two-kustomizations-race-for-the-grafana-ingressroute-name.md`) is not blocking but worth resolving during 13-10, since that plan's own D-04 Docker teardown already touches `k8s/platform/edge/`'s neighborhood — a natural point to also remove the now-fully-redundant placeholder IngressRoute.
-- Compose is stopped but NOT deleted (D-04 gate is 13-10) — all 8 Compose volumes remain intact on the VM. Do not delete them before 13-10's own gate passes.
-- Read `docs/history/2026-09-26-production-cutover-to-k3s.md` before starting 13-10 or any later production-touching plan — it documents a real mid-window incident (a staged multi-commit branch pushed by tip instead of per-gate SHA, causing an ~11-minute public 502 with zero data loss) and 5 gaps found and fixed live. `docs/SESSION_LESSONS.md` lesson 8 generalizes the incident's root cause for any future staged multi-commit rollout in this repo.
-- WINDOWS.md entry 9 (13-05 Task 2's unreproducible verbatim rpk/reset-endpoint acceptance-criteria capture) is open, not blocking, worth closing opportunistically.
-- Deferred, user-requested: reorganize `/docs` (9 top-level .md files + demo/diagrams/incidents/learning/netcup-report/plans subdirs) — still deferred. Two untracked items found in the working tree in a prior session, not cleaned up (unclear provenance): `docs/netcup-report/netcup_network_diagnostics.txt` and `docs/learning/.review-431836/` (a completed multi-agent review's scratch output, 20 findings) — triage or delete before/during the docs reorg.
+- Start the next milestone with /gsd-new-milestone

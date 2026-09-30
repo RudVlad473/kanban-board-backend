@@ -144,6 +144,29 @@
 
 ---
 
+## Milestone: v1.4 — Self-Hosted Infra and Kubernetes
+
+**Shipped:** 2026-09-30
+**Phases:** 3 | **Plans:** 24
+
+### What Was Built
+Neon replaced by self-hosted Postgres, a measured self-hosted observability stack, then both environments moved from Docker Compose to k3s + Flux, with Compose/Caddy/Docker deleted behind a strict D-08 gate.
+
+### What Worked
+Gating the one-way Compose deletion on a written, evidence-based D-08 gate: its first evaluation FAILED (OOM kills, unreachable run-count floor), the fix and a re-opened 24h window passed, and nothing irreversible ran before that.
+
+### What Was Inefficient
+The first D-08 run-count floor (90) assumed a 15-minute cron that GitHub does not deliver, so it was amended to 10 after the fact. Phase 13 verification read `stale` because the verifier's fingerprint omitted plan and summary files. Pre-commit Gradle daemons were repeatedly stopped by another session.
+
+### Patterns Established
+Re-derive gate thresholds from observed platform behavior before the window starts; verify off-box exposure through every firewall layer, since an outer layer can mask the inner one.
+
+### Key Lessons
+An outer firewall can make an inner-layer proof impossible without a temporary console rule, so plan that probe before removing the old layer. Backups were deferred and are now the largest open risk.
+
+### Cost Observations
+- Notable: Phase 13 plans 13-06/13-09/13-10 were the heaviest; 13-10 alone used roughly 0.5M subagent tokens across two executors.
+
 ## Cross-Milestone Trends
 
 ### Process Evolution

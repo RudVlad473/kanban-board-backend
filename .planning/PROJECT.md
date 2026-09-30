@@ -10,26 +10,17 @@ v1.0 through v1.2 shipped the backend-depth showcase (JPA/Hibernate optimistic l
 
 ## Current State
 
-v1.3 (Nonprod Environment & CI Hardening) shipped 2026-08-25 — Phases 8, 9, and 10 all complete
-and verified (13/13 plans, zero gaps). The backend now has an isolated, continuously-deployed
-nonprod environment colocated on the existing Netcup VPS, and the CI/deploy pipeline's accumulated
-hardening debt (secret scanning, action digest-pinning, Gradle supply-chain integrity, session
-cookie `Secure` flag, README architecture showcase) is closed. Full milestone detail archived at
-[`milestones/v1.3-ROADMAP.md`](milestones/v1.3-ROADMAP.md) and
-[`milestones/v1.3-REQUIREMENTS.md`](milestones/v1.3-REQUIREMENTS.md).
-
-Phase 11 (Migrate database from Neon to self-hosted Postgres), run standalone after v1.3 closed
-and not yet folded into a named milestone, shipped 2026-08-26 — 8/8 plans complete, 11/11
-must-haves verified after one gap-closure round. **Neon is now fully decommissioned**; both
-production and nonprod run against a single self-hosted `postgres:16` container on the Netcup VPS.
-See Validated below and `docs/INFRA_RUNBOOK.md` for full detail.
-
-Phase 12 (Self-hosted observability stack), also standalone, shipped 2026-09-08 — 6/6 plans
-complete, 21/21 must-haves verified (2 via accepted, disclosed override) after two re-verification
-rounds. Prometheus + Grafana + Loki/Promtail + cAdvisor + node_exporter now run as additional
-containers on the existing Netcup VPS, monitoring both environments from one shared instance, with
-every container's `mem_limit` measured against real evidence rather than arithmetic. See Validated
-below and `docs/INFRA_RUNBOOK.md` for full detail.
+v1.4 (Self-Hosted Infra and Kubernetes) shipped 2026-09-30 — Phases 11, 12 and 13 complete (24/24
+plans). Neon is decommissioned (Phase 11), a self-hosted Prometheus/Grafana/Loki stack was built
+and its limits measured (Phase 12), and both environments now run on single-node k3s on the
+Netcup VPS, deployed pull-based by Flux with Traefik and cert-manager at the edge and Postgres
+in-cluster (Phase 13). Docker Compose, Caddy and Docker Engine are gone from the VM and the repo;
+local dev keeps its own `docker-compose.yml`. Phase 13 closed on an operator-accepted D-03 ordering
+deviation, and two behaviors remain unproven and tracked as todos: the `KANBAN-INGRESS` DROP
+counter after Docker's removal, and the two-source-IP rate-limit re-proof. No automated backups
+exist for current production data. Detail: [`milestones/v1.4-ROADMAP.md`](milestones/v1.4-ROADMAP.md),
+`docs/INFRA_RUNBOOK.md`. Earlier: v1.3 shipped 2026-08-25
+([`milestones/v1.3-ROADMAP.md`](milestones/v1.3-ROADMAP.md)).
 
 Next milestone not yet scoped — run `/gsd-new-milestone` to define it.
 
@@ -150,4 +141,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-08 after Phase 12 (Self-hosted observability stack)*
+*Last updated: 2026-09-30 after v1.4 milestone*
