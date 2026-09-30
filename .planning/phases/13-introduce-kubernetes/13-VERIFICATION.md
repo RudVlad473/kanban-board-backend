@@ -1,7 +1,7 @@
 ---
 phase: 13-introduce-kubernetes
-verified: 2026-09-30T15:10:00Z
-status: human_needed
+verified: 2026-09-30T15:16:10Z
+status: passed
 score: 15/18 must-haves verified
 covered_files:
   - .github/workflows/deploy.yml
@@ -15,7 +15,12 @@ covered_files:
   - scripts/verify-k8s-invariants.py
 covered_digest: "v1:sha256:35f94b79cba7bfcfa92cec5ec77c3a0daef5a9e09b4f73b1424899a4b9e190a8"
 behavior_unverified: 2
-overrides_applied: 0
+overrides:
+  - must_have: "Only one production stack was in memory at a time: every Compose container was stopped before in-cluster prod workloads started, inside one announced window whose start, end and downtime are recorded (D-03)."
+    reason: "Staged W2-W4 were pushed by branch tip; apps-prod ran briefly before the data migration and Compose Postgres stayed up until the real dump. About 11 min public 502, zero data loss, no OOM, parity verified. Operator directed roll-forward."
+    accepted_by: "operator (RudVlad473)"
+    accepted_at: "2026-09-30T15:16:10Z"
+overrides_applied: 1
 behavior_unverified_items:
   - truth: "KANBAN-INGRESS alone keeps k3s NodePorts closed after Docker Engine and DOCKER-USER were retired, attributed by its DROP counter"
     test: "With Docker stopped (it is), open a temporary, source-IP-scoped Netcup Cloud Firewall rule for TCP 30104, run `nc -z -w 5 159.195.114.230 30104` from that IP, and read `iptables -t mangle -L KANBAN-INGRESS -n -v -x | grep DROP` on netcup-prod before and after. Remove the console rule afterwards."
@@ -194,3 +199,7 @@ Bookkeeping to close at phase completion (not verification gaps): tick 13-09 and
 
 _Verified: 2026-09-30T15:10:00Z_
 _Verifier: Claude (gsd-verifier)_
+
+## Operator close-out (2026-09-30)
+
+Operator replied "1" to close Phase 13 now: D-03 accepted (override above). Status set to `passed` by that decision, NOT because the two behavior-unverified items were proven. They stay open as todos: KANBAN-INGRESS DROP-counter attribution (needs a temporary Netcup console rule), and reproducing the two-source-IP rate-limit proof. The unidentified 72 MB anonymous volume deleted in 13-10 is acknowledged as irreversible.
