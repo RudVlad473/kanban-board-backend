@@ -5,6 +5,26 @@ status: passed
 score: 15/18 must-haves verified
 covered_files:
   - .github/workflows/deploy.yml
+  - .planning/phases/13-introduce-kubernetes/13-01-PLAN.md
+  - .planning/phases/13-introduce-kubernetes/13-01-SUMMARY.md
+  - .planning/phases/13-introduce-kubernetes/13-02-PLAN.md
+  - .planning/phases/13-introduce-kubernetes/13-02-SUMMARY.md
+  - .planning/phases/13-introduce-kubernetes/13-03-PLAN.md
+  - .planning/phases/13-introduce-kubernetes/13-03-SUMMARY.md
+  - .planning/phases/13-introduce-kubernetes/13-04-PLAN.md
+  - .planning/phases/13-introduce-kubernetes/13-04-SUMMARY.md
+  - .planning/phases/13-introduce-kubernetes/13-05-PLAN.md
+  - .planning/phases/13-introduce-kubernetes/13-05-SUMMARY.md
+  - .planning/phases/13-introduce-kubernetes/13-06-PLAN.md
+  - .planning/phases/13-introduce-kubernetes/13-06-SUMMARY.md
+  - .planning/phases/13-introduce-kubernetes/13-07-PLAN.md
+  - .planning/phases/13-introduce-kubernetes/13-07-SUMMARY.md
+  - .planning/phases/13-introduce-kubernetes/13-08-PLAN.md
+  - .planning/phases/13-introduce-kubernetes/13-08-SUMMARY.md
+  - .planning/phases/13-introduce-kubernetes/13-09-PLAN.md
+  - .planning/phases/13-introduce-kubernetes/13-09-SUMMARY.md
+  - .planning/phases/13-introduce-kubernetes/13-10-PLAN.md
+  - .planning/phases/13-introduce-kubernetes/13-10-SUMMARY.md
   - .planning/phases/13-introduce-kubernetes/13-CONTEXT.md
   - docs/INFRA_RUNBOOK.md
   - infra/vm/k3s-host-firewall.sh
@@ -13,7 +33,7 @@ covered_files:
   - k8s/overlays/prod/kustomization.yaml
   - k8s/platform/traefik/helmchartconfig.yaml
   - scripts/verify-k8s-invariants.py
-covered_digest: "v1:sha256:35f94b79cba7bfcfa92cec5ec77c3a0daef5a9e09b4f73b1424899a4b9e190a8"
+covered_digest: "v1:sha256:38adbc92bdf6432ce17ab5f6c80bfb0698bad73433f9c3d7b4d1d116a05e96de"
 behavior_unverified: 2
 overrides:
   - must_have: "Only one production stack was in memory at a time: every Compose container was stopped before in-cluster prod workloads started, inside one announced window whose start, end and downtime are recorded (D-03)."
