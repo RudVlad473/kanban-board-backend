@@ -182,16 +182,6 @@ v = _gate.find_panel_type_violations(
 )
 check("a datasource ref's own 'type' is not mistaken for a panel type", v == [], v)
 
-print("I6 -- the plugin allowlist matches the image Compose pins")
-
-check(
-    "the pinned image passes",
-    _gate.find_grafana_version_drift("  grafana:\n    image: grafana/grafana:13.2.1\n") == [],
-)
-
-v = _gate.find_grafana_version_drift("  grafana:\n    image: grafana/grafana:14.0.0\n")
-check("a bumped image is rejected", len(v) == 1 and "14.0.0" in v[0], v)
-
 print("I4 -- every dashboard file is accounted for")
 
 v = _gate.find_uncovered_files({"a.json", "new.json"}, {"a.json": "u1"}, {})
@@ -210,7 +200,7 @@ check(
     _gate.find_uid_mismatches(dashboard([panel()]), "d.json", "rYdddlPWk") == [],
 )
 
-print("k8s scope -- Phase 13 plan 03 (D-07/D-18)")
+print("k8s scope -- Phase 13 plan 03 (D-07/D-18); the only scope since 13-10")
 
 v = _gate.find_datasource_violations(
     dashboard([panel(datasource={"type": "prometheus", "uid": "${DS_PROMETHEUS}"})]),

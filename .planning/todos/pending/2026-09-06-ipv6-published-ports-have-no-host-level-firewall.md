@@ -54,3 +54,26 @@ machine, a cloud shell, or a scriptable third-party IPv6 reachability checker â€
 proven the way 260906-feq proved the IPv4 fix (measured before/after, packet-counter attribution).
 Do not close this todo on a v6 change nobody could verify actually took effect; that would repeat
 exactly the trap 260906-feq's own checkpoint decision was raised to avoid.
+
+## Dated note (2026-09-30, Plan 13-10): NOT closed -- `ss -6 -ltnH` shows non-sshd listeners
+
+Task 3's rule was "run `ss -6 -ltnH`; if nothing listens publicly except sshd, close". Live on
+netcup-prod after Docker was disabled (and after the reboot):
+
+```
+LISTEN 0 128  [::]:22   [::]:*
+LISTEN 0 4096 *:10250   *:*      # k3s-server (kubelet API)
+LISTEN 0 4096 *:6443    *:*      # k3s-server (Kubernetes API)
+```
+
+`*:` is a dual-stack wildcard bind, so kubelet (10250) and the API server (6443) listen on IPv6 as
+well as IPv4. `ip6tables -S INPUT` is still `-P INPUT ACCEPT` (only kube-proxy chains attached), so
+the host has no IPv6 filter for them; whether they are reachable from the internet over IPv6
+depends on the Netcup Cloud Firewall (Layer 2), which was not probed (no IPv6 egress from the
+probing box, the original todo's blocker). Both endpoints require TLS client/bearer authentication,
+so this is an authenticated API surface, not an open service -- but it is the same "IPv6 has no
+host-level filter" gap this todo describes, now on k3s ports instead of Docker-published ones. The
+Docker half is moot (Docker is disabled, no `docker-proxy`); the k3s half is new. Scope for whoever
+picks it up: mirror `KANBAN-INGRESS` into `ip6tables -t mangle`, or confirm Layer 2 blocks
+6443/10250 over IPv6 from an IPv6-capable host. `infra/vm/docker-user-firewall.sh`, listed in
+`files:` above, was deleted in 13-10.

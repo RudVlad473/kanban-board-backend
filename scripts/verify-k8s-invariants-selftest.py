@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Self-test for scripts/verify-k8s-invariants.py's pure check functions.
 
-Same rationale as scripts/verify-compose-ports-selftest.py: prevents the failure this whole gate
-exists to catch, one level up -- an edit to the gate that makes an invariant unfireable is
+Prevents the failure this whole gate exists to catch, one level up -- an edit to the gate that makes an invariant unfireable is
 invisible against a tree that already satisfies every invariant, so the gate goes green and stays
 green. Each case below builds an in-memory rendered document (or source-file text) engineered to
 trip exactly one invariant and asserts the violation is reported; a clean fixture asserts nothing
@@ -247,17 +246,6 @@ def run_cases():
     # I8 -- a rendered Secret.
     doc = {"kind": "Secret", "metadata": {"name": "app-env"}}
     expect_violation("I8", _gate.check_rendered_doc(doc, "fixture"), "I8:")
-
-    # I9 -- init-script byte identity between docker/postgres-init and the k8s init dir.
-    expect_violation(
-        "I9 (1-byte diff)",
-        _gate.check_i9_init_script_identity(b"same\n", b"different\n", "fixture-init.sh"),
-        "I9:",
-    )
-    expect_clean(
-        "I9 (identical, clean)",
-        _gate.check_i9_init_script_identity(b"same\n", b"same\n", "fixture-init.sh"),
-    )
 
     # I10 -- a redirect route without the ACME-challenge-path negation must fire.
     redirect_mw = {

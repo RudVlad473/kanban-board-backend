@@ -62,3 +62,18 @@ sole production ingress and the highest-consequence of the three if its cap prov
 should get the same longer-observation-window re-ladder treatment, plus — ideally — a genuinely
 multi-source-address adversarial test (e.g., from multiple different networks/proxies) rather than
 the single-address approximation the original ladder was limited to.
+
+## Resolution (2026-09-30)
+
+Closed as moot by **Phase 13, plan 13-10 (2026-09-30)**. The subjects of this todo -- the `cadvisor`,
+`grafana` and `caddy` Compose containers and their `mem_limit` caps -- no longer exist: Compose was
+decommissioned (volumes included) and Docker Engine disabled on netcup-prod, and the Caddy edge was
+deleted from the repository (`Caddyfile`, `docker/caddy/`, the `build-and-push-caddy-image` job).
+Their successors are Traefik, kube-prometheus-stack's Grafana and node-exporter (per-container
+metrics now come from the kubelet), each measured with a restart ladder in `docs/INFRA_RUNBOOK.md`'s
+"k3s resource measurement -- Plan 13-09" section, and re-evaluated after the 2026-09-29
+Prometheus/node-exporter limit raise in the D-08 gate record (24h, zero restarts, zero OOM kills).
+The multi-source-address adversarial gap noted for caddy's rate limiter does not carry over as-is:
+the edge limiter is now a Traefik middleware, measured in 13-09 with the same single-source
+workload. A genuinely multi-source test remains untried, but that is a new question about a
+different component, not this todo.

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Adversarial harness for docker/postgres-init/01-create-databases-and-roles.sh (D-01, plan
+# Adversarial harness for k8s/data/postgres/init/01-create-databases-and-roles.sh (D-01, plan
 # 11-07 / 11-REVIEW.md CR-01). Boots a throwaway postgres:16 container against a given init
 # directory with deliberately hostile credential values and asserts what correct, injection-safe
 # provisioning looks like. This file is what makes the fix falsifiable -- it must fail against the
 # pre-fix script and pass against the fixed one; see the plan's Task 1 for the recorded proof.
 #
-# Deliberately lives in scripts/, NOT docker/postgres-init/ -- the official postgres image sources
+# Deliberately lives in scripts/, NOT k8s/data/postgres/init/ -- the official postgres image sources
 # every file it finds in the mounted init directory as the superuser on first boot, so a harness
 # placed there would execute against a real database rather than a throwaway one.
 #
@@ -13,7 +13,7 @@
 set -eo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-INIT_DIR="${REPO_ROOT}/docker/postgres-init"
+INIT_DIR="${REPO_ROOT}/k8s/data/postgres/init"
 CASE_NAME="all"
 
 while [[ $# -gt 0 ]]; do
@@ -221,8 +221,8 @@ check_cross_refused "$PROD_USER" "$PROD_PASS" "$NONPROD_DB" "prod role ($PROD_US
 check_cross_refused "$NONPROD_USER" "$NONPROD_PASS" "$PROD_DB" "nonprod role ($NONPROD_USER)"
 
 # 5. The monitoring role (k8s/data/postgres/init/02-create-monitoring-role.sh), only asserted
-# when the init dir under test actually carries that script -- docker/postgres-init has no 02
-# script and must keep passing without one.
+# when the init dir under test actually carries that script (the k8s init dir does, so this runs
+# by default; an init dir without a 02 script must keep passing without it).
 if [[ -f "${INIT_DIR}/02-create-monitoring-role.sh" ]]; then
   check_auth "monitoring" "$MONITORING_PASS" "$MAINT_DB" "monitoring role"
   if OUT="$(run_psql "$SUPERUSER" "$SUPERUSER_PASS" "$MAINT_DB" \

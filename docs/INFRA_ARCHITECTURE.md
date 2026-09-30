@@ -5,8 +5,10 @@ single-node k3s v1.36.4+k3s1 cluster on a Netcup VPS Lite 2 G12s VM (Vienna, x86
 Flux (GitOps, pull-based), fronted by Traefik (the k3s-packaged edge), with cert-manager issuing
 Let's Encrypt certificates, a self-hosted PostgreSQL 16 StatefulSet, self-hosted Redpanda
 StatefulSets per environment, and kube-prometheus-stack/Loki/Alloy for observability. Docker
-Compose is retired from the production request path as of Plan 13-06's cutover (2026-09-26) — it
-is stopped but not yet deleted on the VM, pending Plan 13-10's D-04 teardown gate. The original
+Compose left the production request path at Plan 13-06's cutover (2026-09-26) and was
+decommissioned on 2026-09-30 (Plan 13-10, D-04): its containers, volumes and networks are deleted,
+Docker Engine is disabled on the VM, and the Compose/Caddy files are gone from this repository (local
+dev keeps its own `docker-compose.yml`). The original
 deploy target was Oracle Cloud's Always Free A1 Flex (ARM64); it was replaced after Oracle's
 free-tier capacity in the planned region proved structurally unavailable — see
 `docs/INFRA_RUNBOOK.md` and Phase 5 Plan 05-03's SUMMARY for that earlier pivot rationale.
@@ -116,11 +118,10 @@ pods -A` enumerates the entire host-wide workload set by construction.
 ## Scenario (+1) View — Delivery Path
 
 Traces one key end-to-end scenario — push to `main` through to a running deploy — across the
-other views, confirming they stay consistent with each other. `deploy.yml` holds 8 jobs as of
-Plan 13-06 (D-14, D-15): `setup`, `run-tests`, `build-and-push-docker-image`,
-`build-and-push-caddy-image` (persists until Plan 13-10's D-04 teardown — the Caddy image is
-still built, just no longer deployed to anything in the request path), `flyway-verify`,
-`flyway-verify-nonprod`, `cleanup-old-images`, `cleanup-old-images-nonprod`. **Deploys are now
+other views, confirming they stay consistent with each other. `deploy.yml` holds 7 jobs as of
+Plan 13-10 (8 after Plan 13-06's D-14/D-15 rewrite): `setup`, `run-tests`, `build-and-push-docker-image`,
+`flyway-verify`, `flyway-verify-nonprod`, `cleanup-old-images`, `cleanup-old-images-nonprod`
+(`build-and-push-caddy-image` was removed in Plan 13-10 together with the Caddy edge). **Deploys are now
 pull-based GitOps (D-14)** — this workflow ends at image push. There is no `deploy-to-netcup`,
 `deploy-to-nonprod`, `register-schemas-production`, or `health-check-nonprod` job anymore; Flux's
 image-automation controllers and `kustomize-controller` own the rest of the path, entirely inside
@@ -234,19 +235,22 @@ exists to enforce.
 from the `DOCKER-USER`-era gap rather than reopening it — the underlying IPv6 exposure was never
 closed, only re-described against the new chain that replaced its IPv4 sibling.
 
-`DOCKER-USER` and `infra/vm/docker-user-firewall.*` remain installed on this VM as of this
-writing — D-04's Docker teardown (Plan 13-10) is what retires them, not this plan. Until then, both
-chains coexist: `DOCKER-USER` governs nothing (no Docker container publishes a host port anymore,
-since Compose is stopped), while `KANBAN-INGRESS` governs everything k3s exposes.
+**`DOCKER-USER` is retired (Plan 13-10, 2026-09-30).** Docker Engine, containerd and
+`docker-user-firewall.service` are disabled on the VM and `infra/vm/docker-user-firewall.*` is
+deleted from the repository, so `KANBAN-INGRESS` is now the only forward-path filter, with the Netcup
+Cloud Firewall outside it. Re-proven without Docker, and again after a reboot, in
+`docs/INFRA_RUNBOOK.md`'s "Decommission Record — Plan 13-10": `mangle PREROUTING` still carries the
+jump first, `nc` to the Traefik NodePort from off-box fails, and 22/443 connect. The DROP counter
+did not move for that probe because Layer 2 drops it first, so counter attribution to
+`KANBAN-INGRESS` after Docker's removal rests on the unchanged chain plus the 2026-09-27
+attribution above, not on a fresh counter increase.
 
 ## Maintenance Note
 
-**Compose/Caddy status (Plan 13-09):** Docker Compose and Caddy are marked **removed in 13-10**
-throughout this document rather than deleted outright before that plan actually runs — Compose is
-stopped on the VM but its containers/volumes still exist pending Plan 13-10's D-04 teardown gate.
-Do not delete any mention of `docker-compose.prod.yml`/`Caddyfile`/`docker/caddy/Dockerfile` from
-this list until that teardown has actually landed; doing so earlier would silently stop tracking
-files that still exist on disk and could still need a fix before they're gone for good.
+**Compose/Caddy status (Plan 13-10):** Docker Compose and Caddy are removed. `docker-compose.prod.yml`,
+`docker-compose.nonprod.yml`, `Caddyfile`, `docker/**`, the Compose-only gate scripts and
+`infra/vm/docker-user-firewall.*` were deleted in the same change that decommissioned them on the
+VM (D-04). Only the local-dev `docker-compose.yml` remains, and it is not a deployment artifact.
 
 This document now describes: `k8s/**` (every Kustomize root — `flux-system`, `platform`,
 `platform/cert-manager`, `platform/edge`, `data`, `data/postgres(-bridge)`, `base/app`,
@@ -254,22 +258,19 @@ This document now describes: `k8s/**` (every Kustomize root — `flux-system`, `
 (k3s config + pinned install wrapper), `infra/vm/k3s-host-firewall.*` (the `KANBAN-INGRESS`
 ruleset + systemd unit), and `infra/vm/sshd/` (the sshd hardening this VM already carried forward
 from Phase 5, unchanged by the k3s cutover but now cited here alongside its k3s-era siblings).
-Also still tracked, pending D-04: `docker-compose.prod.yml`, `Caddyfile`,
-`docker/caddy/Dockerfile`, `.github/workflows/invariant-checks.yml`, and
-`.github/workflows/deploy.yml` — specifically the `build-and-push-docker-image` and
-`build-and-push-caddy-image` jobs' `linux/amd64` platform target (the deploy target pivoted from
-Oracle A1 Flex/ARM64 to Netcup/x86_64 in Phase 5) and the 8 job names (reduced from 14 across
-Plans 13-05/13-06's removal of every SSH-based deploy/health-check/cleanup-unused-image job — GitOps
-replaced all of them). If any of those facts changes — a job renamed or added, a build platform
-changed, a new `k8s/` root added, or Compose/Caddy actually removed in 13-10 — update this
-document, and the diagrams it links to, in the same change: it is the single checked-in
-description of what actually runs where.
+Also tracked: `.github/workflows/invariant-checks.yml` (three jobs: `public-dashboards`,
+`k8s-manifests-valid`, `k8s-invariants`) and `.github/workflows/deploy.yml` — specifically the
+`build-and-push-docker-image` job's `linux/amd64` platform target (the deploy target pivoted from
+Oracle A1 Flex/ARM64 to Netcup/x86_64 in Phase 5) and the 7 job names (reduced from 14 across
+Plans 13-05/13-06's removal of every SSH-based deploy/health-check/cleanup-unused-image job, and by
+13-10's removal of the Caddy image job). If any of those facts changes — a job renamed or added, a
+build platform changed, a new `k8s/` root added — update this document, and the diagrams it links
+to, in the same change: it is the single checked-in description of what actually runs where.
 
-**Also on this list, added 2026-09-08 (Phase 12, plan 12-06):** `docker/prometheus/prometheus.yml`,
-`docker/loki/loki-config.yaml`, `docker/promtail/promtail-config.yaml`,
-`docker/grafana/provisioning/**`, and the `kanban-metrics` network. These define what the
-observability stack scrapes, ships and provisions, and the cross-project network it uses to reach
-the nonprod broker — exactly the kind of fact this document has already gone stale on once.
+What the observability stack scrapes, ships and provisions is defined by `k8s/monitoring/**` (the
+Compose-era `docker/prometheus`, `docker/loki`, `docker/promtail`, `docker/grafana` and the
+`kanban-metrics` network were deleted in 13-10) — exactly the kind of fact this document has already
+gone stale on once.
 
 **Where the database lives is on that list deliberately, added 2026-09-03.** It was not, and that
 is how this document went on describing Neon as the system of record for the four months after
@@ -299,7 +300,7 @@ document's own Physical/Deployment facts change.
   `infra/vm/k3s-host-firewall.sh` (installed on the VM per `infra/vm/README.md`'s convention),
   not this document's prose. This document's packet-path Scenario describes the policy in force
   and the evidence it works, and must be updated again if the script's ruleset ever changes (a new
-  published port, an IPv6 closure, D-04's eventual removal of the now-inert `DOCKER-USER` sibling)
+  published port, an IPv6 closure)
   — the same discipline that closed the prior `DOCKER-USER`-era staleness applies to whatever
   replaces today's seven-rule `mangle` policy.
 - **The Netcup Cloud Firewall's policy, flagged as external state this repository cannot verify.**

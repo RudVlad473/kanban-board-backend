@@ -1,57 +1,30 @@
-# Committed-invariant checks (quick task 260903-dvp, 2026-09-03 review F4).
+# Committed-invariant checks (quick task 260903-dvp, 2026-09-03 review F4; rewritten for the k8s
+# runtime in Phase 13 plan 10, D-04/D-13/D-16).
 #
-# Why this workflow exists at all: deploy.yml already runs scripts/verify-caddy-image-tag.py, but
-# deploy.yml triggers on `push: branches: [main]` ONLY -- it has no `pull_request:` trigger, and
-# giving it one is not an option, since that would arm the deploy jobs on every PR. So the gate
-# fired exclusively AFTER merge, where its only remaining power was to leave `main` undeployed.
-# Two comments (the script's own docstring and .github/dependabot.yml's caddy note) claimed the
-# drift was "unmergeable" and that a bump PR "will fail CI"; both were false until this file
-# existed. Written to make the claim true rather than to soften the claim.
+# Why this workflow exists at all: deploy.yml triggers on `push: branches: [main]` ONLY -- it has no
+# `pull_request:` trigger, and giving it one is not an option, since that would arm the deploy jobs
+# on every PR. A gate living only there would fire exclusively AFTER merge, where its only power is
+# to leave `main` undeployed. These jobs run on push AND pull_request, like secret-scan.yml.
 #
-# Runs on push and pull_request for the same reason secret-scan.yml does, and the argument is
-# worth restating because it is what makes a per-PR gate safe here: this check is a PURE FUNCTION
-# OF THE COMMIT. It reads two committed files and compares them to each other, reaching no
-# network and no registry, so an unchanged tree cannot newly fail here days later the way
-# security-scan.yml's advisory-driven verdict can. That is precisely the property that earns a
-# blocking per-PR run instead of a scheduled advisory one.
+# A per-PR blocking run is safe because every job below is a PURE FUNCTION OF THE COMMIT: it reads
+# committed files (and, for k8s-manifests-valid, binaries pinned by sha256), so an unchanged tree
+# cannot newly fail days later the way security-scan.yml's advisory-driven verdict can.
 #
-# Scope note, so this file is not mistaken for broader coverage than it has: the tag gate proves
-# the Dockerfile's base version and plugin SHA agree with the compose image literal. It is NOT a
-# content hash of the Dockerfile -- see that script's own docstring for the states it knowingly
-# does not catch.
-#
-# Second job added 2026-09-05: scripts/verify-compose-ports.py checks
-# that only `caddy` publishes a host port, and only 80/443. This earns the same per-PR blocking
-# run as the job above and for the identical reason -- on this VM the OS iptables layer does not
-# see anything Docker publishes (DNAT traverses FORWARD, never INPUT), so the compose file is
-# where the decision to expose a port is actually made and reviewed. See that script's own
-# docstring for the full argument and its KNOWN HOLES.
-#
-# Third job added quick task 260908-sj9 (2026-09-08): scripts/verify-deploy-scp-coverage.py checks
-# that every repo-relative bind-mount source a deploy compose file declares is actually transferred
-# by that environment's own deploy.yml SCP step. Same per-PR blocking rationale: this is a pure
-# function of two committed files (a compose file and deploy.yml), reaching no network and no
-# registry, so an unchanged tree cannot newly fail here. Discovered live: four of six
-# docker-compose.prod.yml bind mounts were absent from deploy-to-netcup's `source:` list from
-# Phase 12 onward, and nothing compared the two lists until this gate existed. See that script's
-# own docstring for the full argument and its KNOWN HOLES.
-#
-# Fourth job added 2026-09-12 (debug session grafana-datasource-not-found):
-# scripts/verify-public-dashboards.py checks that no publicly-shared Grafana dashboard contains a
-# construct the public renderer cannot resolve -- a datasource referenced by name or by a
-# `${ds_*}` variable, or a query holding a `$variable`. Same per-PR blocking rationale: a pure
-# function of the committed dashboard JSON and datasources.yaml, no network. Discovered live: all
-# three public dashboards had been serving "Datasource was not found" on every panel since they
-# were shared, and the second defect class this gate covers fails SILENTLY as HTTP 200 with an
-# empty result -- no log line, no unhealthy container, just quiet panels. These dashboards are
-# vendored from grafana.com, where template variables are the norm, so each re-fetch reintroduces
-# it. See that script's own docstring for the measurements and its KNOWN HOLES.
-#
-# Fifth and sixth jobs added Phase 13 plan 01 (D-12): k8s-manifests-valid renders every k8s/
-# kustomization root with a pinned kubectl and validates the result against pinned Kubernetes/CRD
-# schemas via kubeconform (scripts/verify-k8s-manifests.sh). k8s-invariants is the k8s-native
-# successor of compose-published-ports above, added Task 3 -- see
-# scripts/verify-k8s-invariants.py's own docstring for its invariants.
+# Jobs:
+#   public-dashboards (2026-09-12, debug session grafana-datasource-not-found):
+#     scripts/verify-public-dashboards.py -- no publicly-shared Grafana dashboard holds a construct
+#     the public renderer cannot resolve (a datasource by name or `${ds_*}` variable, a `$variable`
+#     in a query, a panel plugin the pinned Grafana no longer ships). Those failures are silent:
+#     HTTP 200 with an empty result, no log line, no unhealthy container. See that script's own
+#     docstring for the measurements and its KNOWN HOLES.
+#   k8s-manifests-valid (Phase 13 plan 01, D-12): renders every k8s/ kustomization root with a pinned
+#     kubectl and validates the result against pinned Kubernetes/CRD schemas via kubeconform
+#     (scripts/verify-k8s-manifests.sh).
+#   k8s-invariants (Phase 13 plan 01/04/10): scripts/verify-k8s-invariants.py -- only the edge is
+#     public, memory caps are measured and dated, images are pinned, no Secret is committed, no
+#     redirect route matches the ACME challenge path. It is the k8s-native successor of the
+#     Compose-era compose-published-ports, caddy-image-tag and deploy-scp-coverage jobs, which were
+#     removed in 13-10 together with their subject (Compose and Caddy).
 name: Invariant Checks
 
 on:
@@ -59,8 +32,7 @@ on:
     branches:
       - main
     # Same two known-inert path groups deploy.yml ignores. A docs-only or planning-only change
-    # cannot alter the relationship between docker/caddy/Dockerfile and docker-compose.prod.yml,
-    # which is the only thing this workflow reads.
+    # cannot alter anything this workflow reads.
     paths-ignore:
       - "docs/**"
       - "**/*.md"
@@ -72,64 +44,6 @@ on:
       - ".planning/**"
 
 jobs:
-  caddy-image-tag:
-    name: Caddy image tag matches its Dockerfile
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      # PyYAML is installed explicitly rather than assumed. An earlier version of this file claimed
-      # the script was "stdlib-only" and skipped this step; that was wrong (2026-09-03 review) --
-      # verify-caddy-image-tag.py imports yaml to read docker-compose.prod.yml, inside main(), so
-      # even --print-tag needs it. It fails closed with an explicit "PyYAML is required", so the
-      # gate could never be green-while-broken; but on a runner image without PyYAML it would be
-      # permanently red, i.e. a gate that blocks everything rather than one that checks anything.
-      # ubuntu-latest currently ships it; this step makes that a guarantee instead of a bet.
-      - name: Install the gate's one dependency
-        run: python3 -m pip install --disable-pip-version-check --quiet pyyaml
-
-      - name: Verify Caddy image tag invariants
-        run: python3 scripts/verify-caddy-image-tag.py
-
-  compose-published-ports:
-    name: Only Caddy publishes host ports (80/443)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: Install the gate's one dependency
-        run: python3 -m pip install --disable-pip-version-check --quiet pyyaml
-
-      # Runs ahead of the gate: if the gate's own logic has been edited into something that
-      # cannot fire, that must be the failure reported here, not a green gate reading a
-      # compliant file.
-      - name: Verify the gate's invariants can fire
-        run: python3 scripts/verify-compose-ports-selftest.py
-
-      - name: Verify compose published-ports invariants
-        run: python3 scripts/verify-compose-ports.py
-
-  deploy-scp-coverage:
-    name: Deploy SCP transfers every repo-relative bind mount
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: Install the gate's one dependency
-        run: python3 -m pip install --disable-pip-version-check --quiet pyyaml
-
-      # Runs ahead of the gate, matching compose-published-ports's own ordering above and for the
-      # identical reason: a gate edited into something that cannot fire must be reported as the
-      # failure here, not masked by a compliant tree.
-      - name: Verify the gate's invariants can fire
-        run: python3 scripts/verify-deploy-scp-coverage-selftest.py
-
-      - name: Verify deploy SCP coverage invariants
-        run: python3 scripts/verify-deploy-scp-coverage.py
-
   public-dashboards:
     name: Public Grafana dashboards carry nothing the public renderer cannot resolve
     runs-on: ubuntu-latest
@@ -140,10 +54,9 @@ jobs:
       - name: Install the gate's one dependency
         run: python3 -m pip install --disable-pip-version-check --quiet pyyaml
 
-      # Runs ahead of the gate, matching the two jobs above and for the identical reason: a gate
-      # edited into something that cannot fire must be reported as the failure here, not masked by
-      # a compliant tree. That mode is the whole reason this gate exists -- the defect it catches
-      # is already the kind that looks green from the outside.
+      # Runs ahead of the gate: a gate edited into something that cannot fire must be reported as
+      # the failure here, not masked by a compliant tree. That mode is the whole reason this gate
+      # exists -- the defect it catches is already the kind that looks green from the outside.
       - name: Verify the gate's invariants can fire
         run: python3 scripts/verify-public-dashboards-selftest.py
 

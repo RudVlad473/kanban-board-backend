@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
 r"""Gate: only the edge is exposed, memory is measured and dated, images are pinned and sortable,
-every k8s/ root is accounted for, no Secret is committed, the Postgres init scripts stay
-byte-identical to their Compose source, and no redirect route can ever match the ACME HTTP-01
-challenge path (Phase 13 plans 01/04).
+every k8s/ root is accounted for, no Secret is committed, and no redirect route can ever
+match the ACME HTTP-01 challenge path (Phase 13 plans 01/04/10).
 
-WHY this exists: this is the k8s-native successor of scripts/verify-compose-ports.py's "only the
-edge is public" invariant. That script guards docker-compose*.yml files and stops mattering once
-Compose is decommissioned (D-04); this one guards the k8s/ manifests that replace it, so the same
-class of defect -- a service silently gaining a public port, an unmeasured memory cap, a committed
-credential -- keeps getting caught pre-merge on the new runtime. See
-scripts/verify-compose-ports.py (2026-09-05) for the original argument this ports.
+WHY this exists: this is the k8s-native successor of the deleted scripts/verify-compose-ports.py's
+"only the edge is public" invariant (2026-09-05, removed with Compose in 13-10, D-04). It guards the
+k8s/ manifests, so the same class of defect -- a service silently gaining a public port, an
+unmeasured memory cap, a committed credential -- keeps getting caught pre-merge. I6 superseded the
+deleted scripts/verify-postgres-memory-invariant.py, whose two inequalities it ports.
 
 SCOPE: every kustomization root under k8s/ (discovered the same way
 scripts/verify-k8s-manifests.sh discovers them), rendered with that script's own pinned kubectl,
@@ -19,8 +17,7 @@ inequalities) applies only when a rendered object is a Postgres StatefulSet -- n
 this phase's own tree, so I6 is exercised only by the selftest until 13-04 adds one.
 
 KNOWN HOLES, enumerated now rather than left to be rediscovered:
-  * This sees committed manifests only, exactly like verify-compose-ports.py's own first KNOWN
-    HOLE -- a `kubectl apply` made by hand against a live cluster, or an object mutated by a
+  * This sees committed manifests only -- a `kubectl apply` made by hand against a live cluster, or an object mutated by a
     controller after admission, is invisible here.
   * Helm-rendered chart objects (HelmRelease `values:`) and the k3s-packaged Traefik Service are
     invisible to this gate -- neither is Kustomize-rendered YAML this script's render step
@@ -56,16 +53,15 @@ I5: no rendered container/initContainer image is untagged or `:latest`; every ov
     and carries its Flux setter-marker comment.
 I6: a rendered Postgres StatefulSet's `shared_buffers` exceeds `limits.memory` / 4, or
     `shared_buffers + max_connections * work_mem` exceeds 0.85 * `limits.memory` --
-    ported directly from scripts/verify-postgres-memory-invariant.py's own two inequalities.
+    ported directly from the deleted scripts/verify-postgres-memory-invariant.py's own two
+    inequalities.
 I7: every directory under k8s/ that holds a kustomization.yaml is either rendered by this gate's
     own root-discovery (same mechanism as verify-k8s-manifests.sh) or explicitly listed in
     DELIBERATELY_EXCLUDED with a reason -- a root in neither set would be silently ungated.
 I8: no rendered object has `kind: Secret` -- D-10 requires every Secret be created on the VM from
     env files, never committed.
-I9: when docker/postgres-init/01-create-databases-and-roles.sh exists,
-    k8s/data/postgres/init/01-create-databases-and-roles.sh must be byte-identical to it -- a
-    one-byte difference fails. Read from disk directly (not part of any rendered root); a pure
-    function of two byte strings so the selftest can exercise it with no disk access.
+I9: RETIRED in 13-10 (its subject, docker/postgres-init/, was deleted with Compose). The number is
+    kept unused so I10 and the FAIL-line history in the runbook keep their numbers.
 I10: an IngressRoute route attaching a Middleware whose spec is `redirectScheme` or
     `redirectRegex` must fullmatch ``Host(`<host>`) && !PathPrefix(`/.well-known/acme-challenge/`)``.
     Evaluated over every rendered root the gate already renders, so it covers the redirect routes
@@ -300,18 +296,6 @@ ACME_EXCLUSION_RE = re.compile(
 REDIRECT_MIDDLEWARE_SPEC_KEYS = ("redirectScheme", "redirectRegex")
 
 
-def check_i9_init_script_identity(compose_bytes, k8s_bytes, label):
-    """I9: byte identity between the Compose init script and its k8s copy. Pure function of two
-    byte strings (no disk access) so the selftest can exercise it directly; the real call site in
-    main() reads both files first."""
-    if compose_bytes != k8s_bytes:
-        return [
-            f"I9: {label}: k8s/data/postgres/init copy is not byte-identical to "
-            f"docker/postgres-init's own script"
-        ]
-    return []
-
-
 def check_i10_redirect_acme_exclusion(docs, label):
     """I10: every IngressRoute route attaching a redirectScheme/redirectRegex Middleware must
     fullmatch the ACME-challenge-exclusion rule shape. Fails closed on a web-entrypoint route
@@ -521,20 +505,6 @@ def main():
         # so it runs once per root over that root's own doc list rather than per-document.
         all_violations += check_i10_redirect_acme_exclusion(root_docs, root)
 
-    # I9: byte identity between the Compose init script and its k8s copy. A missing Compose
-    # source (a future Compose deletion post-D-04) makes this a no-op rather than a violation --
-    # nothing to compare against once Compose itself is gone.
-    compose_init = os.path.join(REPO_ROOT, "docker", "postgres-init", "01-create-databases-and-roles.sh")
-    k8s_init = os.path.join(REPO_ROOT, "k8s", "data", "postgres", "init", "01-create-databases-and-roles.sh")
-    if os.path.isfile(compose_init) and os.path.isfile(k8s_init):
-        with open(compose_init, "rb") as f:
-            compose_bytes = f.read()
-        with open(k8s_init, "rb") as f:
-            k8s_bytes = f.read()
-        all_violations += check_i9_init_script_identity(
-            compose_bytes, k8s_bytes, "k8s/data/postgres/init/01-create-databases-and-roles.sh"
-        )
-
     for path in sorted(glob.glob(os.path.join(REPO_ROOT, "k8s", "**", "*.yaml"), recursive=True)):
         rel = os.path.relpath(path, REPO_ROOT)
         with open(path) as f:
@@ -552,8 +522,7 @@ def main():
         f"invariants OK -- {len(roots)} kustomization root(s) checked; no NodePort/LoadBalancer "
         "Service, no hostNetwork/hostPID/hostPort/hostPath, every container's memory "
         "requests+limits set and dated, no untagged/:latest image, no committed Secret, "
-        "postgres init scripts byte-identical to Compose, no redirect route matches the ACME "
-        "challenge path"
+        "no redirect route matches the ACME challenge path"
     )
     return 0
 

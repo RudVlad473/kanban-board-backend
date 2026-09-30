@@ -909,14 +909,159 @@ of the earlier Prometheus kills landed.
 - Uptime-check has no run after 2026-09-30T08:08:15Z as of evaluation; that is the normal
   2.6-8.2 h spacing and not a missing run.
 
+## Decommission Record — Plan 13-10 (2026-09-30)
+
+Docker Compose, Caddy and Docker Engine were removed from netcup-prod and from the repository after
+the D-08 gate passed on evidence. This section records what was checked before deletion, what was
+deleted, and what is honestly no longer recoverable. Shape mirrors "Decommission Record — Plan 11-06"
+(`docs/history/2026-08-26-decommission-record-neon.md`).
+
+### Gate verified before the decision was presented (D-08)
+
+The second evaluation, "D-08 gate — Plan 13-10 (2026-09-30)" above, is all PASS at T0+27.5 h (the
+first, 2026-09-29, FAILED and is retained). Immediately before the first deletion the executor
+re-checked live, 2026-09-30 about 13:37Z: 28 of 28 pods `Running`/`Completed`, both public health
+endpoints `{"status":"UP","groups":["liveness","readiness"]}`, and no Docker container running
+(every Compose container was already `Exited`, 4 days).
+
+### Decision (D-04)
+
+**Operator's verbatim answer, 2026-09-30:** reply `1` = option `decommission-reboot-keep-dump`:
+"decommission Compose (volumes included), retire Docker Engine, REBOOT netcup-prod to prove boot-time
+posture (about 2 min public downtime, authorized), and KEEP the dump by moving
+/root/k3s-cutover-20260926 to /root/k3s-cutover-archive (dir 0700, files 0600). Do NOT shred it."
+
+### Part A — what was deleted
+
+**VM (`ssh netcup-prod`, root), in the plan's order:**
+
+1. `docker compose -p kanban-board-backend ... down -v --remove-orphans` (11 containers,
+   `kanban-board-backend-{caddy,app,cadvisor,postgres,postgres-exporter,grafana,loki,prometheus,
+   promtail,node-exporter,redpanda}-1`) and the same for `kanban-board-nonprod`.
+   **The nonprod file gates both of its services behind `profiles: ["nonprod"]`, so the first
+   `down -v` (without `--profile nonprod`) exited 0 having done nothing; the second, with
+   `--profile nonprod`, removed `kanban-nonprod-app` and `kanban-nonprod-redpanda`.** A `down` that
+   prints nothing and exits 0 is not evidence; `docker ps -a` is.
+2. Volumes removed by `down -v`: `kanban-board-backend_{postgres-data,redpanda-data,caddy-data,
+   caddy-config,prometheus-data,grafana-data,loki-data}` and
+   `kanban-board-nonprod_redpanda-nonprod-data`. Networks removed by `down`:
+   `kanban-board-backend_default`, `kanban-board-nonprod_default`.
+3. **Volumes the plan's list did not name, removed by hand so that `docker volume ls` would be
+   empty (the plan's requirement):** `root_caddy-config` (12K), `root_caddy-data` (76K),
+   `root_redpanda-data` (348K), `redpanda-nonprod-data` (4K), and an anonymous volume
+   `e757bd8d26785cd99f9e082088a565a9ee5dacf32038b3a4d370f98e3d8d99b5` (72 MB, created
+   2026-09-26T09:36:43+02:00, the cutover day; its top level was a Postgres data directory: `base/`,
+   `global/`, `pg_hba.conf`, ...). Its origin was not established and its contents were not read
+   beyond a directory listing; it is gone. The `root_*` volumes are strays from a Compose project run
+   out of `/root` on 2026-08-16.
+4. Networks removed by hand: `kanban-edge`, `kanban-db`, `kanban-metrics`. `docker image prune -af`
+   reclaimed 23.58 GB; `docker system df` afterwards shows 0 images, 0 containers, 0 volumes and 0
+   build cache. `docker ps -a` and `docker volume ls` were empty before Docker was disabled.
+5. `/opt/deploy/kanban-board-backend` and `/opt/deploy/kanban-board-nonprod`: everything except
+   `.env.prod` / `.env.nonprod` deleted (`Caddyfile`, `docker/`, `docker-compose.prod.yml`,
+   `docker-compose.nonprod.yml`, both `ci-flyway-verify/`). The env files stay, mode 0600, as the
+   Secret source of truth (D-10: rotation stays a manual SSH step).
+6. `systemctl disable --now docker-user-firewall.service docker.service docker.socket
+   containerd.service`. Packages stay installed (reversible). This is Docker's containerd; k3s runs
+   its own (`/run/k3s/containerd/containerd.sock`) and its unit has no dependency on Docker.
+   `k3s-host-firewall.service` and `k3s.service` were left `enabled` and `active`.
+7. The dump: **kept.** `/root/k3s-cutover-20260926` moved to `/root/k3s-cutover-archive`, directory
+   0700, every file 0600, owner root; `sha256sum -c SHA256SUMS` re-run after the move: all 7 entries
+   OK, and the before/after row-count files are identical for both databases. 152 KB.
+
+**Repository (one commit):** deleted `docker-compose.prod.yml`, `docker-compose.nonprod.yml`,
+`Caddyfile`, `docker/caddy/`, `docker/prometheus/`, `docker/loki/`, `docker/promtail/`,
+`docker/grafana/`, `docker/postgres-init/`, `scripts/verify-compose-ports.py` (+ selftest),
+`scripts/verify-deploy-scp-coverage.py` (+ selftest), `scripts/verify-caddy-image-tag.py`,
+`scripts/verify-postgres-memory-invariant.py`, `infra/vm/docker-user-firewall.sh`,
+`infra/vm/docker-user-firewall.service`. Edited: `invariant-checks.yml` (removed jobs
+`caddy-image-tag`, `compose-published-ports`, `deploy-scp-coverage`), `deploy.yml` (removed
+`build-and-push-caddy-image`, `DOCKERHUB_REPOSITORY_CADDY`, the `base_image_name_caddy` output),
+`dependabot.yml` (removed the `/docker/caddy` entry), `verify-k8s-invariants.py` (+ selftest; I9
+retired, its number left unused so I10 keeps its number; docstring notes I6 superseded
+`verify-postgres-memory-invariant.py`), `verify-public-dashboards.py` (+ selftest; Compose scope and
+its Compose-image drift check dropped), `verify-postgres-init-quoting.sh` (default init dir is now
+`k8s/data/postgres/init`; it passes, 9 of 9, against that directory), `infra/vm/README.md`,
+`.claude/CLAUDE.md` (Platform Requirements bullets only), this runbook, `docs/INFRA_ARCHITECTURE.md`.
+Todo `2026-09-08-cadvisor-grafana-and-caddy-mem-limits...` moved to `completed/` with a Resolution.
+The local-dev `docker-compose.yml` stays. `.env.prod.example` / `.env.nonprod.example` are not
+edited: their keys remain the Secret inventory, and **`APP_DOMAIN`, `APP_DOMAIN_NONPROD` and
+`APP_DOMAIN_MONITORING` are now unused** (they fed the Caddyfile).
+
+### Part B — credentials
+
+None revoked. `NETCUP_SSH_KEY` (and its host-fingerprint secret) is still used by `flyway-verify` and
+`flyway-verify-nonprod`. The Docker Hub repository `kanban-board-caddy` is no longer published to; its
+tags are left in place. `DOCKERHUB_TOKEN` is unchanged (the app-image jobs use it).
+
+### Part C — what was verified unaffected
+
+All times UTC, 2026-09-30.
+
+- **Docker stopped, before the reboot:** 28 of 28 pods `Running`/`Completed`; both health endpoints
+  UP; `iptables -t mangle -S PREROUTING` = `-P PREROUTING ACCEPT`, `-A PREROUTING -i eth0 -j
+  KANBAN-INGRESS` (the jump, first and only); `k3s-host-firewall.sh check` "matches the expected
+  ruleset, jump confirmed at PREROUTING position 1"; `nc -z -w 5 159.195.114.230 30104` and `... 30080`
+  (Traefik `websecure`/`web` NodePorts) failed off-box (rc 1); `nc` to 22 and 443 connected.
+- **KANBAN-INGRESS DROP counter: NOT INCREASED, so that leg of the plan's check is not proven here.**
+  The counter read 22 packets / 1184 bytes before and after the off-box probes, and again after a
+  second probe run. This is the gap "Off-box probe and counter attribution" in "Edge hardening on
+  k3s — Plan 13-08" already documents: the Netcup Cloud Firewall (Layer 2) drops NodePort probes
+  before they reach the VM, so an unmodified probe fails for the right general reason but cannot move
+  a Layer 3 counter. The 2026-09-27 attribution (5 to 10 packets) needed a temporary, operator-opened
+  console rule, which the executor cannot create. What this evidence does establish: the chain and
+  its jump are unchanged by Docker's removal, and NodePorts are closed to the internet. What it does
+  not: that KANBAN-INGRESS alone, with Layer 2 out of the picture, drops them after Docker went away.
+  After the reboot the chain restarted from 2 packets / 167 bytes (counters reset with the chain),
+  again not incremented by the probe.
+- **Reboot** (`systemctl reboot` issued 13:40:24Z; boot time 13:40:51Z, shown as `uptime -s`
+  15:40:51 in the VM's local time): SSH back at 13:41:07Z, all pods `Running` at 13:41:23Z, every
+  container Ready by 13:41:59Z. The public health endpoints were UP when first checked at about
+  13:42Z; the outage window was not measured to the second and is bounded by roughly 90 s from reboot
+  to first UP. Post-reboot `REMOTE_OK` block from the plan, verbatim: docker not enabled and not
+  active; `k3s-host-firewall` enabled; `k3s-host-firewall.sh check` OK; `/var/lib/docker/volumes`
+  holds only `backingFsBlockDev` and `metadata.db`; every pod `Running`/`Completed`; printed
+  `REMOTE_OK` with `uptime` "up 1 minute". `systemctl is-enabled docker` = `disabled`,
+  `k3s-host-firewall` = `enabled`; `dockerd` not running; PREROUTING jump first. Off-box: 30104 not
+  reachable (rc 1), 22 and 443 connect, both health endpoints `{"status":"UP",...}`.
+- **Restart counts are no longer zero, by construction:** the reboot restarted every container once
+  (32 restarts across the cluster right after boot). This postdates the D-08 window and is expected;
+  it must not be read against D-08.3.
+- `ss -6 -ltnH` on the VM: `[::]:22`, and dual-stack `*:6443` and `*:10250` (k3s API server and
+  kubelet). The IPv6 todo was therefore not closed; see its dated note. This is a finding, not
+  something acted on here.
+
+### Part D — what is NOT recoverable
+
+- Every Compose-era volume: Postgres's `kanban-board-backend_postgres-data` (the pre-cutover
+  production database; the only surviving copies of that data are the retained dump, taken
+  2026-09-26 10:11, and the live k3s Postgres PVC), Redpanda logs for both environments (Kafka topics
+  and Schema Registry state from the Compose era), Prometheus and Loki history, Grafana's state
+  (dashboards are in git, but users, sessions and UI-only edits are not), and Caddy's `caddy-data`
+  (ACME account and certificates; Traefik and cert-manager hold the live ones).
+- The 72 MB anonymous Postgres-shaped volume `e757bd8d...`: never identified, not restorable.
+- **No automated backups exist** (D-12, still open). Anything written to Postgres after the
+  2026-09-26 dump exists only in the k3s Postgres PVC on this one VM's disk. The retained dump
+  protects the pre-cutover state only.
+- Every local Docker image on the VM (23.58 GB); all were pullable from their registries.
+
+### Decommission date
+
+2026-09-30.
+
 ## Maintenance note
 
 If the provider, IP, OS, spec, or firewall policy changes, update this document in the same
 change — it is the single checked-in description of what the production host actually is, as
 opposed to what any given plan intended it to be. **File list (13-02 addition):** `infra/vm/k3s/`
-(k3s config + pinned install wrapper) now sits alongside `infra/vm/docker-user-firewall.*` as the
-VM-provisioning files this document describes. **File list (13-07 addition):** the "Observability
+(k3s config + pinned install wrapper) now sits alongside `infra/vm/k3s-host-firewall.*` as the
+VM-provisioning files this document describes (`infra/vm/docker-user-firewall.*`, the other member
+of the 13-02 list, was deleted in 13-10). **File list (13-07 addition):** the "Observability
 on k3s" section above now describes `k8s/monitoring/{controllers,configs}/` as the live-reconciled
 observability manifests. **File list (13-09 addition):** `k8s/flux-system/controller-resources.yaml`
 now joins `k8s/flux-system/gotk-components.yaml` as the manifests describing Flux's own controller
-resources -- the former is a strategic-merge patch, the latter stays generator-owned.
+resources -- the former is a strategic-merge patch, the latter stays generator-owned. **File list
+(13-10 change):** the Compose-era files older sections above still mention (`docker-compose.prod.yml`,
+`docker-compose.nonprod.yml`, `Caddyfile`, `docker/**`, `infra/vm/docker-user-firewall.*`) are
+removed; read those sections as history, not as current state, and do not re-add the files to this
+list. The `/opt/deploy/kanban-board-*` directories on the VM now hold only their `.env.*` files.

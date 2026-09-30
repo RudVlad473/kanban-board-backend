@@ -74,22 +74,27 @@ A Spring Boot 3.5.16 / Java 21 REST API backend for a Kanban board application (
 
 - Java 21 JDK
 - Gradle 8.7 (via wrapper)
-- Docker Compose - Container deployment (`docker-compose.prod.yml`, standalone from local dev's
-  `docker-compose.yml`)
+- k3s (single node) + Flux GitOps - production and nonprod runtime (Phase 13, cutover 2026-09-26;
+  superseded Docker Compose, decommissioned in 13-10 — Docker Engine is disabled on the VM). Manifests
+  live in `k8s/`; local dev keeps its own `docker-compose.yml`, which is not a deployment artifact.
+  Layout and runbook: `docs/INFRA_ARCHITECTURE.md`, `docs/INFRA_RUNBOOK.md`
 - Netcup VPS Lite 2 G12s - Deployment target (v1.2 Phase 5; superseded AWS EC2, torn down on cost
   grounds — see `docs/INFRA_RUNBOOK.md`)
-- Self-hosted PostgreSQL 16 - Database server, resource-capped. One container on the VPS serving
-  BOTH environments' databases (production's `kanban_prod` and nonprod's `kanban_nonprod`, D-01)
-  over the shared external `kanban-db` network (Phase 11, 2026-08-26; superseded Neon serverless
-  Postgres, decommissioned in 11-06 — see `docker-compose.prod.yml` and
-  `docs/history/2026-08-26-self-hosted-postgres-cutover.md`'s "Self-hosted Postgres cutover")
-- Self-hosted Redpanda - Kafka-protocol broker, resource-capped
-- Caddy - Automatic public HTTPS / reverse proxy. A pinned custom image
-  (`docker/caddy/Dockerfile`, CI-built via `build-and-push-caddy-image`), not the stock `caddy:2` —
-  carries an edge rate limiter (`github.com/mholt/caddy-ratelimit`) in front of `/api/signin` and
-  `/api/signup` on the production hostname only (quick task 260903-dvp).
+- Self-hosted PostgreSQL 16 - Database server, resource-capped. One in-cluster StatefulSet
+  (`kanban-data` namespace, `k8s/data/postgres/`) serving BOTH environments' databases
+  (production's `kanban_prod` and nonprod's `kanban_nonprod`, D-01). History: superseded Neon
+  serverless Postgres (Phase 11, 2026-08-26, see
+  `docs/history/2026-08-26-self-hosted-postgres-cutover.md`), then moved from Compose into k3s
+  (13-06)
+- Self-hosted Redpanda - Kafka-protocol broker, resource-capped, one single-replica broker per
+  environment namespace
+- Traefik (k3s-packaged) + cert-manager - Public HTTPS edge and certificate issuance, replacing the
+  Caddy edge removed in 13-10. Edge rate limiting on `/api/signin` and `/api/signup` is a Traefik
+  middleware on the production hostname only (`k8s/overlays/prod/ingressroute.yaml`)
+- kube-prometheus-stack + Loki + Alloy - Metrics, dashboards and logs, in the `monitoring` namespace
 - Linux environment (from Docker image: `eclipse-temurin:21-jre-jammy`)
-- Ports 80/443 published on the VM; app's port 8080 stays internal-only behind Caddy
+- Ports 80/443 are the only public HTTP entry, served by Traefik; the app's port 8080 stays
+  ClusterIP-only. `KANBAN-INGRESS` (`infra/vm/k3s-host-firewall.sh`) keeps NodePorts closed
 - GitHub Actions - Automated testing, build, Flyway migration verification, and deployment
 - Docker Hub - Container registry
 
