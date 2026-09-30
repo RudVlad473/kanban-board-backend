@@ -824,6 +824,91 @@ The table above is the evidence for the gate as written on 2026-09-29 and is not
   tests application availability, which the limit change does not touch. The old result
   (10 runs, all success) meets the amended floor today. Recorded in `13-10-PLAN.md` § Task 1.
 
+## D-08 gate — Plan 13-10 (2026-09-30)
+
+**Verdict: PASS on every item — D-04 (Compose deletion) is cleared for the operator decision in
+Task 2.** This is the second evaluation; the 2026-09-29 record above stays as written (FAIL) and is
+the reason a new window was opened. Evaluated 2026-09-30T13:25Z to 13:28Z, about 27.5 h after the
+re-opened T0. No threshold was relaxed; D-08.1(b) uses the floor amended on 2026-09-29 (see the
+follow-up above) over the original window. Everything read on the VM was read-only; the only state
+change was `gh workflow run verify-rate-limit.yml`.
+
+**Re-opened T0 = `2026-09-29T09:58:50Z`** (supplied by the executing orchestrator, and consistent
+with the live pods: the recreated `prometheus-kps-prometheus-0` started 2026-09-29T09:58:31Z,
+Prometheus `process_start_time_seconds` 1790675911 = 09:58:31Z, and node-exporter
+`kube-prometheus-stack-prometheus-node-exporter-cx26d` started 09:58:30Z). D-08.3 is evaluated at
+`time=T0+24h` = `2026-09-30T09:58:50Z`, which is in the past at evaluation time.
+
+| Item | Check | Evidence | PASS/FAIL |
+|---|---|---|---|
+| D-08.1a | Both public health endpoints UP now | `curl` at 2026-09-30T13:25:31Z and again 13:27:40Z: prod `{"status":"UP","groups":["liveness","readiness"]}` HTTP 200; nonprod identical, HTTP 200 | PASS |
+| D-08.1b | `uptime-check.yml`: every run in [original T0 `2026-09-27T10:44:46Z`, now] succeeded, count >= 10 (amended floor) | `gh run list --workflow uptime-check.yml --created ">=2026-09-27"`, filtered to `createdAt >= 2026-09-27T10:44:46Z`: **15 runs, 15 `success`, 0 other** (all `event=schedule`, all `completed`). First 2026-09-27T11:31:02Z, last 2026-09-30T08:08:15Z. Gaps between runs are 2.6 h to 8.2 h, the known GitHub `schedule` throttling, unchanged from the 2026-09-29 record; the amended floor is a count of 10, met with 15 | PASS |
+| D-08.1c | `gh workflow run verify-rate-limit.yml`, watched, green | Dispatched 2026-09-30T13:25:46Z, run **36721560206** (`workflow_dispatch`), `gh run watch --exit-status` exit 0, conclusion `success`, job "Production limits signin, nonprod does not" `success` in 34 s | PASS |
+| D-08.1d | `python3 scripts/verify-public-dashboards.py` | Output: `invariants OK -- compose: 3 dashboard(s) checked; k8s: 3 dashboard(s) checked`, rc 0 | PASS |
+| D-08.1e | GitOps: pod image equals ImagePolicy latest; tag reached the overlay via fluxcdbot; build run event `push`; pod Ready | ImagePolicy `kanban-board-backend-prod` `status.latestRef.tag` = `main-142-f424526` (nonprod policy identical). Running pod `kanban-prod/app-5f47756674-smvsl`, 1/1 Ready, RESTARTS 0, image `rudenkovladimir/kanban-board-backend:main-142-f424526`, started 2026-09-27T10:49:42Z. Overlay bump: fluxcdbot commit `3ac4b68` ("chore(flux): bump images", 2026-09-27T10:47:58Z; `git show` diff: `main-141-54249e7` to `main-142-f424526` in `k8s/overlays/prod/kustomization.yaml` and `k8s/overlays/nonprod/kustomization.yaml`). Build: deploy.yml run **36313018824**, event `push`, head `f42452679b164e27d44bde63127791eec22e95c8`, conclusion `success`, all 8 jobs `success`. Nothing newer has been built since (the 15 latest deploy.yml runs put this one first) | PASS |
+| D-08.2 | `diff` of the 13-06 counts files, both databases | `/root/k3s-cutover-20260926/`: `diff counts-kanban_prod-before.txt counts-kanban_prod-after.txt` rc 0, empty (activity_log 2261, boards 43, columns 249, subtasks 983, tasks 984, users 49); `kanban_nonprod` diff rc 0, empty (all six tables 0) | PASS |
+| D-08.3a | Prometheus: `sum(increase(kube_pod_container_status_restarts_total[24h]))` = 0 | At `time=2026-09-30T09:58:50Z` (T0+24h): **0**, result `[1790762330,"0"]`. At now (13:26:58Z; the trailing 24 h is 2026-09-29T13:27Z to now, entirely inside the re-opened window, so it covers the 3.5 h past T0+24h): **0** | PASS |
+| D-08.3b | Prometheus: `count(max_over_time(kube_pod_container_status_last_terminated_reason{reason="OOMKilled"}[24h]))` is empty | At T0+24h: `"result":[]` (empty). At now: `"result":[]`. `increase(...) > 0` and `max_over_time(OOMKilled) > 0` also empty at both times; `kube_pod_container_status_restarts_total > 0` at now also empty | PASS |
+| D-08.3c | Kernel journal: `journalctl -k --since "2026-09-29 09:58:50 UTC"` count of "Memory cgroup out of memory" = 0 | **0** at 13:27:10Z. The journal is live: the same command with `--since "2026-09-27 10:44:46 UTC"` returns 10 (the five kills recorded in the 2026-09-29 record, all before this T0), so the 0 is a real absence and not a broken journal. `journalctl -k --since <T0>` returned `-- No entries --`: no kernel messages of any kind since T0 | PASS |
+| D-08.3d | Every current container's `restartCount` equals the T0 snapshot | No T0 snapshot was recorded for the re-opened window, so equality is shown structurally. Live `k3s kubectl get pods -A -o json`: 34 containers, **34 with restartCount 0, 0 nonzero**, none with a `lastState.terminated.reason`. The latest pod `startTime` in the cluster is 2026-09-29T09:58:31Z (before T0), so no pod was created or replaced after T0. Prometheus itself has `kube_pod_container_status_restarts_total` series for 34 containers at T0+24h and at T0 (`count(...)` = 34 and `count(last_over_time(...[24h]))` = 34), i.e. the container set is unchanged over the window | PASS |
+| D-08.4 | Dump directory exists and `sha256sum -c SHA256SUMS` passes | `/root/k3s-cutover-20260926/` mode 0700, 152K. `sha256sum -c SHA256SUMS`: kanban_prod.dump OK, kanban_nonprod.dump OK, globals.sql OK, four counts files OK, rc 0 | PASS |
+
+### Queries, verbatim
+
+Prometheus, `kubectl -n monitoring port-forward svc/kps-prometheus 19090:9090` run on the VM, then
+`curl -G --data-urlencode query=... --data-urlencode time=<epoch>` against `/api/v1/query`, at
+`time=1790762330` (2026-09-30T09:58:50Z, T0+24h) and at the current time:
+
+```
+sum(increase(kube_pod_container_status_restarts_total[24h]))
+count(max_over_time(kube_pod_container_status_last_terminated_reason{reason="OOMKilled"}[24h]))
+increase(kube_pod_container_status_restarts_total[24h]) > 0
+max_over_time(kube_pod_container_status_last_terminated_reason{reason="OOMKilled"}[24h]) > 0
+kube_pod_container_status_restarts_total > 0
+count(kube_pod_container_status_restarts_total)
+count(last_over_time(kube_pod_container_status_restarts_total[24h]))
+min_over_time(up{job=~".*kube-state-metrics.*"}[24h])
+```
+
+The last query at T0+24h returned `1` with `count_over_time(...[24h])` = 2880 samples (one per
+30 s), so kube-state-metrics, the source of the restart and OOM series, was scraped without a gap
+for the whole window and the zero in D-08.3a/b is not an artefact of missing data.
+
+Kernel journal on the VM (journalctl, not dmesg: dmesg timestamps are boot-relative):
+
+```
+journalctl -k --since "2026-09-29 09:58:50 UTC" | grep -c "Memory cgroup out of memory"
+```
+
+Other commands: `gh run list --workflow uptime-check.yml --created ">=2026-09-27" --limit 200 --json
+conclusion,status,createdAt`, `gh workflow run verify-rate-limit.yml` + `gh run watch 36721560206
+--exit-status`, `k3s kubectl get imagepolicy -A`, `k3s kubectl get pods -n kanban-prod -o
+jsonpath=...`, `gh run view 36313018824 --json event,headSha,conclusion,jobs`, `git show 3ac4b68`,
+`sha256sum -c SHA256SUMS`, `diff counts-<db>-before.txt counts-<db>-after.txt`.
+
+### Limits this evaluation ran under
+
+Prometheus: 384Mi request / 640Mi limit; node-exporter: 16Mi request / 32Mi limit (live pod specs
+read at 13:27Z), i.e. the values raised by quick task 260929-fwf. Neither container was killed or
+restarted for 27.5 h, including across the 2-hourly TSDB head-compaction boundaries where all three
+of the earlier Prometheus kills landed.
+
+### Caveats, stated rather than smoothed over
+
+- **The Task 1 `<automated>` verify block would fail against this file as written.** It takes
+  `rb.split(<the gate heading prefix>)[1]`, the first section with that heading, which is the
+  retained 2026-09-29 FAIL record (D-08.1b and D-08.3 rows are FAIL there). The retained record was
+  deliberately not edited, so the block needs `[-1]` (last section) to test this one. The other
+  checks in that block (dashboards, health, dump, verify-rate-limit) were run and pass as above.
+- **The prod pod's `imageID` is the `-nonprod` repository digest** (`docker.io/rudenkovladimir/
+  kanban-board-backend-nonprod@sha256:31118c04...`), while its spec image is
+  `rudenkovladimir/kanban-board-backend:main-142-f424526`; the nonprod pod reports the same
+  digest. The two Docker Hub repositories hold the same manifest and containerd names it by one
+  alias. This is consistent with a pipeline that pushes one build to both repositories; it was
+  observed, not investigated.
+- Uptime-check has no run after 2026-09-30T08:08:15Z as of evaluation; that is the normal
+  2.6-8.2 h spacing and not a missing run.
+
 ## Maintenance note
 
 If the provider, IP, OS, spec, or firewall policy changes, update this document in the same
