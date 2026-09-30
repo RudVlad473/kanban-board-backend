@@ -2,18 +2,17 @@
 gsd_state_version: "1.0"
 milestone: v1.3
 current_phase: 13
-current_phase_name: Introduce Kubernetes
-status: executing
-stopped_at: Completed 13-09-PLAN.md (k3s restart-ladder resource measurement + final-state docs -- D-07/D-08/D-13/D-15) -- awaiting operator merge/push, execution paused per dispatch instructions before 13-10
-last_updated: "2026-09-27T11:10:00.000Z"
-last_activity: 2026-09-27
-last_activity_desc: Completed 13-09 -- ladder-measured 18 k3s components (Traefik, Flux's 6 controllers, cert-manager's 3, kube-prometheus-stack, Loki, Alloy, postgres-exporter) with dmesg/lastState OOM evidence per failing rung, implemented verify-k8s-invariants.py --no-provisional, resumed Flux and recorded T0 = 2026-09-27T10:44:46Z for D-08's 24h window, then redrew all three infra diagrams plus INFRA_ARCHITECTURE.md/README.md for the k3s reality. Found and filed (not fixed) a real pre-existing IngressRoute-name collision between the edge and monitoring Kustomizations. Two git-branching conflicts (commits needing to reach main for Flux to see them, this session prohibited from merging main itself) resolved by the operator merging directly, once also reconciling a concurrent fluxcdbot image-bump. Three fresh, single-commit-scoped --no-verify authorizations used under confirmed host memory contention. Full account in `.planning/phases/13-introduce-kubernetes/13-09-SUMMARY.md`.
-state_head: 06cf6c1
+status: completed
+stopped_at: Phase 13 complete — all phases complete
+last_updated: "2026-09-30T15:17:57.531Z"
+last_activity: 2026-09-30
+last_activity_desc: Phase 13 complete
+state_head: 0ccb811d0dd85a65bdf66240a6f12deed3f704e9
 progress:
   total_phases: 3
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 24
-  completed_plans: 23
+  completed_plans: 24
 milestone_name: Nonprod Environment & CI Hardening
 ---
 
@@ -28,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-09-08)
 
 ## Current Position
 
-Phase: 13 (Introduce Kubernetes) — EXECUTING
-Plan: 9 of 10 (Wave 7, 13-09) — COMPLETE. Waves 1-7 (13-01 through 13-09) done; 13-09's commits are on this worktree's branch, awaiting operator merge/push to `main` (per this plan's own dispatch instructions, the executing session does not merge/push main itself). Every k8s/ memory value is now a real restart-ladder measurement, D-08's 24h zero-OOM/zero-restart window is running from T0 = 2026-09-27T10:44:46Z. Wave 8 (13-10) not started.
-Status: Paused for operator merge/push -- not ready to execute 13-10 until D-08's window elapses regardless
-Last activity: 2026-09-27 — Completed 13-09 (k3s restart-ladder resource measurement + final-state docs): Task 1 recorded the pre-authorized "all" decision; Task 2 ladder-measured 18 components (Traefik at 64Mi/32Mi, Flux's 6 controllers at 256Mi/64Mi, cert-manager's 3 at 64Mi/16Mi, kube-prometheus-stack's 5 pieces, Loki at 192Mi/96Mi, Alloy at 75Mi/40Mi, postgres-exporter at 16Mi/10Mi) with dmesg/lastState OOM evidence per failing rung, implemented `verify-k8s-invariants.py --no-provisional`, resumed Flux and recorded T0; Task 3 redrew all three infra diagrams and rewrote INFRA_ARCHITECTURE.md/README.md for k3s, verifying every claim against live cluster state first. Prometheus was found live-OOMing at its provisional cap before this session even began; Grafana repeated a known Plan-12-05 under-measurement pattern, resolved by adopting the already-known corrected value directly. A real, pre-existing IngressRoute-name collision (edge vs monitoring Kustomizations racing for `grafana`) was found and filed as a todo rather than fixed out-of-scope. Full account in `.planning/phases/13-introduce-kubernetes/13-09-SUMMARY.md`.
+Phase: 13
+Plan: Not started
+Status: All phases complete
+Last activity: 2026-09-30 — Phase 13 complete
 
 Next: operator to merge/push 13-09's commits to `main`, then 13-10 (D-08's 24h evaluation window, Docker/Caddy teardown) — Wave 8, the final wave of Phase 13. 13-10 cannot start its own D-08.3 evaluation until `[T0, T0+24h]` = `[2026-09-27T10:44:46Z, 2026-09-28T10:44:46Z]` has actually elapsed, independent of any merge timing. D-04's Docker teardown in 13-10 is also a natural point to resolve the filed IngressRoute-collision todo, since it already touches `k8s/platform/edge/`'s neighborhood.
 
@@ -200,7 +199,7 @@ The 46 pending todos are individually listed and categorized in this document's 
 ## Session Continuity
 
 Last session: 2026-09-27T11:10:00.000Z
-Stopped at: Completed 13-09-PLAN.md (k3s restart-ladder resource measurement + final-state docs, D-07/D-08/D-13/D-15) -- awaiting operator merge/push of the executing worktree's commits to main; execution paused before 13-10 per this plan's own dispatch instructions
+Stopped at: Phase 13 complete — all phases complete
 Resume file: None
 
 ## Operator Next Steps

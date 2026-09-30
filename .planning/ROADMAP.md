@@ -138,7 +138,7 @@ Plans:
 **Goal:** Both environments run on a single-node k3s cluster on the existing Netcup VPS instead of Docker Compose. Nonprod moves first and completes a full GitOps deploy cycle; production follows in one announced maintenance window. Deploys are pull-based: Flux applies sortable `main-<run>-<sha7>` image tags. Traefik + cert-manager front both environments, with the Caddy-era rate limits re-derived and proven per client. Postgres runs in-cluster, restored from `pg_dump` with row-count parity. kube-prometheus-stack + Loki/Alloy provide observability, with the public dashboard links recreated. Compose (files, deploy jobs, volumes) is deleted only after the strict D-08 gate passes: automated checks, parity, 24h with zero OOMKilled/restarts, dump retained.
 **Requirements**: D-01..D-18 (CONTEXT.md decisions — no REQUIREMENTS.md for this not-yet-scoped milestone)
 **Depends on:** Phase 12
-**Plans:** 8/10 plans executed
+**Plans:** 10/10 plans complete
 
 Plans:
 **Wave 1**
@@ -169,8 +169,8 @@ Plans:
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 13-09-PLAN.md — Restart-ladder for every new component, D-08 window start (T0), final-state architecture docs (D-07, D-08)
+- [x] 13-09-PLAN.md — Restart-ladder for every new component, D-08 window start (T0), final-state architecture docs (D-07, D-08)
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 13-10-PLAN.md — D-08 gate evaluation, D-04 decision, Compose/Caddy/Docker decommission (D-04, D-08)
+- [x] 13-10-PLAN.md — D-08 gate evaluation, D-04 decision, Compose/Caddy/Docker decommission (D-04, D-08)
