@@ -1,5 +1,13 @@
 {
   "model_profile": "adaptive",
+  "model_overrides": {
+    "gsd-debugger": "sonnet"
+  },
+  "effort": {
+    "agent_overrides": {
+      "gsd-debugger": "high"
+    }
+  },
   "commit_docs": true,
   "parallelization": true,
   "search_gitignored": false,
