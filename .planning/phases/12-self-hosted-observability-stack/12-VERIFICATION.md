@@ -3,8 +3,8 @@ phase: 12-self-hosted-observability-stack
 verified: 2026-09-08T13:15:00Z
 status: passed
 score: 21/21 truths verified (2 via accepted override)
-covered_files: [".planning/phases/12-self-hosted-observability-stack/12-01-PLAN.md", ".planning/phases/12-self-hosted-observability-stack/12-01-SUMMARY.md", ".planning/phases/12-self-hosted-observability-stack/12-02-PLAN.md", ".planning/phases/12-self-hosted-observability-stack/12-02-SUMMARY.md", ".planning/phases/12-self-hosted-observability-stack/12-03-PLAN.md", ".planning/phases/12-self-hosted-observability-stack/12-03-SUMMARY.md", ".planning/phases/12-self-hosted-observability-stack/12-04-PLAN.md", ".planning/phases/12-self-hosted-observability-stack/12-04-SUMMARY.md", ".planning/phases/12-self-hosted-observability-stack/12-05-PLAN.md", ".planning/phases/12-self-hosted-observability-stack/12-05-SUMMARY.md", ".planning/phases/12-self-hosted-observability-stack/12-06-PLAN.md", ".planning/phases/12-self-hosted-observability-stack/12-06-SUMMARY.md", ".planning/phases/12-self-hosted-observability-stack/12-CONTEXT.md", ".planning/todos/completed/2026-09-03-caddy-service-has-no-mem-limit.md", ".planning/todos/pending/2026-08-20-no-remote-log-shipping-structured-logging-or-alerting.md", ".planning/todos/pending/2026-09-08-cadvisor-grafana-and-caddy-mem-limits-need-a-longer-observation-window-re-ladder.md", "Caddyfile", "docker-compose.nonprod.yml", "docker-compose.prod.yml", "docker/grafana/provisioning/dashboards/dashboards.yaml", "docker/grafana/provisioning/dashboards/json/cadvisor.json", "docker/grafana/provisioning/dashboards/json/node-exporter-full.json", "docker/grafana/provisioning/dashboards/json/postgres-exporter.json", "docker/grafana/provisioning/datasources/datasources.yaml", "docker/loki/loki-config.yaml", "docker/prometheus/prometheus.yml", "docker/promtail/promtail-config.yaml", "docs/INFRA_ARCHITECTURE.md", "docs/INFRA_RUNBOOK.md", "docs/diagrams/infra-physical-deployment.mmd", "docs/diagrams/infra-physical-deployment.png"]
-covered_digest: "v1:sha256:0c2bbcd07966f0d43e2cbcceed33b0eb2713ca92b9a718afa9dcd011062da0cd"
+covered_files: [".planning/phases/12-self-hosted-observability-stack/12-01-PLAN.md", ".planning/phases/12-self-hosted-observability-stack/12-01-SUMMARY.md", ".planning/phases/12-self-hosted-observability-stack/12-02-PLAN.md", ".planning/phases/12-self-hosted-observability-stack/12-02-SUMMARY.md", ".planning/phases/12-self-hosted-observability-stack/12-03-PLAN.md", ".planning/phases/12-self-hosted-observability-stack/12-03-SUMMARY.md", ".planning/phases/12-self-hosted-observability-stack/12-04-PLAN.md", ".planning/phases/12-self-hosted-observability-stack/12-04-SUMMARY.md", ".planning/phases/12-self-hosted-observability-stack/12-05-PLAN.md", ".planning/phases/12-self-hosted-observability-stack/12-05-SUMMARY.md", ".planning/phases/12-self-hosted-observability-stack/12-06-PLAN.md", ".planning/phases/12-self-hosted-observability-stack/12-06-SUMMARY.md", ".planning/phases/12-self-hosted-observability-stack/12-CONTEXT.md", ".planning/todos/completed/2026-09-03-caddy-service-has-no-mem-limit.md", ".planning/todos/pending/2026-08-20-no-remote-log-shipping-structured-logging-or-alerting.md", "docs/INFRA_ARCHITECTURE.md", "docs/INFRA_RUNBOOK.md", "docs/diagrams/infra-physical-deployment.mmd", "docs/diagrams/infra-physical-deployment.png"]
+covered_digest: "v1:sha256:088c3d0afd2e05688b649c26b879d9fc78a02fd1ed6c85c90812ec0de011a2af"
 overrides_applied: 2
 overrides:
   - must_have: "Grafana's admin password comes from .env.prod, and Grafana dashboards render real data through the authenticated UI (login-confirmed), not just via the underlying Prometheus/Loki APIs"
@@ -194,3 +194,22 @@ endpoints return `200`. The phase goal is achieved.
 _Verified: 2026-09-08T13:15:00Z (third/final pass, independent live SSH inspection of
 netcup-prod)_
 _Verifier: Claude (gsd-verifier)_
+
+## Superseded by Phase 13 (2026-09-30)
+
+The Compose-era observability stack verified above was replaced by kube-prometheus-stack, Loki and Alloy on k3s (13-07) and its Compose files were deleted in 13-10 (commit 15d6b3f). This report's verdict stands for what Phase 12 built at the time (2026-09-08); it is not re-tested. The covered-file fingerprint was refreshed over the files that still exist; these no longer exist and were dropped from it:
+
+- `.planning/todos/pending/2026-09-08-cadvisor-grafana-and-caddy-mem-limits-need-a-longer-observation-window-re-ladder.md`
+- `Caddyfile`
+- `docker-compose.nonprod.yml`
+- `docker-compose.prod.yml`
+- `docker/grafana/provisioning/dashboards/dashboards.yaml`
+- `docker/grafana/provisioning/dashboards/json/cadvisor.json`
+- `docker/grafana/provisioning/dashboards/json/node-exporter-full.json`
+- `docker/grafana/provisioning/dashboards/json/postgres-exporter.json`
+- `docker/grafana/provisioning/datasources/datasources.yaml`
+- `docker/loki/loki-config.yaml`
+- `docker/prometheus/prometheus.yml`
+- `docker/promtail/promtail-config.yaml`
+
+Current-state evidence for the replacement stack is in `13-VERIFICATION.md`. Recorded at the operator's direction (option 1, 2026-09-30); no UAT was run.
