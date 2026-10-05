@@ -3,10 +3,10 @@ gsd_state_version: "1.0"
 milestone: v1.3
 status: Awaiting next milestone
 stopped_at: Phase 13 complete — all phases complete
-last_updated: "2026-09-30T17:25:42.056Z"
+last_updated: "2026-10-05T17:23:18.627Z"
 last_activity: 2026-09-30
 last_activity_desc: Milestone v1.4 completed and archived
-state_head: 7dc642096f3d8a1e5d2fa8dd1e39e68dc4a56f14
+state_head: 7f4d52daae77e3a04b7cf74edabce7d3e5f2bc58
 progress:
   total_phases: 3
   completed_phases: 2
@@ -164,6 +164,7 @@ confusion risk, `NVD_API_KEY` resolution failure) were resolved during Phases 8�
 | 260908-sj9 | Discovered live (checking why a fresh public Grafana link showed stale content): deploy-to-netcup's SCP step never transferred 4 of 6 repo-relative bind mounts docker-compose.prod.yml declares (grafana provisioning, prometheus.yml, loki-config.yaml, promtail-config.yaml) — production had served Sep-7 hand-copied config behind 14 green deploys. Fixed the source list, added scripts/verify-deploy-scp-coverage.py (proven to fail against the pre-fix string, naming all four paths, and pass against the fix) wired into invariant-checks.yml, recorded the evidence in INFRA_RUNBOOK.md, and filed a todo for the separate remaining gap (3 of 4 consumers need a restart to apply transferred config, not just a copy) | 2026-09-08 | d433360 | [260908-sj9-fix-deploy-yml-add-docker-grafana-provis](./quick/260908-sj9-fix-deploy-yml-add-docker-grafana-provis/) |
 | 260927-ryo | Onboarded the karpathy-llm-wiki skill (vendored by pinned upstream SHA at `.claude/skills/karpathy-llm-wiki/`, not the deprecated npm installer) and migrated docs/ into its raw/wiki model, rooted under docs/: 20 living-reference docs became docs/wiki/ articles, 51 dated/point-in-time docs (history, incidents, backend-modernization plans, the mockup gap snapshot) became docs/raw/ sources. An independent verify_migration.py checks completeness, header shape, link equivalence (1,717 rebased links) and originals-untouched; three deliberate corruptions proved the gate catches real regressions before recovering. Originals under docs/ are unmodified and stay authoritative until an operator-reviewed follow-on deletes them; nothing was pushed (this repo is inside 13-09's D-08 24h observation window, ending 2026-09-28T10:44:46Z, and a push would trigger a mid-window Flux rollout). Full account in `.planning/quick/260927-ryo-onboard-the-karpathy-llm-wiki-skill-gith/260927-ryo-SUMMARY.md` | 2026-09-27 | 173614b | [260927-ryo-onboard-the-karpathy-llm-wiki-skill-gith](./quick/260927-ryo-onboard-the-karpathy-llm-wiki-skill-gith/) |
 | 260911-gkz | Root-caused all 7 dead "Postgres Internals" dashboard tiles via a live 4-layer probe (SSH to netcup-prod + Grafana's /api/ds/query with a viewer credential, substituting for an unavailable browser MCP tool): 2 tiles had disabled exporter collectors, 2 hit an already-documented Grafana 13.2.1 singlestat rendering bug, 2 (really 9 panels) hit a collapsed-row exact-match datname matcher. User approved all 4 fixes at the plan's checkpoint; landed as docker-compose.prod.yml + dashboard-JSON changes verified against disposable local containers only — the pg_stat_statements fix's production Postgres restart is explicitly deferred to a separate, later, gated deploy. A second, independent exporter-version/dashboard metric-name mismatch was found and fixed along the way | 2026-09-11 | 2ad3656 | [260911-gkz-debug-why-several-grafana-postgres-inter](./quick/260911-gkz-debug-why-several-grafana-postgres-inter/) |
+| 261005-o6t | Trim all comments to the code-comments rubric and add a comment lint | 2026-10-05 | 7f4d52d | [261005-o6t-trim-and-format-all-comments-per-fan-out](./quick/261005-o6t-trim-and-format-all-comments-per-fan-out/) |
 
 ## Deferred Items
 
