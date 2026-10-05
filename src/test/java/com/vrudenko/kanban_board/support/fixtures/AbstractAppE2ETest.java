@@ -13,7 +13,6 @@ import org.springframework.data.util.Pair;
 import static io.restassured.RestAssured.given;
 
 public abstract class AbstractAppE2ETest extends AbstractAppTest {
-    /** Env variables */
     @LocalServerPort protected int port;
 
     @Value("${server.servlet.session.cookie.name}")
@@ -21,8 +20,6 @@ public abstract class AbstractAppE2ETest extends AbstractAppTest {
 
     @Value("${server.servlet.context-path}")
     protected String CONTEXT_PATH;
-
-    /***/
 
     @Override
     @BeforeEach

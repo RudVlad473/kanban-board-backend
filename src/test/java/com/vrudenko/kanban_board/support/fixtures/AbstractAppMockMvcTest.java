@@ -14,32 +14,20 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * In-process counterpart to {@link AbstractAppE2ETest} (D-03 tier downgrade). Where that class
- * drives a real HTTP socket via REST Assured, this one drives the same {@code
- * AuthenticationController.authenticate} call site through Spring's in-process {@link MockMvc}
- * dispatch -- {@link #signinCookie()} and {@link #signinCookie(String, String)} deliberately POST
- * to the real {@code /signin} route rather than injecting a pre-authenticated principal via {@code
- * .with(user(userId))} (the shortcut the four {@code controller/*ControllerTest} classes use for
- * already-authenticated scenarios): that shortcut bypasses {@code
- * AuthenticationController.authenticate} entirely, and this base exists precisely for the small set
- * of classes that must keep exercising the real signin/session path under the cheaper in-process
- * tier (RESEARCH.md Common Pitfalls, Pitfall 2 -- this is the phase-wide proof of Assumption A2).
+ * In-process counterpart to {@link AbstractAppE2ETest}: {@link #signinCookie()} and {@link
+ * #signinCookie(String, String)} POST to the real {@code /signin} route through {@link MockMvc}.
  *
- * <p>Because that shortcut establishes a brand-new session on every call, it must not be used for
- * more than two requests authenticated as the same principal within one test method -- {@code
- * SecurityConfiguration}'s {@code MAX_CONCURRENT_SESSIONS = 2} refuses the third, surfacing as a
- * 401 indistinguishable from a wrong password. For three or more authenticated calls as one
- * principal, call {@link #signinCookie()} once and replay the returned cookie on every subsequent
- * request instead; see {@code docs/CODE_STYLE.md} rule 4 for the full account and {@code
- * InjectionAttemptTest} for the reference call site.
- *
- * <p>Carries no class-level {@code @SpringBootTest}/{@code @AutoConfigureMockMvc} -- matching
- * {@link AbstractAppE2ETest}'s own precedent of leaving Spring Boot test annotations to each
- * concrete subclass rather than assuming a base class can supply them by inheritance.
- *
- * <p>{@link MockMvc} does not apply {@code server.servlet.context-path}: subclasses build request
- * URLs from {@link ApiPaths} constants bare, without the context-path prefix {@link
- * AbstractAppE2ETest}'s real-socket tier needs.
+ * <p>Why this is the way it is: they do not inject a principal via {@code .with(user(userId))},
+ * which bypasses {@code AuthenticationController.authenticate} entirely; this base exists for the
+ * classes that must keep exercising the real signin/session path under the cheaper in-process tier.
+ * That shortcut also establishes a brand-new session on every call, so more than two requests as
+ * one principal in a test method hit {@code MAX_CONCURRENT_SESSIONS = 2} and the third surfaces as
+ * a 401 indistinguishable from a wrong password. For three or more authenticated calls, call {@link
+ * #signinCookie()} once and replay the cookie; see docs/CODE_STYLE.md rule 4 and {@code
+ * InjectionAttemptTest} for the reference call site. The class carries no {@code @SpringBootTest}
+ * or {@code @AutoConfigureMockMvc}, leaving them to each subclass as {@link AbstractAppE2ETest}
+ * does. {@link MockMvc} ignores {@code server.servlet.context-path}, so subclasses build URLs from
+ * {@link ApiPaths} constants bare, unlike the real-socket tier.
  */
 public abstract class AbstractAppMockMvcTest extends AbstractAppTest {
 
@@ -52,16 +40,15 @@ public abstract class AbstractAppMockMvcTest extends AbstractAppTest {
 
     /**
      * Signs in as this fixture's owning user ({@link #getOwningUser()}) through a real {@code POST
-     * /signin}, and returns the session cookie the response set.
+     * /signin} and returns the session cookie.
      */
     protected Cookie signinCookie() throws Exception {
         return signinCookie(getOwningUser().getEmail(), getOwningUserPassword());
     }
 
     /**
-     * Signs in as an arbitrary user through a real {@code POST /signin}, and returns the session
-     * cookie the response set. For tests that need a second, non-owning user's session (e.g.
-     * cross-user isolation checks).
+     * Signs in as an arbitrary user through a real {@code POST /signin} and returns the session
+     * cookie, for tests that need a second user's session (e.g. cross-user isolation).
      */
     protected Cookie signinCookie(String email, String password) throws Exception {
         var result =

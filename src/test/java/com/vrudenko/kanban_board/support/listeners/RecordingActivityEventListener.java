@@ -10,9 +10,10 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
- * Real Spring wiring (not a mock, per CODE_STYLE rule 4) that records every {@link ActivityEvent}
- * observed after its enclosing transaction commits. Generic over {@link ActivityEvent} rather than
- * a single event type so later plans can reuse it for every event this application publishes.
+ * Real Spring wiring, not a mock (CODE_STYLE rule 4), that records every {@link ActivityEvent}
+ * observed after its enclosing transaction commits.
+ *
+ * <p>Generic over {@link ActivityEvent}, so it serves every event type this application publishes.
  */
 @Component
 public class RecordingActivityEventListener {

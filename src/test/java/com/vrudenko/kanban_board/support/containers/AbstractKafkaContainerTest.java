@@ -20,71 +20,50 @@ import org.testcontainers.redpanda.RedpandaContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * Shared real-broker-and-registry harness for the {@code activitylog} package's integration tests.
- * Starts one {@code docker.redpanda.com/redpandadata/redpanda:v26.2.1} container per test class --
- * one container exposing both a Kafka-protocol-compatible broker and a Confluent-API-compatible
- * Schema Registry (Phase 4, Schema Registry), replacing the previous {@code
- * apache/kafka-native:4.3.1} broker-only image. Migrating this shared base class in place (rather
- * than adding a second, Avro-specific harness) was the deliberate choice: the three pre-existing
- * {@code activitylog} E2E classes never touch a registry at all, so they compile and pass unchanged
- * against Redpanda purely because it is a Kafka-protocol superset of what they already exercised --
- * see this plan's design_alternatives for the full comparison against standing up a second,
- * standalone Confluent registry container.
+ * Shared broker-and-registry harness for the {@code activitylog} integration tests: one {@code
+ * docker.redpanda.com/redpandadata/redpanda:v26.2.1} container.
  *
- * <p>Raises the test profile's producer bounds ({@code max.block.ms}, {@code request.timeout.ms},
- * {@code delivery.timeout.ms}) to 30 seconds for this context only. The test profile ({@code
- * application-test.properties}) deliberately bounds them at 50ms so a *missing* broker cannot slow
- * the full suite -- but against a real broker, 50ms is not enough for the first metadata fetch, and
- * the default 50ms bound would abort the first send before the container finishes announcing
- * itself. 30 seconds (not the original 10) matches the {@code Awaitility} ceiling every consuming
- * assertion in this package already uses: once Plan 02 added two more Testcontainers-backed test
- * classes sharing this one broker instance and one {@code activity-log} consumer group, the
- * cumulative produce/consume volume across all three classes in a single full-suite run can leave
- * the broker busy enough that a 10-second producer bound occasionally expires ({@code
- * org.apache.kafka.common.errors.TimeoutException: Expiring 1 record(s)...}) even though every
- * class passes cleanly in isolation. This is headroom for real broker load, not a hidden retry loop
- * or a softened assertion -- the bound only protects against an unreachable broker (its original
- * purpose); it does not affect what any test asserts.
+ * <p>The container exposes a Kafka broker and a Confluent-compatible Schema Registry.
  *
- * <p>Deliberately still does not extend {@link
- * com.vrudenko.kanban_board.support.fixtures.AbstractAppTest}: the consumer path needs no user,
- * board, column or task fixture -- an activity row's board/user identifiers are plain columns, and
- * the consumer resolves no entity. {@code AbstractAppTest}'s setup creates roughly twenty entities
- * through the real services, each of which now publishes an event into the very broker under test,
- * turning every test method into a race against unrelated traffic. This keeps the no-mocking rule
- * (docs/CODE_STYLE.md rule 4) fully honoured while avoiding that noise: real Spring wiring, real
- * broker, no fixtures this package does not need. What this class now shares with {@code
- * AbstractAppTest} (04.2, D-01) is only {@link
- * com.vrudenko.kanban_board.support.containers.AbstractPostgresContainerTest}, the common ancestor
- * both hierarchies extend so one PostgreSQL container backs the whole suite instead of two.
+ * <p>Why this is the way it is:
  *
- * <p>The container is started imperatively in a static initializer -- {@code kafka.start()} below
- * -- rather than via the {@code @Testcontainers}/{@code @Container} JUnit 5 extension. On this
- * environment (Windows + Docker Desktop, testcontainers-java 1.21.0), the extension's "singleton
- * container" pattern for a static {@code @Container} field did not reliably hold across this
- * package's three sibling test classes: instead of reusing the one already-running container, a
- * second, distinct container (a different Docker container ID, a different mapped port) was
- * observed starting when a second class in the package began running, while Spring's cached {@code
- * ApplicationContext} -- and the {@code KafkaTemplate}/{@code @KafkaListener} beans it had already
- * built against the *first* container's port -- was correctly reused unchanged. The result was
- * silent: those already-built beans kept talking to a stale port from a container that either no
- * longer existed or was no longer the one new test-local clients connected to, while a freshly
- * constructed raw client (via {@link #getBootstrapServers()}, evaluated fresh on every call) always
- * pointed at whatever container was current -- so Spring-mediated sends hung until they timed out
- * while raw test clients worked, exactly the split symptom that surfaced this. A plain, imperative
- * {@code kafka.start()} in a static initializer is guaranteed by JVM class-initialization semantics
- * to run exactly once per classloader, independent of any JUnit extension's lifecycle bookkeeping,
- * which is the standard Testcontainers "singleton container" recommendation for containers meant to
- * be shared across multiple test classes in one JVM.
- *
- * <p>{@code @ServiceConnection} on {@code kafka} still wires {@code spring.kafka.bootstrap-servers}
- * automatically -- Spring Boot 3.5.16 ships a dedicated {@code
- * RedpandaContainerConnectionDetailsFactory} for exactly this container type. No equivalent
- * connection-details mechanism exists for the Schema Registry (it is a Confluent/Avro concern, not
- * something Spring Boot's Kafka autoconfiguration knows about), so {@code schema.registry.url} is
- * wired explicitly below via {@code @DynamicPropertySource} instead of folded into the
- * {@code @TestPropertySource} block above it -- an annotation attribute must be a compile-time
- * constant, and the registry's mapped port is only known once the container has actually started.
+ * <ul>
+ *   <li>Redpanda replaced {@code apache/kafka-native:4.3.1} in place, rather than adding a second
+ *       Avro-specific harness: the pre-existing {@code activitylog} E2E classes never touch a
+ *       registry, so they pass unchanged because Redpanda is a Kafka-protocol superset of what they
+ *       exercised.
+ *   <li>Producer bounds ({@code max.block.ms}, {@code request.timeout.ms}, {@code
+ *       delivery.timeout.ms}) are raised to 30 seconds for this context only. The test profile
+ *       bounds them at 50ms so a missing broker cannot slow the suite, but against a real broker
+ *       50ms aborts the first send before the container finishes announcing itself. 30 seconds, not
+ *       the original 10, matches the {@code Awaitility} ceiling: with several Testcontainers-backed
+ *       classes sharing one broker and one {@code activity-log} consumer group, cumulative load in
+ *       a full-suite run occasionally expired a 10-second bound ({@code TimeoutException: Expiring
+ *       1 record(s)...}) though every class passes in isolation. It is headroom for real load, not
+ *       a retry loop or a softened assertion, and does not affect what any test asserts.
+ *   <li>It does not extend {@code AbstractAppTest}: the consumer path needs no user, board, column
+ *       or task fixture, and {@code AbstractAppTest}'s setup creates roughly twenty entities
+ *       through the real services, each publishing an event into the broker under test and turning
+ *       every test into a race against unrelated traffic. It shares only {@link
+ *       AbstractPostgresContainerTest}, the common ancestor, so one PostgreSQL container backs the
+ *       whole suite.
+ *   <li>The container starts imperatively in a static initializer ({@code kafka.start()}), not via
+ *       the {@code @Testcontainers}/{@code @Container} extension. Observed on Windows with Docker
+ *       Desktop and testcontainers-java 1.21.0: the extension's singleton-container pattern did not
+ *       hold across this package's classes. A second container (different ID and mapped port)
+ *       started for a later class while Spring's cached {@code ApplicationContext} kept its {@code
+ *       KafkaTemplate}/{@code @KafkaListener} beans bound to the first container's stale port, and
+ *       raw clients built via {@link #getBootstrapServers()} (evaluated on every call) reached the
+ *       current container. Spring-mediated sends hung until timeout while raw clients worked. A
+ *       static initializer runs exactly once per classloader, independent of JUnit extension
+ *       bookkeeping.
+ *   <li>{@code @ServiceConnection} on {@code kafka} wires {@code spring.kafka.bootstrap-servers}
+ *       (Spring Boot 3.5.16 ships a {@code RedpandaContainerConnectionDetailsFactory}). No
+ *       connection-details mechanism exists for the Schema Registry, so {@code schema.registry.url}
+ *       is wired through {@code @DynamicPropertySource}, not the test property source block: an
+ *       annotation attribute must be a compile-time constant and the registry's mapped port is
+ *       known only after the container starts.
+ * </ul>
  */
 @SpringBootTest
 @TestPropertySource(
@@ -92,62 +71,48 @@ import org.testcontainers.utility.DockerImageName;
             "spring.kafka.producer.properties.max.block.ms=30000",
             "spring.kafka.producer.properties.request.timeout.ms=30000",
             "spring.kafka.producer.properties.delivery.timeout.ms=30000",
-            // application-test.properties bounds the Confluent registry REST client's own
-            // retry/timeout config down to fail-fast values (max.retries=0, 50ms timeouts) --
-            // correct for the 17 fixture-heavy classes whose registry address has nothing
-            // listening, wrong here: this harness's registry is real and responds, so those tight
-            // bounds would turn an occasional slow-but-real lookup into a flaky failure instead of
-            // a passing test. Raised back up, mirroring the same override this block already does
-            // for the Kafka producer bounds above.
+            // Raises the registry REST client's retry/timeout bounds back up, as the producer
+            // bounds above are.
+            //
+            // application-test.properties fail-fasts them (max.retries=0, 50ms timeouts), correct
+            // for the 17 fixture-heavy classes whose registry has nothing listening; here the
+            // registry is real, so those bounds would turn a slow lookup into a flaky failure.
             "spring.kafka.producer.properties.max.retries=3",
             "spring.kafka.producer.properties.retries.wait.ms=1000",
             "spring.kafka.producer.properties.http.connect.timeout.ms=30000",
             "spring.kafka.producer.properties.http.read.timeout.ms=30000"
         })
 public abstract class AbstractKafkaContainerTest extends AbstractPostgresContainerTest {
-    // The docker-java api.version=1.44 pin (testcontainers-java#11212) now lives in
-    // AbstractPostgresContainerTest's own static initializer, not here. It still fires before
-    // kafka.start() below: JVM class initialization runs a superclass's static initializers
-    // before a subclass's, so the pin is guaranteed to be in place before either container type
-    // in this hierarchy starts.
+    // The docker-java api.version=1.44 pin (testcontainers-java#11212) lives in
+    // AbstractPostgresContainerTest's static initializer; JVM class initialization runs superclass
+    // statics first, so it is in place before either container type starts.
 
     @ServiceConnection
     static final RedpandaContainer kafka =
             new RedpandaContainer(
                     DockerImageName.parse("docker.redpanda.com/redpandadata/redpanda:v26.2.1"));
 
-    // Imperative, exactly-once start -- see the class Javadoc for why this replaces the
-    // @Testcontainers/@Container-driven lifecycle. Schema registration happens here too, right
-    // after the container is up: this is the same AvroSchemaRegistrar.registerAll() the
-    // registerSchemas Gradle task invokes for build/CI, so this is what makes
-    // auto.register.schemas=false workable in tests with zero manual setup step
-    // (docs/CODE_STYLE.md rule 8), not a second, drifting registration path.
+    // Imperative, exactly-once start (see the class Javadoc). Schemas register here too, through
+    // the same AvroSchemaRegistrar.registerAll() the registerSchemas Gradle task invokes, so
+    // auto.register.schemas=false needs no manual step (docs/CODE_STYLE.md rule 8).
     static {
         kafka.start();
         AvroSchemaRegistrar.registerAll(kafka.getSchemaRegistryAddress());
     }
 
     /**
-     * Producer-side registry URL resolves through this mutable, test-scoped hook instead of always
-     * resolving straight to the live container address. {@link
-     * com.vrudenko.kanban_board.activitylog.SchemaRegistryOutageE2ETest} (D-01's registry-outage
-     * resilience test) needs the producer -- and only the producer -- to see an unreachable
-     * registry while every other class in this package sees the real one.
+     * Test-scoped hook that lets {@code SchemaRegistryOutageE2ETest} make the producer, and only
+     * the producer, see an unreachable registry.
      *
-     * <p>A plain subclass-local {@code @DynamicPropertySource} method attempting to override the
-     * same property key does not work for this: Spring discovers {@code @DynamicPropertySource}
-     * methods across a class hierarchy and invokes all of them into one shared property source, but
-     * (confirmed empirically, not assumed) it discovers -- and therefore invokes -- subclass-local
-     * methods <em>before</em> superclass ones, the opposite of {@code @BeforeAll} semantics. Since
-     * every invocation writes into the same underlying map, the superclass's method here always
-     * runs last and silently overwrites whatever a subclass registered for this same key. This
-     * mutable field is the actual override point instead: it defaults to {@code null} (real
-     * container address), and the one test that needs it different sets it in a {@code static}
-     * initializer before its own tests run and resets it to {@code null} in an {@code @AfterAll},
-     * so every other class in this package -- built before, after, or never touching the override
-     * -- is unaffected. Test classes in this package always run sequentially within one JVM (no
-     * parallel test execution is configured anywhere in this project), so there is no window where
-     * two classes' contexts are built concurrently against a transiently wrong value.
+     * <p>Why this is the way it is: a subclass-local {@code @DynamicPropertySource} overriding the
+     * same key does not work. Spring invokes all such methods into one shared property source and
+     * (confirmed empirically) invokes subclass-local methods before superclass ones, the opposite
+     * of {@code @BeforeAll}, so the superclass method runs last and overwrites the subclass value.
+     * This mutable field is the override point instead: it defaults to {@code null} (the real
+     * container address), and the one test that needs it sets it in a {@code static} initializer
+     * and resets it in an {@code @AfterAll}. Test classes in this package run sequentially in one
+     * JVM (no parallel execution is configured), so no two contexts are built concurrently against
+     * a transiently wrong value.
      */
     protected static volatile String producerSchemaRegistryUrlOverride;
 
@@ -176,20 +141,13 @@ public abstract class AbstractKafkaContainerTest extends AbstractPostgresContain
     }
 
     /**
-     * Publishes {@code event} to {@link KafkaTopics#ACTIVITY}, keyed by its own {@code eventId},
-     * and blocks until the broker acknowledges the send, timing out at 30 seconds -- the same bound
-     * this class's {@code @TestPropertySource} already applies to the producer's {@code
-     * max.block.ms}/{@code request.timeout.ms}/{@code delivery.timeout.ms}. Every call site pairs
-     * this with an Awaitility poll for the consumer's persisted effect; awaiting the ack here means
-     * a broker-side send rejection surfaces immediately as this method's own exception instead of
-     * as a misleading 30-second Awaitility timeout that would blame the consumer for a problem that
-     * was actually the producer's.
+     * Publishes {@code event} to {@link KafkaTopics#ACTIVITY}, keyed by its {@code eventId}, and
+     * blocks until the broker acknowledges, timing out at 30 seconds.
      *
-     * <p>Maps {@code event} through {@link ActivityEventAvroMapper} before sending -- the wire
-     * format is Avro (Phase 4), not the plain domain record -- so this is the one internal change
-     * that keeps all three pre-existing {@code activitylog} E2E classes compiling and passing with
-     * zero edits to their own source: they hand this helper domain events, and it is this helper's
-     * job, not theirs, to know the wire format.
+     * <p>Awaiting the ack makes a broker-side send rejection surface as this method's own
+     * exception, not as a misleading 30-second Awaitility timeout that blames the consumer. The
+     * event is mapped through {@link ActivityEventAvroMapper} first, because the wire format is
+     * Avro, so callers keep handing it domain events.
      */
     protected void sendAndAwaitAck(ActivityEvent event)
             throws InterruptedException, ExecutionException, TimeoutException {
