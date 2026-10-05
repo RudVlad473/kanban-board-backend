@@ -31,11 +31,9 @@ import org.springframework.http.HttpStatus;
 import static io.restassured.RestAssured.given;
 
 /**
- * Tracer proving GAP-01 end to end: a POST to the boards collection route runs through the
- * controller, DTO validation, {@link
- * com.vrudenko.kanban_board.service.UserService#addBoardByUserId}, and back out through {@link
- * com.vrudenko.kanban_board.handler.GlobalExceptionHandler}. Modeled on {@link
- * com.vrudenko.kanban_board.e2e.subtask.SubtaskLockingTest}.
+ * Tracer for {@code POST} to the boards collection over a real socket: controller, DTO validation,
+ * {@link com.vrudenko.kanban_board.service.UserService#addBoardByUserId}, and back out through
+ * {@link com.vrudenko.kanban_board.handler.GlobalExceptionHandler}.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Tag("realSocket")
@@ -48,9 +46,8 @@ public class BoardCreationE2ETest extends AbstractAppE2ETest {
     }
 
     /**
-     * Signs in as an arbitrary user (not necessarily {@link #getOwningUser()}), mirroring {@link
-     * AbstractAppE2ETest#signin()}'s shape. Needed for the cross-user isolation case, which must
-     * drive requests as two distinct signed-in users.
+     * Signs in as an arbitrary user, not necessarily {@link #getOwningUser()}, for the cross-user
+     * isolation case.
      */
     private Pair<String, String> signinAs(String email, String password) {
         var cookie =
@@ -144,11 +141,8 @@ public class BoardCreationE2ETest extends AbstractAppE2ETest {
 
         @Test
         void shouldReturnUnauthorizedAndCreateNoRow_whenNotAuthenticated() {
-            // arrange -- no session cookie at all (not merely a wrong user).
-            // ProblemDetailAuthenticationEntryPoint (plan 07.1-03) now produces a real 401 for
-            // this case, wired explicitly via SecurityConfiguration's
-            // http.exceptionHandling(...) DSL call; 403 is reserved for an
-            // authenticated-but-forbidden ownership denial (D-04, D-05).
+            // arrange -- no session cookie at all, not merely a wrong user:
+            // ProblemDetailAuthenticationEntryPoint answers 401; 403 is for ownership denial.
             var dto = SaveBoardRequestDTO.builder().name(randomBoardName()).build();
             var boardCountBefore = boardService.findAll().size();
 
@@ -192,9 +186,8 @@ public class BoardCreationE2ETest extends AbstractAppE2ETest {
             var body = response.as(BoardResponseDTO.class);
             Assertions.assertThat(body.getId()).isEqualTo(explicitId);
 
-            // assert: a fresh read proves the database stored it under that exact id -- a create
-            // response echoing back the value it was handed proves less than the row actually
-            // being there
+            // assert: a fresh read proves the row is stored under that exact id; an echo proves
+            // less
             var boards =
                     given().cookie(cookie.getFirst(), cookie.getSecond())
                             .when()
@@ -446,9 +439,8 @@ public class BoardCreationE2ETest extends AbstractAppE2ETest {
         void shouldAllowBothCreates_whenTwoDifferentUsersUseIdenticalBoardName() {
             // arrange
             var boardName = randomBoardName();
-            // generateValidPassword() (not a raw dataFactory word) because this password is
-            // posted to the real POST /signin route below via signinAs(), which validates its
-            // body as of D-06.
+            // generateValidPassword(), not a raw dataFactory word: signinAs() posts this to POST
+            // /signin, which validates its body.
             var otherPassword = generateValidPassword();
             var otherUser = createUser(otherPassword);
 
@@ -510,12 +502,11 @@ public class BoardCreationE2ETest extends AbstractAppE2ETest {
         @Test
         void shouldPersistExactlyOneBoard_whenTwoRequestsCreateSameNameConcurrently()
                 throws InterruptedException {
-            // arrange -- mirrors ActivityLogIdempotencyE2ETest.ConcurrentRecordTest's structure:
-            // two threads race through the same service-level check-then-act window, backstopped
-            // by uk_boards_user_id_name (plan 01's V5). The assertion is on the final row count,
-            // never on which caller "won" -- under a real race either request can receive the
-            // 409, and asserting on the loser's identity would make this test flaky by
-            // construction.
+            // arrange -- two threads race the same service-level check-then-act window,
+            // backstopped by uk_boards_user_id_name.
+            //
+            // The final row count is asserted, never which caller "won": either request can
+            // receive the 409, so asserting on the loser would be flaky by construction.
             Pair<String, String> cookie = signin();
             var boardName = randomBoardName();
             var dto = SaveBoardRequestDTO.builder().name(boardName).build();
@@ -527,10 +518,8 @@ public class BoardCreationE2ETest extends AbstractAppE2ETest {
 
             // act
             try {
-                // The returned Futures are deliberately dropped, not awaited -- awaiting them
-                // here would serialize the two submissions and destroy the race window this test
-                // exists to open (same reasoning as ActivityLogIdempotencyE2ETest's
-                // ConcurrentRecordTest).
+                // The returned Futures are deliberately dropped: awaiting them would serialize the
+                // two submissions and destroy the race window.
                 {
                     Future<?> unused =
                             executor.submit(

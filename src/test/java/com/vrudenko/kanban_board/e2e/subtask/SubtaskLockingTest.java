@@ -28,10 +28,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
 /**
- * Tracer proving GAP-06 end to end: a PUT to the subtask update route runs through the controller,
- * DTO validation, the ownership chain, the service's explicit version-compare-then-409-then-flush
- * guard, and back out through {@link com.vrudenko.kanban_board.handler.GlobalExceptionHandler}.
- * Modeled on {@code e2e.task.TaskLockingTest} and {@code e2e.column.ColumnLockingTest}.
+ * Tracer for the subtask update route: controller, DTO validation, ownership chain, the service's
+ * version-compare-then-409-then-flush guard, and back out through {@link
+ * com.vrudenko.kanban_board.handler.GlobalExceptionHandler}.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -61,9 +60,9 @@ public class SubtaskLockingTest extends AbstractAppMockMvcTest {
     }
 
     /**
-     * Creates a board/column/task/subtask owned by an arbitrary user, for the cross-user rejection
-     * case. There is no REST endpoint for creating a board directly, so this goes through the
-     * service layer directly, same as {@link AbstractAppTest#createColumnForUser}.
+     * Creates a board/column/task/subtask owned by an arbitrary user for the cross-user rejection
+     * case. There is no REST endpoint for creating a board, so it goes through the service layer,
+     * like {@link AbstractAppTest#createColumnForUser}.
      */
     private SubtaskResponseDTO createSubtaskForUser(String userId) {
         var column =
@@ -251,9 +250,8 @@ public class SubtaskLockingTest extends AbstractAppMockMvcTest {
             var otherUser = createUser();
             var otherSubtask = createSubtaskForUser(otherUser.getId());
 
-            // the board/column/task segments below only route the request — SubtaskController's
-            // updateById method never binds them to a parameter, so the signed-in user's own ids
-            // are fine here; only subtaskId (otherSubtask's) determines which entity is loaded.
+            // The board/column/task url segments only route: updateById never binds them, so the
+            // signed-in user's own ids are fine; only subtaskId decides which entity loads.
             var url =
                     getSubtaskUrl(
                             mockPopulatedBoard.getId(),

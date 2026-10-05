@@ -43,10 +43,9 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 
 /**
- * Real-broker, real-Postgres proof of {@link ResetService#resetAll()} (RESET-01). Extends {@link
- * AbstractKafkaContainerTest} directly (not {@code AbstractAppTest}) so fixtures are created
- * explicitly through the real services in each test, matching the plan's own read-first pointer to
- * that harness's Javadoc.
+ * Real-broker, real-Postgres proof of {@link ResetService#resetAll()}. Extends {@link
+ * AbstractKafkaContainerTest} directly, not {@code AbstractAppTest}, so each test creates its
+ * fixtures through the real services.
  */
 @SpringBootTest
 @Tag("kafka")
@@ -90,9 +89,8 @@ class ResetServiceE2ETest extends AbstractKafkaContainerTest {
     }
 
     /**
-     * Creates one real user/board/column/task/subtask chain through the real services, returning
-     * the created user's id (quick task 260829-ii3's {@code DeleteUsersTest} needs it to target a
-     * specific user; pre-existing {@code ResetAllTest} callers simply discard the return value).
+     * Creates one real user/board/column/task/subtask chain through the real services and returns
+     * the user's id, for tests that target a specific user.
      */
     private String createDomainFixture() {
         var user =
@@ -157,16 +155,14 @@ class ResetServiceE2ETest extends AbstractKafkaContainerTest {
     }
 
     /**
-     * Awaits {@code activity_log} reaching exactly {@code expectedRowCount}. {@link
-     * com.vrudenko.kanban_board.config.KafkaEventPublisher#onActivityEvent} is {@code @Async} on
-     * {@code AFTER_COMMIT}, so returning from {@link #createDomainFixture()} gives no guarantee its
-     * events have reached the broker yet, let alone been consumed. Callers that then invoke {@link
-     * ResetService#resetAll()} without this wait race a real bug found live (todo
-     * 2026-08-19-resetservicee2etest-flaky-resetall-after-real-traffic.md): a fixture event that
-     * arrives at the broker after {@code resetAll()}'s topic-trim step survives it, gets consumed
-     * by the listener {@code resetAll()} restarts in its {@code finally} block, and lands a stray
-     * row in {@code activity_log} *after* the Postgres truncate already ran -- failing an isZero
-     * assertion that had every right to expect zero.
+     * Awaits {@code activity_log} reaching exactly {@code expectedRowCount}.
+     *
+     * <p>Why this is the way it is: {@code KafkaEventPublisher#onActivityEvent} is {@code @Async}
+     * on {@code AFTER_COMMIT}, so returning from {@link #createDomainFixture()} does not mean its
+     * events reached the broker. Without this wait {@code resetAll()} races a bug found live: a
+     * fixture event arriving after the topic-trim step survives it, is consumed by the listener
+     * {@code resetAll()} restarts in its {@code finally} block, and lands a stray row after the
+     * Postgres truncate, failing an {@code isZero} assertion.
      */
     private void awaitActivityLogRowCount(long expectedRowCount) {
         Awaitility.await()
@@ -174,9 +170,8 @@ class ResetServiceE2ETest extends AbstractKafkaContainerTest {
                 .until(() -> countRows("activity_log") == expectedRowCount);
     }
 
-    // Scoped counts (quick task 260829-ii3) -- a targeted delete must prove exactly one user's
-    // rows are gone across every owned-resource table, never a blanket countRows that would also
-    // count an untouched second user's rows in the same table.
+    // Scoped counts: a targeted delete must prove exactly one user's rows are gone in every
+    // owned-resource table, so a blanket countRows would also count the second user's rows.
     private long countUsersById(String userId) {
         return ((Number)
                         entityManager
@@ -279,13 +274,9 @@ class ResetServiceE2ETest extends AbstractKafkaContainerTest {
             awaitActivityLogHasAtLeastOneRow();
             var rowCountBeforeFixture = countRows("activity_log");
             createDomainFixture();
-            // createDomainFixture's own signup->board->column->task->subtask chain publishes 4
-            // events (BOARD_CREATED/COLUMN_CREATED/TASK_CREATED/SUBTASK_CREATED -- signup itself
-            // emits none, matching the identical chain's proof in docs/INFRA_RUNBOOK.md's nonprod
-            // reset rollout). Awaiting a RELATIVE gain of 4, not a hardcoded absolute total: this
-            // class's sibling tests (e.g. should_succeed_when_resetAllCalledTwiceInARow) have the
-            // same unawaited-publish gap this method is closing, so a fixed total would be fragile
-            // against their own late-arriving events landing in this shared activity_log table.
+            // createDomainFixture's chain publishes 4 events (BOARD/COLUMN/TASK/SUBTASK_CREATED;
+            // signup emits none). Await a relative gain of 4, not a hardcoded total: sibling tests
+            // have the same unawaited-publish gap, so their late events could land in this table.
             awaitActivityLogRowCount(rowCountBeforeFixture + 4);
 
             // act
@@ -424,22 +415,20 @@ class ResetServiceE2ETest extends AbstractKafkaContainerTest {
                                                 .partitionResult(partition)
                                                 .get());
 
-                // assert: proves the underlying AdminClient call used by truncateActivityTopics()
-                // throws rather than silently succeeding against an unreachable broker -- the same
-                // propagation path resetAll() relies on, since it adds no catch of its own around
-                // this call.
+                // assert: the AdminClient call throws against an unreachable broker; resetAll()
+                // adds no catch of its own, so that is the propagation path it relies on.
                 Assertions.assertThat(exception).isNotNull();
             }
         }
     }
 
     /**
-     * Real-Postgres, real-Kafka proof of {@link ResetService#deleteUsers} (quick task 260829-ii3):
-     * a targeted delete removes exactly the named user's rows across every owned-resource table, a
-     * second untouched user's rows of every one of those kinds survive unchanged, and the {@code
-     * activity_log}/Kafka-offset assertions for the deleted user are bounded (not strictly zero) to
-     * account for the accepted, empirically-confirmed async race documented on {@link
-     * ResetService#deleteUsers}'s Javadoc.
+     * Real-Postgres, real-Kafka proof of {@link ResetService#deleteUsers}: a targeted delete
+     * removes exactly the named user's rows and leaves a second user's unchanged.
+     *
+     * <p>The {@code activity_log}/Kafka-offset assertions for the deleted user are bounded, not
+     * strictly zero, because of the accepted async race documented on {@link
+     * ResetService#deleteUsers}.
      */
     @Nested
     class DeleteUsersTest {
@@ -448,11 +437,9 @@ class ResetServiceE2ETest extends AbstractKafkaContainerTest {
             // arrange
             var targetUserId = createDomainFixture();
             var otherUserId = createDomainFixture();
-            // createDomainFixture's own signup->board->column->task->subtask chain publishes 4
-            // events per user (see ResetAllTest's own comment on the same helper) -- await both
-            // users' full row counts before touching either, so the fixture's own async publish
-            // pipeline cannot be mistaken for the accepted post-delete race this test's own act
-            // step is documented to risk (see ResetService.deleteUsers's Javadoc).
+            // createDomainFixture publishes 4 events per user: await both users' full row counts
+            // before touching either, so the fixture's own async publish is not mistaken for the
+            // accepted post-delete race documented on ResetService.deleteUsers.
             awaitActivityLogRowCountForUser(targetUserId, 4);
             awaitActivityLogRowCountForUser(otherUserId, 4);
 
@@ -481,17 +468,14 @@ class ResetServiceE2ETest extends AbstractKafkaContainerTest {
             Assertions.assertThat(countColumnsForUser(targetUserId)).isZero();
             Assertions.assertThat(countTasksForUser(targetUserId)).isZero();
             Assertions.assertThat(countSubtasksForUser(targetUserId)).isZero();
-            // Bounded, not strictly zero (empirically confirmed, not merely theoretical -- this
-            // exact scenario reproduced on every run in this environment, contradicting this
-            // plan's own optimistic "should not be observed" prediction): the deleteUsers()
-            // cascade above published exactly 1 BoardDeletedEvent (this fixture owns 1 board) via
-            // KafkaEventPublisher's @Async AFTER_COMMIT listener, and on this box the async
-            // dispatch + produce + ActivityLogConsumer's consume + persist round-trip consistently
-            // completes before this assertion runs, reinserting exactly 1 stray activity_log row
-            // for the now-deleted user. This is precisely the accepted, self-limited race
-            // ResetService.deleteUsers's Javadoc documents -- upper-bounded by the number of
-            // boards this fixture owns (1), never unbounded, and the affected id can never be a
-            // valid delete target again.
+            // Bounded, not strictly zero: the accepted race ResetService.deleteUsers documents,
+            // observed on every run in this environment.
+            //
+            // The cascade publishes 1 BoardDeletedEvent (the fixture owns 1 board) via
+            // KafkaEventPublisher's @Async AFTER_COMMIT listener; its produce, consume and persist
+            // round trip completes before this assertion and reinserts 1 stray activity_log row
+            // for the deleted user. The race is bounded by the boards the fixture owns, and that id
+            // can never be a valid delete target again.
             Assertions.assertThat(countActivityLogForUser(targetUserId)).isLessThanOrEqualTo(1L);
 
             Assertions.assertThat(countUsersById(otherUserId)).isEqualTo(1);
@@ -501,11 +485,8 @@ class ResetServiceE2ETest extends AbstractKafkaContainerTest {
             Assertions.assertThat(countSubtasksForUser(otherUserId)).isEqualTo(1);
             Assertions.assertThat(countActivityLogForUser(otherUserId)).isEqualTo(4);
 
-            // Same bounded-race reasoning applies to the activity topic's own offset: the 1
-            // BoardDeletedEvent the cascade above published may or may not have reached the
-            // broker by the time this assertion runs, so the offset can advance by at most 1 --
-            // never more, and the DLT topic (no consumer failure occurs on this happy path) never
-            // moves at all.
+            // Same bounded race for the activity topic's offset: the 1 BoardDeletedEvent may or may
+            // not have reached the broker, so it advances by at most 1; the DLT topic never moves.
             Assertions.assertThat(activityOffsetAfter)
                     .isGreaterThanOrEqualTo(activityOffsetBefore)
                     .isLessThanOrEqualTo(activityOffsetBefore + 1);
@@ -514,8 +495,7 @@ class ResetServiceE2ETest extends AbstractKafkaContainerTest {
 
         @Test
         void should_deleteNothing_when_batchContainsOneUnknownId() {
-            // arrange: a bare signup is enough to prove atomicity -- no board graph is needed,
-            // only that the row survives (task 2 of this plan).
+            // arrange: a bare signup suffices to prove atomicity; no board graph is needed.
             var realUserId =
                     userService
                             .save(

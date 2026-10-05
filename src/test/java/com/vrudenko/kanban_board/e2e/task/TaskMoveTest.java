@@ -92,10 +92,8 @@ public class TaskMoveTest extends AbstractAppMockMvcTest {
                 .toList();
     }
 
-    // POST endpoint (add task to column): ColumnController's mapping, no /tasks suffix -- named
-    // distinctly from getColumnTasksUrl(boardId, columnId) above (the GET-list endpoint) to avoid
-    // an overload pair with two different HTTP semantics behind the same name (carried over from
-    // quick task 260812-eg8's TaskOrderingTest.MoveToColumn split).
+    // Add-task endpoint (ColumnController's mapping, no /tasks suffix). Not an overload of
+    // getColumnTasksUrl (the GET list): same name, different HTTP semantics.
     private String getAddTaskUrl(String columnId) {
         return ApiPaths.BOARDS
                 + "/"
@@ -217,12 +215,8 @@ public class TaskMoveTest extends AbstractAppMockMvcTest {
     @Nested
     class MoveToColumn {
 
-        // The 8 tests below are carried over from TaskOrderingTest.MoveToColumn (quick task
-        // 260812-eg8, D-03 SPLIT disposition): they assert exact position VALUES via
-        // TaskRepository, a property none of the sibling nested groups in this class assert,
-        // rather than duplicating them. One near-identical test,
-        // shouldReturnBadRequest_whenTargetColumnIsOnDifferentBoard_beforePositionWorkRuns, was
-        // dropped as a genuine duplicate of CrossBoardTarget's own test below.
+        // These tests assert exact position values via TaskRepository, which no sibling nested
+        // group in this class asserts.
 
         @Test
         void shouldMoveThirdTaskToFront_andShiftOthersDown_whenTargetPositionIsZeroInSameColumn()
@@ -431,10 +425,9 @@ public class TaskMoveTest extends AbstractAppMockMvcTest {
             createTaskInColumn(cookie, column.getId());
             createTaskInColumn(cookie, column.getId());
 
-            // act — reads TaskRepository.findAllByColumnId directly, with no additional sort
-            // applied by this test: the (position, id) order must come from the production query
-            // itself, not from a test-side re-sort, or a future change that drops the id tiebreak
-            // would pass here undetected.
+            // act — reads TaskRepository.findAllByColumnId directly with no test-side sort: the
+            // (position, id) order must come from the production query, or dropping the id
+            // tiebreak would go undetected.
             var firstRead =
                     taskRepository.findAllByColumnId(column.getId()).stream()
                             .map(TaskEntity::getId)

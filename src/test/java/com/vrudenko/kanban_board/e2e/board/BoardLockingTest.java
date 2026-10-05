@@ -25,17 +25,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Proves D-13/D-15 end to end: Board now shares the same explicit-version-compare concurrency model
- * as Column/Task/Subtask (no exceptions left, per this plan's success criteria). Modeled on {@link
- * com.vrudenko.kanban_board.e2e.column.ColumnLockingTest} and {@link
- * com.vrudenko.kanban_board.e2e.task.TaskLockingTest}'s structure, with {@code ProblemDetail}
- * fields asserted at their flattened top-level paths (matching {@code GlobalExceptionHandlerTest}'s
- * convention) rather than deserialized into a DTO, since the 409/400 cases under test are error
- * responses, not {@link BoardResponseDTO} bodies.
+ * Proves Board shares the explicit-version-compare concurrency model of Column, Task and Subtask,
+ * end to end.
  *
- * <p>Deliberately named without the {@code E2ETest} suffix -- plan 07.1-07 is dropping that suffix
- * from in-process MockMvc-tier classes, and a new class should not be born needing the rename. Per
- * D-22 it carries no {@code @Tag}, so it runs in the pre-commit {@code fastTest} gate.
+ * <p>{@code ProblemDetail} fields are asserted at their flattened top-level paths (as {@code
+ * GlobalExceptionHandlerTest} does), not deserialized into a {@link BoardResponseDTO}, since the
+ * 409/400 cases are error responses. Named without the {@code E2ETest} suffix, which is being
+ * dropped from in-process MockMvc-tier classes, and carrying no {@code @Tag}, so it runs in the
+ * pre-commit {@code fastTest} gate.
  */
 @SpringBootTest
 @AutoConfigureMockMvc

@@ -35,15 +35,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 /**
- * Proof of {@code GET /boards/{boardId}/activity} (READ-01, READ-02). Rows are seeded directly
- * through {@link ActivityLogRepository} rather than published through Kafka: this suite needs no
- * broker, and direct seeding is the only way to place two rows at an identical {@code createdAt}
- * instant, which the page-boundary case requires. The Kafka path itself is already proven
- * end-to-end by Plans 01 and 02.
+ * Proof of {@code GET /boards/{boardId}/activity}, seeding rows through {@link
+ * ActivityLogRepository} instead of Kafka.
  *
- * <p>Downgraded to the in-process MockMvc tier (D-03, verdict-table row 16). The direct repository
- * seeding above is preserved exactly -- nothing in this conversion introduces a Kafka container
- * ancestor or any broker-related configuration.
+ * <p>Why this is the way it is: the suite needs no broker, and direct seeding is the only way to
+ * place two rows at an identical {@code createdAt} instant, which the page-boundary case requires.
+ * The Kafka path is proven end to end in the {@code activitylog} package.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -297,9 +294,8 @@ public class ActivityReadTest extends AbstractAppMockMvcTest {
         }
 
         /**
-         * S5E: seeds one row per {@link ActivityAction} value this quick task added (everything
-         * beyond the six the read endpoint already covered), proving the endpoint exposes each new
-         * action string correctly rather than only exercising it at the write/consumer tier.
+         * One row per {@link ActivityAction} value beyond the original six, proving the endpoint
+         * exposes each action string, not only the write/consumer tier.
          */
         @Test
         void shouldReturnEveryNewActivityActionValue_whenSeeded() throws Exception {

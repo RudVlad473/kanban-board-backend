@@ -34,8 +34,8 @@ import org.springframework.test.context.TestPropertySource;
 import static io.restassured.RestAssured.given;
 
 /**
- * HTTP-level proof of the reset endpoint's 204/403 contract (RESET-01, D-01), extending the
- * real-broker harness so a real reset actually runs the Kafka side too, not just the Postgres side.
+ * HTTP-level proof of the reset endpoint's 204/403 contract, extending the real-broker harness so a
+ * real reset also runs the Kafka side.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Tag("kafka")
@@ -149,8 +149,8 @@ class ResetControllerE2ETest extends AbstractKafkaContainerTest {
                             .then()
                             .extract();
 
-            // assert: byte-identical status and code to the wrong-token case above -- absence
-            // is not distinguishable from mismatch.
+            // assert: byte-identical to the wrong-token case above, so absence is not
+            // distinguishable from mismatch.
             Assertions.assertThat(response.statusCode()).isEqualTo(HttpStatus.FORBIDDEN.value());
             Assertions.assertThat(response.body().jsonPath().getString("code"))
                     .isEqualTo("ACCESS_DENIED");
@@ -213,9 +213,8 @@ class ResetControllerE2ETest extends AbstractKafkaContainerTest {
     }
 
     /**
-     * HTTP-level proof of the targeted-delete route (quick task 260829-ii3). Every request here
-     * carries NO {@code fullReset} query parameter, proving that is what a plain {@code POST}
-     * reaches per {@link ResetController}'s {@code params}-based dispatch.
+     * HTTP-level proof of the targeted-delete route, reached by omitting {@code fullReset} per
+     * {@link ResetController}'s {@code params}-based dispatch.
      */
     @Nested
     class DeleteUsersEndpoint {
