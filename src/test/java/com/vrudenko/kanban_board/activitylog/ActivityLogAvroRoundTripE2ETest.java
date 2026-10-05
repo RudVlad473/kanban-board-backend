@@ -27,10 +27,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /**
- * The Phase 4 tracer's end-to-end proof: a real {@link TaskMovedEvent} published through the real
- * producer travels as Avro binary with a registry-resolved schema id, is deserialized back into a
- * domain event by {@code ActivityEventAvroMapper}, and lands as an {@code activity_log} row -- with
- * the existing exhaustive switch downstream of it completely unaware anything changed (SCHEMA-02).
+ * The tracer's end-to-end proof: a real {@link TaskMovedEvent} travels as Avro binary with a
+ * registry-resolved schema id, is deserialized by {@code ActivityEventAvroMapper}, and lands as an
+ * {@code activity_log} row, with the downstream exhaustive switch unaware anything changed.
  */
 @SpringBootTest
 @Tag("kafka")
@@ -51,10 +50,9 @@ class ActivityLogAvroRoundTripE2ETest extends AbstractKafkaContainerTest {
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, getBootstrapServers());
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "avro-wire-probe-" + UUID.randomUUID());
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        // The key deserializer must match what the producer actually writes (a String, per
-        // spring.kafka.producer.key-serializer) -- deserializing it as byte[] instead would make
-        // every key comparison below silently and permanently false, never a cast exception,
-        // since Object.equals(Object) accepts any type without complaint.
+        // The key deserializer must match what the producer writes (a String, per
+        // spring.kafka.producer.key-serializer): byte[] would make every key comparison silently
+        // false, never a cast exception, since Object.equals accepts any type.
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
 
@@ -64,11 +62,11 @@ class ActivityLogAvroRoundTripE2ETest extends AbstractKafkaContainerTest {
     }
 
     /**
-     * Polls {@link KafkaTopics#ACTIVITY} with a plain byte-array {@code kafka-clients} consumer --
-     * bypassing the Avro deserializer entirely -- until a record keyed by {@code key} is seen, then
-     * returns its raw value bytes. The topic is shared across every test class in this package (the
-     * Spring/Testcontainers context is cached across the whole {@code activitylog} package), so
-     * matching is scoped by key rather than assuming the topic starts empty.
+     * Polls {@link KafkaTopics#ACTIVITY} with a plain byte-array consumer, bypassing the Avro
+     * deserializer, until a record keyed by {@code key} is seen, then returns its raw value bytes.
+     *
+     * <p>The topic is shared across the package's test classes (the context is cached), so matching
+     * is scoped by key, not by assuming an empty topic.
      */
     private byte[] awaitRawValueForKey(String key) {
         var matches = new ArrayList<byte[]>();
@@ -163,10 +161,8 @@ class ActivityLogAvroRoundTripE2ETest extends AbstractKafkaContainerTest {
             sendAndAwaitAck(event);
             var rawValue = awaitRawValueForKey(eventId.toString());
 
-            // assert -- this is what makes the class a genuine cutover proof rather than a "the
-            // pipeline still works" test: a silent fallback to JSON would still pass every other
-            // assertion in this class, but a JSON payload always starts with '{' (0x7B), never the
-            // Confluent magic byte 0.
+            // assert -- what makes this a cutover proof: a silent fallback to JSON would pass every
+            // other assertion here, but a JSON payload starts with '{' (0x7B), never magic byte 0.
             Assertions.assertThat(rawValue.length).isGreaterThan(CONFLUENT_WIRE_PREFIX_LENGTH);
             Assertions.assertThat(rawValue[0]).isEqualTo(CONFLUENT_MAGIC_BYTE);
 

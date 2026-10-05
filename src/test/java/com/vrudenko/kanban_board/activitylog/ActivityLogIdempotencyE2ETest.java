@@ -34,13 +34,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /**
- * Real-broker proof that a redelivered {@code eventId} produces exactly one {@code activity_log}
- * row (TEST-02, ACTLOG-03) and never reaches {@link KafkaTopics#ACTIVITY_DLT} (D-05), and that the
- * database's unique {@code event_id} constraint -- not the {@code existsByEventId} fast path -- is
- * what arbitrates a genuine concurrent race. One partition and one consumer thread make broker
- * delivery strictly sequential (D-08), so the concurrency case bypasses the transport and drives
- * {@link ActivityLogRecorder#record} directly from two threads; every other case here goes through
- * the real broker.
+ * Real-broker proof that a redelivered {@code eventId} yields exactly one {@code activity_log} row
+ * and never reaches {@link KafkaTopics#ACTIVITY_DLT}.
+ *
+ * <p>The unique {@code event_id} constraint, not the {@code existsByEventId} fast path, arbitrates
+ * a genuine concurrent race.
+ *
+ * <p>One partition and one consumer thread make broker delivery strictly sequential, so the
+ * concurrency case bypasses the transport and drives {@link ActivityLogRecorder#record} from two
+ * threads; every other case goes through the real broker.
  */
 @SpringBootTest
 @Tag("kafka")
@@ -66,11 +68,13 @@ class ActivityLogIdempotencyE2ETest extends AbstractKafkaContainerTest {
     }
 
     /**
-     * Publishes {@code event} twice, waits for its row to appear, then publishes a distinct
-     * sentinel event and waits for the sentinel's row to appear. The topic has one partition and
-     * one consumer, so the sentinel's arrival proves the consumer has drained past both copies of
-     * {@code event} -- the settle signal that makes a subsequent negative assertion ("exactly one
-     * row", "no dead-letter record") safe instead of a race against an unprocessed duplicate.
+     * Publishes {@code event} twice, waits for its row, then publishes a sentinel event and waits
+     * for the sentinel's row.
+     *
+     * <p>The topic has one partition and one consumer, so the sentinel's arrival proves the
+     * consumer drained past both copies: the settle signal that makes a negative assertion
+     * ("exactly one row", "no dead-letter record") safe instead of a race against an unprocessed
+     * duplicate.
      */
     private void publishTwiceThenAwaitSettle(TaskMovedEvent event) throws Exception {
         sendAndAwaitAck(event);
@@ -110,9 +114,10 @@ class ActivityLogIdempotencyE2ETest extends AbstractKafkaContainerTest {
 
     /**
      * Polls {@link KafkaTopics#ACTIVITY_DLT} for {@code window} and returns every record value
-     * seen. The topic is shared across every test class in this package (the Spring/Testcontainers
-     * context is cached across the whole {@code activitylog} package), so a caller must filter the
-     * returned values for its own {@code eventId} rather than assume the topic starts empty.
+     * seen.
+     *
+     * <p>The topic is shared across the package's test classes (the context is cached), so callers
+     * must filter for their own {@code eventId}.
      */
     private List<byte[]> pollDeadLetterValues(Duration window) {
         var values = new ArrayList<byte[]>();
@@ -172,22 +177,18 @@ class ActivityLogIdempotencyE2ETest extends AbstractKafkaContainerTest {
             // act
             publishTwiceThenAwaitSettle(event);
 
-            // assert -- this is what distinguishes real idempotency from a duplicate that merely
-            // exhausted its three retries into the dead-letter topic (D-05); the row count alone
-            // cannot tell the two apart.
+            // assert -- distinguishes real idempotency from a duplicate that merely exhausted its
+            // three retries into the dead-letter topic, which the row count alone cannot tell
+            // apart.
             var deadLetterValues = pollDeadLetterValues(Duration.ofSeconds(5));
             var matchingEventId =
                     deadLetterValues.stream()
-                            // A tombstone (null value) can legitimately sit on this shared topic
-                            // from an unrelated test (see ActivityLogDeadLetterE2ETest's
-                            // TombstoneTest) -- it can never carry this eventId, so it is
-                            // filtered out rather than decoded.
+                            // A tombstone (null value) from an unrelated test can sit on this
+                            // shared topic and never carries this eventId: filter it, don't decode.
                             .filter(Objects::nonNull)
-                            // The producer writes activity events as UTF-8 JSON, so the decode
-                            // charset here is a known property of the data, not a guess -- a
-                            // platform-default decode would silently mis-match on a non-UTF-8
-                            // default locale/charset (windows-1252 locally, UTF-8 on CI) and let
-                            // this negative assertion pass for the wrong reason.
+                            // Decode as UTF-8: the producer writes UTF-8 JSON, and a
+                            // platform-default charset (windows-1252 locally, UTF-8 on CI) would
+                            // let this negative assertion pass for the wrong reason.
                             .filter(
                                     value ->
                                             new String(value, StandardCharsets.UTF_8)
@@ -203,11 +204,9 @@ class ActivityLogIdempotencyE2ETest extends AbstractKafkaContainerTest {
         @Test
         void shouldPersistExactlyOneRow_whenTwoThreadsRecordSameEventIdConcurrently()
                 throws InterruptedException {
-            // arrange -- bypasses the Kafka transport deliberately: with one partition and one
-            // consumer thread, broker delivery is strictly sequential, so only a direct,
-            // concurrent call to the recorder can reach the exists-check/insert race window and
-            // prove the database's unique constraint -- not just the exists-check fast path -- is
-            // what arbitrates it (ACTLOG-03 concurrency probe).
+            // arrange -- bypasses the Kafka transport: broker delivery is strictly sequential, so
+            // only concurrent calls to the recorder reach the exists-check/insert race window and
+            // prove the unique constraint, not the exists-check fast path, arbitrates it.
             var eventId = UUID.randomUUID().toString();
             var timestamp = Instant.now();
             var firstEntity = buildActivityLogEntity(eventId, randomId(), randomId(), timestamp);
@@ -220,13 +219,13 @@ class ActivityLogIdempotencyE2ETest extends AbstractKafkaContainerTest {
 
             // act
             try {
-                // The returned Future is deliberately dropped, not awaited: awaiting it here
-                // would serialize the two submissions and destroy the race window this test
-                // exists to open. The failure channel FutureReturnValueIgnored protects is
-                // already covered more strongly below -- each lambda catches Throwable into
-                // firstFailure/secondFailure, asserted non-null after awaitTermination. Each
-                // submit is scoped to its own block so both locals can share the name `unused`
-                // that ErrorProne's suggested fix expects, without a duplicate-variable clash.
+                // The returned Future is dropped, not awaited: awaiting would serialize the two
+                // submissions and destroy the race window.
+                //
+                // FutureReturnValueIgnored's failure channel is covered below: each lambda catches
+                // Throwable into firstFailure/secondFailure, asserted after awaitTermination. Each
+                // submit has its own block so both locals can share the name `unused` that
+                // ErrorProne's suggested fix expects.
                 {
                     Future<?> unused =
                             executor.submit(

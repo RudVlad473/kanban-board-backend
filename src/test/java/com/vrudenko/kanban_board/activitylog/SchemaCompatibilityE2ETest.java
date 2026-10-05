@@ -30,12 +30,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /**
- * Turns D-02's BACKWARD compatibility choice from a configured setting into a demonstrated
- * behaviour. The first nested group asserts configuration (SCHEMA-04: every one of the 14
- * production subjects reports BACKWARD, and it is genuinely subject-level, not just an inherited
- * read of the registry's global default). The second asserts enforcement: a backward-incompatible
- * schema evolution is rejected, and a backward-compatible one is accepted -- the control case that
- * distinguishes "compatibility is enforced" from "registration is broken for everything".
+ * Turns BACKWARD compatibility from a configured setting into a demonstrated behaviour.
+ *
+ * <p>The first nested group asserts configuration: every one of the 14 production subjects reports
+ * BACKWARD, at subject level and not an inherited read of the registry's global default. The second
+ * asserts enforcement: a backward-incompatible evolution is rejected and a compatible one accepted,
+ * the control case that separates "compatibility is enforced" from "registration is broken for
+ * everything".
  */
 @SpringBootTest
 @Tag("kafka")
@@ -104,9 +105,8 @@ class SchemaCompatibilityE2ETest extends AbstractKafkaContainerTest {
                             () -> client.getCompatibility(throwawaySubject, false));
 
             // assert -- the contrast with ConfiguredCompatibilityTest's first test is the point:
-            // identical API call, opposite outcome, because only one of the two subjects was ever
-            // explicitly configured. That is what makes SCHEMA-04's "explicitly configured, not
-            // inherited" claim meaningful rather than tautological.
+            // identical call, opposite outcome, because only one subject was ever explicitly
+            // configured.
             Assertions.assertThat(exception).isInstanceOf(RestClientException.class);
 
             // act + assert -- the same subject succeeds once fallback to the global default is
@@ -153,10 +153,11 @@ class SchemaCompatibilityE2ETest extends AbstractKafkaContainerTest {
         }
 
         private Schema compatibleEvolution() {
-            // Adds a new field WITH a default: old records missing it resolve to the default
-            // under a newer reader schema -- backward-compatible by definition. The control case:
-            // without it, a green "rejection" test cannot distinguish "compatibility is enforced"
-            // from "registration is broken for everything".
+            // Adds a new field WITH a default: old records resolve to it under a newer reader
+            // schema, so it is backward-compatible by definition.
+            //
+            // The control case: without it, a green "rejection" test cannot distinguish
+            // "compatibility is enforced" from "registration is broken for everything".
             String avsc =
                     "{"
                             + "\"type\":\"record\","
@@ -174,11 +175,9 @@ class SchemaCompatibilityE2ETest extends AbstractKafkaContainerTest {
         @Test
         void shouldRejectIncompatibleEvolution_andAcceptCompatibleEvolution_underBackward()
                 throws Exception {
-            // arrange -- a throwaway subject, explicitly set to BACKWARD (mirroring
-            // AvroSchemaRegistrar's own order: compatibility before the first registration) and
-            // seeded with one baseline version. A brand-new subject's first version is always
-            // accepted regardless of compatibility setting -- there is nothing yet to compare
-            // against -- so enforcement only becomes observable from the second version onward.
+            // arrange -- a throwaway subject set to BACKWARD (as AvroSchemaRegistrar does:
+            // compatibility before first registration) with one baseline version. A subject's first
+            // version is always accepted, so enforcement is observable only from the second.
             var client = buildSchemaRegistryClient();
             var throwawaySubject = "compatibility-probe-enforcement-" + UUID.randomUUID();
             client.updateCompatibility(throwawaySubject, BACKWARD);

@@ -16,19 +16,15 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.Pageable;
 
 /**
- * Tripwire for the D-02a gap: under a long-lived container (unlike H2's per-context {@code
- * create-drop}), {@code activity_log} rows would survive from one test method to the next unless
- * {@link AbstractAppTest#cleanup()} explicitly deletes them, since they carry no foreign key back
- * to a user. This class is deliberately built as two structurally identical methods so that
- * removing {@code activityLogRepository.deleteAll()} from {@code AbstractAppTest.cleanup()} turns
- * it red: whichever method runs second sees the row the first left behind.
+ * Tripwire: {@code activity_log} rows carry no foreign key to a user, so {@link
+ * AbstractAppTest#cleanup()} must delete them or they survive between test methods.
  *
- * <p>Assertions are scoped by a constant probe board id, {@link #PROBE_BOARD_ID}, rather than an
- * absolute {@code activityLogRepository.count()}, precisely because the nine {@code
- * AbstractKafkaContainerTest} subclasses write real activity-log rows into this same shared
- * database, have no {@code @AfterEach} cleanup of their own, and always use real ULID board ids --
- * an absolute count would be flaky against their traffic, a count scoped to this test's own
- * fabricated board id is not.
+ * <p>Two structurally identical methods make removing {@code activityLogRepository.deleteAll()}
+ * from {@code AbstractAppTest.cleanup()} turn this red: whichever runs second sees the row the
+ * first left behind. Assertions are scoped by a constant probe board id, {@link #PROBE_BOARD_ID},
+ * not an absolute count, because the {@code AbstractKafkaContainerTest} subclasses write real
+ * activity-log rows into the same database, have no {@code @AfterEach} cleanup, and use real ULID
+ * board ids.
  */
 @SpringBootTest
 class ActivityLogCleanupIsolationTest extends AbstractAppTest {

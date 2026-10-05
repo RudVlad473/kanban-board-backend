@@ -25,27 +25,20 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * The exact inverse of {@code ActivityLogConsumer.deriveActionAndDetailIds}: turns a persisted
- * {@link ActivityLogEntity} row back into the {@link ActivityEvent} that produced it. Test-only
- * verification tooling (SCHEMA-06) -- this is not production behaviour the application ever needs,
- * so it lives in the test source set rather than {@code src/main}.
+ * {@link ActivityLogEntity} row back into the {@link ActivityEvent} that produced it.
  *
- * <p>Field recovery is total by construction: {@code eventId}, {@code userId}, {@code boardId} and
- * {@code timestamp} (from the row's {@code createdAt} -- the consumer never takes it from a fresh
- * clock reading, see {@code ActivityLogConsumer}'s Javadoc) come straight from columns; every
- * type-specific identifier comes from the row's {@code detail} JSON object, whose key set is fixed
- * per {@link com.vrudenko.kanban_board.entity.ActivityAction} and is read here by the exact same
- * key names {@code ActivityLogConsumer.deriveActionAndDetailIds} writes.
+ * <p>Test-only verification tooling, so it lives in the test source set, not {@code src/main}.
+ * Field recovery is total by construction: {@code eventId}, {@code userId}, {@code boardId} and
+ * {@code timestamp} (from the row's {@code createdAt}) come from columns; every type-specific
+ * identifier comes from the row's {@code detail} JSON, read by the key names the consumer writes.
  *
- * <p>Deliberately never substitutes a default for an absent {@code detail} key: a row whose detail
- * cannot produce a complete event is precisely the finding SCHEMA-06's rehearsal exists to surface,
- * and defaulting it away would hide that finding rather than reveal it. {@link #reconstruct} throws
- * instead, naming the row's {@code eventId}, its action and the missing key.
- *
- * <p>Dispatch is an exhaustive {@code switch} over {@link
+ * <p>Decisions: it never substitutes a default for an absent {@code detail} key. A row whose detail
+ * cannot produce a complete event is the finding the rehearsal exists to surface, and defaulting it
+ * away would hide that. {@link #reconstruct} throws instead, naming the row's {@code eventId}, its
+ * action and the missing key. Dispatch is an exhaustive {@code switch} over {@link
  * com.vrudenko.kanban_board.entity.ActivityAction} with no {@code default} arm, mirroring {@code
- * ActivityLogConsumer.deriveActionAndDetailIds} and {@code ActivityEventAvroMapper.toAvro} --
- * adding another action is then a compile error here until this switch is updated, rather than a
- * silently unmappable row at runtime.
+ * ActivityLogConsumer.deriveActionAndDetailIds} and {@code ActivityEventAvroMapper.toAvro}, so
+ * adding an action is a compile error here until the switch is updated.
  */
 public class HistoricalActivityEventReconstructor {
 
@@ -53,8 +46,7 @@ public class HistoricalActivityEventReconstructor {
 
     /**
      * Takes the same {@link ObjectMapper} bean {@code ActivityLogConsumer} parses {@code detail}
-     * with, rather than constructing a fresh one -- reconstruction should read {@code detail} back
-     * exactly the way the shipped consumer's own JSON handling behaves.
+     * with, so reconstruction reads {@code detail} exactly as the shipped consumer does.
      */
     public HistoricalActivityEventReconstructor(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
@@ -183,9 +175,9 @@ public class HistoricalActivityEventReconstructor {
     }
 
     /**
-     * Never substitutes a default for a missing key -- see the class Javadoc for why. Throws naming
-     * the row's {@code eventId}, its action, and the specific missing key, so a rehearsal failure
-     * is immediately actionable rather than a bare {@code NullPointerException}.
+     * Throws naming the row's {@code eventId}, its action and the missing key, so a rehearsal
+     * failure is actionable, not a bare {@code NullPointerException}. Never substitutes a default
+     * (see the class Javadoc).
      */
     private String requireKey(ActivityLogEntity row, Map<String, String> detail, String key) {
         String value = detail.get(key);

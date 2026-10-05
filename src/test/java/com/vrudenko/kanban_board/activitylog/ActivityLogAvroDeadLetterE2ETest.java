@@ -32,27 +32,20 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /**
- * Re-verifies the dead-letter path's byte-fidelity and non-blocking guarantees (SCHEMA-05, T-04-09,
- * T-04-10) now that the main pipeline serializes as Avro instead of JSON. This class is a sibling
- * of {@link ActivityLogDeadLetterE2ETest}, not a replacement -- that class keeps proving the
- * framing-level poison shapes it always has, unchanged, against the same Redpanda broker.
+ * Re-verifies the dead-letter path's byte-fidelity and non-blocking guarantees under Avro; a
+ * sibling of {@link ActivityLogDeadLetterE2ETest}, not a replacement.
  *
- * <p>Two genuinely distinct poison shapes are exercised. The first -- a payload with no valid
- * Confluent magic byte -- fails at <em>framing</em>, before the deserializer ever consults the
- * registry; the JSON-era test already covered the analogous case, and this class carries the
- * equivalent forward so the Avro path is proven, not assumed, to behave the same way. The second --
- * a payload in genuinely valid Confluent wire format (correct magic byte, correct 4-byte schema-id
- * framing) carrying a schema id the registry has never issued -- is the case the JSON-era test
- * could not produce at all, since JSON has no registry-mediated resolution step to fail. Both are
- * asserted to reach {@code kanban.activity.dlt} with their bytes byte-for-byte intact.
+ * <p>Two poison shapes are asserted to reach {@code kanban.activity.dlt} byte-for-byte: a payload
+ * with no valid Confluent magic byte (fails at framing, before the registry is consulted), and
+ * valid Confluent framing carrying a schema id the registry never issued (a case JSON could not
+ * produce).
  *
- * <p>Per this plan's design_alternatives, the production {@code KafkaConsumerConfig} is
- * deliberately left untouched: the dead-letter path's {@code DelegatingByTypeSerializer} is already
- * generic over <em>any</em> deserialization-failure payload shape, Avro included, since it
- * dispatches purely on the record value's runtime class ({@code byte[]}) and never inspects the
- * bytes themselves. Giving the recoverer an Avro-aware branch would be actively harmful: it would
- * attempt to re-encode a payload that just failed to decode, throwing inside the recovery path and
- * destroying the one audit trail an operator needs most for exactly these messages.
+ * <p>Decisions: production {@code KafkaConsumerConfig} is deliberately left untouched. The
+ * dead-letter path's {@code DelegatingByTypeSerializer} is generic over any deserialization-failure
+ * payload shape, Avro included, because it dispatches on the record value's runtime class ({@code
+ * byte[]}) and never inspects the bytes. An Avro-aware branch would be harmful: it would try to
+ * re-encode a payload that just failed to decode, throwing inside the recovery path and destroying
+ * the audit trail an operator needs most for exactly these messages.
  */
 @SpringBootTest
 @Tag("kafka")
@@ -62,11 +55,9 @@ class ActivityLogAvroDeadLetterE2ETest extends AbstractKafkaContainerTest {
     private static final byte CONFLUENT_MAGIC_BYTE = 0x0;
 
     /**
-     * Deliberately far outside the handful of ids {@link
-     * com.vrudenko.kanban_board.config.AvroSchemaRegistrar} actually registers (5 subjects, issued
-     * small sequential ids by a freshly-started registry) -- guaranteed to be an id the registry
-     * has never handed out, so the deserializer fails at schema <em>resolution</em>, not at
-     * framing.
+     * A schema id far outside the few ids {@link
+     * com.vrudenko.kanban_board.config.AvroSchemaRegistrar} registers (5 subjects, small sequential
+     * ids), so the deserializer fails at schema resolution, not framing.
      */
     private static final int UNREGISTERED_SCHEMA_ID = 999_999_999;
 
@@ -104,15 +95,14 @@ class ActivityLogAvroDeadLetterE2ETest extends AbstractKafkaContainerTest {
     }
 
     /**
-     * Builds a payload in genuinely valid Confluent wire format -- the magic byte, then a 4-byte
-     * big-endian schema id the registry has never issued, then a fresh-random-per-call trailing
-     * discriminator. The discriminator exists solely to keep every call's return value byte-unique:
-     * {@code kanban.activity.dlt} is shared across every class and every test method in this
-     * package (the Spring context is cached), so two byte-identical poison payloads published by
-     * two different test methods would otherwise both match {@link
-     * #awaitDeadLetterRecordMatching}'s exact-payload filter and break its single-match assertion.
-     * The trailing bytes are never decoded as Avro: resolution fails on the id lookup before the
-     * deserializer ever attempts to read them.
+     * Builds a valid Confluent wire-format payload: the magic byte, a 4-byte big-endian schema id
+     * the registry never issued, then a random trailing discriminator.
+     *
+     * <p>The discriminator keeps every call's payload byte-unique: {@code kanban.activity.dlt} is
+     * shared across the package's tests (the Spring context is cached), so byte-identical poison
+     * payloads would both match {@link #awaitDeadLetterRecordMatching}'s exact-payload filter and
+     * break its single-match assertion. The trailing bytes are never decoded: resolution fails on
+     * the id lookup first.
      */
     private byte[] framedPayloadWithUnregisteredSchemaId() {
         var discriminator = randomId().getBytes(StandardCharsets.UTF_8);
@@ -125,11 +115,11 @@ class ActivityLogAvroDeadLetterE2ETest extends AbstractKafkaContainerTest {
 
     /**
      * Polls {@link KafkaTopics#ACTIVITY_DLT} until exactly one record whose value byte-equals
-     * {@code expectedValue} has been seen, then returns that value. Comparing the raw arrays (never
-     * a decoded string) is load-bearing: a decode step before comparing would mask exactly the
-     * re-encoding bug this class exists to catch. The retry policy is three attempts at a ~1s fixed
-     * interval (see {@code KafkaConsumerConfig}), so routing is expected within a few seconds; the
-     * 30s ceiling comfortably exceeds that.
+     * {@code expectedValue} has been seen, then returns it.
+     *
+     * <p>Raw arrays are compared, never a decoded string: decoding first would mask the re-encoding
+     * bug this class exists to catch. Routing takes a few seconds (three attempts at a ~1s fixed
+     * interval, see {@code KafkaConsumerConfig}); the 30s ceiling comfortably exceeds that.
      */
     private byte[] awaitDeadLetterRecordMatching(byte[] expectedValue) {
         var matches = new ArrayList<byte[]>();
@@ -156,11 +146,9 @@ class ActivityLogAvroDeadLetterE2ETest extends AbstractKafkaContainerTest {
 
         @Test
         void shouldDeadLetterWithByteFidelity_whenPayloadHasNoValidMagicByte() throws Exception {
-            // arrange -- a genuine, deterministic framing failure: the first byte is `{` (0x7B),
-            // never the Confluent magic byte 0x0, so KafkaAvroDeserializer rejects it before ever
-            // consulting the registry. Distinct from every poison literal
-            // ActivityLogDeadLetterE2ETest
-            // already uses on this same shared topic.
+            // arrange -- a deterministic framing failure: the first byte is `{` (0x7B), not the
+            // Confluent magic byte 0x0, so KafkaAvroDeserializer rejects it before consulting the
+            // registry. Distinct from every poison literal ActivityLogDeadLetterE2ETest uses.
             var poisonBytes =
                     "{\"type\":\"AvroSchemaRegistryPoison\"".getBytes(StandardCharsets.UTF_8);
             var key = randomId();
@@ -181,11 +169,9 @@ class ActivityLogAvroDeadLetterE2ETest extends AbstractKafkaContainerTest {
         @Test
         void shouldDeadLetterWithByteFidelity_whenPayloadIsFramedButSchemaIdIsUnregistered()
                 throws Exception {
-            // arrange -- the poison shape the JSON-era test could not produce: genuinely valid
-            // Confluent framing (correct magic byte, correct schema-id width) but an id the
-            // registry has never issued. This proves a failure originating from the *registry
-            // lookup* itself, not from the payload's shape, still lands in the dead-letter topic
-            // with fidelity.
+            // arrange -- valid Confluent framing with an id the registry never issued: a failure
+            // from the registry lookup itself, not the payload shape, must still dead-letter with
+            // fidelity.
             var poisonBytes = framedPayloadWithUnregisteredSchemaId();
             var key = randomId();
 
@@ -210,8 +196,8 @@ class ActivityLogAvroDeadLetterE2ETest extends AbstractKafkaContainerTest {
             var key = randomId();
 
             // act -- both records share the topic's single partition, so the well-formed event
-            // published behind the registry-aware poison one can only be consumed if the
-            // container advanced past the poisoned offset instead of stalling on it (T-04-10).
+            // behind the poison one is consumed only if the container advanced past the poisoned
+            // offset instead of stalling.
             publishRawBytes(poisonBytes, key);
             var wellFormedEventId = UUID.randomUUID().toString();
             var wellFormedEvent =

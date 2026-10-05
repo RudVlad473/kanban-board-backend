@@ -30,10 +30,11 @@ import org.springframework.boot.test.context.SpringBootTest;
 
 /**
  * Real-broker proof that {@link ActivityLogConsumer#onActivityEvent} turns a published event into a
- * persisted, deduplicated {@link ActivityLogEntity} row (TEST-01, ACTLOG-02). Every assertion here
- * waits on a real {@code apache/kafka-native} container started by {@link
- * AbstractKafkaContainerTest} -- consumer-group formation and first delivery are asynchronous, so
- * every assertion below polls with {@link Awaitility} rather than sleeping a fixed duration.
+ * persisted, deduplicated {@link ActivityLogEntity} row.
+ *
+ * <p>Every assertion waits on a real {@code apache/kafka-native} container started by {@link
+ * AbstractKafkaContainerTest}; consumer-group formation and first delivery are asynchronous, so
+ * assertions poll with {@link Awaitility} rather than sleeping.
  */
 @SpringBootTest
 @Tag("kafka")
@@ -252,13 +253,9 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
                                         .isEqualTo(ActivityAction.COLUMN_DELETED);
                                 Assertions.assertThat(row.getDetail())
                                         .isEqualTo("{\"columnId\":\"" + columnId + "\"}");
-                                // Proves the row's timestamp comes from the event, not a fresh
-                                // clock reading taken by the consumer (see
-                                // ActivityLogConsumer.onActivityEvent's Javadoc). Millisecond
-                                // tolerance because Avro's timestamp-millis logical type
-                                // truncates by design (see
-                                // shouldPopulateAllColumns_whenBoardCreatedEventIsSparsest below
-                                // for the fuller explanation of this same tolerance).
+                                // The row's timestamp comes from the event, not a consumer clock
+                                // reading; millisecond tolerance because Avro truncates (see
+                                // shouldPopulateAllColumns_whenBoardCreatedEventIsSparsest).
                                 Assertions.assertThat(row.getCreatedAt())
                                         .isCloseTo(
                                                 timestamp, Assertions.within(1, ChronoUnit.MILLIS));
@@ -366,19 +363,13 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
                                 Assertions.assertThat(row.getEventId()).isNotNull();
                                 Assertions.assertThat(row.getCreatedAt()).isNotNull();
                                 Assertions.assertThat(row.getDetail()).isEqualTo("{}");
-                                // Since Phase 4 (Schema Registry), the wire-format precision floor
-                                // is coarser than it used to be: `timestamp` is carried as Avro's
-                                // timestamp-millis logical type (see AvroBoardCreatedEvent.avsc),
-                                // whose generated accessor truncates to millisecond precision by
-                                // design (confirmed by direct inspection of the generated code,
-                                // 04-01-SUMMARY.md) -- not a bug, and not the same failure mode the
-                                // original 1-microsecond tolerance here was written to absorb (the
-                                // JSON pipeline's double-precision epoch-seconds encoding, which
-                                // lost only sub-microsecond digits). An Instant.now() value
-                                // carrying
-                                // JVM nanosecond precision can now lose up to just under a full
-                                // millisecond on its round trip through Avro encoding and JPA
-                                // persistence, so the tolerance widens to match that floor.
+                                // Millisecond tolerance: Avro's timestamp-millis truncates by
+                                // design, not a bug (confirmed in the generated code).
+                                //
+                                // An Instant.now() with JVM nanosecond precision can lose just
+                                // under 1 ms through Avro encoding and JPA persistence; the old
+                                // JSON pipeline's epoch-seconds encoding lost only sub-microsecond
+                                // digits.
                                 Assertions.assertThat(row.getCreatedAt())
                                         .isCloseTo(
                                                 timestamp, Assertions.within(1, ChronoUnit.MILLIS));
@@ -417,10 +408,9 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
         }
 
         /**
-         * S5E per-domain E2E proof (Task 5): one representative new event type per domain reaches a
-         * real {@code activity_log} row through the real broker and registry, complementing the
-         * tracer's {@code SubtaskCreatedEvent} coverage above (the subtask domain) with board,
-         * column and task representatives.
+         * One representative new event type per domain (board, column, task) reaches a real {@code
+         * activity_log} row through the real broker and registry, complementing the tracer's {@code
+         * SubtaskCreatedEvent} coverage above.
          */
         @Test
         void shouldPersistBoardUpdated_withEmptyDetail() throws Exception {
@@ -447,9 +437,9 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
         void
                 shouldPersistColumnReordered_withColumnIdSourcePositionTargetPositionDetail_asStringifiedInts()
                         throws Exception {
-            // arrange -- fork D-A's first non-opaque-identifier detail values, proven end-to-end
-            // through the real stringify (ActivityLogConsumer) / int wire encoding (Avro) path,
-            // not just the in-memory mapper round trip ActivityEventAvroMapperTest already covers.
+            // arrange -- the first non-opaque-identifier detail values, proven through the real
+            // stringify (ActivityLogConsumer) and int wire encoding (Avro) path, not just the
+            // in-memory round trip ActivityEventAvroMapperTest covers.
             var eventId = UUID.randomUUID().toString();
             var columnId = randomId();
             var sourcePosition = 4;

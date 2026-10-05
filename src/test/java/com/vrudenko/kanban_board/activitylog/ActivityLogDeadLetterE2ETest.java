@@ -31,10 +31,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /**
- * Real-broker proof of the dead-letter path's routing, payload fidelity and non-blocking behaviour
- * (RELY-01, RELY-02, D-06). The poison is genuinely unparseable JSON published as raw bytes through
- * a standalone {@code kafka-clients} producer -- never a rigged, test-only failure hook -- so a
- * dead-lettered record here proves the pipeline isolates real bad data, not that a hook works.
+ * Real-broker proof of the dead-letter path's routing, payload fidelity and non-blocking behaviour.
+ *
+ * <p>The poison is genuinely unparseable JSON published as raw bytes through a standalone {@code
+ * kafka-clients} producer, never a test-only failure hook, so a dead-lettered record proves the
+ * pipeline isolates real bad data.
  */
 @SpringBootTest
 @Tag("kafka")
@@ -75,14 +76,13 @@ class ActivityLogDeadLetterE2ETest extends AbstractKafkaContainerTest {
 
     /**
      * Polls {@link KafkaTopics#ACTIVITY_DLT} until exactly one record whose value byte-equals
-     * {@code expectedValue} has been seen, then returns that value. Comparing the raw arrays (never
-     * a decoded string) is what {@link DeadLetterFidelityTest} depends on: a decode step before
-     * comparing would mask exactly the re-encoding bug this class exists to catch. The topic is
-     * shared across every test class in this package (the Spring/Testcontainers context is cached
-     * across the whole {@code activitylog} package), so matching must be scoped to this exact
-     * payload rather than assuming the topic starts empty. The retry policy is three attempts at a
-     * ~1s fixed interval (see {@code KafkaConsumerConfig}), so routing is expected within a few
-     * seconds; the 30s ceiling comfortably exceeds that.
+     * {@code expectedValue} has been seen, then returns it.
+     *
+     * <p>Raw arrays are compared, never a decoded string, which {@link DeadLetterFidelityTest}
+     * depends on: decoding first would mask the re-encoding bug this class exists to catch. The
+     * topic is shared across the package's test classes (the context is cached), so matching is
+     * scoped to this exact payload. Routing takes a few seconds (three attempts at a ~1s fixed
+     * interval, see {@code KafkaConsumerConfig}); the 30s ceiling comfortably exceeds that.
      */
     private byte[] awaitDeadLetterRecordMatching(byte[] expectedValue) {
         var matches = new ArrayList<byte[]>();
@@ -110,10 +110,9 @@ class ActivityLogDeadLetterE2ETest extends AbstractKafkaContainerTest {
         @Test
         void shouldRouteMalformedPayloadToDeadLetterTopic_whenPayloadIsUnparseableJson()
                 throws Exception {
-            // arrange -- an unterminated JSON object: a genuine, deterministic parse failure in
-            // the delegate JSON deserializer, never a trusted-packages rejection (which would
-            // also fire for a perfectly valid event and would mean the whole pipeline is broken,
-            // not correctly isolating one bad record).
+            // arrange -- an unterminated JSON object: a deterministic parse failure in the delegate
+            // JSON deserializer, never a trusted-packages rejection (which would also fire for a
+            // valid event and mean the whole pipeline is broken).
             var poisonBytes = "{\"type\":\"TaskMovedEvent\"".getBytes(StandardCharsets.UTF_8);
             var key = randomId();
 
@@ -140,9 +139,7 @@ class ActivityLogDeadLetterE2ETest extends AbstractKafkaContainerTest {
             publishRawBytes(poisonBytes, key);
 
             // assert -- compares the arrays directly; decoding to a String first would mask a
-            // base64/re-encoding round trip, which is exactly the failure mode this test exists
-            // to catch (a byte-preserving dead-letter template turning back into a JSON-wrapping
-            // one).
+            // base64/re-encoding round trip, the failure mode this test exists to catch.
             var deadLetteredValue = awaitDeadLetterRecordMatching(poisonBytes);
             Assertions.assertThat(deadLetteredValue).isEqualTo(poisonBytes);
         }
@@ -160,9 +157,9 @@ class ActivityLogDeadLetterE2ETest extends AbstractKafkaContainerTest {
                             .getBytes(StandardCharsets.UTF_8);
             var key = randomId();
 
-            // act -- since both records share the topic's single partition, the well-formed
-            // event published behind the poison one can only be consumed if the container
-            // advanced past the poisoned offset instead of stalling on it (RELY-01).
+            // act -- both records share the topic's single partition, so the well-formed event
+            // behind the poison one is consumed only if the container advanced past the poisoned
+            // offset.
             publishRawBytes(poisonBytes, key);
             var wellFormedEventId = UUID.randomUUID().toString();
             var wellFormedEvent =
@@ -198,9 +195,8 @@ class ActivityLogDeadLetterE2ETest extends AbstractKafkaContainerTest {
             var boardId = randomId();
             var key = randomId();
 
-            // act -- a tombstone: non-null key, null value. Whether it is silently ignored or
-            // itself routed to the dead-letter topic is an implementation consequence, not
-            // something RELY-01/RELY-02 specify; only non-blocking is asserted here.
+            // act -- a tombstone (non-null key, null value). Whether it is ignored or itself
+            // dead-lettered is an implementation consequence; only non-blocking is asserted.
             publishRawBytes(null, key);
             var sentinelEventId = UUID.randomUUID().toString();
             var sentinelEvent =

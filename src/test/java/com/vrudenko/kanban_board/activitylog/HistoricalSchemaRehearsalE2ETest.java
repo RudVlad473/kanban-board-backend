@@ -40,35 +40,37 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /**
- * SCHEMA-06's rehearsal: the last check before Phase 5 repoints the registry at a production
- * target. Reads every row this environment's real Postgres {@code activity_log} table actually
- * holds -- the durable historical record, not the disposable Kafka topic (04-RESEARCH.md Pitfall 2)
- * -- reconstructs each one back into the domain event that produced it via {@link
- * HistoricalActivityEventReconstructor}, and pushes it through the new Avro schemas end to end.
+ * Rehearses the historical corpus against the new Avro schemas before the registry is repointed at
+ * a production target.
  *
- * <p><b>Read-only against the historical database.</b> This class opens no write transaction of its
- * own: {@link CorpusCheckAndRehearsalTest#shouldRehearseHistoricalCorpus_reportingSizeAndCoverage}
- * either reads existing rows through {@link ActivityLogRepository} or round-trips an
- * already-reconstructed event purely in memory (direct {@code KafkaAvroSerializer}/{@code
- * KafkaAvroDeserializer} calls against the registry, never touching a database). The one place a
- * write could sneak in is the final end-to-end sample, which republishes a handful of historical
- * events through the real topic and lets the real {@link ActivityLogConsumer} consume them -- that
- * IS a write, but a safe one: {@link ActivityLogRecorder#record} is idempotent on {@code eventId}
- * (its {@code existsByEventId} fast path), and every eventId republished here already has a row
- * under that exact id in the very database this class reads from, so the write is structurally a
- * no-op. Do not add an assertion here that inserts a row through any other path -- doing so would
- * silently turn this rehearsal from a safe read into a mutation against the only surviving
- * historical corpus (T-04-13).
+ * <p>It reads every row of this environment's real Postgres {@code activity_log} table (the durable
+ * record, not the disposable Kafka topic), reconstructs each into its domain event via {@link
+ * HistoricalActivityEventReconstructor}, and pushes it through the schemas end to end.
  *
- * <p>Deliberately does NOT run under the {@code test} Spring profile: this class carries no {@code
- * spring.profiles.active} override, and the {@code rehearseHistoricalSchemas} Gradle task (unlike
- * {@code test}/{@code fastTest}) never sets that system property either -- so Spring resolves the
- * default profile's {@code application.properties}, whose datasource already points at a real
- * Postgres instance via the {@code DB_HOST}/{@code DB_NAME}/{@code DB_USER}/{@code DB_PASS}
- * environment variables the running application already uses. The Kafka broker and Schema Registry
- * are still the Testcontainers-managed Redpanda instance from {@link AbstractKafkaContainerTest} --
- * only the JPA datasource is the real one, which is exactly what lets {@link ActivityLogRepository}
- * read genuine historical rows instead of an empty, freshly-created H2 database.
+ * <p>Decisions:
+ *
+ * <ul>
+ *   <li>Read-only against the historical database: this class opens no write transaction. {@link
+ *       CorpusCheckAndRehearsalTest#shouldRehearseHistoricalCorpus_reportingSizeAndCoverage} reads
+ *       rows through {@link ActivityLogRepository} or round-trips a reconstructed event in memory
+ *       (direct {@code KafkaAvroSerializer}/{@code KafkaAvroDeserializer} calls against the
+ *       registry). The one possible write is the final end-to-end sample, which republishes a
+ *       handful of historical events for the real {@link ActivityLogConsumer}; it is structurally a
+ *       no-op because {@link ActivityLogRecorder#record} is idempotent on {@code eventId} (its
+ *       {@code existsByEventId} fast path) and every republished eventId already has a row in the
+ *       database this class reads. Do not add an assertion that inserts a row through any other
+ *       path: it would turn the rehearsal from a safe read into a mutation against the only
+ *       surviving historical corpus.
+ *   <li>Does not run under the {@code test} Spring profile: it carries no {@code
+ *       spring.profiles.active} override, and the {@code rehearseHistoricalSchemas} Gradle task
+ *       (unlike {@code test}/{@code fastTest}) never sets that property either, so Spring resolves
+ *       the default profile's {@code application.properties}, whose datasource points at a real
+ *       Postgres via the {@code DB_HOST}/{@code DB_NAME}/{@code DB_USER}/{@code DB_PASS}
+ *       environment variables the running application uses. The Kafka broker and Schema Registry
+ *       are still the Testcontainers-managed Redpanda from {@link AbstractKafkaContainerTest}; only
+ *       the JPA datasource is real, which lets {@link ActivityLogRepository} read genuine
+ *       historical rows instead of an empty database.
+ * </ul>
  */
 @SpringBootTest
 @Tag("rehearsal")
@@ -78,14 +80,13 @@ class HistoricalSchemaRehearsalE2ETest extends AbstractKafkaContainerTest {
     private static final Logger log =
             LoggerFactory.getLogger(HistoricalSchemaRehearsalE2ETest.class);
 
-    // A few hundred rows spanning every action present proves what an exhaustive pass would, at a
-    // fraction of the runtime (T-04-16, Denial of Service via unbounded corpus scan).
+    // A few hundred rows spanning every action present prove what an exhaustive pass would, at a
+    // fraction of the runtime, and bound the corpus scan.
     private static final int MAX_SAMPLE_ROWS_PER_ACTION = 100;
 
-    // The end-to-end sample republishes real historical events and waits to see whether any of
-    // them show up on the dead-letter topic. Generous relative to DefaultErrorHandler's ~1s x 3
-    // retry policy (KafkaConsumerConfig) -- long enough that a genuine dead-lettering would
-    // certainly have completed by the time this window closes.
+    // The end-to-end sample republishes historical events and waits to see whether any reach the
+    // dead-letter topic. Generous relative to DefaultErrorHandler's ~1s x 3 retry policy
+    // (KafkaConsumerConfig), so a genuine dead-lettering completes before the window closes.
     private static final Duration DEAD_LETTER_SETTLE_WINDOW = Duration.ofSeconds(15);
 
     @Autowired private ActivityLogRepository activityLogRepository;
@@ -134,9 +135,7 @@ class HistoricalSchemaRehearsalE2ETest extends AbstractKafkaContainerTest {
 
     /**
      * Same tolerance rationale as {@link HistoricalActivityEventReconstructorTest}: Avro's {@code
-     * timestamp-millis} logical type truncates to millisecond precision by design, so an exact
-     * round-trip comparison on {@code timestamp} would be too strict. Every other field is compared
-     * for exact equality.
+     * timestamp-millis} truncates to milliseconds by design; every other field is compared exactly.
      */
     private void assertFieldEqual(ActivityEvent expected, ActivityEvent actual) {
         Assertions.assertThat(actual)
@@ -152,9 +151,9 @@ class HistoricalSchemaRehearsalE2ETest extends AbstractKafkaContainerTest {
 
         @Test
         void shouldRehearseHistoricalCorpus_reportingSizeAndCoverage() throws Exception {
-            // --- Step 1: corpus check -- must run first. A rehearsal that examines nothing must
-            // not silently pass (T-04-14): report the actual corpus size and action coverage
-            // unconditionally, then fail loudly rather than pass vacuously on zero rows.
+            // --- Step 1: corpus check, first so a rehearsal that examines nothing cannot pass
+            // silently: report the corpus size and action coverage unconditionally, then fail
+            // loudly on zero rows.
             List<ActivityLogEntity> allRows = activityLogRepository.findAll();
             int rowCount = allRows.size();
 
@@ -194,18 +193,16 @@ class HistoricalSchemaRehearsalE2ETest extends AbstractKafkaContainerTest {
                         actionsPresent);
             }
 
-            // Cap each action's group at MAX_SAMPLE_ROWS_PER_ACTION -- "a few hundred rows
-            // spanning every action present" (T-04-16), not an unbounded scan.
+            // Cap each action's group at MAX_SAMPLE_ROWS_PER_ACTION, not an unbounded scan.
             rowsByAction.replaceAll(
                     (action, rows) ->
                             rows.size() > MAX_SAMPLE_ROWS_PER_ACTION
                                     ? rows.subList(0, MAX_SAMPLE_ROWS_PER_ACTION)
                                     : rows);
 
-            // --- Step 2: per-row reconstruct, then encode/decode through the real registry.
-            // Avro's build() is the strictness gate SCHEMA-06 exists to exercise -- a historical
-            // row that cannot fill every required field fails here, and this rehearsal lets it
-            // fail rather than defensively working around it.
+            // --- Step 2: per-row reconstruct, then encode/decode through the real registry. Avro's
+            // build() is the strictness gate: a historical row that cannot fill every required
+            // field fails here, and this rehearsal lets it fail rather than working around it.
             int roundTripped = 0;
             try (KafkaAvroSerializer serializer = buildAvroSerializer();
                     KafkaAvroDeserializer deserializer = buildAvroDeserializer()) {
@@ -230,9 +227,8 @@ class HistoricalSchemaRehearsalE2ETest extends AbstractKafkaContainerTest {
                     roundTripped);
 
             // --- Step 3: a small end-to-end sample, one per action present, through the real
-            // topic. Safe against the real database: ActivityLogRecorder is idempotent on
-            // eventId, so republishing an event this environment already recorded writes nothing
-            // new -- see this class's Javadoc.
+            // topic. Safe against the real database: ActivityLogRecorder is idempotent on eventId,
+            // so republishing a recorded event writes nothing (see this class's Javadoc).
             List<ActivityEvent> endToEndSample = new ArrayList<>();
             for (ActivityAction action : actionsPresent) {
                 ActivityLogEntity firstRow = rowsByAction.get(action).getFirst();

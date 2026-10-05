@@ -28,13 +28,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /**
- * Proves {@link HistoricalActivityEventReconstructor} is the exact inverse of the real, shipped
- * consumer pipeline (SCHEMA-06) -- never of a reimplementation of its mapping. Every positive case
- * publishes a real event of one action type through the real broker, waits for the real {@link
- * ActivityLogConsumer} to persist its row, loads that row back, reconstructs it, and asserts the
- * result equals the original event. {@code deriveActionAndDetailIds} is private and could drift
- * from a test that merely read its source; round-tripping through the real pipeline is what proves
- * the reconstructor tracks what the consumer actually does, not what it is believed to do.
+ * Proves {@link HistoricalActivityEventReconstructor} is the exact inverse of the real consumer
+ * pipeline, never of a reimplementation of its mapping.
+ *
+ * <p>Every positive case publishes a real event through the real broker, waits for the real {@link
+ * ActivityLogConsumer} to persist its row, reconstructs it, and asserts equality with the original.
+ * {@code deriveActionAndDetailIds} is private and could drift from a test that merely read its
+ * source; the round trip proves the reconstructor tracks what the consumer does.
  */
 @SpringBootTest
 @Tag("kafka")
@@ -55,10 +55,8 @@ class HistoricalActivityEventReconstructorTest extends AbstractKafkaContainerTes
     }
 
     /**
-     * Polls until exactly one row carries {@code eventId}, matching every sibling class in this
-     * package: the topic and consumer group are shared across the whole {@code activitylog}
-     * package's cached Spring context, so matching must be scoped by {@code eventId} rather than
-     * assuming the table starts empty.
+     * Polls until exactly one row carries {@code eventId}, scoped by {@code eventId} because the
+     * topic and consumer group are shared across the package's cached Spring context.
      */
     private ActivityLogEntity awaitPersistedRow(String eventId) {
         var found = new ArrayList<ActivityLogEntity>();
@@ -78,14 +76,13 @@ class HistoricalActivityEventReconstructorTest extends AbstractKafkaContainerTes
     }
 
     /**
-     * Compares every field except {@code timestamp} for exact equality, then compares {@code
-     * timestamp} with an explicit 1-millisecond tolerance: Avro's {@code timestamp-millis} logical
-     * type truncates to millisecond precision by design (confirmed by direct inspection, per
-     * 04-01-SUMMARY.md and this project's identical resolution for {@code
-     * ActivityLogConsumerE2ETest}), so an {@code Instant.now()} value carrying JVM nanosecond
-     * precision can lose up to just under a full millisecond on its round trip through the real
-     * pipeline before this reconstructor ever sees it. This is a documented property of the wire
-     * format, not a loosened assertion.
+     * Compares every field except {@code timestamp} exactly, and {@code timestamp} with a
+     * 1-millisecond tolerance.
+     *
+     * <p>Avro's {@code timestamp-millis} logical type truncates to millisecond precision by design
+     * (confirmed by inspecting the generated code, as for {@code ActivityLogConsumerE2ETest}), so
+     * an {@code Instant.now()} with nanosecond precision can lose just under a millisecond in the
+     * real pipeline. A property of the wire format, not a loosened assertion.
      */
     private void assertReconstructedMatchesOriginal(
             ActivityEvent original, ActivityEvent reconstructed) {
@@ -196,9 +193,8 @@ class HistoricalActivityEventReconstructorTest extends AbstractKafkaContainerTes
 
         @Test
         void shouldThrow_whenDetailIsMissingRequiredKey() {
-            // arrange -- constructed directly, never published: this proves the reconstructor's
-            // own defensive behaviour, not a property of what the real consumer ever actually
-            // writes.
+            // arrange -- constructed directly, never published: proves the reconstructor's
+            // defensive behaviour, not a property of what the consumer writes.
             var eventId = UUID.randomUUID().toString();
             var row = new ActivityLogEntity();
             row.setEventId(eventId);
