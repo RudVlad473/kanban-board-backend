@@ -42,12 +42,11 @@ public final class ValidationConstants {
     public static final String COLUMN_COLOR_VALIDATION_MESSAGE =
             "Column color must be a #RRGGBB hex string";
 
-    // RandFlakeGenerator packs a Snowflake-shaped positive long (1 unused sign bit + 41 timestamp
-    // bits + 22 sequence bits) and renders it via Long.toString(payload, 36) -- lowercase base36
-    // digits only, always positive, so a leading '-' and any uppercase letter are values this
-    // application never issues. MAX_BOARD_ID_LENGTH is the generator's real ceiling
-    // (Long.toString(Long.MAX_VALUE, 36).length()), pinned by BoardIdTest so this constant and the
-    // generator cannot drift apart silently.
+    // Match RandFlakeGenerator's output: a positive long in lowercase base36, so never a leading
+    // '-' or an uppercase letter.
+    //
+    // MAX_BOARD_ID_LENGTH is the generator's real ceiling (Long.toString(Long.MAX_VALUE,
+    // 36).length()), pinned by BoardIdTest so the two cannot drift apart silently.
     public static final int MAX_BOARD_ID_LENGTH = 13;
     public static final String BOARD_ID_PATTERN = "^[0-9a-z]{1," + MAX_BOARD_ID_LENGTH + "}$";
     public static final String BOARD_ID_VALIDATION_MESSAGE =
@@ -82,7 +81,7 @@ public final class ValidationConstants {
                     + ValidationConstants.MAX_SUBTASK_TITLE_LENGTH
                     + " characters";
 
-    // The widest event (TaskMovedEvent: three ULIDs plus keys) serialises to roughly 130
-    // characters; 2000 is deliberate headroom for future event shapes rather than a tight fit.
+    // The widest event (TaskMovedEvent: three ids plus keys) serialises to roughly 130 characters;
+    // 2000 is deliberate headroom for future event shapes, not a tight fit.
     public static final int MAX_ACTIVITY_DETAIL_LENGTH = 2000;
 }

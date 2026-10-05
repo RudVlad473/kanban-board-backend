@@ -1,9 +1,8 @@
 package com.vrudenko.kanban_board.base.entity;
 
 /**
- * Interfaces are used for base entities instead of classes because you can't override fields in
- * Java therefore you can't override field to apply Hibernate's annotations to them so methods are
- * used instead
+ * Base entities are interfaces, not classes: Java cannot override fields, so Hibernate annotations
+ * could not be applied to inherited ones, and methods can.
  */
 public interface BaseBoard {
     String getName();

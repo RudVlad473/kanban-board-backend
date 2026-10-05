@@ -1,13 +1,11 @@
 package com.vrudenko.kanban_board.constant;
 
 /**
- * Closed, stable set of machine-readable error codes {@link
- * com.vrudenko.kanban_board.handler.GlobalExceptionHandler} attaches to every {@code
- * org.springframework.http.ProblemDetail} error response via the {@code code} (and, for field
- * validation failures, {@code errors}) extension property. These values -- both the enum member
- * names and the two property-key constants below -- are a published API contract consumed by the
- * frontend: renaming a member or either constant is a breaking change and must not be done without
- * coordinating the change with every client of this API.
+ * Machine-readable error codes {@link com.vrudenko.kanban_board.handler.GlobalExceptionHandler}
+ * attaches to every {@code ProblemDetail} error response as the {@code code} property.
+ *
+ * <p>The enum member names and the two property-key constants are a published API contract consumed
+ * by the frontend: renaming any is a breaking change and must be coordinated with every client.
  */
 public enum ErrorCode {
     ENTITY_NOT_FOUND,

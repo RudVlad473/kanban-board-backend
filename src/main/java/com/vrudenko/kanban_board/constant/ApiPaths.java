@@ -1,7 +1,8 @@
 package com.vrudenko.kanban_board.constant;
 
 /**
- * Be aware that you may need to concat these paths with 'context-path' from application.properties
+ * Context-path-relative route constants: prepend {@code server.servlet.context-path} from
+ * application.properties for the externally resolvable URL.
  */
 public final class ApiPaths {
     public static final String BOARDS = "/boards";
@@ -21,9 +22,6 @@ public final class ApiPaths {
     public static final String ACTIVITY = "/activity";
     public static final String FULL = "/full";
 
-    // Unused until plans 04-06 wire the routes that need them; landed here in wave 1 so the
-    // migration/entity/constants foundation is a single plan and plans 04-06 can run in parallel
-    // without contending over this file.
     public static final String USERS = "/users";
     public static final String ME = "/me";
     public static final String THEME = "/theme";
@@ -32,18 +30,14 @@ public final class ApiPaths {
     public static final String SIGNUP = "/signup";
     public static final String LOGOUT = "/logout";
 
-    /** Utilities */
     public static final String SWAGGER_UI = "/swagger-ui";
 
-    // Spring Boot Actuator's default base path (management.server.port is not set, so it shares
-    // this app's port/context-path). Declared as a constant here, matching SWAGGER_UI's precedent
-    // of a framework-adjacent utility path living in this class rather than inline in
-    // SecurityConfiguration -- unlike SWAGGER_DOCS_PATH, which is sourced from a genuinely
-    // configurable property (springdoc.api-docs.path) and has no fixed default to name here.
+    // Actuator's default base path; management.server.port is unset, so it shares this app's port
+    // and context-path. Unlike SWAGGER_DOCS_PATH, which comes from springdoc.api-docs.path and has
+    // no fixed default to name here.
     public static final String ACTUATOR_HEALTH = "/actuator/health";
 
-    // Plan 08-02, RESET-01: the nonprod-only data-reset endpoint (@Profile("nonprod")-gated,
-    // ResetController). Like ACTUATOR_HEALTH above, the externally resolvable URL is
-    // /api/admin/reset because server.servlet.context-path is /api.
+    // The nonprod-only data-reset endpoint (@Profile("nonprod"), ResetController). The external
+    // URL is /api/admin/reset because server.servlet.context-path is /api.
     public static final String RESET = "/admin/reset";
 }
