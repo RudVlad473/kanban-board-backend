@@ -22,8 +22,9 @@ SQL-level facts.
 
 ## Sign up
 
-**`POST /api/signup`** -- one of only two routes reachable without a session (the other is
-`/signin`).
+**`POST /api/signup`** -- one of the two authentication routes reachable without a session (the
+other is `/signin`). The Swagger docs, Swagger UI and the actuator health check are also `permitAll`
+(`SecurityConfiguration#securityFilterChain`); every other route needs a session.
 
 ### Request body
 
@@ -77,7 +78,7 @@ run must either randomize the email address per run or reset state between runs.
 
 ## Sign in
 
-**`POST /api/signin`** -- the other route reachable without a session.
+**`POST /api/signin`** -- the other authentication route reachable without a session.
 
 ### Request body
 
