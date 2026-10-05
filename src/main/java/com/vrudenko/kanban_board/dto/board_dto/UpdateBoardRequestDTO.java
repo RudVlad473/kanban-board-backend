@@ -15,18 +15,14 @@ import lombok.*;
 @EqualsAndHashCode
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class UpdateBoardRequestDTO implements BaseBoard {
-    /**
-     * If more fields are added, don't forget to add validation so at least one of them are present
-     * You can see example with UpdateTaskRequestDTO
-     */
+    /** If more fields are added, validate that at least one is present, as UpdateTaskRequestDTO. */
     @BoardName @OptionalNotBlank private String name;
 
-    // D-13: required so BoardService.updateById can reject a stale write, matching
-    // UpdateColumnRequestDTO/UpdateTaskRequestDTO/UpdateSubtaskRequestDTO's shape. No
-    // atLeastOneFieldPopulated() cross-check -- name is this DTO's only field besides version, so
-    // there is nothing to cross-check it against (docs/CODE_STYLE.md rule 6). As of quick task
-    // 260811-ufu (D-02), this DTO's shape no longer matches UpdateColumnRequestDTO: name here may
-    // genuinely be omitted (a version-only board update is accepted), whereas
-    // UpdateColumnRequestDTO.name is deliberately mandatory -- see that class's Javadoc for why.
+    // Required so BoardService.updateById can reject a stale write.
+    //
+    // There is no atLeastOneFieldPopulated() cross-check: name is the only other field, so there
+    // is nothing to cross-check it against (docs/CODE_STYLE.md rule 6). Unlike
+    // UpdateColumnRequestDTO, name here may be omitted (a version-only board update is accepted);
+    // see that class's Javadoc for why the column's is mandatory.
     @NotNull private Long version;
 }

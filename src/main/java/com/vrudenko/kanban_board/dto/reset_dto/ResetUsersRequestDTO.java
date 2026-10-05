@@ -9,9 +9,10 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * Request body for the nonprod targeted-user-delete reset mode (quick task 260829-ii3). An empty
- * {@code userIds} list is a validation error (400), never a no-op and never a full-reset sentinel
- * -- the unconditional full reset has its own, separate {@code fullReset=true} route.
+ * Request body for the nonprod targeted-user-delete reset mode.
+ *
+ * <p>An empty {@code userIds} list is a validation error (400), never a no-op and never a
+ * full-reset sentinel: the unconditional full reset has its own {@code fullReset=true} route.
  */
 @Getter
 @Setter

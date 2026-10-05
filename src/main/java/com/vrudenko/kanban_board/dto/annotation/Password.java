@@ -17,8 +17,8 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 /**
- * Minimum length: 8 characters; Maximum length: 64 characters (to prevent abuse); At least 1
- * uppercase letter; At least 1 lowercase letter; At least 1 digit; At least 1 special character
+ * Require 8-64 characters (the cap prevents abuse) with at least one uppercase letter, one
+ * lowercase letter, one digit and one special character.
  */
 @Documented
 @Target({ElementType.FIELD})
@@ -34,11 +34,9 @@ import jakarta.validation.constraints.Size;
                 "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?]).+$",
         message =
                 "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character")
-// D4 (quick task 260904-ss1, 2026-09-05): no @Schema example is published here deliberately --
-// a password-shaped literal in source is exactly what this repository's gitleaks pre-commit scan
-// looks for. That rationale used to live inside the published `description` itself, disclosing
-// this repo's secret-scanning setup to every API consumer; it belongs here instead, where only
-// this codebase's own contributors read it.
+// No @Schema example is published, deliberately: a password-shaped literal in source is exactly
+// what the gitleaks pre-commit scan looks for. This rationale stays out of the published
+// `description`, which would disclose the repo's secret-scanning setup to every API consumer.
 @Schema(
         description =
                 "8-64 characters; must contain at least one uppercase letter, one lowercase"

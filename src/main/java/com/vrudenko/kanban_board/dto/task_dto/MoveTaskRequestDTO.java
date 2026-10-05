@@ -19,9 +19,9 @@ public class MoveTaskRequestDTO {
 
     @NotNull private Long version;
 
-    // Deliberately nullable, no @NotNull (D-04): null means "append at the end of the target
-    // column", preserving the pre-existing move behaviour for clients that never send this field.
-    // An over-large value is clamped server-side to the end rather than rejected; a negative
-    // value is rejected by this @Min(0) before service code runs.
+    // Nullable on purpose: null means append at the end of the target column.
+    //
+    // An over-large value is clamped server-side to the end, not rejected; a negative one is
+    // rejected by @Min(0) before service code runs.
     @Min(0) private Integer targetPosition;
 }

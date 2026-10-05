@@ -11,18 +11,18 @@ import jakarta.validation.ReportAsSingleViolation;
 import jakarta.validation.constraints.Pattern;
 
 /**
- * Validates an optional caller-supplied board id against the exact charset and length {@link
- * com.vrudenko.kanban_board.config.RandFlakeGenerator} can itself emit: lowercase base36 digits
- * only, at most {@link ValidationConstants#MAX_BOARD_ID_LENGTH} characters.
+ * Validate an optional caller-supplied board id: lowercase base36, at most {@link
+ * ValidationConstants#MAX_BOARD_ID_LENGTH} characters, the format {@code RandFlakeGenerator} emits.
  *
- * <p>A {@code null} value is permitted and means the server generates the id -- that behaviour
- * comes from Jakarta's {@link Pattern} skipping {@code null} by default, not from anything declared
- * here, and is otherwise invisible at the field.
+ * <p>Decisions:
  *
- * <p>{@link OptionalNotBlank} is deliberately NOT stacked alongside this annotation, for the same
- * reason documented on {@link ColumnColor}: {@link ValidationConstants#BOARD_ID_PATTERN}'s closed
- * charset already rejects a blank or whitespace-only value by construction, so stacking would
- * produce two violations for one bad input instead of one, breaking the
+ * <p>A {@code null} value is permitted and means the server generates the id. That comes from
+ * Jakarta's {@link Pattern} skipping {@code null} by default, not from anything declared here, and
+ * is otherwise invisible at the field.
+ *
+ * <p>{@link OptionalNotBlank} is deliberately NOT stacked alongside this annotation: {@link
+ * ValidationConstants#BOARD_ID_PATTERN}'s closed charset already rejects a blank or whitespace-only
+ * value, so stacking would produce two violations for one bad input, breaking the
  * one-violation-per-invalid-input convention {@code docs/CODE_STYLE.md} rule 4 depends on.
  */
 @Documented

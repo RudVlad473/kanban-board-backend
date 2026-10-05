@@ -10,18 +10,20 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * A single row of a board's activity feed, as returned by {@code GET /boards/{boardId}/activity}
- * (D-10). Deliberately carries exactly five fields: the row's own ULID {@code id} and its {@code
- * boardId} are both omitted — the board is already identified by the URL path, and repeating it on
- * every item would be redundant. {@code detail} is raw identifier JSON (never user-authored text,
- * per D-01); rendering it into a human-readable sentence is a frontend concern, done from data the
- * frontend already has loaded.
+ * A single row of a board's activity feed, as returned by {@code GET /boards/{boardId}/activity}.
  *
- * <p>{@code eventId}'s JSON type is a deliberate, documented breaking change (GAP-07): it was
- * previously a UUID string, and is now a {@link String} carrying either a legacy UUID string or a
- * new Base36 Snowflake-style id, indistinguishable at this type level by design — {@code eventId}
- * is a dedupe key compared for equality only, never parsed by any consumer. There is no frontend
- * consumer of this endpoint today, so the blast radius of this change is currently zero.
+ * <p>It carries exactly five fields: the row's own {@code id} and {@code boardId} are omitted,
+ * since the URL path already identifies the board. {@code detail} is raw identifier JSON, never
+ * user-authored text; rendering it into a human-readable sentence is a frontend concern, done from
+ * data the frontend already has loaded.
+ *
+ * <p>Decisions:
+ *
+ * <p>{@code eventId} is a deliberate, documented breaking change: it was a UUID string and is now a
+ * {@link String} carrying either a legacy UUID string or a Base36 Snowflake-style id, which are
+ * indistinguishable at this type by design, because {@code eventId} is a dedupe key compared for
+ * equality only and never parsed. There is no frontend consumer of this endpoint, so the blast
+ * radius is currently zero.
  */
 @Getter
 @Setter

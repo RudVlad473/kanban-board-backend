@@ -12,22 +12,24 @@ import jakarta.validation.ReportAsSingleViolation;
 import jakarta.validation.constraints.Pattern;
 
 /**
- * Rejects a whitespace-only {@code String} while leaving {@code null} (an omitted, optional field)
+ * Reject a whitespace-only {@code String} while leaving {@code null} (an omitted, optional field)
  * untouched.
  *
- * <p>The composing constraint is deliberately {@link Pattern}, not {@code @NotBlank}: every
- * built-in Bean Validation constraint treats {@code null} as valid — only {@code @NotNull} /
- * {@code @NotBlank} / {@code @NotEmpty} reject it — so composing {@code @Pattern} is what makes
- * "optional but not blank" work. Swapping the composing constraint for {@code @NotBlank} would
- * silently make every field this annotation is applied to mandatory.
+ * <p>Stack it alongside a field's existing composed annotation (which owns that field's
+ * {@code @Size} and character-class rules, e.g. {@link BoardName}, {@link TaskTitle}, {@link
+ * SubtaskTitle}, {@link DisplayName}), never to replace it.
+ *
+ * <p>Decisions:
+ *
+ * <p>The composing constraint is {@link Pattern}, not {@code @NotBlank}: every built-in Bean
+ * Validation constraint treats {@code null} as valid (only {@code @NotNull} / {@code @NotBlank} /
+ * {@code @NotEmpty} reject it), so composing {@code @Pattern} is what makes "optional but not
+ * blank" work. Swapping in {@code @NotBlank} would silently make every field this annotation is
+ * applied to mandatory.
  *
  * <p>{@code Pattern.Flag.DOTALL} is required because {@link Pattern} evaluates with {@code
- * Matcher.matches()} (a whole-string match), and an undotted {@code .} does not match a newline —
+ * Matcher.matches()} (a whole-string match), and an undotted {@code .} does not match a newline:
  * without {@code DOTALL} a legitimate multi-line value would be rejected outright.
- *
- * <p>This annotation is meant to be stacked alongside a field's existing composed annotation (which
- * owns the {@code @Size} and character-class rules for that field, e.g. {@link BoardName}, {@link
- * TaskTitle}, {@link SubtaskTitle}, {@link DisplayName}), never to replace it.
  */
 @Documented
 @Target({ElementType.FIELD})

@@ -18,7 +18,7 @@ public class SaveBoardRequestDTO implements BaseBoard {
     @NotBlank(message = "Board name must not be blank") @BoardName
     private String name;
 
-    // Optional: null means the server generates the id, exactly as before this field existed.
-    // See BoardId's Javadoc and BoardService#save for the assignment/uniqueness path.
+    // Optional: null means the server generates the id (see BoardId and BoardService#save for the
+    // assignment and uniqueness path).
     @BoardId private String id;
 }

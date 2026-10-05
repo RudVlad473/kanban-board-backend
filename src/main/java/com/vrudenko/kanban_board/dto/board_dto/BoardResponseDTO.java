@@ -18,10 +18,9 @@ public class BoardResponseDTO implements BaseId, BaseBoard {
     private String id;
     private String name;
 
-    // D-13/A1: carried on the flat response (not just BoardFullResponseDTO, D-15's literal scope)
-    // so POST /boards, PUT /boards/{boardId} and GET /boards can all chain a rename without an
-    // extra /full fetch purely to re-read a number the prior response already knew -- the same
-    // precedent ColumnResponseDTO already sets. See 07.1-05-PLAN.md's task 1 checkpoint.
+    // Carried on the flat response so POST /boards, PUT /boards/{boardId} and GET /boards can
+    // chain a rename without an extra /full fetch just to re-read a version the prior response
+    // already knew.
     private Long version;
 
     private Instant createdAt;

@@ -12,12 +12,10 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * The root of GAP-04's nested board read (see {@code 06-05-PLAN.md}'s {@code
- * flat_dto_exception_justification} block for why this is the one deliberate exception to this
- * codebase's flat-DTO convention). Carries every column, each with its tasks, each with its
- * subtasks, in one document -- replacing the four-round-trip fan-out the flat {@code
- * BoardResponseDTO}/{@code ColumnResponseDTO}/{@code TaskResponseDTO}/{@code SubtaskResponseDTO}
- * endpoints require today.
+ * The root of the nested board read: every column, each with its tasks, each with its subtasks, in
+ * one document instead of the four-round-trip fan-out of the flat DTO endpoints.
+ *
+ * <p>It is the one deliberate exception to this codebase's flat-DTO convention.
  */
 @Getter
 @Setter
@@ -26,14 +24,12 @@ public class BoardFullResponseDTO implements BaseId, BaseBoard {
     private String id;
     private String name;
 
-    // D-13/D-15: the board's own version, alongside the column/task/subtask versions this
-    // document already carries -- so a client reading the nested document has everything it needs
-    // to issue a subsequent PUT /boards/{boardId} without a separate flat GET first.
+    // Carried alongside the column/task/subtask versions so a client reading the nested document
+    // can issue a subsequent PUT /boards/{boardId} without a separate flat GET first.
     private Long version;
 
-    // Quick task 260825-h7m: carried here too, not just the flat BoardResponseDTO, so a client
-    // reading this document does not need a second flat GET /boards purely to learn when the
-    // board was created.
+    // Carried here too, so a client reading this document need not GET /boards just to learn
+    // when the board was created.
     private Instant createdAt;
 
     private List<ColumnFullResponseDTO> columns;

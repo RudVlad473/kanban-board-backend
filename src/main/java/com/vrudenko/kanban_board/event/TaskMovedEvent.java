@@ -2,11 +2,6 @@ package com.vrudenko.kanban_board.event;
 
 import java.time.Instant;
 
-/**
- * Announces that a task was reassigned to a different column. Carries identifiers, actor, action
- * and timestamp only — never the task's title or description, per the event package's
- * no-user-authored-content rule.
- */
 public record TaskMovedEvent(
         String eventId,
         String userId,

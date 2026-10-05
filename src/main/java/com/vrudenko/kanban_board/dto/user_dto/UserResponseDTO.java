@@ -18,7 +18,7 @@ public class UserResponseDTO implements BaseId, BaseUser {
     private String email;
     private String displayName;
 
-    // D-05/GAP-05: UserMapper.toResponseDTO maps this by name from UserEntity.theme, no explicit
-    // @Mapping needed. Never nullable -- UserEntity.theme is NOT NULL with a LIGHT default (D-12).
+    // Mapped by name from UserEntity.theme (no explicit @Mapping). Never null: the column is NOT
+    // NULL with a LIGHT default.
     private ThemePreference theme;
 }

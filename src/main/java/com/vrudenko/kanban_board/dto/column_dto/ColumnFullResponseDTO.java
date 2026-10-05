@@ -11,9 +11,9 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * The column level of GAP-04's nested board read. Carries {@code version} and {@code position} --
- * fields the flat {@link ColumnResponseDTO} also carries -- plus its own tasks, so the nested
- * response is never less informative than the flat fan-out it replaces.
+ * The column level of the nested board read: {@code version} and {@code position}, as in the flat
+ * {@link ColumnResponseDTO}, plus its tasks, so the nested response is never less informative than
+ * the flat fan-out it replaces.
  */
 @Getter
 @Setter
