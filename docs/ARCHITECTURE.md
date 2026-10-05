@@ -159,8 +159,8 @@ reasoning.
 
 ### Process View — path of a mutation
 
-![Flowchart: path of a mutation through the activity-log pipeline](diagrams/architecture-mutation-flowchart.png)
-<sub>[diagram source](diagrams/architecture-mutation-flowchart.mmd)</sub>
+![Flowchart: path of a mutation through the activity-log pipeline](diagrams/process/activity-pipeline.png)
+<sub>[diagram source](diagrams/process/activity-pipeline.mmd)</sub>
 
 *Process view only, per [DIAGRAM_CONVENTIONS.md](DIAGRAM_CONVENTIONS.md) — it shows runtime
 communication, not deployment topology.*

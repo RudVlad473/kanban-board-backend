@@ -311,7 +311,7 @@ One diagram is embedded above; the rest live under
 | `infra-delivery-scenario.mmd`                           | How a push to `master` becomes a running deploy, job by job                                                        |
 | `architecture-signin-scenario.mmd`                      | What happens between a `POST` of credentials and a session cookie landing in Postgres                              |
 | `architecture-error-response-split.mmd`                 | Which layer rejects a request for each of 401/403/400/409, and whether it ever reaches a controller                |
-| `architecture-mutation-flowchart.mmd`                   | The path of a mutation through the activity-log pipeline (process view)                                            |
+| `process/activity-pipeline.mmd`                         | The path of a mutation through the activity-log pipeline (process view)                                            |
 | `architecture-mutation-sequence.mmd`                    | The same pipeline grounded in one real endpoint, response timing vs. the Kafka send                                |
 | `architecture-activity-feed-read.mmd`                   | How a paginated `GET` becomes a total, deterministic order                                                         |
 | `auth-signin-scenario.mmd` / `auth-signup-scenario.mmd` | The signin/signup flows drawn from an HTTP-first, frontend/QA angle — see [docs/AUTH_FLOWS.md](docs/AUTH_FLOWS.md) |

@@ -104,6 +104,9 @@ render_one() {
   local src_mount="${DIAGRAMS_DIR}:/data"
   [[ "$ro" == "ro" ]] && src_mount="${src_mount}:ro"
 
+  # A name is view/subject, so the scratch tree needs the view directory before mmdc writes into it.
+  [[ "$out_dir" != "$DIAGRAMS_DIR" ]] && mkdir -p "${out_dir}/$(dirname "$name")"
+
   if [[ "$out_dir" == "$DIAGRAMS_DIR" ]]; then
     docker run --rm -u "$(id -u):$(id -g)" -v "$src_mount" \
       "$MERMAID_CLI_IMAGE" -i "/data/${name}.mmd" -o "/data/${name}.png" -s "$scale" -b white
@@ -156,7 +159,7 @@ height_ok = abs(height_delta_pct) <= 2.0
 row_ok = width_ok and height_ok
 
 print(
-    f"{name:<38} committed={cw}x{ch:<6} rendered={rw}x{rh:<6} "
+    f"{name:<44} committed={cw}x{ch:<6} rendered={rw}x{rh:<6} "
     f"width={'OK' if width_ok else 'FAIL'}({cw}v{rw}) "
     f"height={'OK' if height_ok else 'FAIL'}({height_delta_pct:+.2f}%) "
     f"mode={cmode}->{rmode}"

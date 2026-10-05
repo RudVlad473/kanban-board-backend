@@ -3,7 +3,7 @@
 # Derived empirically 2026-09-05, one render per row, not copied from any prior plan.
 architecture-activity-feed-read	4
 architecture-error-response-split	4
-architecture-mutation-flowchart	4
+process/activity-pipeline	4
 architecture-mutation-sequence	4
 architecture-signin-scenario	4
 auth-signin-scenario	1
