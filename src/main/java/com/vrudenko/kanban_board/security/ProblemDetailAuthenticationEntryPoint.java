@@ -17,17 +17,14 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.stereotype.Component;
 
 /**
- * Emits the same RFC 7807 {@link ProblemDetail} envelope {@link
- * com.vrudenko.kanban_board.handler.GlobalExceptionHandler} produces, for the one rejection path
- * {@code GlobalExceptionHandler} structurally cannot reach: a genuinely unauthenticated request.
- * This fires from inside Spring Security's {@code ExceptionTranslationFilter}, before {@code
- * DispatcherServlet} ever runs -- the request never resolves to a controller method, so no
- * {@code @ExceptionHandler} in {@code GlobalExceptionHandler} is ever invoked for it. That is why
- * this class exists as a second, independent envelope producer instead of sharing a method with
- * {@code GlobalExceptionHandler}: the two run at structurally different points in the request
- * lifecycle, and only converge on producing the same JSON shape. A future change to either
- * producer's envelope shape should check the other for drift -- {@code GlobalExceptionHandler} is
- * this class's sibling producer.
+ * Emit the RFC 7807 {@link ProblemDetail} envelope for a genuinely unauthenticated request, the one
+ * rejection {@code GlobalExceptionHandler} structurally cannot reach.
+ *
+ * <p>This fires inside Spring Security's {@code ExceptionTranslationFilter}, before {@code
+ * DispatcherServlet} runs, so no {@code @ExceptionHandler} is ever invoked. That is why this is a
+ * second, independent producer rather than a shared method: the two run at structurally different
+ * points in the request lifecycle and only converge on the JSON shape. Check the other producer for
+ * drift when either envelope changes.
  */
 @Component
 @RequiredArgsConstructor
@@ -45,11 +42,9 @@ public class ProblemDetailAuthenticationEntryPoint implements AuthenticationEntr
                 ProblemDetail.forStatusAndDetail(
                         HttpStatus.UNAUTHORIZED, "Authentication is required");
         problem.setProperty(ErrorCode.CODE_PROPERTY, ErrorCode.UNAUTHENTICATED.name());
-        // GlobalExceptionHandler's ResponseEntity<ProblemDetail> arms get "instance" populated
-        // for free by HttpEntityMethodProcessor, which only runs for a request that actually
-        // reaches a HandlerMethod. This entry point runs earlier, from the filter chain, so that
-        // machinery never fires here -- set it explicitly to keep the two producers' key sets
-        // identical.
+        // GlobalExceptionHandler's arms get "instance" for free from HttpEntityMethodProcessor,
+        // which only runs for a request reaching a HandlerMethod. This entry point runs earlier,
+        // so set it explicitly to keep both producers' key sets identical.
         problem.setInstance(URI.create(request.getRequestURI()));
 
         response.setStatus(HttpStatus.UNAUTHORIZED.value());

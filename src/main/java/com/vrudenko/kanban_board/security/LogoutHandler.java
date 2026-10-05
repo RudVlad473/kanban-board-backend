@@ -17,7 +17,6 @@ public class LogoutHandler implements LogoutSuccessHandler {
             HttpServletRequest request, HttpServletResponse response, Authentication authentication)
             throws IOException, ServletException {
 
-        // Set response status and body (e.g., JSON)
         response.setStatus(HttpServletResponse.SC_OK);
         response.setContentType("application/json");
         response.getWriter().write("{\"message\": \"Successfully logged out\"}");

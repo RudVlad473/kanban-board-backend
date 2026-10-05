@@ -12,18 +12,16 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
- * Plan 08-02 (RESET-01, D-02): a second, path-scoped {@link SecurityFilterChain} that permits the
- * nonprod reset route (and only that route) without a session, leaving {@link
- * SecurityConfiguration} -- production's own catch-all chain -- completely untouched.
+ * Permit the nonprod reset route, and only that route, without a session via a second {@link
+ * SecurityFilterChain}.
  *
- * <p>This bean's own {@code @Profile("nonprod")} gate is what keeps production's filter chain
- * byte-identical to today's: in a production context this bean does not exist, so the permit rule
- * does not merely go unused there -- it does not exist there either. {@link
- * SecurityConfiguration}'s chain carries no {@code @Order}, so it sorts last (Spring's {@code
- * LOWEST_PRECEDENCE} default) and remains the catch-all for every other route, in every context.
+ * <p>{@link SecurityConfiguration}'s catch-all chain is untouched. The {@code @Profile("nonprod")}
+ * gate keeps production's filter chain unchanged: there this bean does not exist, so the permit
+ * rule is absent, not merely unused. The catch-all chain has no {@code @Order}, so it sorts last
+ * ({@code LOWEST_PRECEDENCE}) and handles every other route in every context.
  *
- * <p>{@code SessionCreationPolicy.STATELESS} on this chain means a reset call never creates a
- * {@code spring_session} row that the very same reset would then go on to truncate.
+ * <p>{@code SessionCreationPolicy.STATELESS} means a reset call never creates a {@code
+ * spring_session} row that the same reset would then truncate.
  */
 @Profile("nonprod")
 @Configuration

@@ -48,25 +48,23 @@ public class AuthenticationController {
 
     @Autowired private UserService userService;
 
-    // Mirrors SecurityConfiguration:45 -- read from configuration rather than
-    // request.getRequestURI() so signup's Location header is identical under MockMvc and a real
-    // servlet container (D-04, quick task 260812-hs4).
+    // Read from configuration rather than request.getRequestURI() so signup's Location header is
+    // identical under MockMvc and a real servlet container.
     @Value("${server.servlet.context-path}")
     private String contextPath;
 
     private static final String INVALID_CREDENTIALS_MESSAGE = "Invalid username or password";
 
-    // Fixed plaintext hashed once at startup (see equalizerHash below) purely to give the
-    // unknown-email signin branch a real BCrypt comparison to perform. Never compared against
-    // any real user's credentials.
+    // Hashed once at startup (see equalizerHash) to give the unknown-email signin branch a real
+    // BCrypt comparison. Never compared against a real user's credentials.
     private static final String EQUALIZER_PLAINTEXT = "signin-timing-equalizer";
 
-    // Written exactly once, in initializeEqualizerHash() below, which runs during container
-    // initialization -- happens-before any request is served -- and is read-only thereafter.
-    // No synchronization is needed for that reason, and this field must not be "tidied" into a
-    // constant (D-01): deriving it from the injected PasswordEncoder bean is what makes its
-    // BCrypt work factor automatically track whatever strength BeanConfiguration configures,
-    // instead of freezing today's cost into a source literal that could silently drift from it.
+    // Written once during container initialization, before any request, and read-only after, so
+    // no synchronization is needed.
+    //
+    // Do not "tidy" it into a constant: deriving it from the injected PasswordEncoder makes its
+    // BCrypt work factor track BeanConfiguration's strength instead of freezing today's cost into
+    // a literal that could drift.
     private String equalizerHash;
 
     @PostConstruct
@@ -84,16 +82,18 @@ public class AuthenticationController {
         try {
             user = userService.findByEmail(dto.getEmail());
         } catch (AppEntityNotFoundException e) {
-            // Closes finding F1 (2026-08-10 /claude-security scan): without this, an unknown
-            // email fast-fails with zero BCrypt work while a registered email below always pays
-            // one, so response *latency* enumerated registered accounts even though D-08 already
-            // made the response *body* byte-identical. Performing the same comparison here makes
-            // both branches pay the same dominant cost. The result is intentionally discarded --
-            // this call exists for its cost, not its answer, and must not be removed as dead
-            // code. Residual, not a full fix: the registered-email path below still performs one
-            // extra indexed DB read (loadUserByUsername), sub-millisecond against BCrypt's tens
-            // of milliseconds -- this narrows the channel by a large constant factor, it does not
-            // make the endpoint provably constant-time.
+            // Closes finding F1 (2026-08-10 /claude-security scan): run a BCrypt comparison for an
+            // unknown email too.
+            //
+            // Decisions:
+            // Without it an unknown email fast-fails with zero BCrypt work while a registered one
+            // always pays one, so response latency enumerated registered accounts even though the
+            // body was already byte-identical. The result is intentionally discarded: the call
+            // exists for its cost, not its answer, and must not be removed as dead code.
+            // Residual, not a full fix: the registered-email path still performs one extra indexed
+            // DB read (loadUserByUsername), sub-millisecond against BCrypt's tens of milliseconds,
+            // so this narrows the channel by a large constant factor but does not make the endpoint
+            // provably constant-time.
             passwordEncoder.matches(dto.getPassword(), equalizerHash);
 
             throw new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE);
@@ -110,24 +110,20 @@ public class AuthenticationController {
             throw new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE);
         }
 
-        // D-01 (quick task 260812-hs4): the caller's identity, so a frontend BFF learns who just
-        // authenticated instead of receiving only an opaque session cookie. Maps the `user`
-        // already loaded above -- no second database read, no reordering relative to the
-        // authenticate(...) call above, so both failure arms above are untouched.
+        // Return the caller's identity so a frontend BFF learns who just authenticated instead of
+        // receiving only an opaque session cookie. Maps the `user` loaded above: no second
+        // database read, and the failure arms above are untouched.
         return ResponseEntity.ok(userService.toResponseDTO(user));
     }
 
-    // only these authentication routes yield session cookie
     @PostMapping(ApiPaths.SIGNUP)
     public ResponseEntity<UserResponseDTO> signup(
             @Valid @RequestBody SignupRequestDTO signupDTO,
             HttpServletRequest request,
             HttpServletResponse response) {
-        // Deliberately outside the try block below (D-07/D-09): a duplicate email throws
-        // AppDuplicateResourceException, which must reach GlobalExceptionHandler as a 409, not be
-        // swallowed by this method's blanket catch, which exists only to collapse a failed
-        // *authentication* of the account just created into the same generic 401 every other
-        // credential failure returns.
+        // Outside the try block on purpose: a duplicate email throws AppDuplicateResourceException,
+        // which must reach GlobalExceptionHandler as a 409, not be swallowed by the blanket catch
+        // that collapses authentication failures into the generic 401.
         var createdUser = userService.save(signupDTO);
 
         try {
@@ -143,14 +139,11 @@ public class AuthenticationController {
             throw new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE);
         }
 
-        // D-01/D-02/D-04 (quick task 260812-hs4): this call site deliberately diverges from the
-        // request-URI-derived Location the other four ResponseEntity.created sites still use
-        // (BoardController, ColumnController, TaskController) -- that idiom names the parent
-        // collection a resource was POSTed to, but named the signup route itself here, a URI
-        // describing no resource. GET /users/me has no handler yet -- see the follow-up todo
-        // filed alongside this task -- so this Location does not currently resolve, matching
-        // today's /signup Location, which also does not resolve; it is still a strict
-        // improvement because the URI shape now names the real resource that was created.
+        // Deliberately not the request-URI-derived Location other ResponseEntity.created sites
+        // use: that names the POSTed-to collection, here the signup route, which is no resource.
+        //
+        // The URI names no resource yet: GET /users/me has no handler. Tracked in
+        // .planning/todos/pending/2026-08-12-signup-location-header-points-at-a-uri-with-no-get-handler.md
         return ResponseEntity.created(URI.create(contextPath + ApiPaths.USERS + ApiPaths.ME))
                 .body(createdUser);
     }
@@ -165,22 +158,18 @@ public class AuthenticationController {
         return Try.of(() -> authenticationManager.authenticate(token))
                 .mapTry(
                         authentication -> {
-                            // Enforces the concurrent-session ceiling and rotates the session id
-                            // on the privilege transition (D-01). Shared by both signin and
-                            // signup, since both go through this helper -- intended, because
-                            // signup auto-authenticates the account it just created, and the
-                            // ceiling can never reject a signup since a brand-new principal has
-                            // zero live sessions. A rejection throws
-                            // SessionAuthenticationException,
-                            // which the Try below collapses to false, then the caller's blanket
-                            // catch turns into a 401.
+                            // Enforce the concurrent-session ceiling and rotate the session id
+                            // on the privilege transition.
+                            //
+                            // Shared by signin and signup: signup auto-authenticates the new
+                            // account, and the ceiling can never reject it (zero live sessions). A
+                            // rejection throws SessionAuthenticationException, which the Try
+                            // collapses to false and the blanket catch turns into a 401.
                             sessionAuthenticationStrategy.onAuthentication(
                                     authentication, request, response);
 
-                            // get user credential for wrapped to token
                             var context = securityContextHolderStrategy.createEmptyContext();
 
-                            // set context application from authentication
                             context.setAuthentication(authentication);
                             securityContextHolderStrategy.setContext(context);
                             securityContextRepository.saveContext(context, request, response);
