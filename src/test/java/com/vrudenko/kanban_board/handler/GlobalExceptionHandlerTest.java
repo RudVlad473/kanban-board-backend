@@ -32,12 +32,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Proves every {@link GlobalExceptionHandler} branch emits a real RFC 7807 {@code ProblemDetail}
- * envelope carrying a stable, published {@code code} extension property (D-01, D-03), rather than
- * the bare-string/flat-map bodies the handler returned before this phase. {@code $.code} and {@code
- * $.errors} are asserted as top-level JSON keys -- never {@code $.properties.code} -- which is what
- * proves {@code ProblemDetailJacksonMixin}'s extension-property flattening locally instead of
- * resting on RESEARCH.md's citation of it.
+ * Proves every {@link GlobalExceptionHandler} branch emits an RFC 7807 {@code ProblemDetail} with a
+ * stable {@code code} property.
+ *
+ * <p>{@code $.code} and {@code $.errors} are asserted as top-level JSON keys, never {@code
+ * $.properties.code}, which pins {@code ProblemDetailJacksonMixin}'s flattening of extension
+ * properties.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -82,11 +82,8 @@ class GlobalExceptionHandlerTest extends AbstractAppMockMvcTest {
             // arrange
             Cookie cookie = signinCookie();
             var otherUser = createUser();
-            // Fixed literal, not a random word (D-05): "about" is 5 characters, inside the
-            // [MIN_BOARD_NAME_LENGTH, MAX_BOARD_NAME_LENGTH] bound, so it is a valid board name —
-            // and it is precisely the value that used to cause an intermittent failure below, by
-            // colliding with the "about:blank" RFC 7807 type boilerplate. Fixing it makes that
-            // previously-unlucky case run on every build instead of ~1-in-N.
+            // Fixed "about", not a random word: it is a valid board name that once collided with
+            // the "about:blank" RFC 7807 type and failed intermittently.
             var otherBoard =
                     userService.addBoardByUserId(
                             otherUser.getId(), SaveBoardRequestDTO.builder().name("about").build());
@@ -106,17 +103,12 @@ class GlobalExceptionHandlerTest extends AbstractAppMockMvcTest {
             var body = objectMapper.readTree(response.getContentAsString());
             Assertions.assertThat(body.get("code").asText()).isEqualTo("ACCESS_DENIED");
 
-            // `type` is pinned to the RFC 7807 boilerplate default rather than excluded blindly
-            // (D-05): this is the exact field whose "about:blank" value collided with a
-            // randomly-drawn board name of "about" before this fix. Pinning its value means the
-            // exclusion below cannot silently widen if Spring ever starts emitting a real type URI
-            // instead of the boilerplate default.
+            // `type` is pinned to the RFC 7807 default "about:blank" so the exclusion below cannot
+            // silently widen if Spring starts emitting a real type URI.
             Assertions.assertThat(body.get("type").asText()).isEqualTo("about:blank");
 
-            // Leak-check every other field's textual value — not just `detail` — so this remains
-            // the one assertion proving a 403 on another user's board never echoes that board's
-            // name back to the caller, across `title`, `instance`, `code` and any future extension
-            // property.
+            // Leak-check every other field, not just `detail`: a 403 must never echo the board
+            // name via `title`, `instance`, `code` or any future extension property.
             var fieldNames = body.fieldNames();
             while (fieldNames.hasNext()) {
                 var fieldName = fieldNames.next();
@@ -239,12 +231,11 @@ class GlobalExceptionHandlerTest extends AbstractAppMockMvcTest {
     }
 
     /**
-     * Proves D-04/D-05: a genuinely unauthenticated request (no session cookie at all) now returns
-     * a real 401 carrying the same RFC 7807 envelope every other error path uses, produced by
-     * {@link com.vrudenko.kanban_board.security.ProblemDetailAuthenticationEntryPoint} -- a second,
-     * independent producer from this class's own {@code @ExceptionHandler} methods, since Spring
-     * Security's {@code ExceptionTranslationFilter} rejects the request before {@code
-     * DispatcherServlet} ever dispatches to a controller.
+     * An unauthenticated request returns 401 with the same RFC 7807 envelope as every other error.
+     *
+     * <p>{@link com.vrudenko.kanban_board.security.ProblemDetailAuthenticationEntryPoint} produces
+     * it, independently of this class's {@code @ExceptionHandler} methods, because {@code
+     * ExceptionTranslationFilter} rejects the request before {@code DispatcherServlet} dispatches.
      */
     @Nested
     class UnauthenticatedTest {
@@ -281,13 +272,13 @@ class GlobalExceptionHandlerTest extends AbstractAppMockMvcTest {
                             .andReturn()
                             .getResponse();
 
-            // assert: the entry point wiring did not break the happy path
+            // assert
             Assertions.assertThat(response.getStatus()).isEqualTo(HttpStatus.OK.value());
         }
 
         @Test
         void shouldMatchAccessDeniedBodyKeySet_whenComparing401To403() throws Exception {
-            // arrange: a real 403 ownership-denial body, from a second, independent user
+            // arrange
             Cookie cookie = signinCookie();
             var otherUser = createUser();
             var otherBoard =
@@ -311,8 +302,7 @@ class GlobalExceptionHandlerTest extends AbstractAppMockMvcTest {
                             .andReturn()
                             .getResponse();
 
-            // assert: two independent producers (ProblemDetailAuthenticationEntryPoint and
-            // GlobalExceptionHandler) emit the exact same top-level key set
+            // assert: both producers emit the same top-level key set
             var unauthenticatedKeys =
                     topLevelKeys(
                             objectMapper.readTree(unauthenticatedResponse.getContentAsString()));

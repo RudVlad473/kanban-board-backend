@@ -23,17 +23,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Quick task 260811-p9c: pins the DESIRED end-state envelope contract across all seven {@code
- * controller/} classes for two failure kinds -- a {@code @Valid @RequestBody} field constraint
- * (should always be {@code VALIDATION_FAILED} + a per-field {@code errors} map) and a
- * {@code @PathVariable @NotBlank} constraint (should always be {@code CONSTRAINT_VIOLATION}, never
- * a 5xx) -- spanning at least one already-{@code @Validated} controller ({@link
- * com.vrudenko.kanban_board.controller.BoardController}) and one not-yet-{@code @Validated}
- * controller ({@link com.vrudenko.kanban_board.controller.ColumnController}). Two of the four cases
- * below are expected to start RED: this class is a measurement fixture before quick task 260811-p9c
- * Task 2 touches any {@code src/main} file, not a pre-verified assertion of already-converged
- * behavior. See {@code .planning/quick/260811-p9c-.../260811-p9c-SUMMARY.md} for the recorded
- * pre-change baseline table.
+ * Pins one error envelope across the {@code controller/} classes, whichever controller handles the
+ * request.
+ *
+ * <p>A {@code @Valid @RequestBody} field violation is always {@code VALIDATION_FAILED} with a
+ * per-field {@code errors} map; a {@code @PathVariable @NotBlank} violation is always {@code
+ * CONSTRAINT_VIOLATION}, never a 5xx.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -48,7 +43,7 @@ class ErrorEnvelopeConsistencyTest extends AbstractAppMockMvcTest {
 
         @Test
         void shouldReturnValidationFailedWithErrorsMap_whenBoardNameExceedsMax() throws Exception {
-            // arrange: BoardController already carries class-level @Validated
+            // arrange
             Cookie cookie = signinCookie();
             var name = "A".repeat(ValidationConstants.MAX_BOARD_NAME_LENGTH + 1);
 
@@ -71,9 +66,7 @@ class ErrorEnvelopeConsistencyTest extends AbstractAppMockMvcTest {
 
         @Test
         void shouldReturnValidationFailedWithErrorsMap_whenTaskTitleExceedsMax() throws Exception {
-            // arrange: this creation route lives on ColumnController, which does NOT (yet) carry
-            // class-level @Validated -- this case is expected to start RED, empirically confirming
-            // the split quick task 260811-p9c's source todo describes
+            // arrange
             Cookie cookie = signinCookie();
             var boardId = mockPopulatedBoard.getId();
             var columnId = mockPopulatedColumn.getId();
@@ -104,10 +97,8 @@ class ErrorEnvelopeConsistencyTest extends AbstractAppMockMvcTest {
 
         @Test
         void shouldReturnConstraintViolation_whenBoardIdPathVariableIsBlank() throws Exception {
-            // arrange: BoardController already carries class-level @Validated. URI-template
-            // variable substitution (not string concatenation) so the single space is
-            // percent-encoded to %20 by Spring's UriComponentsBuilder, exactly as a JSON API
-            // client sending that literal value would produce it.
+            // arrange: URI-template substitution (not concatenation) so the space is
+            // percent-encoded to %20 as a real client sends it.
             Cookie cookie = signinCookie();
             var url = ApiPaths.BOARDS + ApiPaths.BOARD_ID + ApiPaths.FULL;
 
@@ -120,9 +111,7 @@ class ErrorEnvelopeConsistencyTest extends AbstractAppMockMvcTest {
         @Test
         void shouldReturnConstraintViolation_whenBoardIdPathVariableIsBlank_onColumnRoute()
                 throws Exception {
-            // arrange: ColumnController does NOT (yet) carry class-level @Validated -- expected
-            // GREEN today, since @NotBlank on this route's @PathVariable is still validated
-            // through Spring MVC's built-in method-validation path rather than the AOP validator
+            // arrange
             Cookie cookie = signinCookie();
             var url = ApiPaths.BOARDS + ApiPaths.BOARD_ID + ApiPaths.COLUMNS;
 

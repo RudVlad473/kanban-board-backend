@@ -29,34 +29,16 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 /**
- * Turns four rules this repository currently enforces only by convention and code review into
- * build-failing checks:
+ * Enforces four controller/service conventions as build-failing ArchUnit rules.
  *
- * <ol>
- *   <li>Controllers must not reach past the service layer into repositories.
- *   <li>The domain services must load entities through their own ownership-verified {@code
- *       findById(userId, id)}, never through a direct {@code repository.findById(id)} (see
- *       docs/CODE_STYLE.md rule 2).
- *   <li>Every {@code @RestController} must carry class-level {@code
- *       org.springframework.validation.annotation.Validated} (see docs/CODE_STYLE.md rule 11).
- *   <li>Every mutating handler ({@code @PostMapping}/{@code @PutMapping}/{@code @PatchMapping}) on
- *       a {@code @RestController} must bind any {@code *RequestDTO} parameter from the request body
- *       with both {@code @RequestBody} and {@code @Valid} — quick task 260811-me4 found {@code
- *       TaskController.addSubtaskByTaskId} missing {@code @RequestBody}, silently binding the DTO
- *       from query/form params instead of the JSON body a real client sends.
- * </ol>
+ * <p>All four share one {@code @AnalyzeClasses} so they share one cached import of the class graph,
+ * the expensive part of an ArchUnit test. {@link ImportOption.DoNotIncludeTests} keeps the test
+ * source set out of that graph.
  *
- * <p>All four rules are declared on this single {@code @AnalyzeClasses} class so they share one
- * cached import of the {@code com.vrudenko.kanban_board} class graph — the import, not the rule
- * evaluation, is the expensive part of running an ArchUnit test. {@link
- * ImportOption.DoNotIncludeTests} keeps the test source set itself out of the imported graph.
- *
- * <p><strong>This is a floor, not a ceiling.</strong> Rule 2 catches a direct {@code
- * repository.findById} call from a domain service. It does not catch the other half of
- * docs/CODE_STYLE.md rule 2 — deriving a downstream repository call's id from the verified entity
- * rather than from the raw path-variable parameter — nor other unverified loaders such as a
- * hand-written {@code repository.findByX} query. A green build here closes the single most common
- * hole; code review still carries the rest.
+ * <p>Known holes: a floor, not a ceiling. The {@code findById} rule (docs/CODE_STYLE.md rule 2)
+ * catches a direct {@code repository.findById} call from a domain service. It does not catch
+ * deriving a downstream repository call's id from the raw path variable instead of the verified
+ * entity, nor a hand-written {@code repository.findByX} query. Code review carries those.
  */
 @AnalyzeClasses(
         packages = "com.vrudenko.kanban_board",
@@ -64,10 +46,8 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 public class LayeringArchTest {
 
     /**
-     * Direct call target predicate: a method named {@code findById} whose owner resides in this
-     * project's repository package. Scoped to {@code com.vrudenko.kanban_board.repository..} rather
-     * than the loose {@code ..repository..} glob, which would also match Spring's own {@code
-     * org.springframework.data.repository} types and produce false positives.
+     * A {@code findById} call whose owner is in {@code com.vrudenko.kanban_board.repository..}; the
+     * looser {@code ..repository..} glob would also match Spring Data's own types.
      */
     private static final DescribedPredicate<JavaCall<?>> CALLS_PROJECT_REPOSITORY_FIND_BY_ID =
             target(name("findById"))
@@ -144,11 +124,9 @@ public class LayeringArchTest {
                                     + " above.");
 
     /**
-     * A method carrying {@code @PostMapping}, {@code @PutMapping} or {@code @PatchMapping} whose
-     * declaring class is a {@code @RestController} — the {@code
-     * areAnnotatedWith(RestController.class)} owner check (rather than a package glob) is what
-     * brings {@code AuthenticationController} into scope even though it lives in the {@code
-     * security} package rather than {@code controller}, mirroring the two rules above.
+     * A mutating-mapping ({@code @PostMapping}, {@code @PutMapping}, {@code @PatchMapping}) method
+     * on any {@code @RestController}, which brings {@code AuthenticationController} (in {@code
+     * security}) in scope.
      */
     private static final DescribedPredicate<JavaMethod> ARE_MUTATING_REST_HANDLERS =
             DescribedPredicate.describe(
@@ -161,13 +139,12 @@ public class LayeringArchTest {
                                     && method.getOwner().isAnnotatedWith(RestController.class));
 
     /**
-     * Inspects annotations per-parameter (via {@link JavaMethod#getParameters()}, available in the
-     * pinned ArchUnit 1.4.2, build.gradle line 182) rather than per-method — the same handler can
-     * carry other parameters ({@code @PathVariable}, {@code @CurrentUserId}, {@code
-     * HttpServletRequest}) that this rule must not flag. Only a parameter whose raw type simple
-     * name ends with {@code RequestDTO} is required to carry both {@code @RequestBody} and
-     * {@code @Valid}; a handler with no such parameter (for example a {@code @DeleteMapping} taking
-     * only path variables) is unaffected.
+     * Requires {@code @RequestBody} and {@code @Valid} on every parameter whose type name ends with
+     * {@code RequestDTO}.
+     *
+     * <p>Without {@code @RequestBody} the DTO binds silently from query/form params instead of the
+     * JSON body (found on {@code TaskController.addSubtaskByTaskId}). Checked per parameter, so a
+     * handler's {@code @PathVariable} or {@code @CurrentUserId} parameters are not flagged.
      */
     private static final ArchCondition<JavaMethod> BIND_REQUEST_DTO_PARAMETERS_FROM_THE_BODY =
             new ArchCondition<>(

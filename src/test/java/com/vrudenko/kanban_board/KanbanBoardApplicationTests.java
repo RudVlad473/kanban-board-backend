@@ -5,8 +5,7 @@ import com.vrudenko.kanban_board.support.containers.AbstractPostgresContainerTes
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
-// Boots the full context, including JPA, and the test profile no longer names a datasource
-// (04.2, D-01) -- a container is required for even this smoke test to start.
+// Boots the full context; needs a container because the test profile names no datasource.
 @SpringBootTest
 class KanbanBoardApplicationTests extends AbstractPostgresContainerTest {
 

@@ -30,11 +30,7 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/**
- * After-commit publication proof for every {@link ActivityEvent} this application publishes.
- * Extended across Plan 02's three tasks: task lifecycle events (this task), board/column creation
- * events, and the negative-path proofs (rollback suppression, non-null field invariant).
- */
+/** After-commit publication proof for every {@link ActivityEvent} this application publishes. */
 @SpringBootTest
 public class ActivityEventPublicationTest extends AbstractAppTest {
     @Autowired RecordingActivityEventListener recorder;
@@ -198,9 +194,7 @@ public class ActivityEventPublicationTest extends AbstractAppTest {
             Assertions.assertThat(subtaskUpdatedEvent.boardId())
                     .isEqualTo(mockPopulatedBoard.getId());
             Assertions.assertThat(subtaskUpdatedEvent.userId()).isEqualTo(userId);
-            // Derived from the managed entity's post-mutation state (D-B, resolved B2), never
-            // echoed from the request DTO -- proven true here since it equals the persisted
-            // outcome, not merely the request value (they happen to match, which is the point).
+            // Derived from the managed entity's post-mutation state, never echoed from the request.
             Assertions.assertThat(subtaskUpdatedEvent.isCompleted())
                     .isEqualTo(updated.getIsCompleted())
                     .isTrue();
@@ -397,19 +391,14 @@ public class ActivityEventPublicationTest extends AbstractAppTest {
     }
 
     /**
-     * Turns "no ghost events, no dropped events" from a claim into a tested property. Uses a
-     * manually-driven {@link TransactionTemplate} (rather than {@code @Transactional} on the test
-     * method itself, which Spring's test support treats specially — always rolling back at the end
-     * of the test) to control exactly where a transaction commits or rolls back around one or more
-     * publishing service calls.
+     * Pins "no ghost events, no dropped events" with a manually driven {@link TransactionTemplate}:
+     * {@code @Transactional} on the test method would always roll back.
      */
     @Nested
     class TransactionalSuppressionTest {
         /**
-         * S5E's must-have truth: "a rejected mutation — stale version, ownership denial, duplicate
-         * name — publishes nothing, because the transaction never commits." A stale-version update
-         * is the cheapest rejected-mutation case to construct and exercises the
-         * guard-before-publish ordering every S5E publish site depends on (Task 4's action text).
+         * A rejected mutation (stale version, ownership denial, duplicate name) publishes nothing
+         * because the transaction never commits. A stale-version update is the cheapest to build.
          */
         @Test
         void shouldPublishNothing_whenTaskUpdateRejectedByStaleVersion() {
@@ -468,11 +457,8 @@ public class ActivityEventPublicationTest extends AbstractAppTest {
             var title = dataFactory.getRandomWord(ValidationConstants.MIN_TASK_TITLE_LENGTH + 2);
             var transactionTemplate = new TransactionTemplate(transactionManager);
 
-            // act — the task write inside columnService.addTaskByColumnId genuinely happens (it is
-            // its own @Transactional REQUIRED call joining this outer transaction), but the
-            // RuntimeException thrown right after forces TransactionTemplate to roll back the
-            // whole outer transaction before it ever commits, so the AFTER_COMMIT listener never
-            // fires.
+            // act — the inner write joins this outer transaction; the RuntimeException rolls it
+            // back before commit, so AFTER_COMMIT never fires.
             var exception =
                     Assertions.catchException(
                             () ->
@@ -505,9 +491,8 @@ public class ActivityEventPublicationTest extends AbstractAppTest {
                     dataFactory.getRandomWord(ValidationConstants.MIN_TASK_TITLE_LENGTH + 2);
             var transactionTemplate = new TransactionTemplate(transactionManager);
 
-            // act — both task creations run inside one outer transaction that commits once at the
-            // end of executeWithoutResult, so both AFTER_COMMIT deliveries fire off that single
-            // commit.
+            // act — both creations share one outer transaction, so both AFTER_COMMIT deliveries
+            // fire off its single commit.
             transactionTemplate.executeWithoutResult(
                     status -> {
                         columnService.addTaskByColumnId(
@@ -520,8 +505,8 @@ public class ActivityEventPublicationTest extends AbstractAppTest {
                                 SaveTaskRequestDTO.builder().title(secondTitle).build());
                     });
 
-            // assert — exactly two events, distinct instances, neither merged into the other.
-            // Their relative order is deliberately not asserted (not guaranteed by this phase).
+            // assert — exactly two distinct events; their relative order is deliberately not
+            // asserted.
             Assertions.assertThat(recorder.getRecorded()).hasSize(2);
             var eventIds =
                     recorder.getRecorded().stream().map(ActivityEvent::eventId).distinct().toList();
@@ -540,7 +525,7 @@ public class ActivityEventPublicationTest extends AbstractAppTest {
             var taskTitle =
                     dataFactory.getRandomWord(ValidationConstants.MIN_TASK_TITLE_LENGTH + 2);
 
-            // act — drive one representative mutation of each publishing type
+            // act
             var board =
                     userService.addBoardByUserId(
                             userId, SaveBoardRequestDTO.builder().name(boardName).build());
@@ -556,7 +541,7 @@ public class ActivityEventPublicationTest extends AbstractAppTest {
                             SaveTaskRequestDTO.builder().title(taskTitle).build());
             taskService.deleteById(userId, task.getId());
 
-            // assert — every recorded event carries the invariant Phase 3's consumer depends on
+            // assert — every recorded event carries the fields the consumer depends on
             Assertions.assertThat(recorder.getRecorded()).isNotEmpty();
             recorder.getRecorded()
                     .forEach(

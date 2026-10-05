@@ -29,11 +29,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /**
- * No mocks (CODE_STYLE rule 4 / plan Task 3): {@link ActivityEventAvroMapper} touches neither Kafka
- * nor a database, so a plain Spring context is sufficient to autowire it. Still extends {@link
- * com.vrudenko.kanban_board.support.containers.AbstractPostgresContainerTest} because the test
- * profile no longer names a datasource (04.2, D-01) -- booting the full context requires a
- * container even though this class's own assertions never touch it.
+ * Plain-context test of {@link ActivityEventAvroMapper}, which touches neither Kafka nor a DB.
+ *
+ * <p>Extends {@link com.vrudenko.kanban_board.support.containers.AbstractPostgresContainerTest}
+ * only because the test profile names no datasource, so the context needs a container to boot.
  */
 @SpringBootTest
 public class ActivityEventAvroMapperTest
@@ -324,16 +323,14 @@ public class ActivityEventAvroMapperTest
         }
 
         /**
-         * Field-for-field comparison rather than a single record {@code equals()} call. Avro's
-         * generated {@code setTimestamp()} truncates to {@link ChronoUnit#MILLIS} (see {@code
-         * AvroTaskMovedEvent.setTimestamp} — confirmed by reading the generated source this
-         * session), so a full-precision {@link Instant#now()} used as test input never round-trips
-         * as bit-identical; this is a real property of the {@code timestamp-millis} logical type,
-         * not a test bug, and is asserted with {@code isCloseTo} rather than papered over by
-         * pre-truncating the input (matching the precedent already set for the JSON pipeline's own
-         * sub-millisecond loss, STATE.md Phase 03 Plan 01). Every other field (eventId included) is
-         * asserted with exact equality, since neither the {@code uuid} logical type nor any plain
-         * string field loses precision on this path.
+         * Compares field by field because Avro's generated {@code setTimestamp()} truncates to
+         * {@link ChronoUnit#MILLIS}.
+         *
+         * <p>Why this is the way it is: a full-precision {@link Instant#now()} never round-trips
+         * bit-identical through the {@code timestamp-millis} logical type (see the generated {@code
+         * AvroTaskMovedEvent.setTimestamp}), so timestamp uses {@code isCloseTo} instead of
+         * pre-truncating the input. Every other field, {@code eventId} included, is exact: neither
+         * {@code uuid} nor plain strings lose precision.
          */
         private void assertRoundTripEqual(ActivityEvent original, ActivityEvent roundTripped) {
             Assertions.assertThat(roundTripped).isInstanceOf(original.getClass());
@@ -430,9 +427,9 @@ public class ActivityEventAvroMapperTest
     }
 
     /**
-     * A real (not mocked) {@link SpecificRecord} implementation the mapper does not know about —
-     * exercises {@link ActivityEventAvroMapper#toDomain}'s required {@code default} arm, since
-     * {@link SpecificRecord} is not sealed and the compiler cannot enumerate its implementations.
+     * A real {@link SpecificRecord} the mapper does not know, to hit {@link
+     * ActivityEventAvroMapper#toDomain}'s required {@code default} arm: {@link SpecificRecord} is
+     * not sealed.
      */
     private static final class UnknownSpecificRecord implements SpecificRecord {
         @Override
