@@ -62,13 +62,16 @@ ArchUnit rule rather than by convention (see [Testing](#testing)).
 
 *Which question this answers: what actually happens between a client POSTing credentials and a
 session cookie landing in Postgres?* Scenarios(+1) view per
-[DIAGRAM_CONVENTIONS.md](DIAGRAM_CONVENTIONS.md) — an end-to-end user-facing flow traced across the
-security filter chain, the session-strategy bean, and Spring Session JDBC's storage layer. Signup
-follows the identical path through `AuthenticationController#authenticate` (`security/
-AuthenticationController.java`) after its own persistence step; only signin is drawn here to keep
-the diagram legible.
+[DIAGRAM_CONVENTIONS.md](DIAGRAM_CONVENTIONS.md) — an end-to-end flow drawn at the protocol level,
+with four lifelines: the client, the application, the `users` table and the session store. The
+application lifeline is `AuthenticationController#signin` (`security/AuthenticationController.java`)
+calling `UserAuthenticationProvider#authenticate` and then the composite
+`SessionAuthenticationStrategy` bean built in `SecurityConfiguration#sessionAuthenticationStrategy`;
+the session store is Spring Session JDBC's `spring_session` tables. Signup runs the same
+`AuthenticationController#authenticate` helper after its own insert and is drawn separately in
+[AUTH_FLOWS.md](AUTH_FLOWS.md).
 
-![Sequence diagram: signin and session establishment](diagrams/scenarios/signin.png)
+<img src="diagrams/scenarios/signin.png" width="1084" alt="Sequence diagram: signin, its 400 and collapsed 401 arms, and session establishment">
 <sub>[diagram source](diagrams/scenarios/signin.mmd)</sub>
 
 **Want the client's-eye view instead?** [AUTH_FLOWS.md](AUTH_FLOWS.md) is written for a frontend or
@@ -76,16 +79,13 @@ QA engineer planning E2E tests against this API rather than for a security revie
 same signin diagram next to the full response table, draws `signup` in full via
 `diagrams/scenarios/signup.mmd`, and adds the session/cookie/CORS facts (the concurrent-session
 ceiling, the two session lifetimes, `SameSite`, credentialed CORS) that will otherwise silently
-break a Playwright suite.
+break a Playwright suite. The security-review detail that used to sit in notes on the diagram — the
+BCrypt timing-parity compare (finding F1), why a rejected third session collapses into the
+wrong-password `401`, the accepted concurrent-signin overshoot (finding F6), and the
+commit-after-flush timing — is stated once, in prose, under "Sign in" in that document.
 
-Simplified: the diagram omits `signup`'s extra persistence step
-(`UserService#save`, before this same `authenticate` helper runs) and the auto-rollback
-`userService.deleteById(...)` signup performs if authentication of its own new account somehow
-fails — see `AuthenticationController.java`'s `signup` method for that detail, or
-[AUTH_FLOWS.md](AUTH_FLOWS.md)'s signup diagram for the fuller, drawn treatment of both. On
-success, signup
-returns **201** with the same `{id, email, displayName, theme}` body shape as signin's 200 above
-(D-01, quick task 260812-hs4), and a `Location` header naming the caller-identity resource URI
+Signup returns **201** with the same `{id, email, displayName, theme}` body shape as signin's 200
+above (D-01, quick task 260812-hs4), and a `Location` header naming the caller-identity resource URI
 (`${server.servlet.context-path}` + `/users/me`) rather than the `/signup` route that created it
 (D-02/D-04) — that target has no `GET` handler yet, tracked by a follow-up todo.
 
@@ -100,15 +100,23 @@ filter-chain rejection with no controller/service ever invoked; the other three 
 `@ExceptionHandler` dispatch from `GlobalExceptionHandler` (`handler/GlobalExceptionHandler.java`)
 after a controller or service method actually ran and threw.
 
-![Sequence diagram: how a rejected request differs across 401/403/400/409](diagrams/scenarios/error-status-split.png)
+<img src="diagrams/scenarios/error-status-split.png" width="1081" alt="Sequence diagram: which layer answers each of 401, 403, 400 and 409, and whether the request reaches MVC dispatch">
 <sub>[diagram source](diagrams/scenarios/error-status-split.mmd)</sub>
 
 Simplified: the four `rect` blocks are drawn as one diagram for side-by-side comparison, not as one
-literal request — each block starts its own independent request. `AuthorizationFilter` and
-`ExceptionTranslationFilter` are Spring Security's own classes (`org.springframework.security.web
-.access.intercept.AuthorizationFilter` / `...web.access.ExceptionTranslationFilter`), not project
-code; they are named here because which one rejects the request is exactly what makes 401
-structurally different from the other three.
+literal request — each block starts its own independent request. The three server-side lifelines
+map to code as follows:
+
+| Lifeline | Code | Role in the diagram |
+|---|---|---|
+| Security filter chain | Spring Security's filter chain, built in `SecurityConfiguration#securityFilterChain`; its entry point is `ProblemDetailAuthenticationEntryPoint`, which runs inside `ExceptionTranslationFilter` | answers the `401`, and forwards every authenticated or `permitAll` request |
+| MVC dispatch | `DispatcherServlet`, the controller and the service layer | raises the `403` (`OwnershipVerifierService` throws `AppAccessDeniedException`), the `400` (`@Valid` binding throws `MethodArgumentNotValidException` before the handler body runs) and the `409` (`TaskService#updateById` compares versions and throws `OptimisticLockingFailureException`) |
+| Exception handler | `GlobalExceptionHandler`, a `@ControllerAdvice` | turns each of those three exceptions into the `ProblemDetail` envelope with its `code` |
+
+`ExceptionTranslationFilter` and the other filters are Spring Security's own classes, not project
+code; which layer rejects the request is exactly what makes `401` structurally different from the
+other three. A `403` response's `detail` never names the foreign resource (asserted for the board
+name by `GlobalExceptionHandlerTest.AccessDeniedTest` and by `AuthorizationGatingTest`).
 
 ## Concurrency: optimistic locking
 
