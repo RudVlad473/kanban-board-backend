@@ -68,8 +68,7 @@ public class ColumnController {
         return ResponseEntity.ok().build();
     }
 
-    // This class's mapping is already board-nested, so — unlike TaskMoveController, whose task
-    // routes are not board-nested — no separate flat controller is needed for the reorder route.
+    // The mapping is already board-nested, so the reorder route needs no separate flat controller.
     @PatchMapping(ApiPaths.COLUMN_ID + ApiPaths.REORDER)
     public ResponseEntity<ColumnResponseDTO> reorder(
             @CurrentUserId String userId,

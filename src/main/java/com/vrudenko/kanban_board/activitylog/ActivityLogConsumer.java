@@ -29,20 +29,16 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 /**
- * Consumes every {@link ActivityEvent} published to {@link KafkaTopics#ACTIVITY} and turns it into
- * a durable, deduplicated {@link ActivityLogEntity} row via {@link ActivityLogRecorder}
- * (ACTLOG-02). Runs on a Kafka listener container thread, which carries no security context of its
- * own and never re-verifies who was allowed to trigger the underlying mutation — that check already
- * happened once, at publish time, through the same access-control chain every mutating endpoint
- * goes through. This class therefore depends on nothing but the event package, {@link
- * ActivityLogRecorder} and a plain {@link ObjectMapper}: it never loads a task, column, board or
- * user, and never reads a field a user typed by hand (D-01) — only the server-derived identifiers
- * each event already carries.
+ * Turn each {@link ActivityEvent} published to {@link KafkaTopics#ACTIVITY} into a durable,
+ * deduplicated {@link ActivityLogEntity} row via {@link ActivityLogRecorder}.
  *
- * <p>Since Phase 4 (Schema Registry), events arrive Avro-encoded: the listener receives the
- * generated {@link SpecificRecord} payload directly and maps it back to the domain {@link
- * ActivityEvent} via {@link ActivityEventAvroMapper} before anything below this class's exhaustive
- * switch runs (SCHEMA-02) — that switch, {@link #deriveActionAndDetailIds}, is otherwise unchanged.
+ * <p>The listener thread has no security context and never re-verifies the mutation's
+ * authorization, which was checked at publish time. This class therefore depends only on the event
+ * package, {@link ActivityLogRecorder} and a plain {@link ObjectMapper}, and reads only the
+ * server-derived identifiers each event carries.
+ *
+ * <p>Events arrive Avro-encoded and are mapped back to the domain event via {@link
+ * ActivityEventAvroMapper} before the exhaustive switch runs.
  */
 @Component
 public class ActivityLogConsumer {
@@ -81,10 +77,9 @@ public class ActivityLogConsumer {
     }
 
     /**
-     * Exhaustive switch over the sealed {@link ActivityEvent} — deliberately no {@code default}
-     * arm. Adding another event record is then a compile error until this switch is updated,
-     * turning a future missed event type into a build failure instead of a silently absorbed
-     * message.
+     * Exhaustive switch over the sealed {@link ActivityEvent}, deliberately without a {@code
+     * default} arm: a new event record becomes a compile error until the switch is updated, not a
+     * silently absorbed message.
      */
     private ActionAndDetailIds deriveActionAndDetailIds(ActivityEvent event) {
         return switch (event) {
@@ -135,8 +130,7 @@ public class ActivityLogConsumer {
                 yield new ActionAndDetailIds(ActivityAction.COLUMN_UPDATED, ids);
             }
             case ColumnReorderedEvent e -> {
-                // First non-opaque-identifier detail values in this codebase (fork D-A, resolved
-                // A1): sourcePosition/targetPosition are ints, stringified here and parsed back by
+                // sourcePosition/targetPosition are ints, stringified here and parsed back by
                 // HistoricalActivityEventReconstructor with the exact inverse conversion.
                 var ids = new LinkedHashMap<String, String>();
                 ids.put("columnId", e.columnId());
@@ -151,9 +145,6 @@ public class ActivityLogConsumer {
                 yield new ActionAndDetailIds(ActivityAction.SUBTASK_CREATED, ids);
             }
             case SubtaskUpdatedEvent e -> {
-                // isCompleted is a stringified boolean (fork D-B, resolved B2) -- the second
-                // non-opaque-identifier detail value in this codebase, alongside
-                // ColumnReorderedEvent's positions above.
                 var ids = new LinkedHashMap<String, String>();
                 ids.put("taskId", e.taskId());
                 ids.put("subtaskId", e.subtaskId());
@@ -170,9 +161,10 @@ public class ActivityLogConsumer {
     }
 
     /**
-     * Insertion-ordered on purpose: {@link LinkedHashMap}, never an immutable-set-backed factory
-     * map, so serialisation is byte-stable for a given event type. A same-arity static factory
-     * method taking varargs key/value pairs does not guarantee iteration order, which would make
+     * Insertion-ordered on purpose: {@link LinkedHashMap}, so serialisation is byte-stable for a
+     * given event type.
+     *
+     * <p>An immutable-set-backed factory map does not guarantee iteration order, which would make
      * the stored {@code detail} string vary run to run for identical input.
      */
     private record ActionAndDetailIds(

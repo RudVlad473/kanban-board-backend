@@ -18,16 +18,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * GAP-05 (D-10..D-12): a dedicated user-scoped preferences controller, mirroring {@link
- * BoardController}'s shape exactly. Deliberately not folded onto {@link
- * com.vrudenko.kanban_board.security.AuthenticationController}, which is the one controller
- * deliberately carrying no authentication requirement -- its two routes are the only ones that
- * yield a session cookie.
+ * Serve the caller's own user-scoped preferences, kept off {@code AuthenticationController}, the
+ * one controller deliberately requiring no authentication.
  *
- * <p>Neither route below takes a user id from the path or the request body -- the identity always
- * comes from the session. This is the whole IDOR mitigation for this controller and it is
- * structural: {@link UserService} is the identity root with no ownership chain above it, so there
- * is nothing to chain a check from, and no place in the route to put another user's id.
+ * <p>Neither route takes a user id from the path or the body; identity always comes from the
+ * session. This is the whole IDOR mitigation for this controller and it is structural: {@link
+ * UserService} is the identity root with no ownership chain above it, so there is nothing to chain
+ * a check from and no place in the route for another user's id.
  */
 @RestController
 @RequestMapping(ApiPaths.USERS)

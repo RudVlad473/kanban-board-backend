@@ -8,35 +8,31 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 /**
- * Idempotent, insert-only persist for a mapped {@link ActivityLogEntity} row (ACTLOG-03, D-05). A
- * redelivered {@code eventId} completes normally through one of two layers, and neither one ever
- * escapes this method as an exception: the {@code existsByEventId} fast path handles the ordinary
- * sequential redelivery case with zero exceptions in the common path, and the {@link
- * DataIntegrityViolationException} catch below is the backstop for the narrow race window between
- * that check and the insert, arbitrated by the database's own unique constraint on {@code
- * event_id}. Anything that escapes this method is what {@code DefaultErrorHandler} retries and
- * eventually dead-letters, so a duplicate escaping here would exhaust three retries and pollute the
- * dead-letter topic with routine, non-poison traffic — exactly what D-05 forbids.
+ * Insert an {@link ActivityLogEntity} row idempotently: a redelivered {@code eventId} completes
+ * normally and never escapes as an exception.
  *
- * <p>{@code DataIntegrityViolationException} is Spring's translation for the entire SQL "integrity
- * constraint violation" class (23xxx) -- not only the unique-constraint race this method is built
- * to absorb, but also, for example, a {@code NOT NULL} violation from a structurally-valid-but-
- * semantically-null event field. The catch block below re-checks {@code existsByEventId} before
- * deciding the exception was the intended duplicate race: if the row is present under this {@code
- * eventId} after the failed insert, the race happened as expected and the exception is absorbed; if
- * it is still absent, the violation was caused by something else entirely and must be rethrown so
- * it reaches {@code DefaultErrorHandler} and gets retried/dead-lettered like any other genuine
- * failure, rather than being silently dropped.
+ * <p>Decisions:
  *
- * <p>This method deliberately carries no declarative-transaction annotation. A constraint violation
- * marks any surrounding transaction rollback-only, so catching it inside one and completing
- * normally would not actually suppress the failure — the commit at method exit would still fail,
- * and the duplicate would still escape into the listener's error path, relocating rather than
- * avoiding exactly the outcome this method exists to prevent. Leaving the method undecorated lets
- * Spring Data's own per-call transaction own — and roll back — the failed insert on its own, so the
- * catch block below resumes into a clean state. {@code saveAndFlush} is required rather than {@code
- * save} because the insert must run inside this call for the constraint violation to surface at the
- * catch site here, instead of at some later, unrelated flush.
+ * <p><b>Two layers absorb a duplicate.</b> The {@code existsByEventId} fast path handles ordinary
+ * sequential redelivery with no exception; the {@link DataIntegrityViolationException} catch is the
+ * backstop for the race between that check and the insert, arbitrated by the database's unique
+ * constraint on {@code event_id}. Whatever escapes this method is retried by {@code
+ * DefaultErrorHandler} and eventually dead-lettered, so a duplicate escaping here would exhaust
+ * three retries and pollute the dead-letter topic with routine, non-poison traffic.
+ *
+ * <p><b>The catch re-checks {@code existsByEventId}.</b> {@code DataIntegrityViolationException} is
+ * Spring's translation of the whole SQL integrity-violation class (23xxx), not only the
+ * unique-constraint race: a {@code NOT NULL} violation from a structurally valid but semantically
+ * null event field raises it too. If the row is present under this {@code eventId}, the race
+ * happened as expected and the exception is absorbed; if absent, something else caused it and it is
+ * rethrown, to be retried or dead-lettered like any genuine failure rather than silently dropped.
+ *
+ * <p><b>No declarative-transaction annotation, on purpose.</b> A constraint violation marks a
+ * surrounding transaction rollback-only, so catching it inside one would not suppress the failure:
+ * the commit at method exit would still fail and the duplicate would still reach the listener's
+ * error path. Undecorated, Spring Data's own per-call transaction owns and rolls back the failed
+ * insert, so the catch resumes into a clean state. {@code saveAndFlush} is required rather than
+ * {@code save} so the violation surfaces at this catch site, not at a later, unrelated flush.
  */
 @Service
 public class ActivityLogRecorder {
@@ -50,11 +46,8 @@ public class ActivityLogRecorder {
         try {
             activityLogRepository.saveAndFlush(entry);
         } catch (DataIntegrityViolationException e) {
-            // Backstop: the exists-check above raced with a concurrent redelivery and lost.
-            // Only absorb this if the row is now actually present under this eventId -- otherwise
-            // the violation was caused by something else (e.g. a NOT NULL violation on a
-            // semantically-invalid event) and must escape so it is retried/dead-lettered, not
-            // silently dropped as if it were a harmless duplicate.
+            // Absorb only if the row is now present; otherwise something else violated a
+            // constraint and must escape (see the class Javadoc).
             if (!activityLogRepository.existsByEventId(entry.getEventId())) {
                 throw e;
             }

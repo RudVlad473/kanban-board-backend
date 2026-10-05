@@ -82,11 +82,9 @@ public class BoardController {
     }
 
     /**
-     * GAP-04: one nested read returning the board with its columns, each column with its tasks, and
-     * each task with its subtasks, in a single document -- see {@link
-     * com.vrudenko.kanban_board.service.BoardService#findFullById} for the ownership/transaction
-     * reasoning. Additive: the four existing flat GET endpoints above and on {@code
-     * ColumnController}/{@code TaskController}/{@code SubtaskController} are unchanged.
+     * Return the board with its columns, tasks and subtasks nested in one document. See {@link
+     * com.vrudenko.kanban_board.service.BoardService#findFullById} for the ownership and
+     * transaction reasoning.
      */
     @GetMapping(ApiPaths.BOARD_ID + ApiPaths.FULL)
     public ResponseEntity<BoardFullResponseDTO> findFullById(

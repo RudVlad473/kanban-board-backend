@@ -22,9 +22,15 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Plan 08-02 (RESET-01, D-01, D-02): a nonprod-only, shared-secret-authenticated endpoint that
- * fully resets nonprod's Postgres and Kafka activity-log state to zero rows, via {@link
- * ResetService}.
+ * Reset nonprod's Postgres and Kafka activity-log state to zero rows via {@link ResetService},
+ * behind a nonprod-only, shared-secret-authenticated endpoint.
+ *
+ * <p>{@code ?fullReset=true} selects the unconditional full reset ({@link #reset}). Absent, or any
+ * other value, selects the targeted delete ({@link #deleteUsers}), which then requires a {@code
+ * userIds} body. Both routes call {@link #verifyResetToken} first, so neither route's security
+ * check can drift from the other's.
+ *
+ * <p>Decisions:
  *
  * <p><b>Two independent controls, not one.</b> {@code @Profile("nonprod")} means this bean does not
  * exist at all in a context where the {@code nonprod} profile is inactive -- regardless of the
@@ -42,12 +48,6 @@ import org.springframework.web.bind.annotation.RestController;
  * same 403 response) as a request carrying a wrong value. Binding it as required would instead make
  * Spring answer 400 for an absent header and 403 for a wrong one, handing a probe a free
  * distinguisher.
- *
- * <p><b>{@code fullReset} query-param contract (quick task 260829-ii3).</b> {@code ?fullReset=true}
- * selects the unconditional full reset ({@link #reset}, unchanged). Absent, or any other value,
- * selects the targeted delete ({@link #deleteUsers}), which then requires a {@code userIds} body.
- * Both routes call the same private {@link #verifyResetToken} helper as the very first thing they
- * do, so neither route's security check can drift from the other's.
  */
 @Profile("nonprod")
 @RestController
@@ -60,17 +60,16 @@ public class ResetController {
 
     @Autowired private ResetService resetService;
 
-    // No default value, deliberately: a nonprod context started with no APP_RESET_TOKEN env var
-    // fails fast at startup with a resolution error, rather than silently running with a blank
-    // secret that could match a blank supplied token.
+    // No default, deliberately: a nonprod context with no APP_RESET_TOKEN fails fast at startup
+    // instead of running with a blank secret that could match a blank supplied token.
     // planner-discipline-allow: app.reset.token
     @Value("${app.reset.token}")
     private String configuredToken;
 
     /**
-     * Rejects a configured token that is null, blank, or shorter than {@link #MIN_TOKEN_LENGTH}
-     * characters -- without this guard a misconfigured, effectively-empty secret could compare
-     * equal to a blank supplied token via {@link MessageDigest#isEqual}.
+     * Reject a configured token that is null, blank, or shorter than {@link #MIN_TOKEN_LENGTH}:
+     * without this guard an effectively-empty secret could compare equal to a blank supplied token
+     * via {@link MessageDigest#isEqual}.
      */
     @PostConstruct
     void validateConfiguredToken() {
@@ -94,9 +93,9 @@ public class ResetController {
         return ResponseEntity.noContent().build();
     }
 
-    // params = "fullReset!=true" matches BOTH a request with no fullReset parameter at all and one
-    // present with any value other than exactly "true" -- Spring's negated-equality params
-    // condition is not "present and different", it's "not present-and-equal".
+    // params = "fullReset!=true" matches BOTH a request with no fullReset parameter and one with
+    // any value other than exactly "true": Spring's negated-equality condition means "not
+    // present-and-equal", not "present and different".
     @PostMapping(params = "fullReset!=true")
     public ResponseEntity<Void> deleteUsers(
             @RequestHeader(name = RESET_TOKEN_HEADER, required = false) String suppliedToken,

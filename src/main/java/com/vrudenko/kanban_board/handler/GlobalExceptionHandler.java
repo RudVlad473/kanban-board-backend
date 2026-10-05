@@ -57,10 +57,9 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(problem.getStatus()).body(problem);
     }
 
-    // GAP-05: a request body that fails to deserialize -- e.g. a theme value outside
-    // ThemePreference's two members -- throws this before validation ever runs. Without this arm
-    // it falls through to the Exception.class catch-all below and surfaces as a 500 instead of the
-    // 400 a malformed request warrants.
+    // A request body that fails to deserialize (e.g. a theme outside ThemePreference's two
+    // members) throws this before validation runs; without this arm it falls through to the
+    // Exception.class catch-all as a 500, not the 400 a malformed request warrants.
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ProblemDetail> handleHttpMessageNotReadable(
             HttpMessageNotReadableException ex) {
@@ -96,16 +95,17 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(problem.getStatus()).body(problem);
     }
 
-    // quick task 260811-p9c: class-level @Validated (now on every @RestController, see
-    // LayeringArchTest) makes Spring's HandlerMethod.MethodValidationInitializer skip its own
-    // built-in MVC method validation for that controller, routing @PathVariable/@RequestParam
-    // constraint failures through the AOP MethodValidationInterceptor instead -- which raises
-    // jakarta.validation.ConstraintViolationException (handleConstraintViolation below), not this
-    // exception. This arm must not be deleted as dead code even though every controller in this
-    // codebase currently carries @Validated: it is what keeps a constrained handler method a clean
-    // 400 with CONSTRAINT_VIOLATION if it is ever reached without class-level @Validated (Spring
-    // MVC's own built-in path, which this codebase's ArchUnit rule prevents but does not make
-    // structurally impossible for a handler outside @RestController scope).
+    // Map the built-in MVC method-validation failure to a 400 CONSTRAINT_VIOLATION.
+    //
+    // Decisions:
+    // Class-level @Validated (on every @RestController, see LayeringArchTest) makes Spring's
+    // HandlerMethod.MethodValidationInitializer skip its own built-in method validation for that
+    // controller and route @PathVariable/@RequestParam constraint failures through the AOP
+    // MethodValidationInterceptor, which raises jakarta.validation.ConstraintViolationException
+    // (handleConstraintViolation below), not this exception. Do not delete this arm as dead code
+    // although every controller carries @Validated: it keeps a constrained handler method a clean
+    // 400 if it is ever reached without class-level @Validated, which the ArchUnit rule prevents
+    // but cannot make structurally impossible for a handler outside @RestController scope.
     @ExceptionHandler(HandlerMethodValidationException.class)
     public ResponseEntity<ProblemDetail> handleMethodValidationException(
             HandlerMethodValidationException ex) {
@@ -113,7 +113,6 @@ public class GlobalExceptionHandler {
                 ex.getParameterValidationResults().stream()
                         .map(r -> r.getMethodParameter().getMethod());
 
-        // god why
         Pair<String, HttpStatusCode> stringHttpStatusPair =
                 Try.of(
                                 () ->
@@ -132,13 +131,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(problem.getStatus()).body(problem);
     }
 
-    // quick task 260811-p9c: closes a pre-existing latent defect, not one introduced by this
-    // change -- measured empirically (see 260811-p9c-SUMMARY.md) that a blank/malformed
-    // @PathVariable @NotBlank on an already-@Validated controller (BoardController, before this
-    // task the only one) raised this exception unhandled, falling through to the Exception.class
-    // catch-all below and surfacing as a 500 on trivially-craftable input. Now that every
-    // @RestController carries class-level @Validated (LayeringArchTest), this is the arm that keeps
-    // that path-variable-constraint failure a clean 400 with CONSTRAINT_VIOLATION everywhere.
+    // Keep a path-variable constraint failure a clean 400 CONSTRAINT_VIOLATION.
+    //
+    // Decisions:
+    // Measured empirically: a blank or malformed @PathVariable @NotBlank on an @Validated
+    // controller raised this exception unhandled, fell through to the Exception.class catch-all
+    // and surfaced as a 500 on trivially-craftable input. Every @RestController now carries
+    // class-level @Validated (LayeringArchTest), so this arm covers that failure everywhere.
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ProblemDetail> handleConstraintViolation(
             ConstraintViolationException ex) {
@@ -148,7 +147,6 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(problem.getStatus()).body(problem);
     }
 
-    // handles errors from db
     @ExceptionHandler(OptimisticLockingFailureException.class)
     public ResponseEntity<ProblemDetail> handleOptimisticLockingFailure(
             OptimisticLockingFailureException ex) {
@@ -158,8 +156,8 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(problem.getStatus()).body(problem);
     }
 
-    // the checked, expected duplicate-name path (D-09) -- a service-layer existsByUserIdAndName
-    // guard throws this before any insert/update is attempted
+    // The checked, expected duplicate-name path: a service-layer guard throws this before any
+    // insert or update is attempted.
     @ExceptionHandler(AppDuplicateResourceException.class)
     public ResponseEntity<ProblemDetail> handleAppDuplicateResource(
             AppDuplicateResourceException ex) {
@@ -169,12 +167,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(problem.getStatus()).body(problem);
     }
 
-    // Catches a uk_boards_user_id_name violation that slips past the service-level check-then-act
-    // window -- the race uk_boards_user_id_name (plan 01's V5) backstops.
-    // AppDuplicateResourceException
-    // extends this exception, so Spring resolves the more specific arm above first for the checked
-    // path; this broader arm exists only for the unchecked race and must not be deleted as dead
-    // code.
+    // Catch a uk_boards_user_id_name violation that slips past the service-level check-then-act
+    // window.
+    //
+    // AppDuplicateResourceException extends this exception, so Spring resolves the more specific
+    // arm above for the checked path; this broader arm exists only for the unchecked race and
+    // must not be deleted as dead code.
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ProblemDetail> handleDataIntegrityViolation(
             DataIntegrityViolationException ex) {
@@ -184,7 +182,6 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(problem.getStatus()).body(problem);
     }
 
-    // handles errors from authentication
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<ProblemDetail> handleBadCredentialsException(BadCredentialsException ex) {
         var problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());
