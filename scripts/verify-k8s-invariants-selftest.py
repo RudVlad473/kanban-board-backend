@@ -152,7 +152,7 @@ def run_cases():
     measured_text = "# MEASURED (fixture, 2026-01-01)\n    memory: 512Mi"
     expect_clean("I4 (measured, clean)", _gate.check_i4_source_file("fixture.yaml", measured_text))
 
-    # I4 -- --no-provisional (13-09): a PROVISIONAL label passes without the flag, fails with it.
+    # I4 -- --no-provisional: a PROVISIONAL label passes without the flag, fails with it.
     provisional_text = "# PROVISIONAL (fixture, 2026-01-01)\n    memory: 512Mi"
     expect_clean(
         "I4 (provisional, no flag)",

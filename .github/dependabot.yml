@@ -1,50 +1,36 @@
-# Dependabot version updates (quick task 260813-q1i, Task 5). This is the half of the todo's
-# scan-and-remediate pair that actually remediates: dependency-check-gradle (security-scan.yml)
-# reports advisories, Dependabot opens the PR that closes them -- directly addressing the
-# "BOM is N patches stale" root cause that produced the bulk of RESEARCH.md's measured baseline,
-# rather than only reporting it on a schedule.
+# Dependabot version updates: the remediating half of security-scan.yml's dependency-check-gradle.
 #
-# This file configures *version updates* only. Dependabot *security alerts* (the part that
-# actually surfaces the CVE set against installed versions) are a separate repository setting,
-# not something this file controls -- confirmed enabled via a read-only `gh api
-# repos/:owner/:repo/vulnerability-alerts` check (204 response) during Task 3/5 of quick task
-# 260813-q1i.
+# Dependency-check reports advisories; Dependabot opens the PR that closes them, addressing the "BOM is N
+# patches stale" root cause rather than only reporting it.
 #
-# The github-actions ecosystem entry below (Phase 10, HARDEN-01) exists specifically to keep
-# deploy.yml's digest-pinned appleboy/scp-action and appleboy/ssh-action references (HARDEN-03,
-# D-05) maintained rather than frozen at their pinned commit forever (D-07's composition
-# requirement) -- Dependabot natively updates both a SHA pin and its adjacent version comment
-# together when it opens a bump PR, so this ecosystem entry and deploy.yml's pins are meant to
-# compose, not stand alone.
+# Decisions:
+# This file configures *version updates* only. Dependabot *security alerts* are a separate repository
+# setting, confirmed enabled with a read-only `gh api repos/:owner/:repo/vulnerability-alerts` check (204).
+# The github-actions ecosystem entry keeps workflow action references maintained instead of frozen:
+# Dependabot updates a SHA pin and its adjacent version comment together when it opens a bump PR.
 version: 2
 updates:
   - package-ecosystem: "gradle"
     directory: "/"
     schedule:
       interval: "weekly"
-    # gradle/verification-metadata.xml (Phase 10, 10-04) makes every gradle-ecosystem PR fail CI
-    # until someone regenerates and commits that file alongside the bump -- a real, per-bump
-    # chore. Ungrouped, each outdated dependency gets its own PR, so that chore (and its own CI
-    # run) repeats once per dependency. Grouped instead: every gradle-ecosystem update found on
-    # a given schedule run lands in ONE PR, so one regeneration + one CI run covers the batch,
-    # not N of each. The `patterns: ["*"]` wildcard is deliberate -- there is no major/minor
-    # split here, because the verification-metadata regeneration cost is identical either way
-    # (it is per-PR, not per-version-jump), so splitting them would only reintroduce the
-    # one-PR-per-bump chore this grouping exists to remove.
+    # Group every gradle update into ONE PR: gradle/verification-metadata.xml makes each gradle PR fail CI
+    # until it is regenerated and committed with the bump.
+    #
+    # Ungrouped, that chore (and its CI run) repeats once per dependency; grouped, one regeneration and one CI
+    # run cover the batch. `patterns: ["*"]` is deliberate: there is no major/minor split, since the
+    # regeneration cost is per PR, not per version jump.
     groups:
       gradle-updates:
         patterns:
           - "*"
-    # Bounds PR noise from an automated actor. Every Dependabot PR still runs deploy.yml's
-    # run-tests job (spotlessCheck + the full test suite) like any other PR, so nothing merges
-    # untested or unreviewed -- this limit only caps how many can be open at once. Grouping above
-    # already collapses same-run updates into one PR; this remains a backstop for updates
-    # Dependabot finds on different schedule runs before an earlier group PR is merged.
+    # Cap on open PRs from an automated actor; every Dependabot PR still runs deploy.yml's run-tests job,
+    # so nothing merges untested. A backstop for updates found on different runs before an earlier group PR
+    # merges.
     open-pull-requests-limit: 2
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
-    # Same noise bound as the gradle entry above -- every Dependabot PR still runs deploy.yml's
-    # run-tests job like any other PR, so nothing merges untested or unreviewed.
+    # Same cap as the gradle entry above.
     open-pull-requests-limit: 5

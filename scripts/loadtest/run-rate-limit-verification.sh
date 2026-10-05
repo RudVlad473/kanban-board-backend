@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Post-deploy verification that the edge rate limiter is live AND correctly scoped (quick task
-# 260903-dvp, Task 7; retargeted from Caddy to Traefik in Plan 13-08, D-13). Run this against the
-# real deployment after a deploy lands.
+# Post-deploy verification that the edge rate limiter is live AND correctly scoped; run it against
+# the real deployment after a deploy lands.
 #
 #   ./scripts/loadtest/run-rate-limit-verification.sh
 #   ./scripts/loadtest/run-rate-limit-verification.sh <prod-url> <nonprod-url>
@@ -32,6 +31,7 @@ trap 'rm -rf "$OUT"' EXIT
 # Pinned deliberately: an unpinned load-test tool makes a red run ambiguous between "the limiter
 # regressed" and "the tool changed".
 #
+# Decisions:
 # 2.0.24 and NOT 2.0.29 (observed 2026-09-03, reproduced under both pnpm dlx and npx, so this is
 # the package and not the package manager): artillery 2.0.29 fails to load every subcommand with
 # `[MODULE_NOT_FOUND] Cannot find module '@smithy/node-config-provider'`, then reports
@@ -64,11 +64,11 @@ print(codes.get('http.codes.429',0))
 " "$1"
 }
 
-# Distinguish "the limiter misbehaved" from "the probe never reached the limiter's interesting
-# path". Added 2026-09-03 after a review round lost time to the old message, which blamed a spent
-# IP budget for what was actually a 400 -- the probe password failed @Password validation, so every
-# allowed request was rejected before authentication and the 401 counter never moved. Any 4xx that
-# is neither 401 nor 429 means the payload is wrong, and no amount of waiting fixes that.
+# Tell a probe-payload problem from a limiter problem: any 4xx that is neither 401 nor 429 means the
+# payload is wrong, and no amount of waiting fixes that.
+#
+# Observed 2026-09-03: a 400 (the probe password failed @Password validation, so every allowed request
+# was rejected before authentication and the 401 counter never moved) was blamed on a spent IP budget.
 explain_failure() {
   local report="$1"
   [ -f "$report" ] || return 0
@@ -84,12 +84,13 @@ if odd:
 " "$report" 2>/dev/null || true
 }
 
-# Preflight. Added 2026-09-03 (round-3 review) after the committed nonprod default turned out to be
-# a hostname that does not exist -- the segments were transposed
-# (kanban-board-nonprod-<id> instead of kanban-board-<id>-nonprod), so the negative control could
-# never have run against the real deployment. Artillery reports that as `getaddrinfo ENOTFOUND`
-# buried in its output while still writing a report whose 429 count is 0 -- which is exactly what
-# a PASSING negative control looks like. Resolve both names up front and fail loudly instead.
+# Preflight: resolve both hostnames up front and fail loudly.
+#
+# Observed 2026-09-03: the committed nonprod default had its segments transposed
+# (kanban-board-nonprod-<id> instead of kanban-board-<id>-nonprod), so the negative control could never
+# have run against the real deployment. Artillery reports that as `getaddrinfo ENOTFOUND` buried in its
+# output while still writing a report whose 429 count is 0, exactly what a PASSING negative control
+# looks like.
 for pair in "production:$PROD_URL" "nonprod:$NONPROD_URL"; do
   label="${pair%%:*}"; url="${pair#*:}"
   host="${url#*://}"; host="${host%%/*}"; host="${host%%:*}"

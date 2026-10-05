@@ -1,15 +1,14 @@
 #!/usr/bin/env bash
-# Adversarial harness for k8s/data/postgres/init/01-create-databases-and-roles.sh (D-01, plan
-# 11-07 / 11-REVIEW.md CR-01). Boots a throwaway postgres:16 container against a given init
-# directory with deliberately hostile credential values and asserts what correct, injection-safe
-# provisioning looks like. This file is what makes the fix falsifiable -- it must fail against the
-# pre-fix script and pass against the fixed one; see the plan's Task 1 for the recorded proof.
+# Adversarial harness for k8s/data/postgres/init/01-create-databases-and-roles.sh: boot a throwaway
+# postgres:16 with hostile credential values and assert injection-safe provisioning.
 #
-# Deliberately lives in scripts/, NOT k8s/data/postgres/init/ -- the official postgres image sources
-# every file it finds in the mounted init directory as the superuser on first boot, so a harness
-# placed there would execute against a real database rather than a throwaway one.
-#
-# Manually invoked only -- not wired into CI or Gradle by design (see the plan's Task 1 action).
+# Decisions:
+# This file makes the quoting fix falsifiable: it must fail against the pre-fix script and pass against
+# the fixed one.
+# It lives in scripts/, NOT k8s/data/postgres/init/: the official postgres image sources every file in
+# the mounted init directory as the superuser on first boot, so a harness placed there would run against
+# a real database rather than a throwaway one.
+# Manually invoked only, not wired into CI or Gradle by design.
 set -eo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -58,18 +57,16 @@ PROD_USER="qtest_prod_app"
 NONPROD_USER="qtest_np_app"
 PROD_PASS="benign-prod-value"
 NONPROD_PASS="benign-np-value"
-# Extended Phase 13 plan 04 Task 2: MONITORING_DB_PASS is required by an optional
-# 02-create-monitoring-role.sh alongside 01's own two roles (k8s/data/postgres/init). Supplied
-# unconditionally so this harness still passes against an init dir that carries only 01 (the
-# entrypoint simply has no 02 script to source in that case) as well as one that carries both.
+# MONITORING_DB_PASS is required by the optional 02-create-monitoring-role.sh. Supplied unconditionally
+# so the harness passes against an init dir carrying only 01 as well as one carrying both.
 MONITORING_PASS="benign-monitoring-value"
 
 # --- Hostile values, one per attack case. Named for their role in the test, not as credentials. ---
-# breaking: apostrophe + double quote + backslash + dollar + trailing space -- the current script's
-# own comment admits it cannot survive a password shaped like this.
+# breaking: apostrophe + double quote + backslash + dollar + trailing space, a password shape the
+# pre-fix script could not survive.
 HOSTILE_LITERAL_PUNCTUATION=$'a\'b"c\\d$e '
-# injection: closes the SQL string literal early, runs CREATE DATABASE as superuser, comments out
-# the rest of the line -- the direct, reproducible proof that arbitrary SQL executes today.
+# injection: closes the SQL string literal early, runs CREATE DATABASE as superuser, comments out the
+# rest of the line; direct proof that arbitrary SQL executed in the pre-fix script.
 HOSTILE_LITERAL_PAYLOAD="x'; CREATE DATABASE pwned; --"
 # identifier: a double quote in the middle of a role name terminates a quoted identifier early.
 HOSTILE_IDENTIFIER='qtest"np_app'
@@ -123,8 +120,7 @@ dump_logs_and_exit() {
 }
 
 cleanup() {
-  # Force-remove the container and its anonymous data volume on every exit path -- success or
-  # failure -- so no container, volume, or state from this run ever survives.
+  # Runs on every exit path, success or failure, so no container or volume survives.
   docker rm -f -v "$CONTAINER_NAME" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -147,11 +143,9 @@ docker run -d \
   -e MONITORING_DB_PASS="$MONITORING_PASS" \
   postgres:16 >/dev/null
 
-# Readiness: poll up to 60s. Treat readiness as pg_isready succeeding over forced TCP. Abort early
-# if the container has already exited -- a container that died during init would otherwise waste
-# the full timeout. A readiness timeout or an exited container is a legitimate FAIL, not a harness
-# error: it is exactly what the breaking and identifier cases are expected to produce against the
-# pre-fix script.
+# Readiness is pg_isready succeeding over forced TCP; abort early if the container has exited, which
+# would otherwise waste the full 60s. A readiness timeout or an exited container is a legitimate FAIL,
+# not a harness error: it is what the breaking and identifier cases produce against the pre-fix script.
 READY=0
 for _ in $(seq 1 60); do
   STATE="$(docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null || echo "false")"
@@ -172,9 +166,6 @@ if [[ "$READY" -ne 1 ]]; then
 fi
 pass "container became ready (case=$CASE_NAME)"
 
-# --- Assertions, once ready. ---
-
-# 1. Both databases exist.
 if DB_LIST="$(run_psql "$SUPERUSER" "$SUPERUSER_PASS" "$MAINT_DB" "SELECT datname FROM pg_database")"; then
   if echo "$DB_LIST" | grep -qx "$PROD_DB" && echo "$DB_LIST" | grep -qx "$NONPROD_DB"; then
     pass "both '$PROD_DB' and '$NONPROD_DB' exist"
@@ -186,14 +177,12 @@ else
   DB_LIST=""
 fi
 
-# 2. No 'pwned' database exists -- proves injected SQL did not run.
 if echo "$DB_LIST" | grep -qx "pwned"; then
   fail "database 'pwned' exists -- injected SQL executed as the Postgres superuser"
 else
   pass "no 'pwned' database exists"
 fi
 
-# 3. Each role authenticates over TCP with its own exact password for this case.
 check_auth() {
   local user="$1" pw="$2" db="$3" label="$4"
   local out
@@ -206,8 +195,8 @@ check_auth() {
 check_auth "$PROD_USER" "$PROD_PASS" "$PROD_DB" "prod role ($PROD_USER)"
 check_auth "$NONPROD_USER" "$NONPROD_PASS" "$NONPROD_DB" "nonprod role ($NONPROD_USER)"
 
-# 4. Cross-database connection is refused in both directions -- re-proves D-01's isolation across
-# the identifier-quoting rewrite rather than assuming the REVOKE CONNECT lines still bind.
+# Re-proves database isolation across the identifier-quoting rewrite rather than assuming the REVOKE
+# CONNECT lines still bind.
 check_cross_refused() {
   local user="$1" pw="$2" other_db="$3" label="$4"
   local out
@@ -220,9 +209,8 @@ check_cross_refused() {
 check_cross_refused "$PROD_USER" "$PROD_PASS" "$NONPROD_DB" "prod role ($PROD_USER)"
 check_cross_refused "$NONPROD_USER" "$NONPROD_PASS" "$PROD_DB" "nonprod role ($NONPROD_USER)"
 
-# 5. The monitoring role (k8s/data/postgres/init/02-create-monitoring-role.sh), only asserted
-# when the init dir under test actually carries that script (the k8s init dir does, so this runs
-# by default; an init dir without a 02 script must keep passing without it).
+# Asserted only when the init dir carries 02-create-monitoring-role.sh; an init dir without it must keep
+# passing.
 if [[ -f "${INIT_DIR}/02-create-monitoring-role.sh" ]]; then
   check_auth "monitoring" "$MONITORING_PASS" "$MAINT_DB" "monitoring role"
   if OUT="$(run_psql "$SUPERUSER" "$SUPERUSER_PASS" "$MAINT_DB" \

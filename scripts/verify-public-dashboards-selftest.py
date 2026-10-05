@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """Self-test for scripts/verify-public-dashboards.py's pure functions.
 
-Prevents the failure this gate exists to catch, one level up: an edit that makes an invariant
-unfireable is invisible against dashboards that already satisfy every invariant -- the gate goes
-green and stays green, exactly as the real bug stayed invisible for a month. Each case below feeds
-one pure function an in-memory dashboard engineered to trip exactly one invariant and asserts the
+Feed each pure function an in-memory dashboard engineered to trip exactly one invariant and assert the
 violation is reported and names the offending construct; clean inputs assert nothing is reported.
 
-No file access, no working-tree mutation -- this proves the LOGIC fires, not the wiring against the
-real dashboards (that is what the one-off red/green run against the pre-fix JSON proves instead).
-
-Fixtures are literal, not derived from the gate's own PUBLIC_DASHBOARDS/BUILTIN_* constants --
-importing those would let a wrong edit to a constant rewrite this test's expectations along with
-it and still pass, which is strictly worse than a literal fixture that disagrees with the edit.
+Decisions:
+Prevents the failure the gate exists to catch, one level up: an edit that makes an invariant
+unfireable is invisible against dashboards that already satisfy every invariant, so the gate goes green
+and stays green, as the real bug stayed invisible for a month.
+No file access, no working-tree mutation: this proves the LOGIC fires, not the wiring against the real
+dashboards (the one-off red/green run against the pre-fix JSON proves that).
+Fixtures are literal, not derived from the gate's own PUBLIC_DASHBOARDS/BUILTIN_* constants: importing
+those would let a wrong edit to a constant rewrite this test's expectations along with it and still
+pass, which is worse than a literal fixture that disagrees with the edit.
 """
 
 import importlib.util

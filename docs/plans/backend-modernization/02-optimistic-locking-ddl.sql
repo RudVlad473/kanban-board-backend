@@ -1,45 +1,22 @@
--- SUPERSEDED (GSD Phase 04.1, D-03): this script is historical reference
--- material only. Do NOT run it by hand anymore. It has been folded into
--- Flyway migration history as
--- src/main/resources/db/migration/V2__add_optimistic_locking_version_columns.sql,
--- which is now the sole owner of this schema change. The body below is kept
--- verbatim as provenance for that migration's content and the schema
--- decision it documents -- it is no longer executable guidance.
+-- SUPERSEDED: historical reference only. Do NOT run by hand.
 --
--- Epic 2 — Optimistic Locking: one-off manual DDL bridge
+-- Folded into Flyway as src/main/resources/db/migration/V2__add_optimistic_locking_version_columns.sql,
+-- now the sole owner of this schema change. The body below is kept verbatim as provenance for that
+-- migration's content.
 --
--- WHAT THIS IS
--- The real Postgres profile (src/main/resources/application.properties) has
--- ddl-auto unset, so Hibernate will NOT create the new `version` column added
--- to TaskEntity/ColumnEntity (@Version) automatically. This script adds it by
--- hand. The H2 test profile is unaffected — tests create their schema from
--- the entities, so this script has no bearing on the test suite.
---
--- WHEN TO RUN
--- Run this manually via psql against the REAL Postgres database, immediately
--- before merging/deploying this phase's PR. This is one-way (D-06): master
--- auto-deploys to EC2 on every push (.github/workflows/deploy.yml), so if
--- this column is missing when the new code ships, every request touching a
--- Task or Column hits a missing-column SQL error in production. Do not merge
--- the PR before running this.
---
--- ANNOTATION (2026-08-17, historical rationale above left intact, not
--- rewritten): the EC2 host this reasoning names no longer exists -- it was
--- torn down on cost grounds and the auto-deploy target moved to a Netcup
--- VPS during v1.2's infra migration (see docs/INFRA_RUNBOOK.md). This script
--- is already superseded per the note at the top of this file regardless, so
--- the stale host name has no live operational effect -- recorded here only
--- so a future reader is not reasoning from a host that no longer exists.
---
--- WHAT THIS IS NOT
--- This is a one-off manual bridge step for Epic 2 only. It is NOT a
--- replacement for Epic 3's Flyway migration tooling — when Epic 3 lands, this
--- manual step must be reflected in migration history (e.g. as a baseline/
--- already-applied migration), not silently re-applied or lost.
---
--- SAFE TO RE-RUN: uses IF NOT EXISTS, so accidentally running this twice is a
--- no-op the second time. Pre-existing rows get a concrete version (0), never
--- NULL, so @Version(nullable = false) never fails against existing data.
+-- Decisions:
+-- This was a one-off manual DDL bridge for optimistic locking. The Postgres profile has ddl-auto unset,
+-- so Hibernate would NOT create the new `version` column (@Version on TaskEntity/ColumnEntity); the
+-- script added it by hand via psql against the real database, immediately before merging the PR. The
+-- order was one-way: the main branch auto-deployed on every push (.github/workflows/deploy.yml), so a
+-- missing column would make every request touching a Task or Column fail with a missing-column SQL
+-- error in production. The H2 test profile of that time was unaffected, since tests built their schema
+-- from the entities.
+-- Safe to re-run: IF NOT EXISTS makes a second run a no-op, and existing rows get a concrete version
+-- (0), never NULL, so @Version(nullable = false) never fails against existing data.
+-- Annotation 2026-08-17: the EC2 host the auto-deploy reasoning names no longer exists; it was torn down
+-- on cost grounds and the auto-deploy target moved to a Netcup VPS (docs/INFRA_RUNBOOK.md). The stale
+-- host name has no live operational effect since the script is superseded.
 
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS version bigint NOT NULL DEFAULT 0;
 

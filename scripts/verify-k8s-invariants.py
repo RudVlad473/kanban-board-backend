@@ -1,83 +1,72 @@
 #!/usr/bin/env python3
-r"""Gate: only the edge is exposed, memory is measured and dated, images are pinned and sortable,
-every k8s/ root is accounted for, no Secret is committed, and no redirect route can ever
-match the ACME HTTP-01 challenge path (Phase 13 plans 01/04/10).
+r"""Gate: only the edge is public, memory caps are measured and dated, images are pinned, no Secret is
+committed, and no redirect route matches the ACME HTTP-01 challenge path.
 
-WHY this exists: this is the k8s-native successor of the deleted scripts/verify-compose-ports.py's
-"only the edge is public" invariant (2026-09-05, removed with Compose in 13-10, D-04). It guards the
-k8s/ manifests, so the same class of defect -- a service silently gaining a public port, an
-unmeasured memory cap, a committed credential -- keeps getting caught pre-merge. I6 superseded the
-deleted scripts/verify-postgres-memory-invariant.py, whose two inequalities it ports.
+Successor of the deleted scripts/verify-compose-ports.py's "only the edge is public" invariant; I6
+supersedes the deleted scripts/verify-postgres-memory-invariant.py and ports its two inequalities.
 
-SCOPE: every kustomization root under k8s/ (discovered the same way
-scripts/verify-k8s-manifests.sh discovers them), rendered with that script's own pinned kubectl,
-checked against I1-I3/I5/I8 (rendered-object invariants); I4/I7 read the committed k8s/ tree
-directly (I4 scans hand-written source YAML, I7 walks the directory tree); I6 (Postgres memory
-inequalities) applies only when a rendered object is a Postgres StatefulSet -- none exists yet in
-this phase's own tree, so I6 is exercised only by the selftest until 13-04 adds one.
+Scope: every kustomization root under k8s/ (discovered as scripts/verify-k8s-manifests.sh does),
+rendered with that script's pinned kubectl and checked against I1-I3/I5/I8. I4 and I7 read the committed
+tree (I4 scans hand-written source YAML, I7 walks the directory tree); I6 applies only to a rendered
+Postgres StatefulSet.
 
-KNOWN HOLES, enumerated now rather than left to be rediscovered:
-  * This sees committed manifests only -- a `kubectl apply` made by hand against a live cluster, or an object mutated by a
-    controller after admission, is invisible here.
+Known holes:
+  * This sees committed manifests only: a `kubectl apply` made by hand against a live cluster, or an
+    object mutated by a controller after admission, is invisible here.
   * Helm-rendered chart objects (HelmRelease `values:`) and the k3s-packaged Traefik Service are
-    invisible to this gate -- neither is Kustomize-rendered YAML this script's render step
-    produces. The runtime check for those lives in 13-08 (per the phase's own source_audit).
-  * DELIBERATELY_EXCLUDED (I7) is editable in the same PR that adds an unrendered root -- this
-    gate makes an exclusion REVIEWED, not impossible; a human reviewer still has to read the diff.
-  * I4's docstring-window scan (25 lines above a `memory:` line) is a heuristic, not a parser --
-    a MEASURED comment placed further away, or attached to an unrelated `memory:` line by
-    coincidental proximity, is a false negative/positive this gate cannot structurally close
-    without a real YAML-comment-association parser (PyYAML discards comments on load).
-  * I5's tag-pattern check is Kustomize-image-transformer-shaped: it inspects each overlay
-    kustomization.yaml's `images[].newTag` field directly (not the rendered output, since
-    Kustomize's image transformer does not preserve the setter-marker comment through render) --
-    a base manifest's own literal `image:` field (untouched by any overlay's `images:` transform)
-    is checked against `:latest`/untagged only, not against the `main-N-sha7` pattern, since a
-    base image reference is meant to be overridden by every overlay, not final by itself.
+    invisible: neither is Kustomize-rendered YAML this script's render step produces. The runtime check
+    for those is the exposure inventory in docs/INFRA_RUNBOOK.md's edge-hardening section.
+  * DELIBERATELY_EXCLUDED (I7) is editable in the same PR that adds an unrendered root; this gate makes
+    an exclusion REVIEWED, not impossible, and a human reviewer still has to read the diff.
+  * I4's docstring-window scan (25 lines above a `memory:` line) is a heuristic, not a parser: a MEASURED
+    comment placed further away, or attached to an unrelated `memory:` line by coincidental proximity,
+    is a false negative/positive this gate cannot close without a YAML-comment-association parser
+    (PyYAML discards comments on load).
+  * I5's tag-pattern check inspects each overlay kustomization.yaml's `images[].newTag` field directly,
+    not the rendered output, since Kustomize's image transformer does not preserve the setter-marker
+    comment through render. A base manifest's own literal `image:` field (untouched by any overlay's
+    `images:` transform) is checked against `:latest`/untagged only, not the `main-N-sha7` pattern,
+    since a base image reference is meant to be overridden by every overlay.
 
-Invariants, numbered in both this docstring and the emitted FAIL lines so a red CI line names
-which one broke, in which root, on which object:
+Invariants, numbered in both this docstring and the emitted FAIL lines so a red CI line names which
+one broke, in which root, on which object:
 
-I1: no rendered Service is `type: NodePort` (or `type: LoadBalancer` without an explicit,
-    documented exception -- none exists in this phase, so any non-ClusterIP Service violates).
+I1: no rendered Service is `type: NodePort` (or `type: LoadBalancer` without an explicit, documented
+    exception; none exists, so any non-ClusterIP Service violates).
 I2: no rendered Pod template sets `hostNetwork: true`, `hostPID: true`, any container's
     `ports[].hostPort`, or any volume of type `hostPath`.
 I3: every container and initContainer in every rendered Pod template declares BOTH
     `resources.requests.memory` and `resources.limits.memory`, and requests never exceed limits.
-I4: every hand-written source YAML `memory:` line (source files only -- GENERATED below is
-    exempt) carries a MEASURED or PROVISIONAL comment within the 25 lines immediately above it.
-    With `--no-provisional`, a PROVISIONAL-labelled line fails too (13-09 flips this on; this
-    phase runs the gate without it, per Task 3's own <action>).
+I4: every hand-written source YAML `memory:` line (source files only; GENERATED below is exempt)
+    carries a MEASURED or PROVISIONAL comment within the 25 lines immediately above it. With
+    `--no-provisional`, a PROVISIONAL-labelled line fails too (CI runs the gate with it).
 I5: no rendered container/initContainer image is untagged or `:latest`; every overlay's
     `kustomization.yaml` `images[].newTag` for the app image matches `^main-\d+-[0-9a-f]{7}$`
     and carries its Flux setter-marker comment.
 I6: a rendered Postgres StatefulSet's `shared_buffers` exceeds `limits.memory` / 4, or
-    `shared_buffers + max_connections * work_mem` exceeds 0.85 * `limits.memory` --
-    ported directly from the deleted scripts/verify-postgres-memory-invariant.py's own two
-    inequalities.
-I7: every directory under k8s/ that holds a kustomization.yaml is either rendered by this gate's
-    own root-discovery (same mechanism as verify-k8s-manifests.sh) or explicitly listed in
-    DELIBERATELY_EXCLUDED with a reason -- a root in neither set would be silently ungated.
-I8: no rendered object has `kind: Secret` -- D-10 requires every Secret be created on the VM from
-    env files, never committed.
-I9: RETIRED in 13-10 (its subject, docker/postgres-init/, was deleted with Compose). The number is
-    kept unused so I10 and the FAIL-line history in the runbook keep their numbers.
-I10: an IngressRoute route attaching a Middleware whose spec is `redirectScheme` or
-    `redirectRegex` must fullmatch ``Host(`<host>`) && !PathPrefix(`/.well-known/acme-challenge/`)``.
-    Evaluated over every rendered root the gate already renders, so it covers the redirect routes
-    on the prod (13-04), monitoring (13-03) and nonprod (13-06) hostnames as each lands. Fails
-    closed: a `web`-entryPoint route naming a Middleware that is undefined in its own rendered
-    root and namespace cannot be classified, and is reported as a violation rather than skipped.
-    WHY: cert-manager's HTTP-01 solver answers on the `web` entryPoint. A redirect router that
-    also matches the challenge path sends the ACME CA to HTTPS, and issuance/renewal fails.
-    Traefik's own rule-length priority happens to favour the solver today, but an explicit
-    `priority` or a longer redirect rule silently inverts that. KNOWN HOLE: this is a rule-TEXT
-    check -- the live proof is an HTTP probe of the challenge path, run in the cutover runbook.
+    `shared_buffers + max_connections * work_mem` exceeds 0.85 * `limits.memory`; ported directly from
+    the deleted scripts/verify-postgres-memory-invariant.py's own two inequalities.
+I7: every directory under k8s/ that holds a kustomization.yaml is either rendered by this gate's own
+    root-discovery (same mechanism as verify-k8s-manifests.sh) or explicitly listed in
+    DELIBERATELY_EXCLUDED with a reason; a root in neither set would be silently ungated.
+I8: no rendered object has `kind: Secret`: every Secret is created on the VM from env files, never
+    committed.
+I9: RETIRED (its subject, docker/postgres-init/, was deleted with Compose). The number is kept unused
+    so I10 and the FAIL-line history in the runbook keep their numbers.
+I10: an IngressRoute route attaching a Middleware whose spec is `redirectScheme` or `redirectRegex`
+    must fullmatch ``Host(`<host>`) && !PathPrefix(`/.well-known/acme-challenge/`)``. Evaluated over
+    every rendered root the gate already renders. Fails closed: a `web`-entryPoint route naming a
+    Middleware that is undefined in its own rendered root and namespace cannot be classified, and is
+    reported as a violation rather than skipped.
+    WHY: cert-manager's HTTP-01 solver answers on the `web` entryPoint. A redirect router that also
+    matches the challenge path sends the ACME CA to HTTPS, and issuance/renewal fails. Traefik's own
+    rule-length priority happens to favour the solver today, but an explicit `priority` or a longer
+    redirect rule silently inverts that. KNOWN HOLE: this is a rule-TEXT check; the live proof is an
+    HTTP probe of the challenge path, run in the cutover runbook.
 
-A missing/malformed rendered document, or a root that fails to render entirely, is its own
-violation rather than a silently skipped root -- treating "I could not read this" as "nothing to
-report" is the exact failure mode this gate exists to remove.
-"""
+A missing/malformed rendered document, or a root that fails to render entirely, is its own violation
+rather than a silently skipped root: treating "I could not read this" as "nothing to report" is the
+failure mode this gate exists to remove."""
 
 import glob
 import os
@@ -88,23 +77,23 @@ import sys
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MANIFESTS_SCRIPT = os.path.join(REPO_ROOT, "scripts", "verify-k8s-manifests.sh")
 
-# Kustomization roots this gate is not expected to render/check today -- empty for this phase;
-# kept as a named, documented mechanism (I7) rather than silently skipping an unlisted root.
+# Kustomization roots this gate is not expected to render/check; empty today. A named, documented
+# mechanism (I7) rather than silently skipping an unlisted root.
 DELIBERATELY_EXCLUDED = set()
 
-# k8s/base/* roots are intentionally incomplete building blocks for exactly two fields:
-# resources.requests/limits (I3) and the image tag (I5) -- both are meant to be patched in per
-# environment by an overlay, never final at the base level. Every OTHER rendered-object invariant
-# (I1 Service type, I2 host* escapes, I6 postgres memory math, I8 committed Secret) still applies
-# to a base root: a NodePort Service, a hostNetwork pod, or a committed Secret would be exactly as
-# real a defect in a base manifest as in a rendered overlay, and nothing patches those fields in
-# later -- exempting them from base roots would silently blind the gate to the acceptance
-# criterion's own worked example (mutating a base Service to NodePort must still print FAIL: I1).
-# Matched by a `k8s/base/` path prefix rather than listed by name, so a new base/ root added
-# later is automatically covered without editing this set.
+# k8s/base/* roots are intentionally incomplete building blocks for exactly two fields, patched in per
+# environment by an overlay: resources.requests/limits (I3) and the image tag (I5).
+#
+# Decisions:
+# Every OTHER rendered-object invariant (I1 Service type, I2 host* escapes, I6 postgres memory math, I8
+# committed Secret) still applies to a base root: a NodePort Service, a hostNetwork pod or a committed
+# Secret is as real a defect in a base manifest as in an overlay, and nothing patches those fields in
+# later. Exempting them would blind the gate to mutating a base Service to NodePort, which must still
+# print FAIL: I1. Matched by `k8s/base/` path prefix, not by name, so a new base/ root is covered
+# automatically.
 
-# Files exempt from I4's docstring-window scan because they are machine-generated, not
-# hand-written -- a generator's own output is not where a human would place a MEASURED comment.
+# Exempt from I4's docstring-window scan because they are machine-generated: a generator's output is not
+# where a human would place a MEASURED comment.
 GENERATED = {
     "k8s/flux-system/gotk-components.yaml",
 }
@@ -115,9 +104,9 @@ SETTER_MARKER_RE = re.compile(r'"\$imagepolicy":\s*"[^"]+:tag"')
 
 
 def to_mi(value):
-    """Parses a Kubernetes memory quantity (e.g. '512Mi', '1Gi', '900m'... no -- 'm' is millicpu,
-    not a memory suffix; Kubernetes memory quantities use Ki/Mi/Gi or K/M/G) into mebibytes.
-    Returns None if unparseable.
+    """Parse a Kubernetes memory quantity (Ki/Mi/Gi or K/M/G; `m` is millicpu, not memory) into mebibytes.
+
+    Return None if unparseable.
     """
     match = re.fullmatch(r"(\d+(?:\.\d+)?)\s*(Ki|Mi|Gi|K|M|G)?", str(value).strip())
     if not match:
@@ -237,8 +226,8 @@ def check_i5_rendered(doc, label):
 
 
 def check_i6(doc, label):
-    """Ported from scripts/verify-postgres-memory-invariant.py's two inequalities, applied to a
-    rendered Postgres StatefulSet's command-line flags and its own container memory limit."""
+    """I6: apply the deleted scripts/verify-postgres-memory-invariant.py's two inequalities to a rendered
+    Postgres StatefulSet's command-line flags and its container memory limit."""
     if doc.get("kind") != "StatefulSet":
         return []
     name = doc.get("metadata", {}).get("name", "")
@@ -298,10 +287,11 @@ REDIRECT_MIDDLEWARE_SPEC_KEYS = ("redirectScheme", "redirectRegex")
 
 def check_i10_redirect_acme_exclusion(docs, label):
     """I10: every IngressRoute route attaching a redirectScheme/redirectRegex Middleware must
-    fullmatch the ACME-challenge-exclusion rule shape. Fails closed on a web-entrypoint route
-    naming a Middleware undefined in this same doc list (root+namespace). Pure function of a
-    rendered-document list (no disk/subprocess access) so the selftest can exercise it directly
-    with hand-built fixtures; the real call site in main() passes one root's own rendered docs.
+    fullmatch the ACME-challenge-exclusion rule shape.
+
+    Fail closed on a web-entrypoint route naming a Middleware undefined in this same doc list
+    (root+namespace). Pure function of a rendered-document list (no disk/subprocess access), so the
+    selftest can exercise it with hand-built fixtures; main() passes one root's own rendered docs.
     """
     violations = []
     redirect_middlewares = set()
@@ -350,11 +340,11 @@ def check_i10_redirect_acme_exclusion(docs, label):
 
 
 def check_rendered_doc(doc, label, is_base_root=False):
-    """Runs every rendered-object invariant (I1-I3, I5, I6, I8) against one parsed document.
+    """Run every rendered-object invariant (I1-I3, I5, I6, I8) against one parsed document.
 
-    `is_base_root` skips ONLY I3 (resources) and I5 (image tag) -- the two fields a k8s/base/*
-    root is intentionally incomplete for, by design (see the module-level DELIBERATELY_EXCLUDED
-    comment). Every other invariant still applies even to a base root's own rendered objects.
+    `is_base_root` skips ONLY I3 (resources) and I5 (image tag), the two fields a k8s/base/* root is
+    intentionally incomplete for (see the comment above GENERATED). Every other invariant still
+    applies to a base root's own rendered objects.
     """
     if not isinstance(doc, dict):
         return [f"{label}: a rendered document is not a mapping -- cannot check any invariant"]
@@ -371,13 +361,12 @@ def check_rendered_doc(doc, label, is_base_root=False):
 
 def check_i4_source_file(path, text, no_provisional=False):
     """I4: every hand-written source YAML `memory:` line carries a MEASURED/PROVISIONAL comment
-    within the 25 lines immediately above it. Pure function of a (path, text) pair -- no disk
-    access here, so a selftest can feed it a literal string.
+    within the 25 lines immediately above it.
 
-    `no_provisional` (13-09, D-07): once every value in the tree is measured, a PROVISIONAL label
-    is itself a regression -- flip this on to fail any line whose nearest label is PROVISIONAL
-    rather than MEASURED, closing the loophole a provisional-forever value could otherwise hide
-    behind indefinitely.
+    Pure function of a (path, text) pair, so a selftest can feed it a literal string. `no_provisional`:
+    once every value in the tree is measured, a PROVISIONAL label is itself a regression; set it to
+    fail any line whose nearest label is PROVISIONAL rather than
+    MEASURED, so a provisional-forever value cannot hide.
     """
     if path in GENERATED:
         return []

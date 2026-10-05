@@ -1,17 +1,16 @@
-# Artillery: prove the limiter is scoped to production ONLY (quick task 260903-dvp, Task 7).
-#
-# Negative control for rate-limit-prod.yml, and the more informative of the two. Both hostnames are
-# served by the SAME Caddy container running the SAME binary with the SAME Caddyfile -- the only
-# difference is that `rate_limit` appears inside the {$APP_DOMAIN} site block and not inside
-# {$APP_DOMAIN_NONPROD}. So this file is what distinguishes "the limiter is correctly scoped to one
-# site block" from "the limiter is throttling everything", and those two states are indistinguishable
-# from the production side alone.
-#
-# It also protects a real workflow rather than a hypothetical: nonprod runs the chatty e2e suites,
-# which would trip a 120/min general zone. A 429 here is a production incident for CI.
+# Artillery: prove the limiter is scoped to production ONLY. Negative control for rate-limit-prod.yml,
+# and the more informative of the two.
 #
 # Same safety constraints as the production file: signin only (never signup, which would create real
 # rows), deliberately invalid credentials, sequential single user.
+#
+# Decisions:
+# Both hostnames are served by the same Traefik and the same app binary; only the production
+# IngressRoute attaches the rate-limit Middleware. So this file distinguishes "the limiter is correctly
+# scoped to one hostname" from "the limiter is throttling everything", which are indistinguishable from
+# the production side alone.
+# It also protects a real workflow: nonprod runs the chatty e2e suites, which would trip the 120/min
+# general limit, so a 429 here is a production incident for CI.
 config:
   target: "https://kanban-board-rud-vlad-473-nonprod.duckdns.org"
   phases:
@@ -21,14 +20,12 @@ config:
   plugins:
     ensure: {}
     expect: {}
-  # Every one of the 25 must reach the app and be answered 401. Stated as an equality rather than
-  # a floor so that a single 429 -- the exact regression this file exists to catch -- fails the
-  # run even though the other 24 succeeded.
+  # Every one of the 25 must reach the app and be answered 401. Stated as an equality, not a floor, so a
+  # single 429, the exact regression this file exists to catch, fails the run though the other 24 succeed.
   #
-  # The runner ALSO computes the 429 count from the JSON report and fails on non-zero. That is
-  # belt-and-braces on purpose: this is the assertion whose silent failure would be worst (a
-  # throttled nonprod breaks the e2e suites), and `expect`'s per-request statusCode check and this
-  # aggregate condition fail on different signals.
+  # The runner ALSO computes the 429 count from the JSON report and fails on non-zero, on purpose: this is
+  # the assertion whose silent failure would be worst (a throttled nonprod breaks the e2e suites), and
+  # `expect`'s per-request statusCode check and this aggregate condition fail on different signals.
   ensure:
     conditions:
       - expression: "http.codes.401 == 25"
@@ -42,17 +39,15 @@ scenarios:
               url: "/api/signin"
               json:
                 email: "ratelimit-probe@example.invalid"
-                # MUST satisfy @Password (upper + lower + digit + special, 8-64 chars) even though
-                # it is deliberately wrong. Jakarta validation runs BEFORE authentication, so a
-                # format-invalid password is answered 400 VALIDATION_FAILED and never reaches
-                # bcrypt or the limiter's interesting path -- the probe would then assert against a
-                # status it never sees. Found 2026-09-03 (round-2 review): the original
-                # "not-a-real-password" has no uppercase and no digit, which made both halves of
-                # this harness unconditionally red while blaming the limiter. Do not "simplify"
-                # this literal.
+                # MUST satisfy @Password (upper + lower + digit + special, 8-64 chars) though it is deliberately wrong.
+                #
+                # Jakarta validation runs BEFORE authentication, so a format-invalid password is answered 400
+                # VALIDATION_FAILED and never reaches bcrypt or the limiter, and the probe would assert against a status
+                # it never sees. Observed 2026-09-03: the original "not-a-real-password" has no uppercase and no digit,
+                # which turned both halves of this harness red while blaming the limiter. Do not "simplify" this literal.
                 password: "NotAReal-Password1"
-              # 401 ONLY. A 429 here is the failure this whole file exists to catch, so it is
-              # deliberately not in the accepted list -- an unexpected-status failure is the signal.
+              # 401 ONLY: a 429 is the failure this file exists to catch, so it is deliberately not in the accepted
+              # list and an unexpected-status failure is the signal.
               expect:
                 - statusCode: 401
         count: 25

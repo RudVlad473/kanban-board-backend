@@ -1,5 +1,6 @@
 #!/bin/sh
 # Client-side connect prober for the kanban nonprod connect-timeout investigation (2026-09-05).
+#
 # Pairs with /var/tmp/net-forensics/samples.csv on netcup-prod: this records whether a connection
 # COULD be established from here; that records whether the host saw any handshake at the same
 # instant. A row here with exit!=0 and a flat passive_opens there = the SYN never arrived.

@@ -1,58 +1,47 @@
 #!/usr/bin/env bash
-# Renders docs/diagrams/*.mmd to their committed *.png, and checks the committed set for drift,
-# through one digest-pinned renderer -- so a rendered PNG's exact pixels no longer depend on which
-# machine happened to render it.
+# Render docs/diagrams/*.mmd to their committed *.png, and check the committed set for drift, through
+# one digest-pinned renderer, so a PNG's exact pixels no longer depend on which machine rendered it.
 #
-# WHY THIS EXISTS: as of 2026-09-05 no render command existed anywhere in this repository and
-# `mmdc` was not installed (confirmed by searching docs/, scripts/, .github/, .githooks/ and
-# build.gradle). Every one of the nine committed PNGs was therefore an artifact of an unknown
-# renderer on an unknown machine -- unreproducible, and with nothing able to detect drift between
-# a `.mmd` source and its `.png`.
-#
-# --- The pin (load-bearing; re-resolve before trusting it further) -----------------------------
-# Digest re-resolved 2026-09-05 against GHCR's registry API (the `docker-content-digest` response
-# header for the manifest-LIST tag `11.17.0`, which is also npm's `@mermaid-js/mermaid-cli`
-# `latest` dist-tag): a pin copied from a plan and never independently checked is folklore with a
-# hash on it. `docker manifest inspect` alone is not sufficient re-verification -- it returns the
-# per-architecture manifest digests, not the top-level index digest an `@sha256:...` reference
-# resolves against; use `docker buildx imagetools inspect`, or query the registry API directly for
-# the `docker-content-digest` header, as was done here.
+# Decisions:
+# No render command existed as of 2026-09-05 and `mmdc` was not installed (searched docs/, scripts/,
+# .github/, .githooks/, build.gradle), so each of the nine committed PNGs was an artifact of an unknown
+# renderer on an unknown machine: unreproducible, with nothing to detect drift from its `.mmd` source.
+# The pin is load-bearing; re-resolve it before trusting it further. The digest was re-resolved
+# 2026-09-05 against GHCR's registry API (the `docker-content-digest` response header for the
+# manifest-LIST tag `11.17.0`, also npm's `@mermaid-js/mermaid-cli` `latest` dist-tag): a pin copied from
+# a plan and never independently checked is folklore with a hash on it. `docker manifest inspect` alone
+# is not sufficient, since it returns per-architecture manifest digests, not the top-level index digest
+# an `@sha256:...` reference resolves against; use `docker buildx imagetools inspect`, or query the
+# registry API directly for the `docker-content-digest` header.
 readonly MERMAID_CLI_IMAGE="ghcr.io/mermaid-js/mermaid-cli/mermaid-cli@sha256:a6fb0574dded4086888b5e38476899c9aff8963196f689f11a0f8fceee588ce1"
 
-# --- Match criterion (this is what "the committed PNG matches its .mmd" means here) -------------
-# Width must equal the committed width EXACTLY at the manifest's scale; height must be within 2%.
-# Measured 2026-09-05 against this same pinned image at `-s 2`: `infra-physical-deployment`
-# re-renders to the committed width EXACTLY (1568px) but +6.21% in height; `infra-delivery-scenario`
-# matches width exactly and is -8.37% in height. Opposite signs rule out a scale artifact -- this is
-# genuine layout drift from a different mermaid version than produced the committed set, which is
-# why height gets a tolerance and width does not.
+# Match criterion: width must equal the committed width EXACTLY at the manifest's scale; height must
+# be within 2%.
 #
-# BLIND SPOT, stated rather than left implied: this reads only the PNG's IHDR chunk (width, height,
-# bit depth, colour type). A diagram whose labels changed without changing its bounding box passes
-# this check. A perceptual pixel diff would close that gap; it is the upgrade path if
-# docs/diagrams/ ever grows enough to justify the dependency (ImageMagick is not installed on this
-# box; Pillow is present but this script does not depend on it -- see below).
-#
-# COLOUR MODE, reported not gated: the committed PNGs are all colour type 2 (RGB, no alpha).
-# `mmdc` gives no flag to force that -- Puppeteer's screenshot PNG output is colour type 6 (RGBA)
-# regardless of `-b white`. Flattening RGBA to RGB would need Pillow or ImageMagick, which this
-# script deliberately does not depend on (see the dimension reader below), so a fresh render is
-# accepted as RGBA going forward rather than silently downgrading this script's own dependency
-# footprint to buy back a match on a channel the match criterion above never claimed to check.
-#
-# --- Deliberately NOT wired into CI --------------------------------------------------------------
-# `.github/workflows/invariant-checks.yml` ignores `docs/**`, so wiring this script into it would
-# mean removing that ignore -- which pays a full `deploy.yml` production+nonprod redeploy on every
-# documentation commit, plus a 2.36GB image pull per run, for a docs-only check. This pin plus the
+# Decisions:
+# Measured 2026-09-05 against this pinned image at `-s 2`: `infra-physical-deployment` re-renders to the
+# committed width EXACTLY (1568px) but +6.21% in height; `infra-delivery-scenario` matches width exactly
+# and is -8.37% in height. Opposite signs rule out a scale artifact: this is genuine layout drift from a
+# different mermaid version than produced the committed set, which is why height gets a tolerance and
+# width does not.
+# Blind spot: this reads only the PNG's IHDR chunk (width, height, bit depth, colour type). A diagram
+# whose labels changed without changing its bounding box passes. A perceptual pixel diff would close that
+# gap; it is the upgrade path if docs/diagrams/ ever grows enough to justify the dependency (ImageMagick
+# is not installed on this box; Pillow is present but this script does not depend on it).
+# Colour mode, reported not gated: the committed PNGs are all colour type 2 (RGB, no alpha). `mmdc` has no
+# flag to force that: Puppeteer's screenshot output is colour type 6 (RGBA) regardless of `-b white`.
+# Flattening RGBA to RGB would need Pillow or ImageMagick, which this script deliberately does not depend
+# on (see the dimension reader below), so a fresh render is accepted as RGBA going forward rather than
+# growing the dependency footprint to buy back a match on a channel the criterion never claimed to check.
+# Not wired into CI: `.github/workflows/invariant-checks.yml` ignores `docs/**`, so wiring this in would
+# mean removing that ignore, which pays a full `deploy.yml` production+nonprod redeploy on every
+# documentation commit plus a 2.36GB image pull per run, for a docs-only check. This pin plus the
 # Maintenance Note in `docs/INFRA_ARCHITECTURE.md` is the mechanism instead; run this by hand.
-#
-# --- Fallback for a machine with no Docker -------------------------------------------------------
-# `pnpm dlx @mermaid-js/mermaid-cli@11.17.0 -i <name>.mmd -o <name>.png -s <scale> -b white`
-# reproduces the same mermaid layout engine version, but NOT the same geometry: Puppeteer renders
-# text using the HOST's installed fonts, which the npm package cannot pin, so identical input
-# produces different bounding boxes on a different machine. Labelled here as a documented,
-# non-reproducible fallback, not a substitute for the pinned container above. (`pnpm dlx`, per this
-# project's tooling preference -- never `npx`.)
+# Fallback for a machine with no Docker: `pnpm dlx @mermaid-js/mermaid-cli@11.17.0 -i <name>.mmd -o
+# <name>.png -s <scale> -b white` reproduces the same layout engine version but NOT the same geometry:
+# Puppeteer renders text with the HOST's installed fonts, which the npm package cannot pin, so identical
+# input produces different bounding boxes on a different machine. A documented, non-reproducible
+# fallback, not a substitute for the pinned container (`pnpm dlx`, never `npx`).
 
 set -euo pipefail
 
@@ -74,8 +63,8 @@ Usage:
 USAGE
 }
 
-# One name per non-comment, non-blank line of the manifest -- avoids a dependency on any
-# particular awk's field-splitting behavior for a two-column TSV this small.
+# One name per non-comment, non-blank manifest line: avoids depending on any particular awk's
+# field-splitting for a small two-column TSV.
 manifest_names() {
   local line_name line_scale
   while IFS=$'\t' read -r line_name line_scale || [[ -n "$line_name" ]]; do

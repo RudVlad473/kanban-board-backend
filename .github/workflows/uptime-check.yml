@@ -1,63 +1,52 @@
-# Standing uptime probe of both public health endpoints (quick task 260902-vjo).
+# Standing uptime probe of both public health endpoints: were production and nonprod answering recently.
 #
-# What it guards: whether production and nonprod were actually answering recently. It exists
-# because a frozen Netcup SCP "Screen" console screenshot is not evidence of an outage -- see
-# docs/INFRA_RUNBOOK.md's "Triage -- dating what the Netcup SCP 'Screen' console shows" section
-# for the false alarm this responds to, and go there once a run here goes red.
+# It exists because a frozen Netcup SCP "Screen" console screenshot is not evidence of an outage; see
+# docs/INFRA_RUNBOOK.md's "Triage -- dating what the Netcup SCP 'Screen' console shows" section, and go
+# there once a run here goes red.
 #
-# What it cannot do -- stated honestly, not left to be discovered:
-#   (a) GitHub's cron is a floor, not a guarantee: scheduled runs queue on shared runners and can
-#       fire late, so a red run only dates an outage to within roughly the interval plus that
-#       jitter, never to the minute.
-#   (b) GitHub disables scheduled workflows in a public repository after 60 days of repository
-#       inactivity -- this stops silently if the repo goes quiet.
-#   (c) it is a probe, not an alerting system -- a red run sits in the Actions tab; it pages
-#       nobody.
-#   (d) upstream `management.endpoint.health.show-details=never` (application.properties) means a
-#       failure can name the endpoint and its observed status and can never name the failing
-#       subsystem underneath it.
+# Known holes:
+# (a) GitHub's cron is a floor, not a guarantee: scheduled runs queue on shared runners and can fire
+#     late, so a red run dates an outage to within roughly the interval plus jitter, never the minute.
+# (b) GitHub disables scheduled workflows in a public repository after 60 days of inactivity, so this
+#     stops silently if the repo goes quiet.
+# (c) It is a probe, not an alerting system: a red run sits in the Actions tab and pages nobody.
+# (d) `management.endpoint.health.show-details=never` (application.properties) means a failure can name
+#     the endpoint and its observed status, never the failing subsystem beneath it.
 name: Uptime Check
 
 on:
   schedule:
-    # GitHub's 5-minute floor is nominal only: schedule events queue on shared runners and can
-    # arrive late, disproportionately near the top of the hour, so */5's real latency edge over
-    # */15 is mostly notional while its run count is 3x -- not worth the extra Actions-tab noise
-    # for a probe that pages nobody.
+    # GitHub's 5-minute floor is nominal: schedule events queue on shared runners and arrive late, so
+    # */5's latency edge over */15 is mostly notional while its run count is 3x, not worth the Actions-tab
+    # noise for a probe that pages nobody.
     - cron: '*/15 * * * *'
   workflow_dispatch: {}
 
-# Diverges from security-scan.yml/secret-scan.yml's `permissions: contents: read` -- this job
-# never checks out the repository (the same shape as deploy.yml's health-check-nonprod job, which
-# states the same property), so it needs no scope at all. Flagged rather than left to look like
-# drift, per this repo's own established habit for sibling-file differences.
+# Unlike security-scan.yml and secret-scan.yml, no `contents: read`: this job never checks out the
+# repository, so it needs no scope at all.
 permissions: {}
 
 jobs:
   uptime-check:
     runs-on: ubuntu-latest
-    # Runaway guard against a hung curl, not a runtime prediction -- worst case is roughly 3
-    # minutes: 2 endpoints x 3 attempts x 20s curl timeout, plus the inter-attempt sleeps.
+    # Runaway guard against a hung curl: worst case is ~3 minutes (2 endpoints x 3 attempts x 20s curl
+    # timeout, plus the inter-attempt sleeps).
     timeout-minutes: 5
     env:
-      # Both endpoints are public and unauthenticated -- this file carries no secret and needs
-      # none. Folded scalar: one whitespace-separated line, iterated by deliberate unquoted
-      # word-splitting in the script below.
+      # Both endpoints are public and unauthenticated; no secret. Folded scalar: one whitespace-separated
+      # line, iterated by deliberate unquoted word-splitting in the script below.
       HEALTH_URLS: >-
         https://kanban-board-rud-vlad-473.duckdns.org/api/actuator/health
         https://kanban-board-rud-vlad-473-nonprod.duckdns.org/api/actuator/health
-      # A single-shot probe from a shared runner turns a transient network blip into a red run --
-      # manufacturing the exact false alarm this file exists to prevent. 3 attempts x 10s stays
-      # sub-minute on a healthy run and is cheap either way.
+      # A single-shot probe turns a transient network blip into a red run, the false alarm this file exists
+      # to prevent. 3 attempts x 10s stays sub-minute on a healthy run.
       ATTEMPTS: 3
       SLEEP_SECONDS: 10
       CURL_MAX_TIME: 20
       UP_MARKER: '"status":"UP"'
     steps:
-      # No `${{ }}` interpolation anywhere in this script -- every value arrives through `env:`
-      # above. That is both this repo's documented injection-safety rule (see security-scan.yml's
-      # NVD_API_KEY step comment) and what lets this exact script be extracted and run locally
-      # unmodified (quick task 260902-vjo, Task 3).
+      # No `${{ }}` interpolation: every value arrives through `env:`, per this repo's injection-safety rule
+      # (see security-scan.yml's NVD_API_KEY step), which also lets this exact script run locally unmodified.
       - name: Check both public health endpoints
         run: |
           set -eu
@@ -98,9 +87,8 @@ jobs:
               ATTEMPT=$((ATTEMPT + 1))
             done
 
-            # One environment being down must never mask the other -- URL_OK is reset per
-            # iteration and the loop never exits early, so every URL in HEALTH_URLS is always
-            # checked regardless of what earlier ones did.
+            # One environment being down must never mask the other: URL_OK resets per iteration and the loop never
+            # exits early.
             if [ "$URL_OK" -eq 1 ]; then
               echo "$URL: OK (200, UP marker present)"
             else

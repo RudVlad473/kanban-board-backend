@@ -1,40 +1,18 @@
--- SUPERSEDED (GSD Phase 04.1, D-03): this script is historical reference
--- material only. Do NOT run it by hand anymore. It has been folded into
--- Flyway migration history as
--- src/main/resources/db/migration/V3__add_activity_log.sql, which is now the
--- sole owner of this schema change. The body below is kept verbatim as
--- provenance for that migration's content and the schema decision it
--- documents -- it is no longer executable guidance.
+-- SUPERSEDED: historical reference only. Do NOT run by hand.
 --
--- Phase 3 (v1.1) — Activity Log: one-off manual DDL bridge
+-- Folded into Flyway as src/main/resources/db/migration/V3__add_activity_log.sql, now the sole owner of
+-- this schema change. The body below is kept verbatim as provenance for that migration's content.
 --
--- WHAT THIS IS
--- The real Postgres profile (src/main/resources/application.properties) has
--- ddl-auto unset, so Hibernate will NOT create the new `activity_log` table
--- automatically. `activity_log` is a brand-new table, not a new column on an
--- existing one, so there is no automatic path to it in production at all.
--- This script creates it by hand. The H2 test profile is unaffected --
--- tests create their schema from the entities, so this script has no
--- bearing on the test suite.
---
--- WHEN TO RUN
--- Run this manually via psql against the REAL Postgres database, immediately
--- before merging/deploying this phase's PR. This is one-way: master
--- auto-deploys to EC2 on every push (.github/workflows/deploy.yml), so if
--- this table is missing when the new code ships, every consumed Kafka event
--- exhausts its retries and lands on the dead-letter topic instead of ever
--- being persisted -- a total feature outage that superficially looks like
--- "the dead-letter path works" (it does; the feature underneath it does
--- not). Do not merge the PR before running this.
---
--- WHAT THIS IS NOT
--- This is a one-off manual bridge step for this phase only. It is NOT a
--- replacement for Epic 3's Flyway migration tooling -- when Epic 3 lands,
--- this manual step must be reflected in migration history (e.g. as a
--- baseline/already-applied migration), not silently re-applied or lost.
---
--- SAFE TO RE-RUN: every statement below uses IF NOT EXISTS, so accidentally
--- running this script twice is a no-op the second time.
+-- Decisions:
+-- This was a one-off manual DDL bridge creating the activity log. The Postgres profile has ddl-auto
+-- unset, so Hibernate would NOT create `activity_log`, a brand-new table with no automatic path to
+-- production; the script created it by hand via psql against the real database, immediately before
+-- merging the PR. The order was one-way: the main branch auto-deployed on every push
+-- (.github/workflows/deploy.yml), so with the table missing every consumed Kafka event would exhaust its
+-- retries and land on the dead-letter topic instead of being persisted, a total feature outage that
+-- superficially looks like "the dead-letter path works" (it does; the feature beneath it does not). The
+-- H2 test profile of that time was unaffected, since tests built their schema from the entities.
+-- Safe to re-run: every statement uses IF NOT EXISTS.
 
 CREATE TABLE IF NOT EXISTS activity_log (
     id varchar(255) PRIMARY KEY,
@@ -46,8 +24,7 @@ CREATE TABLE IF NOT EXISTS activity_log (
     created_at timestamp(6) with time zone NOT NULL
 );
 
--- Covers the paginated per-board read this table is built to serve so that
--- query is an index scan rather than a sort of the whole board's history as
--- the log grows unbounded (there is no retention policy on this feed).
+-- Serves the paginated per-board read as an index scan rather than a sort of the board's whole history,
+-- which grows unbounded (the feed has no retention policy).
 CREATE INDEX IF NOT EXISTS idx_activity_log_board_created_id
     ON activity_log (board_id, created_at DESC, id DESC);

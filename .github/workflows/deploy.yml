@@ -1,25 +1,20 @@
 name: CI/CD with Docker
 
 on:
-  # Plan 13-06 (W4): a manual re-run path now that deploys are pull-based GitOps (D-14) --
-  # flyway-verify/flyway-verify-nonprod no longer have a paired live deploy job to re-trigger them
-  # automatically, so an operator needs a way to re-run the whole pipeline (image build + both
-  # Flyway verify jobs) without an empty commit.
+  # Manual re-run path: deploys are pull-based GitOps, so the Flyway verify jobs have no paired deploy
+  # job to re-trigger them.
   workflow_dispatch: {}
   push:
     branches:
       - main
-    # Todo 2026-08-19 (deploy.yml has no path filter): a pure docs/planning change has no
-    # runtime effect, so it shouldn't cost a full production+nonprod redeploy (build, two
-    # Flyway verify jobs, two live SSH deploys, schema registration, cleanup). Deliberately
-    # NOT ignoring .github/** as a whole -- a workflow or Dependabot config change genuinely
-    # needs a real deploy-pipeline run to validate, so only the two known-inert path groups
-    # below are excluded.
-    # k8s/** added Phase 13 plan 01 (D-15): Flux commits sortable tag bumps straight to k8s/
-    # overlay files on `main`. Without this exclusion, that commit would trigger a full image
-    # rebuild, producing a NEW tag Flux would then bump to again -- an infinite build/commit loop
-    # (Flux commit -> image build -> new tag -> another Flux commit -> ...). k8s/ manifests never
-    # need a fresh app image; only the tag reference inside them changes.
+    # Skip runs for changes with no runtime effect: docs, markdown, planning files and k8s manifests.
+    #
+    # Decisions:
+    # .github/** is deliberately NOT ignored: a workflow or Dependabot change needs a real pipeline run to
+    # validate it.
+    # k8s/** is ignored because Flux commits tag bumps straight to k8s/ overlay files on `main`; without the
+    # exclusion that commit would rebuild the image, producing a new tag Flux bumps again, an infinite
+    # loop. k8s manifests never need a fresh app image.
     paths-ignore:
       - "docs/**"
       - "**/*.md"
@@ -29,26 +24,19 @@ on:
 env:
   DOCKERHUB_USER: rudenkovladimir
   DOCKERHUB_REPOSITORY: kanban-board-backend
-  # Nonprod's own Docker Hub repository (Phase 9, plan 09-01, part C) -- one build produces
-  # both tags (see build-and-push-docker-image below), so nonprod and production always run
-  # byte-identical image content pulled from two independent repositories.
+  # Nonprod's own Docker Hub repository: one build pushes both tags, so nonprod and production run
+  # byte-identical image content.
   DOCKERHUB_REPOSITORY_NONPROD: kanban-board-backend-nonprod
 
-# Risk-acceptance (Phase 10, HARDEN-03, D-05): actions/checkout, actions/setup-java,
-# docker/setup-buildx-action, docker/build-push-action, actions/cache and actions/upload-artifact
-# remain trusted by tag, not digest.
+# Risk acceptance: actions/checkout, actions/setup-java, docker/setup-buildx-action,
+# docker/build-push-action, actions/cache and actions/upload-artifact stay trusted by tag, not digest.
 #
-# UPDATED Plan 13-06 (D-14, D-15): the appleboy/* actions this risk-acceptance used to name
-# (deploy-to-netcup, register-schemas-production, flyway-verify, flyway-verify-nonprod) are gone
-# from this workflow entirely -- deploy-to-netcup and register-schemas-production were deleted
-# (deploys are pull-based GitOps now; schema registration runs as an in-cluster initContainer),
-# deploy-to-nonprod was already removed in Plan 13-05, and flyway-verify/flyway-verify-nonprod
-# were rewritten to open their own raw `ssh` local forward (host-key-pinned by fingerprint
-# themselves, see each job's "Write SSH key and known_hosts" step) rather than going through an
-# action. No `uses: appleboy/*` line remains anywhere in this file. This paragraph is kept, not
-# deleted, as the historical record of why digest-pinning was ever scoped narrowly in the first
-# place -- the same reasoning would apply again if a future job reintroduces an action holding
-# real production SSH credentials.
+# Decisions:
+# Digest-pinning was scoped narrowly to actions holding real production SSH credentials (formerly the
+# appleboy/* actions). None remain: deploys are pull-based GitOps, schema registration is an in-cluster
+# initContainer, and the flyway-verify jobs open their own raw `ssh` forward with a host-key
+# fingerprint pin. Re-evaluate if a future job reintroduces an action holding production SSH
+# credentials.
 
 jobs:
   setup:
@@ -71,29 +59,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      # HARDEN (Phase 10, folded todo): validates the wrapper's shell/batch scripts and its jar
-      # against Gradle's own published known-good checksums BEFORE any of them execute. Placed
-      # here -- immediately after checkout, strictly before the wrapper permission grant and
-      # every wrapper invocation below -- because validating a wrapper that has already run
-      # defeats the entire point of the control. First-party (published by Gradle's own GitHub
-      # org), so tag-pinned rather than digest-pinned per D-05's third-party-only digest scope.
+      # Validate the wrapper scripts and jar against Gradle's published checksums BEFORE any of them runs:
+      # validating an already-run wrapper defeats the control. First-party, so tag-pinned, not digest-pinned.
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v6
 
-      # Legacy AdoptOpenJDK distribution alias removed -- that vendor stopped shipping
-      # releases years ago and the alias only survived as a deprecated fallback in
-      # setup-java. Node runtime bumped to clear the runner's own deprecation warning
-      # (quick task 260816-sv1, closing the CI half of todo 260802-rq5 Unit B).
       - name: Set up Java
         uses: actions/setup-java@v5
         with:
           java-version: '21'
           distribution: 'temurin'
-          # HARDEN-04 (Phase 10): setup-java's built-in Gradle cache keys on **/*.gradle* and
-          # **/gradle-wrapper.properties. This repo's plugin declarations and its
-          # Confluent Maven repository declaration both live in build.gradle only, so the
-          # default key inputs already cover the full dependency graph -- no extra
-          # cache-path/key configuration needed.
+          # setup-java's Gradle cache keys on **/*.gradle* and gradle-wrapper.properties; this repo's plugin and
+          # Confluent Maven repository declarations live in build.gradle only, so the default key covers the full
+          # dependency graph.
           cache: 'gradle'
 
       - name: Grant permission to gradlew
@@ -109,10 +87,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [ setup, run-tests ]
     if: success()
-    # Declared here (Phase 9, plan 09-01, part B) because this job resolves
-    # secrets.DOCKERHUB_TOKEN. Per Task 1's decision (option-a) this is production's copy of
-    # that credential -- the same account-wide token is duplicated into staging too, so no
-    # unscoped repository secret remains once plan 09-02 sweeps the repository-level ones.
+    # Resolves secrets.DOCKERHUB_TOKEN: production's copy of the account-wide token, duplicated into
+    # staging too, so no unscoped repository secret remains.
     environment: production
     outputs:
       actual_image_name: ${{ steps.set_full_image_name.outputs.actual_image_name }}
@@ -122,24 +98,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      # The Phase 5 deploy target was Oracle A1 Flex (ARM64/Ampere) when this pipeline was first
-      # cross-compiled for linux/arm64 via QEMU + Buildx. Oracle's eu-zurich-1 capacity shortage
-      # proved structural (see 05-03 HANDOFF), and the deploy target pivoted to a Netcup VPS
-      # (x86_64) -- confirmed via `uname -a` on the provisioned VM. ubuntu-latest runners build
-      # linux/amd64 natively, so the QEMU cross-compilation step this architecture pairing used
-      # to require is no longer needed.
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
         run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u $DOCKERHUB_USER --password-stdin
 
-      # Sortable tag scheme (Phase 13 plan 01, D-15): the bare 7-char SHA this used to emit cannot
-      # be numerically ordered, which a Flux ImagePolicy needs to pick "the newest" tag. run_number
-      # is GitHub's own monotonically increasing per-workflow-file counter -- free, no extra state
-      # to maintain -- so `main-<run_number>-<sha7>` sorts correctly by the ImagePolicy's numerical
-      # extraction (`^main-(?P<num>[0-9]+)-[a-f0-9]{7}$`) while the trailing sha7 keeps the tag
-      # traceable to the exact commit, matching this job's pre-existing convention.
+      # Sortable tag `main-<run_number>-<sha7>`: a Flux ImagePolicy needs numerically ordered tags, which a
+      # bare sha7 cannot give.
+      #
+      # run_number is GitHub's monotonic per-workflow counter, matching the ImagePolicy's extraction
+      # `^main-(?P<num>[0-9]+)-[a-f0-9]{7}$`; sha7 keeps the tag traceable to the commit.
       - name: Set image tag from commit
         id: set_image_tag_from_commit
         run: echo "image_tag=main-${{ github.run_number }}-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
@@ -148,18 +117,14 @@ jobs:
         id: set_full_image_name
         run: echo "actual_image_name=${{needs.setup.outputs.base_image_name}}:${{ steps.set_image_tag_from_commit.outputs.image_tag }}" >> "$GITHUB_OUTPUT"
 
-      # Second tag on the same artifact (Phase 9, plan 09-01, part B) -- nonprod's Docker Hub
-      # repository, same short-SHA tag. No second build step: docker/build-push-action pushes
-      # both tags from the one build below, so the marginal cost is a manifest write, not a
-      # second build.
+      # Second tag for nonprod's Docker Hub repository; build-push-action pushes both tags from one build, so
+      # the cost is a manifest write, not a second build.
       - name: Set full image name (nonprod)
         id: set_full_image_name_nonprod
         run: echo "actual_image_name_nonprod=${{needs.setup.outputs.base_image_name_nonprod}}:${{ steps.set_image_tag_from_commit.outputs.image_tag }}" >> "$GITHUB_OUTPUT"
 
-      # Deliberately linux/amd64 only, not a multi-platform amd64+arm64 build: the real deploy
-      # target (Netcup, x86_64) is amd64 only, and building a second platform nobody deploys to
-      # would pay extra CI minutes for no benefit (revisit only if a concrete need for arm64
-      # surfaces later).
+      # Deliberately linux/amd64 only: the deploy target (Netcup, x86_64) is amd64, and a second platform
+      # nobody deploys to costs CI minutes for nothing.
       - name: Build and push Docker image (linux/amd64)
         uses: docker/build-push-action@v6
         with:
@@ -170,42 +135,34 @@ jobs:
             ${{ steps.set_full_image_name.outputs.actual_image_name }}
             ${{ steps.set_full_image_name_nonprod.outputs.actual_image_name_nonprod }}
 
-  # INFRA-06 (Phase 5, plan 05-05 Task 2). This still proves what INFRA-06 always proved --
-  # migrations apply cleanly against the real, already-migrated instance before an image is
-  # allowed to reach a VM (an ephemeral in-CI database was explicitly rejected by D-13: it would
-  # only prove migrations apply to an empty database, blind to the migration drift this gate
-  # exists to catch).
+  # Prove migrations apply cleanly to the real, already-migrated database before an image reaches a VM.
   #
+  # Decisions:
+  # An ephemeral in-CI database was rejected: it would only prove migrations apply to an empty database,
+  # blind to the migration drift this gate exists to catch.
   # DB_HOST/DB_NAME are GitHub Environment VARIABLES, not secrets (`postgres`/`kanban_prod` here,
-  # `postgres`/`kanban_nonprod` in the nonprod twin below, both stale post-13-06 host references
-  # kept as historical variable names -- D-14 corrected the actual resolved values) -- a database
-  # hostname/name is not sensitive, and GitHub masks any log line containing a registered secret's
-  # value regardless of where it came from, so keeping DB_NAME unmasked lets a wrong-environment
-  # scoping mistake (T-11-26) surface directly in the log instead of redacting to `***`. DB_USER/
-  # DB_PASS remain real secrets.
-  #
-  # REWRITTEN Plan 13-06 (D-14): deploys are pull-based GitOps now (Flux), so there is no more
-  # `deploy-to-netcup-vm` Compose network for this job to reach over `docker run --network
-  # kanban-db`. Postgres is in-cluster, reachable only via its pinned ClusterIP
-  # (10.43.54.32:5432, k8s/data/postgres/postgres.yaml) -- the runner cannot route to a ClusterIP
-  # directly, so this job opens a local SSH port-forward from the runner, through the VM, to that
-  # ClusterIP, and runs Flyway ON THE RUNNER against the forwarded local port. No Docker Engine or
-  # kubeconfig needed on the VM for this job; migrations come from the runner's own checkout (no
-  # SCP staging step, unlike the old version of this job).
+  # `postgres`/`kanban_nonprod` in the nonprod twin, stale host references kept under their historical
+  # names). A database name is not sensitive, and GitHub masks any log line containing a registered
+  # secret's value, so an unmasked DB_NAME lets a wrong-environment scoping mistake surface in the log
+  # instead of redacting to `***`. DB_USER/DB_PASS remain secrets.
+  # Postgres is in-cluster, reachable only via its pinned ClusterIP (10.43.54.32:5432,
+  # k8s/data/postgres/postgres.yaml), which the runner cannot route to. The job opens a local SSH
+  # port-forward from the runner, through the VM, to that ClusterIP and runs Flyway ON THE RUNNER against
+  # the forwarded port: no Docker Engine or kubeconfig on the VM, and migrations come from the runner's
+  # own checkout.
   flyway-verify:
     needs: [ setup, run-tests ]
     runs-on: ubuntu-latest
     if: success()
-    # Phase 9, plan 09-01, part C: this job resolves secrets.DB_USER/DB_PASS and vars.DB_HOST/
-    # DB_NAME against production's own self-hosted database, through the `production` environment.
+    # Resolves secrets.DB_USER/DB_PASS and vars.DB_HOST/DB_NAME against production's database, through
+    # the `production` environment.
     environment: production
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      # Host-key pinning by fingerprint (T-13-28): this job opens its own raw `ssh` process rather
-      # than going through an action (no appleboy/* action remains in this file as of Plan 13-06),
-      # so it verifies the host identity itself before ever connecting.
+      # Pin the host key by fingerprint: this job opens its own raw `ssh` process rather than an action, so
+      # it verifies the host identity itself before ever connecting.
       - name: Write SSH key and known_hosts
         env:
           NETCUP_SSH_KEY: ${{ secrets.NETCUP_SSH_KEY }}
@@ -216,25 +173,21 @@ jobs:
           install -m 0600 /dev/null "$RUNNER_TEMP/netcup_ssh_key"
           printf '%s\n' "$NETCUP_SSH_KEY" > "$RUNNER_TEMP/netcup_ssh_key"
           ssh-keyscan -H "$NETCUP_HOST" > "$RUNNER_TEMP/known_hosts" 2>/dev/null
-          # BUG FIXED live during 13-06's maintenance window (2026-09-26): `ssh-keyscan -H` with
-          # no `-t` scans every host key algorithm the server offers (RSA, ED25519, ECDSA), so
-          # `ssh-keygen -lf` prints one fingerprint PER algorithm -- `sort -u` collapsed them into
-          # a multi-line set, and the original `[ "$SCANNED_FP" != "$NETCUP_HOST_FINGERPRINT" ]`
-          # exact-string comparison against a single pinned fingerprint always failed, even
-          # against the correct host (confirmed live: deploy.yml run 36229677270, both
-          # flyway-verify jobs red on this check). Fixed to check whether the pinned fingerprint
-          # is ONE of the scanned lines (`grep -qxF`), which is what "pinned" actually means when
-          # multiple host key types legitimately coexist.
+          # The pin check is membership, not equality: `grep -qxF` accepts the pinned fingerprint if it is ONE of
+          # the scanned lines.
+          #
+          # `ssh-keyscan -H` without `-t` scans every host key algorithm, so `ssh-keygen -lf` prints one
+          # fingerprint per algorithm and an exact-string comparison against a single pinned fingerprint always
+          # failed even against the correct host (observed live 2026-09-26, run 36229677270).
           if ! ssh-keygen -lf "$RUNNER_TEMP/known_hosts" | awk '{print $2}' | grep -qxF "$NETCUP_HOST_FINGERPRINT"; then
             echo "::error::No scanned host key fingerprint matches secrets.NETCUP_HOST_FINGERPRINT ($NETCUP_HOST_FINGERPRINT) -- refusing to connect to a host whose identity cannot be confirmed. Scanned:"
             ssh-keygen -lf "$RUNNER_TEMP/known_hosts"
             exit 1
           fi
 
-      # T-13-28: the VM-side sshd Match block (infra/vm/sshd/kanban-ci-tunnel.conf) restricts this
-      # user to AllowTcpForwarding local + PermitOpen 10.43.54.32:5432 only -- this job's forward
-      # target is exactly that pinned Postgres ClusterIP, never a bare hostname resolved at
-      # connect time.
+      # The VM-side sshd Match block (infra/vm/sshd/kanban-ci-tunnel.conf) restricts this user to
+      # AllowTcpForwarding local and PermitOpen 10.43.54.32:5432; this job's forward target is exactly that
+      # pinned ClusterIP, never a hostname resolved at connect time.
       - name: Open SSH forward to in-cluster Postgres
         env:
           NETCUP_HOST: ${{ secrets.NETCUP_HOST }}
@@ -265,23 +218,16 @@ jobs:
             -e FLYWAY_PASSWORD="${DB_PASS}" \
             -v "$GITHUB_WORKSPACE/src/main/resources/db/migration:/flyway/sql:ro" \
             flyway/flyway:11.7.2 migrate
-          # Flyway aborts on the first failed migration by design (recorded in
-          # flyway_schema_history, blocking all subsequent ones) -- no hand-rolled
-          # abort-on-first-failure logic needed here.
+          # Flyway aborts on the first failed migration (recorded in flyway_schema_history), so no
+          # abort-on-first-failure logic is needed here.
 
-      # Always closes the forward, win or lose -- an orphaned background ssh process on the
-      # runner is harmless (the runner is destroyed after the job either way), but closing it
-      # explicitly keeps this job's own resource lifecycle self-contained rather than relying on
-      # runner teardown to clean up after it.
+      # Always closes the forward, win or lose, so the job's resource lifecycle is self-contained.
       - name: Close the SSH forward
         if: always()
         run: pkill -f "ssh .*-L 15432:10.43.54.32:5432" || true
 
-  # Nonprod twin of flyway-verify (Phase 9, plan 09-01, part D; rewritten phase 11, plan 11-05).
-  # A literal copy with the differing axes called out below -- this job declares the staging
-  # environment, so the identical vars.DB_HOST/DB_NAME and secrets.DB_USER/DB_PASS references
-  # resolve against the staging environment's own values -- the nonprod database -- never
-  # production's, without any name being renamed.
+  # Nonprod twin of flyway-verify: a literal copy that declares the staging environment, so the same
+  # vars/secrets names resolve to the nonprod database, never production's.
   flyway-verify-nonprod:
     needs: [ setup, run-tests ]
     runs-on: ubuntu-latest
@@ -301,20 +247,15 @@ jobs:
           install -m 0600 /dev/null "$RUNNER_TEMP/netcup_ssh_key"
           printf '%s\n' "$NETCUP_SSH_KEY" > "$RUNNER_TEMP/netcup_ssh_key"
           ssh-keyscan -H "$NETCUP_HOST" > "$RUNNER_TEMP/known_hosts" 2>/dev/null
-          # BUG FIXED live during 13-06's maintenance window (2026-09-26): see flyway-verify's
-          # identical fix above for the full root cause (ssh-keyscan -H scans every host key
-          # algorithm, producing multiple fingerprints; the original exact-string comparison
-          # against one pinned fingerprint always failed).
+          # Host-key pin: same membership check as flyway-verify above.
           if ! ssh-keygen -lf "$RUNNER_TEMP/known_hosts" | awk '{print $2}' | grep -qxF "$NETCUP_HOST_FINGERPRINT"; then
             echo "::error::No scanned host key fingerprint matches secrets.NETCUP_HOST_FINGERPRINT ($NETCUP_HOST_FINGERPRINT) -- refusing to connect to a host whose identity cannot be confirmed. Scanned:"
             ssh-keygen -lf "$RUNNER_TEMP/known_hosts"
             exit 1
           fi
 
-      # Same pinned ClusterIP as flyway-verify above (production job) -- one shared Postgres
-      # instance serves both databases (Phase 11 D-01, D-11), so nonprod's forward target is
-      # identical; only the resolved DB_NAME/DB_USER/DB_PASS (via the `staging` environment)
-      # differ. The VM-side sshd Match block covers both this and the production CI user.
+      # Same pinned ClusterIP as flyway-verify: one shared Postgres serves both databases, so only the
+      # resolved DB_NAME/DB_USER/DB_PASS (via `staging`) differ. The sshd Match block covers both CI users.
       - name: Open SSH forward to in-cluster Postgres
         env:
           NETCUP_HOST: ${{ secrets.NETCUP_HOST }}
@@ -350,41 +291,29 @@ jobs:
         if: always()
         run: pkill -f "ssh .*-L 15432:10.43.54.32:5432" || true
 
-  # REMOVED Plan 13-06 (D-14, D-15): deploy-to-netcup, register-schemas-production, and the
-  # old current-tag-based cleanup-unused-image are gone. Deploys are pull-based GitOps now (Flux
-  # watches Docker Hub via ImagePolicy and commits the tag bump itself) -- there is no SSH
-  # `docker compose up -d` step left for this job to run, no post-deploy schema-registration SSH
-  # step (schema registration now runs as an initContainer on the app pod, ordered before the app
-  # container starts -- Plan 13-01), and no "deploy failed, delete the tag we just pushed" job
-  # (nothing here ever deploys, so nothing here can fail a deploy). cleanup-old-images below is
-  # rewritten to prune by age instead of by "the tag this run built," matching its nonprod twin.
+  # No deploy job: deploys are pull-based GitOps (Flux watches Docker Hub via ImagePolicy and commits the
+  # tag bump itself) and schema registration runs as an initContainer on the app pod. There is no
+  # failed-deploy tag cleanup either, since nothing here deploys.
 
-  # REWRITTEN Plan 13-06 (D-15): keeps the same JWT-exchange and pagination fixes as before
-  # (2026-08-16/17), but the retention axis changes to match cleanup-old-images-nonprod's own
-  # shape below -- "keep the 5 newest tags matching main-<n>-<sha7>" instead of "keep only the tag
-  # this run built." There is no longer a single "current" tag to key off: Flux's ImagePolicy
-  # picks the newest tag independently of what this run built, and a `git revert`-driven rollback
-  # needs several recent tags to still exist in the registry.
+  # Keep the 5 newest tags matching main-<n>-<sha7>, not just the tag this run built: Flux's
+  # ImagePolicy picks the newest tag independently of this run, and a revert-driven rollback needs several
+  # recent tags to still exist in the registry.
   cleanup-old-images:
     runs-on: ubuntu-latest
     needs: [ setup, build-and-push-docker-image ]
     if: success()
-    # Phase 9, plan 09-01, part C: this job resolves secrets.DOCKERHUB_TOKEN (production's copy).
+    # Resolves secrets.DOCKERHUB_TOKEN (production's copy).
     environment: production
     steps:
       - name: Delete old Docker Hub images (keep 5 newest sortable tags)
         run: |
-          # BUG FIXED (todo 2026-08-16-cleanup-old-images-delete-calls-rejected-unauthorized.md):
-          # Docker Hub's Hub API v2 (hub.docker.com/v2, distinct from the Registry API v2 the old
-          # cleanup-unused-image job correctly token-exchanged against) rejects HTTP Basic auth on
-          # mutating requests with {"message":"unauthorized"} -- confirmed live, run 31963539949,
-          # 2026-08-16, 29/29 deletes rejected. The prior GET-with-Basic-auth "succeeding" was not
-          # evidence Basic auth worked: this is a public repository, so an unauthenticated GET on
-          # its tag list succeeds regardless of -u. Fixed by exchanging credentials for a JWT via
-          # the documented /v2/users/login/ endpoint first, then sending that as
-          # `Authorization: JWT <token>` on every authenticated call. Both list and delete check
-          # their HTTP status explicitly and fail loudly, rather than relying on a body inspection
-          # that a 404 (the original bug) or 401 (this bug) would both silently pass.
+          # Authenticate with a JWT from /v2/users/login/, not HTTP Basic: Hub API v2 rejects Basic auth on
+          # mutating requests.
+          #
+          # Observed 2026-08-16: 29/29 deletes rejected with {"message":"unauthorized"} (run 31963539949), while
+          # the GET "succeeded" with Basic auth only because this is a public repository, where an
+          # unauthenticated tag listing works regardless of -u. List and delete both check their HTTP status
+          # explicitly: a body inspection would silently pass a 404 or 401.
           HUB_TOKEN=$(curl -s -H "Content-Type: application/json" -X POST \
             -d "{\"username\": \"$DOCKERHUB_USER\", \"password\": \"${{ secrets.DOCKERHUB_TOKEN }}\"}" \
             "https://hub.docker.com/v2/users/login/" | jq -r .token)
@@ -393,13 +322,10 @@ jobs:
             exit 1
           fi
 
-          # Get list of all tags, following pagination -- Hub API v2 paginates at 10/page by
-          # default. DISCOVERED LIVE (2026-08-17, first successful run after the auth fix above):
-          # the unpaginated single-request version only ever saw page 1, so with 41 accumulated
-          # tags it deleted just the 9 most recent non-current ones and silently left the other
-          # 32 -- a real, previously-latent gap that only became visible once deletes started
-          # actually succeeding. Follows `next` until null rather than a one-time page_size bump,
-          # so this keeps working if the backlog ever exceeds one page's page_size again.
+          # Follow `next` until null, not a one-time page_size bump: Hub API v2 paginates at 10 per page.
+          #
+          # Observed 2026-08-17: the unpaginated version saw only page 1, so with 41 tags it deleted 9 and
+          # silently left 32, a gap visible only once deletes started succeeding.
           TAGS=""
           NEXT_URL="https://hub.docker.com/v2/repositories/${{ needs.setup.outputs.base_image_name }}/tags/?page_size=100"
           while [ -n "$NEXT_URL" ] && [ "$NEXT_URL" != "null" ]; do
@@ -414,11 +340,9 @@ jobs:
             NEXT_URL=$(jq -r '.next' /tmp/tags.json)
           done
 
-          # Keep the 5 newest tags matching main-<run_number>-<sha7> (D-15's sortable scheme),
-          # ordered NUMERICALLY by run_number (a lexical sort would put main-9-... after
-          # main-100-... -- wrong), matching cleanup-old-images-nonprod's own retention logic
-          # below. Legacy bare-SHA tags (pre-13-01, no main-N- prefix) never match this pattern,
-          # so they fall straight into the delete set.
+          # Keep the 5 newest main-<run_number>-<sha7> tags, ordered NUMERICALLY by run_number (a lexical sort
+          # puts main-9-... after main-100-...). Legacy bare-SHA tags never match, so they fall into the delete
+          # set.
           KEEP=$(printf '%s\n' $TAGS \
             | grep -E '^main-[0-9]+-[0-9a-f]{7}$' \
             | sort -t- -k2,2n \
@@ -442,39 +366,27 @@ jobs:
             exit 1
           fi
 
-  # REMOVED Plan 13-06 (D-14, D-15): cleanup-unused-image deleted the tag a just-failed
-  # deploy-to-netcup had pushed. There is no deploy-to-netcup left to fail -- Flux decides
-  # independently, on its own schedule, whether to roll a given tag out, so "this run's own
-  # deploy failed" is no longer a concept this workflow can observe.
 
-  # Nonprod twin of cleanup-old-images -- REWRITTEN Plan 13-05 (D-14, D-15): nonprod no longer
-  # deploys via SSH (Flux + image automation deploys it now, see apps-nonprod Kustomization), so
-  # this job can no longer key "the current tag" off a deploy job's own output -- there is no
-  # deploy-to-nonprod anymore, and health-check-nonprod (which this job used to depend on) is gone
-  # with it. Depends on [setup, build-and-push-docker-image] directly instead: this job now runs
-  # on every push to main regardless of what Flux later decides to deploy, so it prunes by AGE
-  # (keep the 5 newest sortable tags) rather than by "every tag except the one this run just
-  # built" -- Flux's ImagePolicy needs several recent tags to exist for a `git revert`-driven
-  # rollback (13-05-PLAN.md's own rollback note), and CI has no way to know which tag is actually
-  # running in the cluster at any given moment.
+  # Nonprod twin of cleanup-old-images: prunes by AGE (keep the 5 newest sortable tags), not "every tag
+  # except this run's".
+  #
+  # Nonprod deploys via Flux, so CI cannot know which tag is running in the cluster, and Flux's
+  # ImagePolicy needs several recent tags to exist for a revert-driven rollback.
   cleanup-old-images-nonprod:
     runs-on: ubuntu-latest
     needs: [ setup, build-and-push-docker-image ]
     if: success()
-    # Phase 9, plan 09-02, Task 3: this job resolves secrets.DOCKERHUB_TOKEN through the `staging`
-    # environment -- nonprod's copy of the account-wide token (see Plan 09-01's T-09-09).
+    # Resolves secrets.DOCKERHUB_TOKEN through `staging`: nonprod's copy of the account-wide token.
     environment: staging
     steps:
       - name: Delete old Docker Hub images (nonprod repository, keep 5 newest sortable tags)
         run: |
-          # A copy of cleanup-old-images with the repository-name axis changed (every
-          # interpolation below reads setup's nonprod-repository job output, never hand-typed --
-          # the production delete-URL bug fixed 2026-08-17 was exactly a hand-typed, missing
-          # repository path segment, docs/INFRA_RUNBOOK.md) PLUS the retention axis changed
-          # (Plan 13-05): "keep 5 newest matching main-<n>-<sha7>, ordered by n" instead of "keep
-          # only the tag this run built". Both already-fixed Docker Hub bugs are inherited in
-          # their fixed form: the JWT login-token exchange (2026-08-16 fix) and the
-          # follow-`next`-until-null pagination loop (2026-08-17 fix).
+          # Copy of cleanup-old-images with the repository axis changed: every interpolation reads setup's
+          # nonprod-repository output, never hand-typed.
+          #
+          # The production delete-URL bug of 2026-08-17 was a hand-typed, missing repository path segment
+          # (docs/INFRA_RUNBOOK.md). The retention axis also differs (keep 5 newest). Both Docker Hub fixes, the JWT
+          # login exchange and the follow-`next` pagination loop, are inherited.
           HUB_TOKEN=$(curl -s -H "Content-Type: application/json" -X POST \
             -d "{\"username\": \"$DOCKERHUB_USER\", \"password\": \"${{ secrets.DOCKERHUB_TOKEN }}\"}" \
             "https://hub.docker.com/v2/users/login/" | jq -r .token)
@@ -497,11 +409,8 @@ jobs:
             NEXT_URL=$(jq -r '.next' /tmp/tags-nonprod.json)
           done
 
-          # Keep the 5 newest tags matching main-<run_number>-<sha7> (D-15's sortable scheme),
-          # ordered NUMERICALLY by run_number (a lexical sort would put main-9-... after
-          # main-100-... -- wrong). Legacy bare-SHA tags (pre-13-01, no main-N- prefix) never
-          # match this pattern, so they fall straight into the delete set -- exactly the "legacy
-          # bare-SHA tags included" instruction in 13-05-PLAN.md's Task 2 action text.
+          # Keep the 5 newest main-<run_number>-<sha7> tags, ordered NUMERICALLY (a lexical sort puts main-9-...
+          # after main-100-...). Legacy bare-SHA tags never match, so they fall into the delete set.
           KEEP=$(printf '%s\n' $TAGS \
             | grep -E '^main-[0-9]+-[0-9a-f]{7}$' \
             | sort -t- -k2,2n \

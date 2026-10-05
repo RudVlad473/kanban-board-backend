@@ -1,27 +1,21 @@
-# Dependency vulnerability scan (OWASP dependency-check-gradle, quick task 260813-q1i, Task 5).
+# Dependency vulnerability scan (OWASP dependency-check-gradle), separate from deploy.yml.
 #
-# Deliberately a separate workflow, not a job inside deploy.yml:
-#   - Not on deploy.yml's `run-tests` job: that job gates the Docker build and (once Phase 5
-#     re-enables it) the production deploy. Wiring the scan there means a newly-published
-#     Tomcat/Spring CVE would block an unrelated production deploy the moment it publishes.
-#   - Not in .githooks/pre-commit: that hook exists to catch what the committer authored --
-#     spotlessCheck and fastTest are both hermetic, pure functions of the tree. A new CVE in a
-#     transitive dependency is not something the committer wrote, and the scan is network-bound
-#     and by far the heaviest task in this build (see build.gradle's plugin-block comment).
-#
-# This is also the first workflow in this repo whose verdict is not a pure function of the
-# commit: an NVD outage or a fresh advisory publication can turn a job red days after the
-# triggering commit landed, with zero code change. That is the intent, not a bug -- see the
-# preflight step and build.gradle's dependencyCheck comment for the full reasoning.
+# Decisions:
+# Not a job in deploy.yml's `run-tests`: that job gates the Docker build, so a newly published
+# Tomcat/Spring CVE would block an unrelated production build the moment it publishes.
+# Not in .githooks/pre-commit: that hook catches what the committer authored (spotlessCheck and
+# fastTest are hermetic). A new CVE in a transitive dependency is not something the committer wrote,
+# and the scan is network-bound and the heaviest task in the build (see build.gradle's plugin block).
+# The verdict is not a pure function of the commit: an NVD outage or a fresh advisory can turn a job
+# red days after the triggering commit, with no code change. That is the intent (see the preflight step
+# and build.gradle's dependencyCheck comment).
 name: Dependency Vulnerability Scan
 
 on:
   workflow_dispatch: {}
-  # Weekly matches dependency-check's own recommended cadence for keeping incremental NVD
-  # updates cheap (dependency-check.github.io/DependencyCheck/data/index.html). Ships active,
-  # not commented out: NVD_API_KEY was confirmed present as a repository secret and Dependabot
-  # vulnerability alerts were confirmed enabled (both read-only `gh` checks, quick task
-  # 260813-q1i, Task 3 resume) before this workflow was added.
+  # Weekly matches dependency-check's recommended cadence for keeping incremental NVD updates cheap
+  # (dependency-check.github.io/DependencyCheck/data/index.html). Active from the start: NVD_API_KEY and
+  # Dependabot vulnerability alerts were both confirmed enabled with read-only `gh` checks.
   schedule:
     - cron: '0 6 * * 1' # Mondays 06:00 UTC
 
@@ -31,23 +25,19 @@ permissions:
 jobs:
   dependency-check:
     runs-on: ubuntu-latest
-    # Runaway guard, not a runtime prediction -- this repo has no measured dependencyCheckAnalyze
-    # runtime yet (260813-q1i-MEASUREMENTS.md: no NVD_API_KEY was available locally, so no local
-    # run was attempted). RESEARCH.md's ~1min-warm/~11min-cold figures are a third-party 2026
-    # benchmark against a different, larger repository, not a measurement of this one.
+    # Runaway guard, not a runtime prediction: no dependencyCheckAnalyze runtime has been measured (no
+    # NVD_API_KEY was available locally), and the ~1min-warm/~11min-cold figures in the research notes are a
+    # third-party 2026 benchmark against a larger repository.
     timeout-minutes: 45
     steps:
-      # Fails in seconds, loudly, naming exactly what is missing -- the difference between "loudly
-      # not configured" and "silently reporting nothing." Without an NVD API key, dependency-check's
-      # update requests are throttled to an ~8000ms inter-request delay (vs ~3500ms with one),
-      # turning an initial full database population from minutes into hours -- long enough to
-      # exceed this job's own timeout, which would otherwise look identical to "ran and found
-      # nothing" from the Actions UI.
-      # env:-indirected (not textual ${{ }} interpolation) so a stored value containing a quote,
-      # backslash, or newline reaches the shell as a variable, never as substituted script text --
-      # GitHub Actions renders ${{ }} into the run: script's source before any shell parses it, so
-      # textual interpolation is both a script-injection surface and makes this exact [ -z ] test
-      # test whether the substituted text happened to parse as shell, not genuine emptiness.
+      # Fail in seconds, naming what is missing: "loudly not configured" beats "silently reporting nothing".
+      #
+      # Without an NVD API key, update requests are throttled to ~8000ms between requests (vs ~3500ms),
+      # turning an initial database population from minutes into hours, long enough to exceed this job's
+      # timeout and look identical to "ran and found nothing". The key is `env:`-indirected, not textually
+      # interpolated: GitHub renders ${{ }} into the script source before any shell parses it, so
+      # interpolation is a script-injection surface and makes the [ -z ] test check whether the substituted
+      # text happened to parse as shell, not genuine emptiness.
       - name: Verify NVD_API_KEY is configured
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
@@ -64,16 +54,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      # HARDEN (Phase 10, folded todo): validates the wrapper's shell/batch scripts and its jar
-      # against Gradle's own published known-good checksums BEFORE any of them execute -- same
-      # control and same placement rule as deploy.yml's run-tests job (see that step's comment
-      # for the full reasoning). Strictly before the wrapper permission grant below.
+      # Validate the wrapper against Gradle's published checksums before any of it runs; same control and
+      # placement as deploy.yml's run-tests job.
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v6
 
-      # temurin, matching deploy.yml's run-tests job: both workflows deliberately pin the same
-      # JDK distribution and the same action majors (HARDEN-06), so this file's Java setup is
-      # intended to stay in step with deploy.yml rather than drift, as it did until this fix.
+      # temurin and the same action majors as deploy.yml's run-tests job, kept in step deliberately.
       - name: Set up Java
         uses: actions/setup-java@v5
         with:
@@ -84,15 +70,12 @@ jobs:
       - name: Grant permission to gradlew
         run: chmod +x gradlew
 
-      # Keyed on the plugin version (12.2.2) so a future plugin bump invalidates a stale cache
-      # rather than silently reusing an incompatible database. Path observed live via
-      # `./gradlew dependencyCheckPurge --info` against this exact plugin version
-      # (260813-q1i-MEASUREMENTS.md, Task 4) -- ~/.gradle/dependency-check-data, which on this
-      # ubuntu-latest runner's GRADLE_USER_HOME resolves to
-      # /home/runner/.gradle/dependency-check-data. Cached at the parent directory rather than
-      # its schema-versioned subdirectory (observed as 11.0/ locally) since that subdirectory
-      # name is the H2 database's own internal schema version, not the plugin version, and could
-      # change independently of a 12.2.2 pin.
+      # Keyed on the plugin version (12.2.2) so a plugin bump invalidates a stale cache.
+      #
+      # Path observed live via `./gradlew dependencyCheckPurge --info`: ~/.gradle/dependency-check-data, which
+      # resolves to /home/runner/.gradle/dependency-check-data on this runner. Cached at the parent, not the
+      # schema-versioned subdirectory (11.0/ locally): that name is the H2 database's own schema version, not
+      # the plugin version, and could change independently of the 12.2.2 pin.
       - name: Cache dependency-check data directory
         uses: actions/cache@v4
         with:
@@ -103,10 +86,8 @@ jobs:
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: ./gradlew dependencyCheckAnalyze
-        # No continue-on-error: true. The scan is report-only at the Gradle level
-        # (failBuildOnCVSS = 11 in build.gradle), so findings alone will not fail this step -- a
-        # job failure here means the scan genuinely could not run (network, NVD outage, plugin
-        # error), which is exactly the thing that should stay visible rather than being swallowed.
+        # No continue-on-error: the scan is report-only at the Gradle level (failBuildOnCVSS = 11), so a job
+        # failure means the scan could not run (network, NVD outage, plugin error), which must stay visible.
 
       - name: Upload dependency-check report
         if: always()

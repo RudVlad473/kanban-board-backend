@@ -1,75 +1,71 @@
 #!/usr/bin/env python3
 r"""Gate: a publicly-shared Grafana dashboard must contain nothing the public renderer cannot resolve.
 
-A committed, re-runnable check rather than a comment restating an invariant nothing enforces.
+Scope: every *.json under a scope's json_dir, where a scope is a (json_dir, uid_source,
+grafana_version_source) triple. The only scope left is k8s: the dashboards under
+k8s/monitoring/configs/dashboards/, checked against the datasource ConfigMap's uids and the
+kube-prometheus-stack HelmRelease's Grafana tag. check_scope() is scope-generic, so a second scope
+has a place to land.
 
-WHY this exists, measured 2026-09-12 against grafana/grafana:13.2.1 on the then-Compose stack (docs/INFRA_RUNBOOK.md,
-"Public Grafana dashboards rendered no data"): all three dashboards shared through
-Grafana's public-dashboard feature rendered their shell but every panel showed "Datasource was not
-found", for over a month, while every exporter was healthy and every Prometheus target was up. The
-public renderer is a DIFFERENT, stricter code path than the logged-in one, and two things that are
-perfectly legal in an authenticated dashboard are fatal in a public one:
+Decisions:
+Measured 2026-09-12 against grafana/grafana:13.2.1 (docs/INFRA_RUNBOOK.md, "Public Grafana dashboards
+rendered no data"): all three dashboards shared through Grafana's public-dashboard feature rendered
+their shell but every panel showed "Datasource was not found", for over a month, while every exporter
+was healthy and every Prometheus target was up. The public renderer is a DIFFERENT, stricter code path
+than the logged-in one, and two things legal in an authenticated dashboard are fatal in a public one:
 
   1. It resolves a datasource by uid ONLY. A legacy name string ("Prometheus") and a datasource
      template variable ("${ds_prometheus}") both fail lookup, and the panel query returns HTTP 500
      with `publicdashboards.service ... error="data source not found"`.
   2. It interpolates built-in macros ($__rate_interval, $__interval) but NEVER dashboard template
      variables. A query holding $node reaches Prometheus as the literal text "$node", which matches
-     no series -- so this one fails SILENTLY, as HTTP 200 with an empty result, indistinguishable
-     in the UI from a genuinely idle metric.
+     no series, so this one fails SILENTLY: HTTP 200 with an empty result, indistinguishable in the UI
+     from a genuinely idle metric.
 
-Failure 2 is the reason this gate is worth its maintenance: nothing else in the stack notices it.
-Grafana logs nothing, Prometheus answers normally, the container stays healthy, and the dashboard
-looks merely quiet. The dashboards are vendored from grafana.com, where template variables are the
-norm, so every future re-fetch reintroduces exactly this defect.
+Failure 2 is why this gate is worth its maintenance: nothing else in the stack notices it. Grafana logs
+nothing, Prometheus answers normally, the container stays healthy, and the dashboard looks merely
+quiet. The dashboards are vendored from grafana.com, where template variables are the norm, so every
+future re-fetch reintroduces this defect.
 
 A THIRD failure, measured 2026-09-12 after the two above were fixed and this gate went green
 (docs/INFRA_RUNBOOK.md, "Plugin graph not found"):
 
   3. A panel whose `type` names a plugin the running Grafana does not ship renders nothing at all.
-     Grafana 13 removed Angular outright -- `graph` and `singlestat` are not disabled-by-default,
-     they are absent from the image, and `angular_support_enabled` no longer exists as a setting,
-     so no configuration can bring them back. The panel draws an error triangle whose tooltip
-     reads "Plugin graph not found" verbatim.
+     Grafana 13 removed Angular outright: `graph` and `singlestat` are not disabled-by-default, they
+     are absent from the image, and `angular_support_enabled` no longer exists as a setting, so no
+     configuration can bring them back. The panel draws an error triangle whose tooltip reads
+     "Plugin graph not found" verbatim.
 
-Failure 3 is why I5 exists and why it is checked separately from I1-I3 rather than assumed away by
-them: the two earlier invariants are about the DATA path, and on the very dashboards that tripped
-this one the data path was provably healthy -- all six live public panel-query endpoints returned
-HTTP 200 with 793-803 datapoints each while every panel rendered blank. A gate that only proves
-queries are well-formed reports success on a dashboard no browser can draw. That is precisely what
-happened: this file passed, CI was green, and two of the three public dashboards were still broken.
+Failure 3 is why I5 exists and is checked separately from I1-I3: those are about the DATA path, and on
+the dashboards that tripped it the data path was provably healthy (all six live public panel-query
+endpoints returned HTTP 200 with 793-803 datapoints each while every panel rendered blank). A gate that
+only proves queries are well-formed reports success on a dashboard no browser can draw: this file
+passed, CI was green, and two of the three public dashboards were still broken.
 
-K8S SCOPE ONLY (Phase 13 plan 10, D-04/D-13): the Compose copies of these dashboards and the Compose
-scope of this gate were deleted with the Compose stack. The Kubernetes copies under
-k8s/monitoring/configs/dashboards/ are the only ones left, checked against the k8s datasource
-ConfigMap's uids and the kube-prometheus-stack HelmRelease's Grafana tag. A scope is still a
-(json_dir, uid_source, grafana_version_source) triple and check_scope() is still scope-generic, so a
-future second scope has a place to land. A dashboard file expected in a scope but not yet authored
-is listed as PENDING (K8S_PENDING) so the gate names exactly what is missing rather than silently
-passing a scope with 1 of 3 dashboards.
+Every *.json under the json_dir is in one of two disjoint sets, so a new dashboard cannot land ungated
+(I4): PUBLIC_DASHBOARDS, checked against every invariant, and DELIBERATELY_PRIVATE, documented and
+exempted from the public-only invariants. I1 (datasource refs resolve by uid) applies to BOTH sets: a
+name-string ref works in the authenticated path but is the same latent defect one "share publicly"
+click away. A dashboard file expected in a scope but not yet authored is listed as PENDING
+(K8S_PENDING), so the gate names exactly what is missing rather than silently passing a scope with 1 of
+3 dashboards. The Compose copies of these dashboards and the Compose scope were deleted with the
+Compose stack.
 
-SCOPE: every *.json under the scope's json_dir, split into two disjoint sets so a new dashboard
-cannot land ungated (I4): PUBLIC_DASHBOARDS, checked against every invariant, and
-DELIBERATELY_PRIVATE, documented and exempted from the public-only invariants. I1 (datasource refs
-resolve by uid) applies to BOTH sets -- a name-string ref happens to work in the authenticated
-path, but it is the same latent defect one "share publicly" click away.
-
-KNOWN HOLES, enumerated rather than left to be rediscovered:
-  * This reads the COMMITTED JSON, not the running Grafana. A dashboard edited in the UI and saved
-    into Grafana's own persistent volume, or shared publicly from the UI without a matching repo
-    change, is invisible here. PUBLIC_DASHBOARDS below is therefore a claim about intent that a human keeps
-    true; the authoritative list lives at GET /api/dashboards/public-dashboards on the VM.
-  * Passing I2 does NOT mean a panel renders. It means the query is free of the specific defect
-    measured above. A query can still be wrong, reference a renamed metric, or match nothing --
-    proving a panel returns data needs a live Prometheus, which this gate does not have.
-    "Renders data" was proven live at the 13-07 activation -- this gate proves only that the query
-    shape is public-renderer-safe.
+Known holes:
+  * This reads the COMMITTED JSON, not the running Grafana. A dashboard edited in the UI and saved into
+    Grafana's own persistent volume, or shared publicly from the UI without a matching repo change, is
+    invisible here. PUBLIC_DASHBOARDS is therefore a claim about intent that a human keeps true; the
+    authoritative list is GET /api/dashboards/public-dashboards on the VM.
+  * Passing I2 does NOT mean a panel renders; it means the query is free of the specific defect measured
+    above. A query can still be wrong, reference a renamed metric, or match nothing, and proving a panel
+    returns data needs a live Prometheus. "Renders data" was proven live when the k8s dashboards were
+    activated at the prod cutover; this gate proves only that the query shape is public-renderer-safe.
   * The hardcoded label values that replaced the template variables (job="prometheus-node-exporter",
-    instance=<k8s node name>) are correct for a single-host deployment and are NOT checked against
-    live Prometheus here. If the stack ever grows a second node or an exporter is renamed, this gate
-    stays green while the dashboards quietly narrow to a host that no longer exists.
-  * A dashboard can be moved into DELIBERATELY_PRIVATE in the same pull request that adds a
-    variable to it. This gate makes that a REVIEWED choice, not an impossible one.
+    instance=<k8s node name>) are correct for a single-host deployment and are NOT checked against live
+    Prometheus. If the stack grows a second node or an exporter is renamed, this gate stays green while
+    the dashboards quietly narrow to a host that no longer exists.
+  * A dashboard can be moved into DELIBERATELY_PRIVATE in the same pull request that adds a variable to
+    it. This gate makes that a REVIEWED choice, not an impossible one.
 """
 
 import glob
@@ -78,27 +74,25 @@ import os
 import re
 import sys
 
-# k8s scope (Phase 13 plan 03; the only scope since 13-10 deleted Compose) -- the Kubernetes-label
-# rewrite of the three original dashboards.
+# k8s scope: the Kubernetes-label rewrite of the three original dashboards.
 K8S_JSON_DIR = "k8s/monitoring/configs/dashboards"
 K8S_DATASOURCES = "k8s/monitoring/configs/datasources.yaml"
 K8S_HELMRELEASE = "k8s/monitoring/controllers/kube-prometheus-stack.yaml"
 
 # Shared through Grafana's public-dashboard feature, so subject to every invariant below.
-# Verified against GET /api/dashboards/public-dashboards on the k8s Grafana
-# (kube-prometheus-stack, image 13.2.1), 2026-09-26 (Phase 13 plan 07 Task 2 -- three shares
-# recreated on the new Grafana after the prod cutover; D-18 corrected). Same file names, same
-# uids as the deleted Compose copies -- the k8s copies are a runtime-label rewrite of the identical
-# dashboard, not a new one.
+#
+# Verified against GET /api/dashboards/public-dashboards on the k8s Grafana (kube-prometheus-stack,
+# image 13.2.1), 2026-09-26: the three shares were recreated on the new Grafana after the prod cutover.
+# Same file names and uids as the deleted Compose copies; the k8s copies are a runtime-label rewrite of
+# the identical dashboard.
 PUBLIC_DASHBOARDS = {
     "node-exporter-full.json": "rYdddlPWk",
     "cadvisor.json": "pMEd7m0Mz",
     "postgres-exporter.json": "v5ciIbUZz",
 }
 
-# k8s-scope files not yet authored. Empty as of Task 3 -- all three dashboards now exist under
-# K8S_JSON_DIR. Kept as a named, documented mechanism (not deleted) so a future dashboard addition
-# has a place to land the same way, and so the "present pending" self-check in check_scope() stays
+# k8s-scope files not yet authored; empty, as all three dashboards exist. Kept as a named mechanism so a
+# future dashboard addition has a place to land and check_scope()'s "present pending" self-check stays
 # exercised.
 K8S_PENDING: set = set()
 
@@ -117,20 +111,21 @@ QUERY_FIELDS = ("expr", "interval")
 
 BUILTIN_DATASOURCE_UIDS = {"grafana", "-- Grafana --", "-- Mixed --", "-- Dashboard --"}
 
-# The Grafana image tag the HelmRelease pins (kube-prometheus-stack.yaml values.grafana.image.tag),
-# and therefore the only version GRAFANA_PANEL_PLUGINS below describes. Checked against that file
-# at run time (I6) so a Grafana bump cannot silently leave this allowlist describing a version
-# nothing runs any more.
+# Grafana image tag the HelmRelease pins (kube-prometheus-stack.yaml values.grafana.image.tag), the only
+# version GRAFANA_PANEL_PLUGINS describes.
+#
+# Checked against that file at run time (I6) so a Grafana bump cannot leave this allowlist describing a
+# version nothing runs any more.
 PINNED_GRAFANA_IMAGE = "grafana/grafana:13.2.1"
 PINNED_GRAFANA_TAG = "13.2.1"
 
-# Derived, not recalled: every directory under /usr/share/grafana/public/app/plugins/panel/ that
-# contains a plugin.json, read out of the pinned image itself on 2026-09-12. Exactly 30. The bare
-# directory listing has 32 entries -- `AGENTS.md` and `test-utils.ts` ship there too and are not
-# plugins, which is why the plugin.json filter is the definition rather than the listing.
+# Derived, not recalled: every directory under /usr/share/grafana/public/app/plugins/panel/ that contains
+# a plugin.json, read out of the pinned image on 2026-09-12 (exactly 30).
 #
-# No GF_INSTALL_PLUGINS is set in the HelmRelease, so nothing widens this set at run time. If an external panel plugin is ever installed, add it here WITH the install mechanism
-# named, or this gate will reject a dashboard that would in fact render.
+# The bare listing has 32 entries (`AGENTS.md` and `test-utils.ts` ship there too and are not plugins),
+# hence the plugin.json filter. No GF_INSTALL_PLUGINS is set in the HelmRelease, so nothing widens this
+# set at run time; if an external panel plugin is installed, add it here WITH the install mechanism named,
+# or this gate rejects a dashboard that would in fact render.
 GRAFANA_PANEL_PLUGINS = {
     "alertlist", "annolist", "barchart", "bargauge", "candlestick", "canvas", "dashlist", "debug",
     "flamegraph", "gauge", "geomap", "gettingstarted", "heatmap", "histogram", "live", "logs",
@@ -147,10 +142,11 @@ STRUCTURAL_PANEL_TYPES = {"row"}
 # grafana.com dashboards actually carry.
 ANGULAR_REPLACEMENTS = {"graph": "timeseries", "singlestat": "stat"}
 
-# k8s-scope-only (I7 below): a Docker/Compose-era literal left in a k8s dashboard means the label
-# rewrite was incomplete -- the panel will silently render "No data" against the real chart-scraped
-# series (13-RESEARCH.md Pitfall 7), a failure this gate's other invariants cannot see because the
-# query is otherwise well-formed.
+# k8s-scope-only (I7 below): a Docker/Compose-era literal left in a k8s dashboard means the label rewrite
+# was incomplete.
+#
+# The panel would silently render "No data" against the real chart-scraped series, a failure this gate's
+# other invariants cannot see because the query is otherwise well-formed.
 K8S_BANNED_LITERALS = (
     "cadvisor:8080",
     "node-exporter:9100",
@@ -343,9 +339,10 @@ def find_uid_mismatches(dashboard, filename, expected_uid):
 
 
 def find_k8s_literal_violations(dashboard_text, filename):
-    """k8s-scope-only: no Docker/Compose-era literal survived the label rewrite (13-RESEARCH.md
-    Pitfall 7) -- a query holding one is well-formed but matches nothing the chart-scraped
-    Kubernetes-labelled series ever produce, and renders a silent, empty panel.
+    """k8s-scope-only: no Docker/Compose-era literal survived the label rewrite.
+
+    A query holding one is well-formed but matches nothing the chart-scraped Kubernetes-labelled series
+    ever produce, and renders a silent, empty panel.
     """
     return [
         f"{filename}: still contains Docker-era literal {literal!r} -- the Kubernetes-label "
@@ -436,8 +433,8 @@ def main():
     violations = []
     summary_lines = []
 
-    # k8s scope (Phase 13 plan 03) -- fails loudly if the directory does not exist yet, rather
-    # than silently skipping (D-07/D-18 spirit: a missing scope is a gate failure, not a no-op).
+    # k8s scope: fail loudly if the directory does not exist, rather than silently skipping; a missing
+    # scope is a gate failure, not a no-op.
     if os.path.isdir(K8S_JSON_DIR):
         k8s_known_uids = load_known_uids_k8s(K8S_DATASOURCES)
         if not k8s_known_uids:

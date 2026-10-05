@@ -1,51 +1,45 @@
-# Artillery: prove the production edge rate limiter is live (quick task 260903-dvp, Task 7).
+# Artillery: prove the production edge rate limiter is live. Positive half of a two-sided check.
 #
-# Positive half of a two-sided check. Run scripts/loadtest/run-rate-limit-verification.sh, which
-# runs this AND rate-limit-nonprod.yml -- either half alone is not evidence. A limiter accidentally
-# declared at the Caddyfile's top level instead of inside the {$APP_DOMAIN} site block would pass
-# this file and fail the negative control, which is the whole reason the negative control exists.
+# Run scripts/loadtest/run-rate-limit-verification.sh, which runs this AND rate-limit-nonprod.yml: either
+# half alone is not evidence. A limiter attached to every route instead of only the production hostname's
+# would pass this file and fail the negative control, which is why the negative control exists.
 #
-# Safety, and the reason this only ever touches /api/signin:
-#   * The auth zone matches `/api/signin* /api/signup*`, but load-testing signup against production
-#     would CREATE real user rows -- one per allowed request, every run. Never point this at signup.
-#   * The credentials below are deliberately invalid, so a request that gets past the limiter is
-#     answered 401 by the app and writes nothing.
-#   * Each allowed request costs one bcrypt hash on a 2 GB VPS. `arrivalCount: 1` with a sequential
-#     loop keeps that to ~20 hashes, not a thundering herd -- this verifies a control, it is not a
-#     capacity test.
-#   * Running this SPENDS THE RUNNER'S OWN IP BUDGET: the source address is limited for the rest of
-#     the 5-minute window, from any client behind the same address. Expected, self-healing, and the
-#     reason a failed run should be retried after the window rather than immediately.
+# Decisions:
+# Only /api/signin is touched: the auth zone matches `/api/signin* /api/signup*`, but load-testing signup
+# against production would CREATE real user rows, one per allowed request, every run.
+# The credentials below are deliberately invalid, so a request past the limiter is answered 401 and
+# writes nothing.
+# Each allowed request costs one bcrypt hash on a 2 GB VPS. `arrivalCount: 1` with a sequential loop keeps
+# that to ~20 hashes, not a thundering herd: this verifies a control, it is not a capacity test.
+# Running this SPENDS THE RUNNER'S OWN IP BUDGET: the source address is limited for the rest of the
+# 5-minute window, from any client behind it. Expected and self-healing, and the reason a failed run is
+# retried after the window rather than immediately.
 config:
-  # Overridden by the runner with -t; the default is documentation, not a fallback worth relying on.
+  # Overridden by the runner with -t; the default is documentation, not a fallback.
   target: "https://kanban-board-rud-vlad-473.duckdns.org"
   phases:
-    # One virtual user, arriving once, looping sequentially. Deliberately NOT `arrivalRate` with
-    # concurrency: the assertion is about a per-address COUNT inside a window, and concurrent
-    # arrivals make the transition point unreadable in exactly the way the local verification of
-    # this change already had to work around.
+    # One virtual user, arriving once, looping sequentially. Deliberately NOT `arrivalRate` with concurrency:
+    # the assertion is a per-address COUNT inside a window, and concurrent arrivals make the transition point
+    # unreadable.
     - arrivalCount: 1
       duration: 1
       name: "auth zone -- 25 sequential signin attempts against a 20/5m budget"
   plugins:
     ensure: {}
     expect: {}
-  # The verdict. `conditions`, NOT `thresholds` -- observed 2026-09-03 against artillery 2.0.24:
-  # an `ensure.thresholds` entry asserts the metric is AT MOST the given value (it exists for
-  # latency budgets like `p99: 100`), so `- "http.codes.429": 1` reads like "expect a 429" and
-  # actually means "fail if more than one 429 arrives". That inversion is silent and backwards in
-  # the worst way -- it would pass against a BROKEN limiter emitting zero or one 429 and fail
-  # against a working one. `conditions` takes a filtrex expression and is the only form here that
-  # can express a lower bound.
+  # The verdict is `conditions`, NOT `thresholds`: a threshold asserts the metric is AT MOST its value, so
+  # `- "http.codes.429": 1` means "fail if more than one 429 arrives", not "expect a 429".
   #
-  # Re-derived 2026-09-26 (Plan 13-08, D-13) against Traefik's auth-rate-limit Middleware
-  # (average=10, period=5m, burst=10 -- k8s/overlays/prod/ingressroute.yaml). This run's 25
-  # sequential requests complete in well under 5m, so negligible refill happens mid-run: the
-  # bucket starts full at `burst` and is spent by the 11th request, so exactly `burst`=10 are
-  # accepted (401) and the remaining 15 are rejected (429). `>= 10` and `> 0`, not exact equality,
-  # to tolerate a small amount of real refill if the run happens to take slightly longer than
-  # instantaneous -- the load-bearing claim either way is "the limiter is in the request path and
-  # its floor is at least the derived burst", not "the count is exactly 10".
+  # Decisions:
+  # Observed 2026-09-03 against artillery 2.0.24: that inversion is silent and passes against a BROKEN
+  # limiter emitting zero or one 429 while failing a working one. `conditions` takes a filtrex expression
+  # and is the only form here that can express a lower bound.
+  # Derived 2026-09-26 against Traefik's auth-rate-limit Middleware (average=10, period=5m, burst=10;
+  # k8s/overlays/prod/ingressroute.yaml). The 25 sequential requests finish well under 5m, so negligible
+  # refill happens mid-run: the bucket starts full at `burst` and is spent by the 11th request, so exactly
+  # 10 are accepted (401) and 15 rejected (429). `>= 10` and `> 0`, not equality, tolerate a little real
+  # refill; the load-bearing claim is "the limiter is in the request path and its floor is at least the
+  # derived burst", not "the count is exactly 10".
   ensure:
     conditions:
       - expression: "http.codes.429 > 0"
@@ -61,18 +55,15 @@ scenarios:
               url: "/api/signin"
               json:
                 email: "ratelimit-probe@example.invalid"
-                # MUST satisfy @Password (upper + lower + digit + special, 8-64 chars) even though
-                # it is deliberately wrong. Jakarta validation runs BEFORE authentication, so a
-                # format-invalid password is answered 400 VALIDATION_FAILED and never reaches
-                # bcrypt or the limiter's interesting path -- the probe would then assert against a
-                # status it never sees. Found 2026-09-03 (round-2 review): the original
-                # "not-a-real-password" has no uppercase and no digit, which made both halves of
-                # this harness unconditionally red while blaming the limiter. Do not "simplify"
-                # this literal.
+                # MUST satisfy @Password (upper + lower + digit + special, 8-64 chars) though it is deliberately wrong.
+                #
+                # Jakarta validation runs BEFORE authentication, so a format-invalid password is answered 400
+                # VALIDATION_FAILED and never reaches bcrypt or the limiter, and the probe would assert against a status
+                # it never sees. Observed 2026-09-03: the original "not-a-real-password" has no uppercase and no digit,
+                # which turned both halves of this harness red while blaming the limiter. Do not "simplify" this literal.
                 password: "NotAReal-Password1"
-              # 401 (rejected credentials) and 429 (rejected by the limiter) are both expected
-              # outcomes here; anything else means the request reached a state this probe does not
-              # model, so surface it rather than silently counting it.
+              # 401 (rejected credentials) and 429 (rejected by the limiter) are both expected; anything else means
+              # the request reached a state this probe does not model, so surface it rather than count it.
               expect:
                 - statusCode: [401, 429]
         count: 25

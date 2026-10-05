@@ -1,38 +1,32 @@
-# Committed-invariant checks (quick task 260903-dvp, 2026-09-03 review F4; rewritten for the k8s
-# runtime in Phase 13 plan 10, D-04/D-13/D-16).
+# Committed-invariant checks, run on push AND pull_request; each job is a pure function of the commit.
 #
-# Why this workflow exists at all: deploy.yml triggers on `push: branches: [main]` ONLY -- it has no
-# `pull_request:` trigger, and giving it one is not an option, since that would arm the deploy jobs
-# on every PR. A gate living only there would fire exclusively AFTER merge, where its only power is
-# to leave `main` undeployed. These jobs run on push AND pull_request, like secret-scan.yml.
-#
-# A per-PR blocking run is safe because every job below is a PURE FUNCTION OF THE COMMIT: it reads
-# committed files (and, for k8s-manifests-valid, binaries pinned by sha256), so an unchanged tree
-# cannot newly fail days later the way security-scan.yml's advisory-driven verdict can.
-#
+# Decisions:
+# deploy.yml triggers on `push: branches: [main]` ONLY and cannot take a `pull_request:` trigger without
+# arming its deploy jobs on every PR, so a gate living there would fire only AFTER merge, where its only
+# power is to leave `main` undeployed.
+# A per-PR blocking run is safe because every job reads committed files (and, for k8s-manifests-valid,
+# binaries pinned by sha256): an unchanged tree cannot newly fail days later the way security-scan.yml's
+# advisory-driven verdict can.
 # Jobs:
-#   public-dashboards (2026-09-12, debug session grafana-datasource-not-found):
-#     scripts/verify-public-dashboards.py -- no publicly-shared Grafana dashboard holds a construct
-#     the public renderer cannot resolve (a datasource by name or `${ds_*}` variable, a `$variable`
-#     in a query, a panel plugin the pinned Grafana no longer ships). Those failures are silent:
-#     HTTP 200 with an empty result, no log line, no unhealthy container. See that script's own
-#     docstring for the measurements and its KNOWN HOLES.
-#   k8s-manifests-valid (Phase 13 plan 01, D-12): renders every k8s/ kustomization root with a pinned
-#     kubectl and validates the result against pinned Kubernetes/CRD schemas via kubeconform
-#     (scripts/verify-k8s-manifests.sh).
-#   k8s-invariants (Phase 13 plan 01/04/10): scripts/verify-k8s-invariants.py -- only the edge is
-#     public, memory caps are measured and dated, images are pinned, no Secret is committed, no
-#     redirect route matches the ACME challenge path. It is the k8s-native successor of the
-#     Compose-era compose-published-ports, caddy-image-tag and deploy-scp-coverage jobs, which were
-#     removed in 13-10 together with their subject (Compose and Caddy).
+#   public-dashboards: scripts/verify-public-dashboards.py -- no publicly-shared Grafana dashboard holds
+#     a construct the public renderer cannot resolve (a datasource by name or `${ds_*}` variable, a
+#     `$variable` in a query, a panel plugin the pinned Grafana no longer ships). Those failures are
+#     silent: HTTP 200 with an empty result, no log line, no unhealthy container. See that script's
+#     docstring for the measurements and its known holes.
+#   k8s-manifests-valid: renders every k8s/ kustomization root with a pinned kubectl and validates the
+#     result against pinned Kubernetes/CRD schemas via kubeconform (scripts/verify-k8s-manifests.sh).
+#   k8s-invariants: scripts/verify-k8s-invariants.py -- only the edge is public, memory caps are measured
+#     and dated, images are pinned, no Secret is committed, no redirect route matches the ACME challenge
+#     path. It replaced the Compose-era compose-published-ports, caddy-image-tag and deploy-scp-coverage
+#     jobs, removed together with their subject.
 name: Invariant Checks
 
 on:
   push:
     branches:
       - main
-    # Same two known-inert path groups deploy.yml ignores. A docs-only or planning-only change
-    # cannot alter anything this workflow reads.
+    # Same inert path groups deploy.yml ignores: a docs-only or planning-only change cannot alter anything
+    # this workflow reads.
     paths-ignore:
       - "docs/**"
       - "**/*.md"
@@ -54,9 +48,8 @@ jobs:
       - name: Install the gate's one dependency
         run: python3 -m pip install --disable-pip-version-check --quiet pyyaml
 
-      # Runs ahead of the gate: a gate edited into something that cannot fire must be reported as
-      # the failure here, not masked by a compliant tree. That mode is the whole reason this gate
-      # exists -- the defect it catches is already the kind that looks green from the outside.
+      # Runs ahead of the gate: a gate edited into something that cannot fire must be reported as the
+      # failure here, not masked by a compliant tree, because that defect looks green from the outside.
       - name: Verify the gate's invariants can fire
         run: python3 scripts/verify-public-dashboards-selftest.py
 
@@ -70,8 +63,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      # No separate dependency-install step: verify-k8s-manifests.sh downloads and sha256-verifies
-      # its own pinned kubectl/kubeconform binaries on demand (see that script's own header).
+      # No separate install step: verify-k8s-manifests.sh downloads and sha256-verifies its own pinned
+      # kubectl/kubeconform binaries on demand.
       - name: Verify k8s manifest invariants
         run: bash scripts/verify-k8s-manifests.sh
 
@@ -85,9 +78,7 @@ jobs:
       - name: Install the gate's one dependency
         run: python3 -m pip install --disable-pip-version-check --quiet pyyaml
 
-      # Runs ahead of the gate, matching every other job in this file: a gate edited into
-      # something that cannot fire must be reported as the failure here, not masked by a
-      # compliant tree.
+      # Runs ahead of the gate, as in every job above.
       - name: Verify the gate's invariants can fire
         run: python3 scripts/verify-k8s-invariants-selftest.py
 
