@@ -1,12 +1,10 @@
 [Unit]
 Description=Apply the KANBAN-INGRESS mangle-table ingress filter for k3s NodePorts/hostPorts
-# No After/Requires/PartOf against docker.service or k3s.service: this unit's own header
-# (k3s-host-firewall.sh) documents the observation that neither docker nor k3s touches mangle
-# PREROUTING, checked directly in Plan 13-08 Task 2 with `iptables -t mangle -S PREROUTING`
-# before and after `systemctl restart k3s` -- the jump stayed first with no reapplication
-# needed. network-online.target is still a real dependency: this rule filters eth0 traffic, so
-# applying it before the network interface is up is a no-op that silently drifts until the next
-# boot or manual re-apply.
+# No After/Requires/PartOf against docker.service or k3s.service: neither touches mangle PREROUTING.
+#
+# Checked with `iptables -t mangle -S PREROUTING` before and after `systemctl restart k3s`: the jump
+# stayed first with no reapplication. network-online.target IS a dependency: applying the rule before
+# eth0 is up is a no-op that silently drifts until the next boot or manual re-apply.
 After=network-online.target
 Wants=network-online.target
 

@@ -1,22 +1,17 @@
-# Grafana edge route (Phase 13 plan 03 Task 2, D-07/D-13). entryPoint websecure -- unlike 13-01's
-# interim nonprod app IngressRoute (entryPoints: [web]), this one is authored for the FINAL,
-# post-cutover state directly: observability moves to k3s at the prod cutover (D-17), by which
-# time Traefik owns 80/443 directly and TLS termination has already moved off Caddy.
+# Grafana edge routes: HTTPS on websecure, plus a separate web-only redirect route.
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
   name: grafana-login-rate-limit
   namespace: monitoring
 spec:
-  # worst case over 5m = 10 + 10*300/300 = 20 <= Caddy's 20 (zone grafana_login, events 20,
-  # window 5m, Phase 12's Caddyfile).
+  # Worst case over 5m = 10 + 10*300/300 = 20, within the 20 events per 5m the Caddy-era grafana_login
+  # zone allowed.
   #
-  # Re-derived 2026-09-26 (Plan 13-08, D-13) from Traefik's own token-bucket semantics
-  # (`burst + average * W / period`, same shape and same Caddy budget as kanban-prod's
-  # auth-rate-limit), not copied verbatim from the Caddyfile as the PROVISIONAL 13-03 placeholder
-  # was. ipv6Subnet: 56 groups a /56 as one client, matching how a residential/mobile IPv6
-  # allocation typically rotates within a single subnet -- the same intent Caddy's {remote_host}
-  # keying had for IPv4.
+  # Derived 2026-09-26 from Traefik's token-bucket semantics (`burst + average * W / period`), not
+  # copied from the Caddyfile as the earlier PROVISIONAL placeholder was; same shape and budget as
+  # kanban-prod's auth-rate-limit. ipv6Subnet: 56 groups a /56 as one client, as a residential/mobile
+  # IPv6 allocation rotates within a single subnet.
   rateLimit:
     average: 10
     period: 5m
@@ -49,16 +44,11 @@ spec:
       middlewares:
         - name: grafana-login-rate-limit
       services:
-        # BUG FIXED live (13-07 Task 2): the real Service is kube-prometheus-stack-grafana, not
-        # kps-grafana as kube-prometheus-stack.yaml's header comment predicted.
+        # The real Service is kube-prometheus-stack-grafana, not kps-grafana.
         #
-        # `fullnameOverride: kps` sets only the PARENT chart's own fullname (kps-prometheus,
-        # kps-operator); Grafana is a subchart whose `grafana.fullname` helper reads
-        # `.Release.Name` (the Helm release name, `kube-prometheus-stack` -- set by Flux from
-        # this HelmRelease's own `metadata.name`, not from the parent's fullnameOverride).
-        # Confirmed both via `helm template` and live (`k3s kubectl get svc -n monitoring`)
-        # after the placeholder name left this IngressRoute routing to a Service with zero
-        # Endpoints.
+        # `fullnameOverride: kps` renames only the parent chart's objects, while the Grafana subchart's
+        # `grafana.fullname` reads the Helm release name. The wrong name once routed here to a Service with
+        # zero Endpoints.
         - name: kube-prometheus-stack-grafana
           port: 80
     - match: Host(`kanban-board-rud-vlad-473-monitoring.duckdns.org`)
@@ -69,10 +59,8 @@ spec:
   tls:
     secretName: grafana-tls
 ---
-# A separate object, not a second entryPoint on the `grafana` IngressRoute above -- an
-# IngressRoute's entryPoints apply to ALL of its routes, so listing `web` on `grafana` would also
-# serve its (non-redirecting) HTTPS routes over plain HTTP. This IngressRoute owns the `web`
-# entryPoint exclusively and carries exactly one route.
+# A separate object: an IngressRoute's entryPoints apply to ALL of its routes, so listing `web` on
+# `grafana` would also serve its HTTPS routes over plain HTTP. This one owns `web` exclusively.
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
@@ -82,14 +70,12 @@ spec:
   entryPoints:
     - web
   routes:
-    # The negation keeps cert-manager's HTTP-01 solver path out of the redirect by construction,
-    # not by Traefik rule-length priority -- Certificate renewals for grafana-tls depend on this
-    # exclusion (13-04's invariant I10 enforces the same rule shape across every root).
+    # The negation keeps cert-manager's HTTP-01 solver path out of the redirect by construction, not by
+    # Traefik rule-length priority; grafana-tls renewals depend on it (invariant I10 enforces the shape).
     - match: Host(`kanban-board-rud-vlad-473-monitoring.duckdns.org`) && !PathPrefix(`/.well-known/acme-challenge/`)
       kind: Rule
       middlewares:
         - name: redirect-https
       services:
-        # Same fix as the `grafana` IngressRoute above -- see that block's comment.
         - name: kube-prometheus-stack-grafana
           port: 80

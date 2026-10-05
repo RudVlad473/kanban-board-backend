@@ -1,16 +1,13 @@
 #!/usr/bin/env bash
-# Installs k3s v1.36.4+k3s1 on this host, pinned and checksum-verified. Plan 13-02 (D-12: never
-# `latest`). Idempotent -- k3s's own install.sh is itself idempotent (re-running with the same
-# INSTALL_K3S_VERSION is a no-op if that version is already active), and this wrapper refuses to
-# run as non-root before doing anything.
+# Install k3s v1.36.4+k3s1 on this host, pinned and checksum-verified. Never `latest`.
 #
-# Usage: sudo bash infra/vm/k3s/install.sh
+# Idempotent: k3s's own install.sh is a no-op when the pinned version is already active, and this
+# wrapper refuses to run as non-root. Usage: sudo bash infra/vm/k3s/install.sh
 #
-# The k3s install.sh fetched here is the upstream https://get.k3s.io script itself -- it is not
-# an installer for THIS specific version; INSTALL_K3S_VERSION (below) pins which release it fetches
-# and runs. Verifying this wrapper's own downloaded copy of that script against a committed sha256
-# closes the supply-chain gap of "curl | sh" fetching different content at execution time than
-# what was reviewed here.
+# Decisions:
+# The fetched script is the upstream https://get.k3s.io installer, not one for THIS version;
+# INSTALL_K3S_VERSION pins the release it runs. Verifying the download against a committed sha256
+# closes the supply-chain gap of "curl | sh" fetching different content than was reviewed.
 set -euo pipefail
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -19,8 +16,8 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 readonly K3S_VERSION="v1.36.4+k3s1"
-# sha256 of https://get.k3s.io as fetched and verified 2026-09-25 (plan 13-02). Re-verify and
-# update this pin deliberately if the upstream installer script changes.
+# sha256 of https://get.k3s.io as fetched and verified 2026-09-25. Re-verify by hand and update this
+# pin deliberately if the upstream installer changes.
 readonly K3S_INSTALLER_SHA256="e5cc3b3d9dfc1662c2d9be6da5abc9a4cd317d6abc3a5ffc02e3dd3248207fee"
 
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

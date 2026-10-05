@@ -1,5 +1,5 @@
-# GitRepository + Kustomization for the flux-system root itself. Plan 13-02 (D-15: SSH deploy
-# key, no GitHub PAT -- see docs/INFRA_RUNBOOK.md's "Flux bootstrap without a PAT" section).
+# GitRepository + Kustomization for the flux-system root itself. SSH deploy key, no GitHub PAT:
+# see docs/INFRA_RUNBOOK.md's "Flux bootstrap without a PAT" section.
 ---
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: GitRepository

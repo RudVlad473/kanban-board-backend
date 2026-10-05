@@ -5,12 +5,12 @@ resources:
   - datasources.yaml
   - podmonitors.yaml
   - ingressroute.yaml
-# One ConfigMap per dashboard, each labelled grafana_dashboard: "1" so the kube-prometheus-stack
-# Grafana dashboards sidecar picks it up. disableNameSuffixHash: true -- a content-hash suffix
-# would break the sidecar's ability to reference a stable ConfigMap name across re-generates, and
-# these dashboards are never referenced by name elsewhere so a hash offers no rollout benefit here.
-# These must only ever be server-side applied (Flux) -- node-exporter-full alone renders ~470 KB,
-# well past kubectl's 256 KiB client-side last-applied-configuration annotation limit.
+# One ConfigMap per dashboard, labelled grafana_dashboard: "1" for the Grafana dashboards sidecar.
+#
+# Decisions:
+# disableNameSuffixHash: true keeps the ConfigMap names stable across re-generates; nothing else
+# references them by name, so a hash offers no rollout benefit. Apply these only server-side (Flux):
+# node-exporter-full alone renders ~470 KB, past kubectl's 256 KiB client-side annotation limit.
 configMapGenerator:
   - name: grafana-dashboard-node-exporter-full
     files:

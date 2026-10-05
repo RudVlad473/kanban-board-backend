@@ -1,12 +1,10 @@
-# Redpanda workload base (Phase 13 plan 01, D-06). Analog: docker-compose.prod.yml `redpanda:` /
-# docker-compose.nonprod.yml `redpanda-nonprod:` service blocks. Fresh single-replica broker per
-# environment (namespaced per D-11), empty topics -- nothing durable is migrated from Compose.
+# Redpanda workload base: one single-replica broker per environment namespace, empty topics.
 #
+# Decisions:
 # Headless Service, not ClusterIP: a StatefulSet pod needs a stable, individually-addressable DNS
-# name (13-RESEARCH.md Pitfall 4) -- `<pod-ordinal>.<headless-service>.<namespace>.svc.cluster.local`
-# -- not a load-balanced single address. `publishNotReadyAddresses: true` so the pod's DNS record
-# resolves even before its own readiness probe passes, which the StatefulSet's own startup ordering
-# already needs (the broker must be resolvable by its own advertised address during its own boot).
+# name (`<pod-ordinal>.<headless-service>.<namespace>.svc.cluster.local`), not a load-balanced
+# address. `publishNotReadyAddresses: true` lets the broker resolve its own advertised address
+# during boot, before its readiness probe passes.
 apiVersion: v1
 kind: Service
 metadata:
@@ -46,8 +44,7 @@ spec:
         app.kubernetes.io/name: redpanda
     spec:
       securityContext:
-        # Redpanda's own data directory ownership (matches the Compose-era image's expected UID);
-        # carried over unchanged, not re-derived.
+        # Redpanda's data directory ownership, matching the image's expected UID.
         fsGroup: 101
       containers:
         - name: redpanda
@@ -61,14 +58,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-          # Flags carried LITERALLY from the Compose measurement (docker-compose.nonprod.yml /
-          # docker-compose.prod.yml's own dated comments) -- overlays patch only --memory via
-          # Kustomize's JSON patch on this args list (see 13-RESEARCH.md Anti-Patterns: do not
-          # re-derive --smp/--memory from the official Redpanda Helm chart's auto-calculation).
-          # --advertise-kafka-addr / --advertise-rpc-addr use StatefulSet DNS
-          # ($(POD_NAME).redpanda.$(POD_NAMESPACE).svc.cluster.local), never the flat Compose
-          # service name redpanda:19092 a bare pod-name or pod-IP would break on any restart,
-          # since neither is stable or cluster-resolvable (Pitfall 4).
+          # Flags carry the measured Compose-era values; overlays patch only --memory.
+          #
+          # Do not re-derive --smp/--memory from the Helm chart's auto-calculation. The advertise
+          # addresses use StatefulSet DNS: a bare pod name or pod IP is not stable across a restart.
           args:
             - redpanda
             - start
@@ -100,8 +93,7 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /var/lib/redpanda/data
-          # Same command the Compose healthcheck used -- rpk cluster health, grep for a healthy
-          # cluster line.
+          # Healthy-cluster check via rpk.
           readinessProbe:
             exec:
               command:

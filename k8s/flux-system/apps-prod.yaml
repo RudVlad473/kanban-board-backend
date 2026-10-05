@@ -1,5 +1,5 @@
-# Plan 13-02. Unsuspended Plan 13-06 (W2), window step 11, only after the restore + parity diff
-# are both clean and a docker ps guard confirms every Compose container is stopped (T-13-27).
+# Unsuspend only after the restore and parity diff are both clean and `docker ps` confirms every
+# Compose container is stopped.
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization

@@ -18,9 +18,6 @@ patches:
 images:
   - name: rudenkovladimir/kanban-board-backend
     newName: rudenkovladimir/kanban-board-backend
-    # Setter marker (D-16): Flux's ImagePolicy flux-system/kanban-board-backend-prod (13-02)
-    # rewrites this line's value in place on every new image it selects. Starting value copied
-    # from the nonprod overlay's own tag today (13-01) -- both track `main` independently
-    # (D-16: no promotion gate), so there is no "correct" starting tag beyond "a real one that
-    # exists on Docker Hub already".
+    # Flux's ImagePolicy flux-system/kanban-board-backend-prod rewrites this value in place on every
+    # new image it selects. Prod and nonprod track `main` independently, with no promotion gate.
     newTag: main-145-3837ab1 # {"$imagepolicy": "flux-system:kanban-board-backend-prod:tag"}

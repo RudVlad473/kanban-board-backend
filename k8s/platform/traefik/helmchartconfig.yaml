@@ -1,29 +1,18 @@
-# Traefik config for the k3s-packaged Traefik chart. Plan 13-02 (D-13's edge controller) shipped
-# the interim NodePort topology (13-RESEARCH.md's "Interim state" diagram); Plan 13-06 (W1/W2)
-# moved it to the production edge shape.
+# Traefik config for the k3s-packaged Traefik chart: the production edge (LoadBalancer, websecure).
 #
-# W1: service.type LoadBalancer + externalTrafficPolicy Local (D-13, Pitfall 2 -- k3s ServiceLB
-# would otherwise SNAT every client to one shared address, collapsing every client into one
-# rate-limit bucket). websecure exposed: cert-manager/ClusterIssuers are live (edge.yaml
-# unsuspended in W1) and the nonprod Certificate/websecure IngressRoute need it.
-#
-# W2 (this commit): the interim `ports.web.nodePort: 30080` pin is REMOVED. Caddy's nonprod
-# upstream (172.17.0.1:30080) was its only consumer, kept alive through W1 specifically so Caddy
-# had somewhere to proxy to until window step 6 stopped it. Landing this removal here, gated on
-# window step 11's `docker ps` guard (every Compose container, Caddy included, confirmed stopped
-# first), is deliberate -- removing it any earlier would break nonprod's only path to Traefik
-# while Caddy was still running.
-#
-# MEASURED (restart-ladder, 13-09, 2026-09-27): passing rungs 256Mi -> 128Mi -> 64Mi -> 32Mi,
-# failed at 16Mi (dmesg: OOMKilled, anon-rss ~14.7MiB + file-rss ~75.3MiB against the 16Mi cap).
-# Adopted 64Mi/32Mi -- one rung above the bare-passing 32Mi (only ~6.4MiB headroom there, ~25%
-# margin) for the same reason Caddy's own 12-06 ladder did not adopt its bare-passing 16m: this is
-# the only public ingress. Verified clean (RestartCount=0, both the standard workload cycle and
-# scripts/loadtest/run-rate-limit-verification.sh's adversarial burst) at every rung, independently
-# re-verified from a fresh recreate at the adopted value.
-#
-# resources.requests/limits keys confirmed against the packaged chart version via
-# `k3s kubectl get helmchart traefik -n kube-system -o yaml` at install time (Task 2, VM steps).
+# Decisions:
+# service.type LoadBalancer with externalTrafficPolicy Local: k3s ServiceLB would otherwise SNAT every
+# client to one shared address, collapsing every client into one rate-limit bucket.
+# The interim `ports.web.nodePort: 30080` pin is removed. Caddy's nonprod upstream (172.17.0.1:30080)
+# was its only consumer, so removal waited for the `docker ps` guard confirming every Compose
+# container, Caddy included, was stopped.
+# MEASURED (restart ladder, 2026-09-27): passed 256Mi, 128Mi, 64Mi, 32Mi; failed at 16Mi (dmesg
+# OOMKilled, anon-rss ~14.7MiB + file-rss ~75.3MiB). Adopted 64Mi limit / 32Mi request: one rung above
+# the bare-passing 32Mi (~6.4MiB, ~25% headroom) because this is the only public ingress. Clean
+# (RestartCount=0) under the standard workload cycle and scripts/loadtest/run-rate-limit-verification.sh's
+# adversarial burst at every rung.
+# resources.requests/limits keys were confirmed against the packaged chart via
+# `k3s kubectl get helmchart traefik -n kube-system -o yaml`.
 apiVersion: helm.cattle.io/v1
 kind: HelmChartConfig
 metadata:

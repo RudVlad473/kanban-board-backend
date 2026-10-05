@@ -1,15 +1,13 @@
-# Strategic-merge patch for Flux's own gotk-components.yaml Deployments (Plan 13-09, D-07).
-# gotk-components.yaml stays untouched -- it is Flux's own generated manifest (see its own
-# header, "DO NOT EDIT") -- so the measured caps land here instead, listed under `patches:` in
-# this directory's own kustomization.yaml.
+# Strategic-merge patch for the memory caps of Flux's gotk-components.yaml Deployments.
 #
-# MEASURED (restart-ladder, 13-09, 2026-09-27): all 6 controllers share rungs (OOMKilled is
-# reported per-container). Passing rungs 1Gi -> 512Mi -> 256Mi, failed at 128Mi
-# (source-controller only: dmesg OOMKilled, anon-rss ~126.7MiB + file-rss ~57.5MiB against the
-# 128Mi cap; the other 5 controllers stayed at RestartCount=0 through that same rung). Adopted
-# 256Mi/64Mi for all 6 -- source-controller's own live cgroup usage measured ~150MiB against this
-# cap immediately after independent re-verify, the other 5 all measured under 32MiB. Verified
-# clean (RestartCount=0, full workload cycle) at the adopted value from a fresh recreate.
+# MEASURED (restart ladder, 2026-09-27): all 6 controllers share rungs. They passed 1Gi, 512Mi and
+# 256Mi and failed at 128Mi (source-controller only: dmesg OOMKilled, anon-rss ~126.7MiB + file-rss
+# ~57.5MiB; the other 5 stayed at RestartCount=0). Adopted 256Mi limit / 64Mi request for all 6.
+# source-controller measured ~150MiB live against that cap, the other 5 under 32MiB.
+#
+# Decisions:
+# gotk-components.yaml is Flux's generated manifest ("DO NOT EDIT"), so the caps live here, listed
+# under `patches:` in this directory's kustomization.yaml.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -19,7 +17,7 @@ spec:
   template:
     spec:
       containers:
-        # MEASURED (restart-ladder, 13-09, 2026-09-27) -- see this file's header.
+        # MEASURED (2026-09-27) -- see this file's header.
         - name: manager
           resources:
             requests:
@@ -36,7 +34,7 @@ spec:
   template:
     spec:
       containers:
-        # MEASURED (restart-ladder, 13-09, 2026-09-27) -- see this file's header.
+        # MEASURED (2026-09-27) -- see this file's header.
         - name: manager
           resources:
             requests:
@@ -53,7 +51,7 @@ spec:
   template:
     spec:
       containers:
-        # MEASURED (restart-ladder, 13-09, 2026-09-27) -- see this file's header.
+        # MEASURED (2026-09-27) -- see this file's header.
         - name: manager
           resources:
             requests:
@@ -70,7 +68,7 @@ spec:
   template:
     spec:
       containers:
-        # MEASURED (restart-ladder, 13-09, 2026-09-27) -- see this file's header.
+        # MEASURED (2026-09-27) -- see this file's header.
         - name: manager
           resources:
             requests:
@@ -87,7 +85,7 @@ spec:
   template:
     spec:
       containers:
-        # MEASURED (restart-ladder, 13-09, 2026-09-27) -- see this file's header.
+        # MEASURED (2026-09-27) -- see this file's header.
         - name: manager
           resources:
             requests:
@@ -104,9 +102,7 @@ spec:
   template:
     spec:
       containers:
-        # MEASURED (restart-ladder, 13-09, 2026-09-27) -- see this file's header. This was the
-        # controller that actually failed the 128Mi rung (dmesg OOMKilled) -- see the header for
-        # the measured anon-rss/file-rss figures.
+        # MEASURED (2026-09-27) -- see this file's header. The controller that failed the 128Mi rung.
         - name: manager
           resources:
             requests:

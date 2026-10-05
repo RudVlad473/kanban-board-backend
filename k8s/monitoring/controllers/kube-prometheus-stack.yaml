@@ -1,23 +1,17 @@
-# kube-prometheus-stack HelmRelease (Phase 13 plan 03 Task 1, D-07/D-17). Prometheus Operator +
-# Prometheus + Grafana + kube-state-metrics; Alertmanager and the default alerting rules stay
-# disabled (alerting deferred, per 13-CONTEXT.md's explicit out-of-scope). Nothing reconciles
-# until 13-02's monitoring Kustomizations unsuspend at the prod cutover (13-07).
+# kube-prometheus-stack HelmRelease: Prometheus Operator, Prometheus, Grafana, kube-state-metrics.
+# Alertmanager and the default alerting rules stay disabled (alerting is out of scope).
 #
-# Chart pinned to prometheus-community/kube-prometheus-stack 91.5.2 (appVersion v0.94.1), the
-# latest release on the prometheus-community/helm-charts index as of 2026-09-25 -- recorded here,
-# not "latest", per D-12's pinning discipline.
-#
-# fullnameOverride: kps -- CORRECTED live (13-07 Task 2): this ONLY renames objects the PARENT
-# chart templates directly. Grafana is a subchart, and its own `grafana.fullname` helper reads
-# `.Release.Name` (the Flux HelmRelease's `metadata.name`, `kube-prometheus-stack`) instead --
-# fullnameOverride does not propagate into a subchart's own naming unless that subchart is given
-# its own fullnameOverride too. Rendered Service names (re-verified via `helm template` against
-# this exact chart/version/values after the original claim below proved wrong live -- the
-# Grafana IngressRoute routed to a Service with zero Endpoints for ~12 hours before this fix):
-#   - Prometheus:        kps-prometheus (port 9090) -- parent chart, fullnameOverride applies
-#   - Grafana:            kube-prometheus-stack-grafana (subchart; port 80 -> 3000)
-#   - kube-state-metrics: kube-prometheus-stack-kube-state-metrics (subchart, same reason)
-#   - node-exporter:      kube-prometheus-stack-prometheus-node-exporter (subchart DaemonSet, same reason)
+# Decisions:
+# Chart pinned to prometheus-community/kube-prometheus-stack 91.5.2 (appVersion v0.94.1), the latest
+# on the helm-charts index as of 2026-09-25; pin a version, never "latest".
+# fullnameOverride: kps renames only objects the PARENT chart templates. Grafana is a subchart whose
+# `grafana.fullname` helper reads `.Release.Name` (`kube-prometheus-stack`), so the override never
+# reaches it; the Grafana IngressRoute once routed to a Service with zero Endpoints for ~12 hours.
+# Rendered Service names (verified with `helm template` against this chart, version and values):
+#   - Prometheus:        kps-prometheus (port 9090), parent chart
+#   - Grafana:           kube-prometheus-stack-grafana (subchart; port 80 -> 3000)
+#   - kube-state-metrics: kube-prometheus-stack-kube-state-metrics (subchart)
+#   - node-exporter:     kube-prometheus-stack-prometheus-node-exporter (subchart DaemonSet)
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -40,17 +34,15 @@ spec:
   values:
     fullnameOverride: kps
 
-    # Alerting stays out of scope this phase (13-CONTEXT.md deferred list) -- Alertmanager ships
-    # inside the chart but is not configured or wanted yet.
+    # Alerting is out of scope; Alertmanager ships in the chart but is not configured.
     alertmanager:
       enabled: false
     defaultRules:
       create: false
 
-    # k3s runs these as goroutines inside one process bound to localhost (13-RESEARCH.md
-    # Pitfall 5) -- the chart's control-plane ServiceMonitors would target permanently-down
-    # endpoints. k3s also uses kine/SQLite, not etcd, reinforcing why the etcd monitor can never
-    # work here.
+    # k3s runs these as goroutines in one process bound to localhost, so the chart's ServiceMonitors
+    # would target permanently-down endpoints. k3s uses kine/SQLite, not etcd, so the etcd monitor can
+    # never work either.
     kubeControllerManager:
       enabled: false
     kubeScheduler:
@@ -63,24 +55,18 @@ spec:
     prometheus:
       prometheusSpec:
         retention: 30d
-        # MEASURED (restart-ladder, 13-09, 2026-09-27): passing rungs 512Mi -> 384Mi -> 320Mi ->
-        # 288Mi, failed at 256Mi (dmesg OOMKilled, confirmed live at the start of this ladder
-        # session -- anon-rss climbing to the cap before being killed). Scraping the whole k3s
-        # cluster (kube-apiserver, etcd, kubelet, cAdvisor) drove the real floor well above the
-        # Compose-era same-binary predecessor's 256Mi cap -- headStats showed 123,106 series /
-        # 217,214 chunks at measurement time, ~7x the Plan 12-05 app-only figure (18,523/56,568).
-        # Anon usage tracked ~253-356MiB across rungs, filling whatever headroom the cap allowed
-        # (the same day-one pattern Plan 12-05 documented for this same binary) -- adopted 384Mi,
-        # not the bare-passing 288Mi, for growth headroom over the 30-day retention window (D-07).
-        # CORRECTED (quick 260929-fwf, 2026-09-29): 384Mi did NOT hold. The kernel journal shows
-        # three OOM kills within 6.3h of the D-08 window opening (2026-09-27T11:00, 13:00, 17:00Z,
-        # anon-rss ~390MB), each on a 2-hourly TSDB head-compaction boundary. The ladder above
-        # ran minutes per rung, shorter than that cycle, so it never sampled the spike. Live
-        # 3-day peak working set is 431 MiB (Prometheus max_over_time, container="prometheus").
-        # Adopted 640Mi (peak x1.5), request 384Mi (the old limit). Verification is the D-08.3
-        # 24h zero-restart window re-opened after this rollout, not another ladder.
-        # Falsifier: any OOMKilled on this container inside that window, or weeks later with no
-        # config change, means re-derive against the then-current series/chunk count.
+        # MEASURED (restart ladder, 2026-09-27): passed 512Mi, 384Mi, 320Mi, 288Mi; failed at 256Mi (dmesg
+        # OOMKilled). Adopted 640Mi limit (peak x1.5) / 384Mi request.
+        #
+        # Decisions:
+        # The ladder ran minutes per rung, shorter than the 2-hourly TSDB head-compaction cycle, so it never
+        # sampled the spike: the first adoption (384Mi) was OOM-killed three times within 6.3h (2026-09-27
+        # 11:00, 13:00, 17:00Z; anon-rss ~390MB). Live 3-day peak working set is 431MiB (Prometheus
+        # max_over_time, container="prometheus"). Corrected 2026-09-29.
+        # Scraping the whole k3s cluster put the floor well above the Compose-era 256Mi cap (headStats: 123,106
+        # series / 217,214 chunks, ~7x the app-only figure). Anon usage fills whatever headroom the cap allows.
+        # Falsifier: any OOMKilled on this container inside the 24h zero-restart window after rollout, or
+        # weeks later with no config change, means re-derive against the then-current series/chunk count.
         resources:
           requests:
             memory: 384Mi
@@ -120,12 +106,13 @@ spec:
         type: pvc
         storageClassName: local-path
         size: 1Gi
-      # MEASURED (restart-ladder, 13-09, 2026-09-27): passing rung 384Mi, failed at 256Mi (dmesg
-      # OOMKilled). Anon usage measured ~297MiB at the 384Mi rung, filling the cap the same way
-      # Prometheus above does -- the identical pattern the Plan 12-05 addendum already documented
-      # for this exact binary (TWO OOM kills at an adopted 384m under real sustained load, same-day
-      # corrected to 768Mi). Adopted 768Mi here directly rather than repeat that same-day
-      # correction: a synthetic burst under-measures Grafana's real concurrent dashboard/API peak.
+      # MEASURED (restart ladder, 2026-09-27): passed 384Mi, failed at 256Mi (dmesg OOMKilled). Adopted
+      # 768Mi limit / 400Mi request.
+      #
+      # Decisions:
+      # Anon usage was ~297MiB at the 384Mi rung, filling the cap as Prometheus does; this binary was OOM-killed
+      # twice at 384m under sustained load in its Compose-era deployment and corrected to 768Mi the same day.
+      # A synthetic burst under-measures Grafana's real concurrent dashboard/API peak.
       resources:
         requests:
           memory: 400Mi
@@ -133,56 +120,38 @@ spec:
         limits:
           memory: 768Mi
 
-      # BUG FIXED live (13-07 Task 2): `sidecar:` must nest inside `grafana:`, not sit as its
-      # top-level sibling.
+      # `sidecar:` must nest inside `grafana:`, not sit as its top-level sibling.
       #
-      # A top-level `sidecar:` key here was silently ignored by the chart (Helm does not reject
-      # unknown values keys) -- the template actually reads
-      # `.Values.grafana.sidecar.datasources.defaultDatasourceEnabled`
-      # (kube-prometheus-stack/templates/grafana/configmaps-datasources.yaml), so with no
-      # nested override it fell back to the chart's own default
-      # (`defaultDatasourceEnabled: true`). That rendered a second datasource ConfigMap
-      # (`kps-grafana-datasource`, uid `prometheus`) also marked `isDefault: true`, alongside
-      # this task's own `grafana-datasources` ConfigMap (uid `PBFA97CFB590B2093`, also
-      # `isDefault: true`) -- Grafana refuses to start with two default datasources in one org
-      # ("Datasource provisioning error: ... Only one datasource per organization can be marked
-      # as default"), confirmed live via
-      # `k3s kubectl logs deployment/kube-prometheus-stack-grafana -c grafana`. Re-verified via
-      # `helm template` with `sidecar:` nested here: the chart-managed ConfigMap no longer
-      # renders at all.
+      # Decisions:
+      # A top-level `sidecar:` was silently ignored (Helm does not reject unknown values keys). The chart
+      # reads `.Values.grafana.sidecar.datasources.defaultDatasourceEnabled`, so its default (true) rendered a
+      # second default datasource ConfigMap (`kps-grafana-datasource`) beside `grafana-datasources`, and
+      # Grafana refuses to start with two default datasources in one org (observed live in the Grafana
+      # logs). Re-verified with `helm template`: nested here, the chart-managed ConfigMap no longer renders.
       sidecar:
         dashboards:
           enabled: true
-          # label defaults to grafana_dashboard (chart default, unchanged)
         datasources:
           enabled: true
-          # label defaults to grafana_datasource (chart default, unchanged)
-          # The ONLY Prometheus datasource is grafana-datasources (configs/datasources.yaml,
-          # literal UIDs carried from Compose) -- the chart's own auto-provisioned Prometheus
-          # datasource must not also exist, or the literal-UID dashboards below could silently
-          # resolve against the wrong one.
+          # The ONLY Prometheus datasource is grafana-datasources (configs/datasources.yaml, literal UIDs); the
+          # chart's auto-provisioned one must not also exist, or literal-UID dashboards could resolve against it.
           defaultDatasourceEnabled: false
 
-    # node-exporter subchart (kube-prometheus-stack.charts.prometheus-node-exporter). Same
-    # trade-off Phase 12's node-exporter Compose service already documents: host filesystems
-    # visible (hostRootFsMount), network metrics scoped to the pod's own namespace (no
-    # hostNetwork/hostPID) -- closes the docker.sock-adjacent host-visibility surface that
-    # existed only because Compose's node-exporter needed network_mode:host to avoid; a k8s
-    # DaemonSet does not.
+    # node-exporter subchart: host filesystems visible (hostRootFsMount), network metrics scoped to the
+    # pod's own namespace (no hostNetwork/hostPID); a k8s DaemonSet needs no host network namespace.
     prometheus-node-exporter:
       hostNetwork: false
       hostPID: false
       hostRootFsMount:
         enabled: true
-      # MEASURED (restart-ladder, 13-09, 2026-09-27): shared rung with kube-state-metrics/
-      # prometheusOperator/alloy/postgres-exporter. Passing rung 16Mi, failed at 8Mi (dmesg
-      # OOMKilled, anon-rss ~7MiB + file-rss ~10MiB against the 8Mi cap). Adopted 16Mi/10Mi --
-      # verified clean (RestartCount=0, full workload cycle) from a fresh recreate.
-      # CORRECTED (quick 260929-fwf, 2026-09-29): 16Mi did NOT hold. node-exporter was OOM-killed
-      # twice inside the D-08 window (2026-09-27T23:51Z, 2026-09-28T13:16Z; anon ~14.6MB + file
-      # ~5.5MB = ~20MB) and the surviving pod's 3-day peak working set is 15.8 MiB -- no headroom.
-      # Adopted 32Mi, the shared ladder's other passing rung. Falsifier: any OOMKilled on this
-      # container inside the re-opened D-08.3 window.
+      # MEASURED (restart ladder, 2026-09-27): passed 16Mi, failed at 8Mi (dmesg OOMKilled). Adopted 32Mi
+      # limit / 16Mi request.
+      #
+      # Decisions:
+      # The first adoption (16Mi limit) did NOT hold: OOM-killed twice (2026-09-27T23:51Z, 2026-09-28T13:16Z;
+      # anon ~14.6MB + file ~5.5MB) and the surviving pod's 3-day peak working set is 15.8MiB. 32Mi is the
+      # ladder's other passing rung. Corrected 2026-09-29.
+      # Falsifier: any OOMKilled on this container inside the 24h zero-restart window after rollout.
       resources:
         requests:
           memory: 16Mi
@@ -192,19 +161,15 @@ spec:
       prometheus:
         monitor:
           enabled: true
-          # Sets `instance` from the k8s node name rather than the DaemonSet pod's own
-          # ephemeral IP/hostname target address, so the node-exporter-full dashboard's
-          # hard-coded `instance` value (rewritten below in this task) survives pod restarts --
-          # required per this task's own <action>.
+          # Sets `instance` from the k8s node name, not the pod's ephemeral address, so the
+          # node-exporter-full dashboard's hard-coded `instance` value survives pod restarts.
           relabelings:
             - sourceLabels: [__meta_kubernetes_pod_node_name]
               targetLabel: instance
 
     kube-state-metrics:
-      # MEASURED (restart-ladder, 13-09, 2026-09-27): shared rung with node-exporter/
-      # prometheusOperator/alloy/postgres-exporter. Passing rung 64Mi, failed at 32Mi (dmesg
-      # OOMKilled, anon-rss ~31.5MiB + file-rss ~16.1MiB against the 32Mi cap). Adopted 64Mi/32Mi
-      # -- verified clean (RestartCount=0, full workload cycle) from a fresh recreate.
+      # MEASURED (restart ladder, 2026-09-27): passed 64Mi, failed at 32Mi (dmesg OOMKilled, anon-rss
+      # ~31.5MiB + file-rss ~16.1MiB). Adopted 64Mi limit / 32Mi request.
       resources:
         requests:
           memory: 32Mi
@@ -213,10 +178,8 @@ spec:
           memory: 64Mi
 
     prometheusOperator:
-      # MEASURED (restart-ladder, 13-09, 2026-09-27): shared rung with kube-state-metrics/
-      # node-exporter/alloy/postgres-exporter. Passing rung 32Mi, failed at 16Mi (dmesg
-      # OOMKilled, anon-rss ~15.1MiB + file-rss ~43.5MiB against the 16Mi cap). Adopted 32Mi/25Mi
-      # -- verified clean (RestartCount=0, full workload cycle) from a fresh recreate.
+      # MEASURED (restart ladder, 2026-09-27): passed 32Mi, failed at 16Mi (dmesg OOMKilled, anon-rss
+      # ~15.1MiB + file-rss ~43.5MiB). Adopted 32Mi limit / 25Mi request.
       resources:
         requests:
           memory: 25Mi

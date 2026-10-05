@@ -1,4 +1,4 @@
-# Flux Kustomization for k8s/platform: namespaces + interim Traefik HelmChartConfig. Plan 13-02.
+# Flux Kustomization for k8s/platform: namespaces and the Traefik HelmChartConfig.
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization

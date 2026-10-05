@@ -1,9 +1,9 @@
-# Loki HelmRelease (Phase 13 plan 03 Task 2, D-07/D-17). Single-binary deployment mode, matching
-# docker/loki/loki-config.yaml's shape (filesystem storage, tsdb, no object store, single
-# replica). Chart pinned to grafana/loki 7.3.0 (appVersion 3.6.12), the latest release on
-# grafana.github.io/helm-charts as of 2026-09-25. deploymentMode key is `SingleBinary` at this
-# chart version (verified against the pinned chart's own values.yaml -- the chart has NOT yet
-# renamed this to `Monolithic`, contrary to 13-RESEARCH.md's caveat about newer chart releases).
+# Loki HelmRelease in single-binary mode (filesystem storage, tsdb, no object store, one replica).
+#
+# Decisions:
+# Chart pinned to grafana/loki 7.3.0 (appVersion 3.6.12), the latest on grafana.github.io/helm-charts
+# as of 2026-09-25. The deploymentMode key is `SingleBinary` at this chart version (checked against
+# its values.yaml); the chart has not yet renamed it to `Monolithic`.
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -24,8 +24,7 @@ spec:
   upgrade:
     crds: CreateReplace
   values:
-    # Deterministic Service name (loki) -- configs/datasources.yaml's Loki datasource URL depends
-    # on it, verified via `helm template` in this task's own <verify> block.
+    # Deterministic Service name: configs/datasources.yaml's Loki datasource URL depends on it.
     fullnameOverride: loki
     deploymentMode: SingleBinary
 
@@ -35,10 +34,9 @@ spec:
         replication_factor: 1
       storage:
         type: filesystem
-      # D-07: 30 days, matching docker/loki/loki-config.yaml's 720h exactly. schema_config.from
-      # is deliberately far in the past, not the deploy date -- same rationale that file's own
-      # comment documents (a fresh install's first scrape can still tail a container's pre-deploy
-      # backlog; backdating costs nothing since schema periods do not pre-allocate storage).
+      # 30 days of retention. schema_config.from is deliberately far in the past: a fresh install's
+      # first scrape can still tail a container's pre-deploy backlog, and backdating costs nothing since
+      # schema periods do not pre-allocate storage.
       schemaConfig:
         configs:
           - from: "2024-01-01"
@@ -62,12 +60,13 @@ spec:
         enabled: true
         storageClass: local-path
         size: 10Gi
-      # MEASURED (restart-ladder, 13-09, 2026-09-27): passing rung 128Mi, failed at 64Mi (dmesg
-      # OOMKilled, anon-rss ~62.9MiB + file-rss ~75.6MiB against the 64Mi cap). Anon usage at
-      # 128Mi measured ~82MiB (51 streams/chunks, comparable to Plan 12-05's 14-stream Compose
-      # measurement). Adopted 192Mi/96Mi -- deliberate growth headroom over the 30-day retention
-      # window (D-07), same day-one caveat Plan 12-05 documented for this same binary. Falsifier:
-      # if OOM-killed weeks from now with no config change, re-derive against the then-current
+      # MEASURED (restart ladder, 2026-09-27): passed 128Mi, failed at 64Mi (dmesg OOMKilled, anon-rss
+      # ~62.9MiB + file-rss ~75.6MiB). Adopted 192Mi limit / 96Mi request.
+      #
+      # Decisions:
+      # Anon usage at the 128Mi rung was ~82MiB (51 streams); the extra headroom covers growth over the
+      # 30-day retention window.
+      # Falsifier: an OOM kill weeks from now with no config change means re-derive against the then-current
       # stream/chunk count, not this measurement.
       resources:
         requests:
@@ -76,8 +75,8 @@ spec:
         limits:
           memory: 192Mi
 
-    # read/write/backend are the SimpleScalable-mode components -- zeroed explicitly so a chart
-    # default change cannot silently stand up a second deployment shape alongside singleBinary.
+    # Zero the SimpleScalable-mode components so a chart default change cannot stand up a second
+    # deployment shape beside singleBinary.
     read:
       replicas: 0
     write:
@@ -85,10 +84,8 @@ spec:
     backend:
       replicas: 0
 
-    # Disabled: no object-store gateway (filesystem storage only), no memcached-backed
-    # chunks/results caches (a single-binary, single-node install has no cache tier to front),
-    # no canary/self-test workloads, no self-monitoring stack (this chart's own Prometheus/Grafana
-    # sidecar bundle -- kube-prometheus-stack already provides both).
+    # Disabled: no object-store gateway, no caches (a single-node install has no cache tier to front),
+    # no canary, and no self-monitoring (kube-prometheus-stack already provides it).
     gateway:
       enabled: false
     chunksCache:

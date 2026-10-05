@@ -1,7 +1,4 @@
-# Production-edge shape (Phase 13 plan 06, D-13). Replaces the plan-01 interim IngressRoute --
-# Traefik now owns 80/443 directly via ServiceLB (helmchartconfig.yaml, this same commit), and
-# Caddy is stopped inside the same maintenance window, so the interim entryPoint `web`-only route
-# is no longer needed.
+# Nonprod edge: TLS on websecure plus a web-only redirect route; Traefik owns 80/443 via ServiceLB.
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
@@ -19,8 +16,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    # No rate limit on nonprod (D-13) -- unlike the prod overlay's app-https, this route carries
-    # no Middleware at all.
+    # No rate limit on nonprod, unlike the prod overlay's app-https: this route carries no Middleware.
     - match: Host(`kanban-board-rud-vlad-473-nonprod.duckdns.org`)
       kind: Rule
       services:
@@ -37,8 +33,7 @@ spec:
   entryPoints:
     - web
   routes:
-    # The negation excludes cert-manager's HTTP-01 solver path from the redirect by construction
-    # (I10), matching the prod overlay's own app-http route shape exactly.
+    # The negation excludes cert-manager's HTTP-01 solver path from the redirect (I10), as in prod.
     - match: Host(`kanban-board-rud-vlad-473-nonprod.duckdns.org`) && !PathPrefix(`/.well-known/acme-challenge/`)
       kind: Rule
       middlewares:

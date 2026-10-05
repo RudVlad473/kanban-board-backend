@@ -5,12 +5,9 @@ services:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASS}
-    # Host side published as 5433, not the well-known 5432: on some developer machines a
-    # pre-existing native (non-Docker) PostgreSQL service already owns host port 5432 and
-    # silently answers connections meant for this container -- the symptom is an authentication
-    # failure, not a connection-refused, which is why it can cost hours to diagnose (see
-    # .planning/phases/04-schema-registry/04-04-SUMMARY.md). The container-internal port is
-    # unchanged, so the `app` service (DB_HOST: postgres, its default port) is unaffected.
+    # Host side published as 5433, not 5432: a native PostgreSQL on some developer machines already owns
+    # 5432 and silently answers connections meant for this container, which surfaces as an authentication
+    # failure rather than connection-refused and can cost hours to diagnose.
     ports:
       - "5433:5432"
     volumes:
@@ -19,14 +16,11 @@ services:
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:v26.2.1
     hostname: redpanda
-    # Single-node broker + built-in Schema Registry (Phase 4, Schema Registry) -- replaces the
-    # previous broker image, which carried no registry at all. Two Kafka listeners, mirroring the
-    # previous kafka service's exact port numbering: 9092 external/host-exposed (unchanged, so
-    # existing host tooling such as a Kafka UI needs no reconfiguration), 19092 internal-only for
-    # the app container. The schema registry needs no such internal/external split -- it is a
-    # plain REST server, not a client protocol requiring advertised-address negotiation -- so one
-    # listener on 8081 serves both the app (via the `redpanda` hostname) and the host (via the
-    # port mapping below), matching the address the human-check step below curls directly.
+    # Single-node broker with built-in Schema Registry.
+    #
+    # Two Kafka listeners: 9092 external/host-exposed for host tooling such as a Kafka UI, 19092
+    # internal-only for the app container. The registry is a plain REST server needing no internal/external
+    # split, so one listener on 8081 serves the app (via the `redpanda` hostname) and the host.
     command:
       - redpanda
       - start
@@ -43,21 +37,17 @@ services:
       - "8081:8081" # host-exposed schema registry, e.g. `curl http://localhost:8081/subjects`
     volumes:
       - redpanda-data:/var/lib/redpanda/data # named volume so `down`/`up` does not wipe broker
-      # state. This is a new volume name, not a reuse of the old kafka-data volume: Redpanda's
-      # data directory format differs from the previous broker image's, so an existing local
-      # checkout's broker state is discarded on the first `up` after this change. That is
-      # expected and acceptable -- this is disposable local-dev state -- worth this note so
-      # nobody debugs an empty topic as a bug.
+      # state. A new volume name: Redpanda's data directory format differs from the previous broker's, so
+      # an old checkout's broker state is discarded on the first `up`. Disposable local-dev state; do not
+      # debug an empty topic as a bug.
     healthcheck:
-      # Redpanda ships rpk, a real admin CLI -- unlike the previous broker image's bare-alpine
-      # runtime, which had no admin-script tree at all and forced a bare TCP-connect fallback (an
-      # open socket proves a listener accepts connections, not that the cluster is actually
-      # healthy). `rpk cluster health` gives a genuine readiness signal instead.
+      # `rpk cluster health` is a genuine readiness signal; an open TCP socket only proves a listener
+      # accepts connections, not that the cluster is healthy.
       test: [ "CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1" ]
       interval: 5s
       timeout: 5s
       retries: 8
-      start_period: 15s # ~55s worst-case bound before Compose gives up, inside D-03's 30-60s guidance
+      start_period: 15s # ~55s worst-case bound before Compose gives up
 
   app:
     build: .
@@ -73,21 +63,15 @@ services:
       DB_PASS: ${DB_PASS}
       KAFKA_BOOTSTRAP_SERVERS: redpanda:19092
       SCHEMA_REGISTRY_URL: http://redpanda:8081
-      # Kept explicit rather than deleted (this file's convention is to state non-obvious local
-      # config rather than rely on an invisible default). Value changed from `update` to `validate`
-      # (Flyway cutover, D-03): Spring Boot's environment-variable property source outranks
-      # application.properties, so leaving the old auto-alter value here would let Hibernate keep
-      # silently altering the schema on every local run -- masking exactly the Flyway/entity
-      # mismatch `validate` exists to catch, and making this local stack prove nothing about the
-      # behavior a real deploy would have.
+      # `validate`, not `update`: Spring Boot's environment-variable property source outranks
+      # application.properties, so an auto-alter value here would let Hibernate keep altering the schema on
+      # every local run, masking the Flyway/entity mismatch `validate` exists to catch.
       SPRING_JPA_HIBERNATE_DDL_AUTO: validate
     ports:
       - "8080:8080"
-    # Before this service can publish, the registry must be populated: run
-    # `./gradlew registerSchemas -PschemaRegistryUrl=http://localhost:8081` after `docker compose
-    # up`. This is the same build/CI-invocable step SCHEMA-01 requires -- not a local-dev-only
-    # workaround; the producer's auto.register.schemas=false means it can only ever look schemas
-    # up, never register them itself.
+    # Populate the registry before this service can publish: run
+    # `./gradlew registerSchemas -PschemaRegistryUrl=http://localhost:8081` after `docker compose up`. The
+    # producer's auto.register.schemas=false means it can only look schemas up, never register them.
 
 volumes:
   postgres-data:

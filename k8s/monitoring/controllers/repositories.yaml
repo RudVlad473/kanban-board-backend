@@ -1,7 +1,4 @@
-# HelmRepositories for the observability stack (Phase 13 plan 03, D-07/D-09/D-17). Nothing here
-# reconciles until 13-07 unsuspends the monitoring Kustomizations (13-02) -- every choice in this
-# plan is a file edit against a real, pinned chart, statically proven with `helm template` in this
-# plan's own <verify> blocks, not yet applied to any live cluster.
+# HelmRepositories for the observability stack.
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: HelmRepository
 metadata:

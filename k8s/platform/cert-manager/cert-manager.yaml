@@ -1,18 +1,12 @@
-# cert-manager, deployed via Flux HelmRelease (D-13, D-09: third-party charts go through
-# HelmRepository/HelmRelease rather than hand-written manifests). Owns the ACME certificate
-# lifecycle for all three hostnames (prod, nonprod's own overlay in 13-06, monitoring below).
+# cert-manager via a Flux HelmRepository/HelmRelease; owns the ACME certificate lifecycle for all
+# three hostnames.
 #
-# BUG FIXED live during 13-06's maintenance window (2026-09-26): neither object below carried an
-# explicit `metadata.namespace`, and this directory's own kustomization.yaml sets no top-level
-# `namespace:` either -- so `kubectl apply` rejected the HelmRepository outright with
-# "HelmRepository/jetstack namespace not specified: the server could not find the requested
-# resource", confirmed live via `kubectl describe kustomization cert-manager -n flux-system`.
-# Fixed to the same convention k8s/monitoring/controllers/repositories.yaml and
-# kube-prometheus-stack.yaml already establish: HelmRepository objects (the reconciled Flux
-# Source, not the chart's own release namespace) live in `flux-system`, cross-referenced by the
-# HelmRelease's `sourceRef.namespace`. HelmRelease itself also needs its own `metadata.namespace`
-# for the same reason; `spec.targetNamespace: cert-manager` (unchanged) is a separate field --
-# where the CHART's rendered objects land, not where this HelmRelease object itself lives.
+# Decisions:
+# Every object here sets an explicit `metadata.namespace` (HelmRepository in `flux-system`, as in
+# k8s/monitoring/controllers/repositories.yaml): this directory's kustomization.yaml sets no top-level
+# `namespace:`, so `kubectl apply` rejected the HelmRepository with "namespace not specified" (observed
+# live 2026-09-26). `spec.targetNamespace: cert-manager` is separate: where the chart's objects land,
+# not where the HelmRelease lives.
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: HelmRepository
 metadata:
@@ -32,10 +26,8 @@ spec:
   chart:
     spec:
       chart: cert-manager
-      # Pinned to the latest v1.x stable release as of 2026-09-25 (this file's write date) --
-      # cert-manager.io's own release notes confirm v1.21.1 as a current, real patch release
-      # (fixes a controller panic + a Secret-informer regression from v1.21.0). Never `latest`,
-      # matching D-12's spirit for every other pinned version in this phase.
+      # Pinned to v1.21.1, the latest v1.x stable as of 2026-09-25 (fixes a controller panic and a
+      # Secret-informer regression from v1.21.0). Never `latest`.
       version: v1.21.1
       sourceRef:
         kind: HelmRepository
@@ -49,20 +41,13 @@ spec:
       enabled: true
       keep: true
     prometheus:
-      # Enabled now that 13-07 Task 1 activates kube-prometheus-stack, which provides the
-      # ServiceMonitor CRD this needs. Left disabled from 13-03 through 13-06 specifically
-      # because that CRD did not exist yet -- enabling it earlier would have left a
-      # permanently-unsatisfiable CRD reference.
+      # Enabled because kube-prometheus-stack provides the ServiceMonitor CRD this needs.
       enabled: true
       servicemonitor:
         enabled: true
-    # MEASURED (restart-ladder, 13-09, 2026-09-27): all 3 components share rungs (OOMKilled is
-    # reported per-container). Passing rungs 128Mi -> 64Mi, failed at 32Mi (cainjector only:
-    # dmesg OOMKilled, anon-rss ~31.7MiB + file-rss ~25.8MiB against the 32Mi cap; controller and
-    # webhook stayed at RestartCount=0 through that same rung). Adopted 64Mi/16Mi for all three --
-    # cainjector's own live cgroup usage measured ~36MiB against this cap immediately after
-    # independent re-verify. Verified clean (RestartCount=0, full workload cycle, a self-signed
-    # Issuer+Certificate issued and deleted in scratch namespace ladder-scratch) at every rung.
+    # MEASURED (restart ladder, 2026-09-27): all 3 components share rungs. They passed 128Mi and 64Mi and
+    # failed at 32Mi (cainjector only: dmesg OOMKilled, anon-rss ~31.7MiB + file-rss ~25.8MiB). Adopted
+    # 64Mi limit / 16Mi request for all three; cainjector's live cgroup usage was ~36MiB against that cap.
     resources:
       requests:
         memory: 16Mi

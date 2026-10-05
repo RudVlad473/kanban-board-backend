@@ -1,4 +1,3 @@
-# Activated at the prod cutover (D-02, D-17), Plan 13-07 Task 1.
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization

@@ -1,4 +1,3 @@
-# Plan 13-02. Unsuspended Plan 13-06 (W1) at the start of the maintenance window (D-02, D-17).
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization

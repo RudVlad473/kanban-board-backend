@@ -1,10 +1,8 @@
-# Grafana Alloy HelmRelease (Phase 13 plan 03 Task 2, D-07). Replaces docker-compose.prod.yml's
-# `promtail:` service -- Promtail is formally EOL upstream (13-RESEARCH.md, State of the Art).
-# Chart pinned to grafana/alloy 1.12.1 (appVersion v1.19.2), the latest release on
-# grafana.github.io/helm-charts as of 2026-09-25.
+# Grafana Alloy HelmRelease: tails pod logs to Loki, one DaemonSet pod per node (chart default).
 #
-# controller.type defaults to 'daemonset' (chart default, unchanged) -- one Alloy pod per node,
-# matching Promtail's own DaemonSet-equivalent coverage today.
+# Decisions:
+# Replaces Promtail, which is EOL upstream. Chart pinned to grafana/alloy 1.12.1 (appVersion v1.19.2),
+# the latest on grafana.github.io/helm-charts as of 2026-09-25.
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -27,17 +25,13 @@ spec:
   values:
     alloy:
       mounts:
-        # No hostPath log mounts -- pod logs are tailed via the Kubernetes API
-        # (loki.source.kubernetes below), the mechanism that makes the docker.sock-equivalent
-        # host-visibility surface Promtail needed simply not exist here (13-RESEARCH.md, State of
-        # the Art). Both already default to false at this chart version; set explicitly per this
-        # task's own requirement rather than relying on the unstated default.
+        # No hostPath log mounts: pod logs are tailed through the Kubernetes API (loki.source.kubernetes
+        # below), so the docker.sock-equivalent host-visibility surface Promtail needed does not exist. Both
+        # default to false at this chart version; set explicitly.
         varlog: false
         dockercontainers: false
-      # MEASURED (restart-ladder, 13-09, 2026-09-27): shared rung with kube-state-metrics/
-      # node-exporter/prometheusOperator/postgres-exporter. Passing rung 75Mi, failed at 40Mi
-      # (dmesg OOMKilled, anon-rss ~39.6MiB + file-rss ~108.2MiB against the 40Mi cap). Adopted
-      # 75Mi/40Mi -- verified clean (RestartCount=0, full workload cycle) from a fresh recreate.
+      # MEASURED (restart ladder, 2026-09-27): passed 75Mi, failed at 40Mi (dmesg OOMKilled, anon-rss
+      # ~39.6MiB + file-rss ~108.2MiB). Adopted 75Mi limit / 40Mi request.
       resources:
         requests:
           memory: 40Mi

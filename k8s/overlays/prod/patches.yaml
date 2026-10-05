@@ -1,9 +1,8 @@
-# MEASURED (13-09, 2026-09-27): re-confirmed via
-# max_over_time(container_memory_working_set_bytes{namespace="kanban-prod",container="app"}[24h])
-# against kube-prometheus-stack -- 532.9MiB peak working set on the live k3s pod, exceeding the
-# prior 512Mi request (carried from docker-compose.prod.yml's app comment, Plan 11-03/05-04,
-# 2026-08-26/2026-08-16, ~471.1MiB peak). Rounded up from the new peak to the next 64Mi multiple
-# (576Mi); limits carry the Compose mem_limit (3g) unchanged.
+# MEASURED (2026-09-27): 532.9MiB peak working set on the live pod, 24h max_over_time of
+# container_memory_working_set_bytes{namespace="kanban-prod",container="app"}.
+#
+# The prior 512Mi request (~471.1MiB peak, 2026-08-26) was exceeded, so the request is the new peak
+# rounded up to the next 64Mi multiple (576Mi). The limit is the Compose-era 3g.
 - op: replace
   path: /spec/template/spec/containers/0/resources
   value:
@@ -11,9 +10,8 @@
       memory: 576Mi
     limits:
       memory: 3Gi
-# Same figures as the app container above -- the registrar runs briefly, once, before the app
-# container starts (never concurrently with it), so it needs no independent measurement;
-# matching the app container's own cap keeps the pod's total possible footprint unchanged.
+# Same figures as the app container: the registrar runs briefly, once, before the app starts, so
+# it needs no measurement of its own and the pod's total possible footprint is unchanged.
 - op: replace
   path: /spec/template/spec/initContainers/0/resources
   value:

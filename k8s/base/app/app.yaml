@@ -1,14 +1,9 @@
-# App workload base (Phase 13 plan 01). Analog: docker-compose.prod.yml `app:`/
-# docker-compose.nonprod.yml `app-nonprod:` service blocks -- same env/resource-cap fields,
-# Kubernetes-native shape. Overlays set the image tag/repository and per-env resource requests
-# (see k8s/overlays/nonprod/kustomization.yaml and patches.yaml).
+# App workload base: Deployment plus Service; overlays set image and per-env resources.
 #
-# `register-schemas` initContainer added Task 2 (D-14): schema registration runs in-cluster,
-# ordered before the app container starts, via an initContainer rather than a Job -- Job.spec.
-# template is immutable, so a second apply with a changed image tag (every deploy, per D-15)
-# would fail; an initContainer is part of the Pod template, which IS meant to change every
-# deploy (13-RESEARCH.md Pattern 3). Deviation from D-14's literal "Job" wording, flagged for
-# operator confirmation in the phase-level design record -- do not silently convert either way.
+# Decisions:
+# register-schemas is an initContainer, not a Job: Job.spec.template is immutable, so a second
+# apply with a changed image tag (every deploy) would fail, while an initContainer sits in the Pod
+# template, which is meant to change every deploy. Do not convert it to a Job without the operator.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -17,9 +12,9 @@ metadata:
     app.kubernetes.io/name: app
 spec:
   replicas: 1
-  # Recreate, not RollingUpdate (phase-level design record): keeps the memory envelope at one
-  # app pod per env, matching the ~0.6 GiB steady-state headroom this phase's memory budget
-  # assumes. RollingUpdate's maxSurge 1 would add another app pod's requests transiently.
+  # Recreate, not RollingUpdate: keeps the memory envelope at one app pod per env, matching the
+  # ~0.6 GiB steady-state headroom. RollingUpdate's maxSurge 1 would transiently add another pod's
+  # requests.
   strategy:
     type: Recreate
   selector:
@@ -30,21 +25,16 @@ spec:
       labels:
         app.kubernetes.io/name: app
     spec:
-      # No in-cluster Kubernetes API access is needed by this workload -- closes T-13-03
-      # (Elevation of Privilege: app pod reaching the Kubernetes API).
+      # The app never calls the Kubernetes API, so no service-account token is mounted.
       automountServiceAccountToken: false
       securityContext:
         seccompProfile:
           type: RuntimeDefault
       initContainers:
-        # Schema registration (D-14): runs the same AvroSchemaRegistrar invocation
-        # deploy.yml's register-schemas-production job already proves, now in-cluster and
-        # ordered before the app container by the kubelet's own initContainer contract -- a
-        # failing init blocks the main container from starting, a stronger guarantee than a
-        # Flux Kustomization dependsOn (which only orders reconciliation, not pod scheduling).
+        # Registers Avro schemas in-cluster before the app starts. A failing init blocks the main
+        # container; a Flux dependsOn only orders reconciliation, not pod scheduling.
         - name: register-schemas
-          # Same image as the app container -- Kustomize's images transformer rewrites
-          # initContainers too, so overlays only need to patch one image reference.
+          # Same image as the app container; Kustomize's images transformer rewrites initContainers too.
           image: rudenkovladimir/kanban-board-backend
           workingDir: /app
           command:
@@ -62,11 +52,8 @@ spec:
             capabilities:
               drop:
                 - ALL
-          # Same resources as the app container (overlays patch both identically), so the
-          # pod's effective scheduled request does not rise just because an initContainer
-          # exists -- initContainer and container resource requests are not summed by the
-          # scheduler when only one runs at a time, but keeping them equal avoids a surprise
-          # if that ever changes.
+          # Empty like the app container (overlays patch both identically), so an initContainer never
+          # raises the pod's scheduled request.
           resources: {}
       containers:
         - name: app
@@ -76,12 +63,11 @@ spec:
               containerPort: 8080
           envFrom:
             - secretRef:
-                # Created on the VM from env files, never committed, never handled by CI (D-10).
+                # Created on the VM from env files; never committed, never handled by CI.
                 name: app-env
           env:
-            # Cross-namespace K8s DNS, not Compose's flat service-name DNS (13-RESEARCH.md
-            # Pitfall 4 applies to Redpanda; the same DNS-shape correction applies here to
-            # Postgres). Overrides whatever DB_HOST value the Compose-era app-env Secret carries.
+            # Cross-namespace K8s DNS, not Compose's flat service-name DNS. Overrides the DB_HOST in the
+            # Compose-era app-env Secret.
             - name: DB_HOST
               value: postgres.kanban-data.svc.cluster.local
             - name: DB_PORT
@@ -95,8 +81,8 @@ spec:
             capabilities:
               drop:
                 - ALL
-          # Set by the overlay's patches.yaml (measured, dated MEASURED comment there per D-07's
-          # own memory-cap discipline) -- empty here so the base carries no unmeasured guess.
+          # Set by the overlay's patches.yaml, with a dated MEASURED comment; empty here so the base
+          # carries no unmeasured guess.
           resources: {}
           startupProbe:
             httpGet:
@@ -114,7 +100,6 @@ spec:
               path: /api/actuator/health
               port: http
             periodSeconds: 10
-            # Matches the Compose healthcheck's own retries: 5.
             failureThreshold: 5
 ---
 apiVersion: v1

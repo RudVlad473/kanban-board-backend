@@ -1,7 +1,4 @@
-# D-13: every Certificate started on the staging issuer (13-04). This is 13-06's W3 -- the
-# production flip, landed only after all three hostnames (prod, nonprod, monitoring) validated
-# against staging in the maintenance window -- see k8s/platform/edge/clusterissuers.yaml for both
-# ClusterIssuers.
+# Production certificate for the prod hostname; ClusterIssuers are in k8s/platform/edge/clusterissuers.yaml.
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:

@@ -1,11 +1,7 @@
-# In-cluster Postgres (Phase 13 plan 04, D-05). Analog: docker-compose.prod.yml `postgres:`
-# service -- same shared-instance-two-roles model (Phase 11 D-01), same -c flags, same 256m
-# memory cap, Kubernetes-native shape. Namespace kanban-data (D-11), reached cross-namespace by
-# both app namespaces via the Service's DNS name (postgres.kanban-data.svc.cluster.local).
+# In-cluster Postgres: one instance serving both environments' databases via two roles.
 #
-# ClusterIP is pinned to 10.43.54.32 -- identical to k8s/data/postgres-bridge/postgres-bridge.yaml
-# (13-02)'s own interim Service, so the 13-06 path switch (bridge -> this StatefulSet) updates
-# clients in place with no DNS-name or IP change.
+# Reached cross-namespace as postgres.kanban-data.svc.cluster.local. The ClusterIP is pinned to
+# 10.43.54.32 so clients keep the same DNS name and IP across the bridge-to-StatefulSet switch.
 apiVersion: v1
 kind: Service
 metadata:
@@ -20,11 +16,8 @@ spec:
     - name: postgres
       port: 5432
 ---
-# Headless companion, not the StatefulSet's own governing Service -- serviceName below points at
-# this one so each replica gets a stable, individually-addressable DNS record
-# (<pod-ordinal>.postgres-headless.kanban-data.svc.cluster.local), matching the same headless
-# pattern k8s/base/redpanda/redpanda.yaml already established. Replicas is 1 today, but the
-# StatefulSet contract requires a headless governing Service regardless of replica count.
+# Headless governing Service for the StatefulSet's per-replica DNS records; required even at one
+# replica.
 apiVersion: v1
 kind: Service
 metadata:
@@ -59,30 +52,25 @@ spec:
       terminationGracePeriodSeconds: 60
       containers:
         - name: postgres
-          # Same tag as local dev (docker-compose.yml) and the Testcontainers-backed test suite
-          # (Phase 11 D-02) -- one Postgres version tested across every environment.
+          # Same tag as local dev and the Testcontainers suite.
           image: postgres:16
           ports:
             - name: postgres
               containerPort: 5432
           envFrom:
             - secretRef:
-                # Created on the VM from env files in 13-06 (D-10), never committed. Keys:
-                # POSTGRES_USER POSTGRES_PASSWORD PROD_DB_NAME PROD_DB_USER PROD_DB_PASS
-                # NONPROD_DB_NAME NONPROD_DB_USER NONPROD_DB_PASS MONITORING_DB_PASS.
+                # Created on the VM from env files, never committed. Keys: POSTGRES_USER POSTGRES_PASSWORD
+                # PROD_DB_NAME PROD_DB_USER PROD_DB_PASS NONPROD_DB_NAME NONPROD_DB_USER NONPROD_DB_PASS
+                # MONITORING_DB_PASS.
                 name: postgres-init
           env:
-            # Set explicitly so the image does not create a stray database named after the
-            # superuser (POSTGRES_DB defaults to POSTGRES_USER's value when unset) -- same
-            # rationale as docker-compose.prod.yml's own postgres.environment.POSTGRES_DB.
+            # Set explicitly so the image does not create a stray database named after the superuser.
             - name: POSTGRES_DB
               value: postgres
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
-          # D-11: deliberately the engine's own small built-in defaults plus a max_connections
-          # well below the stock 100 -- carried LITERALLY from docker-compose.prod.yml's own
-          # postgres.command (Plan 11-08 correction: shared_buffers halved from 128MB to 64MB so
-          # it stays at most a quarter of the 256Mi limit below, verified by I6). Not re-derived.
+          # Small built-in defaults plus max_connections well below the stock 100. shared_buffers stays at
+          # most a quarter of the 256Mi limit below (invariant I6).
           args:
             - -c
             - shared_buffers=64MB
@@ -98,22 +86,15 @@ spec:
             - name: postgres-init
               mountPath: /docker-entrypoint-initdb.d
               readOnly: true
-          # -h 127.0.0.1 is load-bearing: during initialization the image's entrypoint runs a
-          # temporary server with listen_addresses empty, so a socket-based probe can report
-          # ready while the init scripts are still running. Forcing TCP means ready cannot be
-          # reached until the real server is listening -- same rationale as the Compose
-          # healthcheck this readiness probe replaces.
-          # BUG FIXED live during 13-06's maintenance window (2026-09-26): `$(POSTGRES_USER)`
-          # inside an exec probe's command string is NOT expanded by Kubernetes -- that
-          # `$(VAR)` field-reference syntax only expands inside `command`/`args`/`env.value`
-          # fields, never inside a probe's own shell string. The container's `sh -c` shell
-          # instead parsed it as command substitution (run `POSTGRES_USER` as a command),
-          # which failed with "POSTGRES_USER: not found" and substituted nothing, producing
-          # `pg_isready: error: too many command-line arguments (first is "postgres")` --
-          # confirmed live via `kubectl describe pod postgres-0`. `$POSTGRES_USER` (real shell
-          # variable expansion, no parens) is correct here: the container's own environment
-          # already carries POSTGRES_USER via `envFrom: postgres-init` (confirmed via
-          # `kubectl exec ... env`), so the shell expands it directly.
+          # Probe over TCP (-h 127.0.0.1): during initialization the entrypoint runs a temporary server
+          # with listen_addresses empty, so a socket probe can report ready while init scripts still run.
+          #
+          # Decisions:
+          # `$(POSTGRES_USER)` inside an exec probe's shell string is NOT expanded by Kubernetes; that
+          # syntax only expands in `command`/`args`/`env.value`. The shell parsed it as command
+          # substitution and pg_isready failed with "too many command-line arguments" (observed live,
+          # 2026-09-26, `kubectl describe pod postgres-0`). `$POSTGRES_USER` is correct: the container
+          # environment already carries it via `envFrom: postgres-init`.
           readinessProbe:
             exec:
               command:
@@ -122,13 +103,11 @@ spec:
                 - "pg_isready -h 127.0.0.1 -U $POSTGRES_USER -d postgres"
             periodSeconds: 5
             failureThreshold: 8
-          # MEASURED (13-09, 2026-09-27): re-confirmed via
-          # max_over_time(container_memory_working_set_bytes{namespace="kanban-data",container="postgres"}[24h])
-          # against kube-prometheus-stack -- 65.5MiB peak working set on the live k3s pod, well
-          # under the existing 128Mi request (carried from docker-compose.prod.yml's postgres
-          # comment, Plan 11-03/11-08, 2026-08-26 -- anon+shmem held ~84MiB under a combined
-          # worst-case workload of 24 concurrent backends / ~127MB pgbench dataset) -- unchanged.
-          # Limits carry the Compose mem_limit (256m) unchanged.
+          # MEASURED (2026-09-27): 65.5MiB peak working set, 24h max_over_time of
+          # container_memory_working_set_bytes{namespace="kanban-data",container="postgres"}.
+          #
+          # The 128Mi request stays: anon+shmem held ~84MiB under a worst-case workload of 24 concurrent
+          # backends and a ~127MB pgbench dataset (2026-08-26). Limits are the Compose-era 256m.
           resources:
             requests:
               memory: 128Mi

@@ -1,69 +1,47 @@
 #!/usr/bin/env bash
-# Applies, checks and removes the KANBAN-INGRESS mangle-table ingress filter for k3s NodePorts and
-# hostPorts. Installed at /usr/local/sbin/k3s-host-firewall.sh per infra/vm/README.md and invoked
-# by k3s-host-firewall.service. See docs/INFRA_RUNBOOK.md's "Edge hardening on k3s -- Plan 13-08"
-# section for the live evidence this ruleset works.
+# Apply, check or remove the KANBAN-INGRESS mangle ingress filter for k3s NodePorts and hostPorts.
 #
-# --- Decisions a future reader would otherwise reverse (load-bearing; read before editing) -----
+# Installed at /usr/local/sbin/k3s-host-firewall.sh per infra/vm/README.md and invoked by
+# k3s-host-firewall.service; docs/INFRA_RUNBOOK.md's "Edge hardening on k3s" section holds the live
+# evidence this ruleset works.
 #
-# WHY mangle, NOT DOCKER-USER's filter/FORWARD approach: DOCKER-USER (infra/vm/docker-user-
-# firewall.sh) is a Docker-managed hook point that only ever sees Docker's own DNAT'd traffic.
-# k3s's NodePorts and hostPorts are DNAT'd by kube-proxy/kube-router's own iptables rules in the
-# `nat` table (KUBE-NODEPORTS) and by the CNI's hostPort plugin (CNI-HOSTPORT-DNAT) -- neither
-# passes through DOCKER-USER at all, and neither of Docker's chains exists in the CNI's path. The
-# one hook point that runs BEFORE both of those NAT chains, regardless of which one eventually
-# claims the packet, is `mangle PREROUTING` -- filtering there means the decision is made before
-# either NAT chain gets a chance to rewrite the destination, so it covers every future NodePort
-# or hostPort a k3s Service could ever open, not just the ones enumerated today.
+# Decisions:
+# mangle, NOT DOCKER-USER's filter/FORWARD: DOCKER-USER only sees Docker's own DNAT'd traffic. k3s's
+# NodePorts and hostPorts are DNAT'd by kube-proxy/kube-router in the `nat` table (KUBE-NODEPORTS) and
+# by the CNI hostPort plugin (CNI-HOSTPORT-DNAT); neither passes through DOCKER-USER. `mangle
+# PREROUTING` runs before both NAT chains, so the decision precedes any destination rewrite and covers
+# every future NodePort or hostPort a Service could open.
+# Position 1 in PREROUTING: `-I mangle PREROUTING 1` (not `-A`) puts the jump ahead of every existing
+# rule, including kube-router's NAT bookkeeping. A later jump would let some NAT'd traffic pick its DNAT
+# target first, making "unreachable" intermittent rather than absolute.
+# Allow-list source: ports 22, 80, 443 were read from the live `iptables -S INPUT` allow-list on
+# 2026-09-26 and are hard-coded, not derived at apply time. INPUT governs host daemons (sshd), a slower-
+# changing surface than k3s Services; a change to INPUT's allow-list is a deliberate event that should
+# also touch this file.
+# Rule order: RETURN established/related, RETURN the allow-list, RETURN icmp, DROP, final RETURN. The
+# established/related RETURN must precede the DROP or every reply packet on a permitted connection (a
+# NodePort response, an image pull's return traffic) is dropped, which fails as a hang, not an error.
+# Atomic apply: `iptables-restore --noflush` with an in-fragment `-F` makes the chain's replacement
+# atomic and idempotent: re-running apply yields exactly six rules in KANBAN-INGRESS, never twelve, and
+# leaves every other mangle chain (PREROUTING's jump is added/removed separately) untouched.
+# Dead-man switch: `apply --dead-man <minutes>` arms a transient `systemd-run --on-active` timer that
+# runs `remove` unless cancelled, protecting a live-apply window against a rule that cuts SSH. Disarm
+# only after the ruleset is confirmed from a FRESH SSH connection, not the one that applied it.
+# IPv4 only: k3s is installed single-stack (infra/vm/k3s/config.yaml), so there is no IPv6 CNI path to
+# filter. The Docker-era ip6tables gap (docs/INFRA_RUNBOOK.md's Layer 3 section) is a separate tracked
+# todo; this script does not attempt to close it.
 #
-# WHY POSITION 1 IN PREROUTING: `-I mangle PREROUTING 1` (not `-A`, append) puts the jump ahead of
-# every existing PREROUTING rule -- including kube-router's own NAT bookkeeping. A jump added
-# later in the chain would let some fraction of NAT'd traffic already choose its DNAT target
-# before this filter ever runs, which would make "unreachable" an intermittent claim rather than
-# an absolute one.
-#
-# ALLOW-LIST SOURCE: the three ports below (22, 80, 443) are read from the live `iptables -S
-# INPUT` allow-list captured 2026-09-26 (Plan 13-08 Task 1's checkpoint evidence) and hard-coded
-# here rather than derived at apply time -- INPUT governs host daemons (sshd), a materially
-# different, slower-changing surface than what k3s exposes via Services, so mirroring it as a
-# literal is the correct trade: a change to INPUT's own allow-list is a deliberate, reviewed event
-# that should also touch this file, not something this script should silently re-derive live.
-#
-# RULE ORDER: RETURN for established/related, then RETURN for the allow-list, then RETURN for
-# icmp, then DROP, then a final RETURN. The established/related RETURN must precede the DROP or
-# every reply packet on an already-permitted connection (a NodePort response, an outbound image
-# pull's return traffic) gets dropped -- and it fails as a hang, not an error, exactly the same
-# failure shape docker-user-firewall.sh's own header describes for its own ordering.
-#
-# ATOMIC APPLY: mirrors docker-user-firewall.sh's `iptables-restore --noflush` shape (an in-
-# fragment `-F` line makes the chain's own replacement atomic and idempotent) -- re-running apply
-# produces exactly six rules in KANBAN-INGRESS, never twelve, and --noflush leaves every other
-# mangle chain (including PREROUTING itself, whose jump is added/removed separately) untouched.
-#
-# DEAD-MAN SWITCH: `apply --dead-man <minutes>` arms a transient `systemd-run --on-active`
-# timer that runs `remove` if not cancelled -- protects a live-apply window against a firewall
-# rule that turns out to cut SSH. Mirrors the precedent in docker-user-firewall's own quick task
-# 260906-feq (an armed `fw-rollback` timer, disarmed only once the ruleset was confirmed working
-# from a FRESH SSH connection, not the connection that applied it).
-#
-# IPv4 ONLY: k3s is installed single-stack (infra/vm/k3s/config.yaml); there is no IPv6 CNI path
-# to filter. The Docker-era ip6tables gap (docs/INFRA_RUNBOOK.md's Layer 3 section) is a separate,
-# already-tracked todo, re-evaluated in 13-10 when Docker itself stops -- this script does not
-# attempt to close it.
-#
-# WHAT THIS SCRIPT DELIBERATELY DOES NOT CHECK: it never touches INPUT, DOCKER-USER, or any nat-
-# table chain -- structurally incapable of it, since KANBAN-INGRESS lives in mangle PREROUTING
-# only. It does not verify which Kubernetes Services are actually live; that is the runtime
-# exposure inventory (`k3s kubectl get svc -A`), a separate check documented in the same runbook
-# section this script's header points to.
+# Known holes:
+# This script never touches INPUT, DOCKER-USER or any nat-table chain (KANBAN-INGRESS lives in mangle
+# PREROUTING only). It does not verify which Kubernetes Services are live; that is the runtime
+# exposure inventory (`k3s kubectl get svc -A`), documented in the same runbook section.
 set -euo pipefail
 
 readonly EXT_IF="eth0"
 readonly CHAIN="KANBAN-INGRESS"
 readonly TABLE="mangle"
 readonly PREROUTING_JUMP="-I PREROUTING 1 -i ${EXT_IF} -j ${CHAIN}"
-# Layer 1 allow-list, read live from `iptables -S INPUT` on 2026-09-26 (Task 1 checkpoint
-# evidence): 22 (SSH), 80/443 (Traefik's websecure/web NodePorts, and any future HTTP-01 solve).
+# Layer 1 allow-list: 22 (SSH), 80/443 (Traefik websecure/web, and any future HTTP-01 solve).
 readonly ALLOWED_TCP_PORTS="22 80 443"
 
 usage() {
@@ -71,8 +49,8 @@ usage() {
   exit 2
 }
 
-# The ruleset, in enforcement order. `apply` and `check` both build off this single definition so
-# the two can never drift from each other -- same discipline as docker-user-firewall.sh.
+# Single definition of the ruleset, in enforcement order; `apply` and `check` both build off it so
+# they cannot drift.
 expected_rules() {
   # `-m tcp` is written explicitly so this matches `iptables -S`'s own kernel-normalized output.
   #

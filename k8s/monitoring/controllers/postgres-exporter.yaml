@@ -1,8 +1,5 @@
-# postgres-exporter HelmRelease (Phase 13 plan 03 Task 2, D-07). Analog:
-# docker-compose.prod.yml `postgres-exporter:` service block. Chart pinned to
-# prometheus-community/prometheus-postgres-exporter 8.2.0 (appVersion v0.20.1, matching the
-# Compose image tag exactly), the latest release on the prometheus-community/helm-charts index as
-# of 2026-09-25.
+# postgres-exporter HelmRelease. Chart prometheus-community/prometheus-postgres-exporter 8.2.0
+# (appVersion v0.20.1), the latest on the helm-charts index as of 2026-09-25; pinned, never "latest".
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -26,16 +23,14 @@ spec:
     image:
       tag: v0.20.1
 
-    # config.datasource.* (the chart's own structured datasource block), NOT extraEnvs -- the
-    # chart's secrets.yaml template unconditionally requires config.datasource.password unless
-    # passwordSecret/passwordFile/datasourceSecret is set, and setting `password` directly would
-    # make the chart RENDER a committed Secret object containing it (violates D-10/I8). Host,
-    # user, port, database, sslmode are plain values assembled into DATA_SOURCE_URI by the
-    # chart's own template (no scheme, no credentials in the string itself -- the chart's own
-    # url.UserPassword(user, pass) percent-encodes the credential, same split
-    # docker-compose.prod.yml's postgres-exporter: comment documents and quick task 260911-gkz's
-    # fix applies). passwordSecret references the Secret created on the VM in 13-07 (D-10) --
-    # never committed, never handled by CI.
+    # Use config.datasource.* (the chart's structured block), NOT extraEnvs.
+    #
+    # Decisions:
+    # The chart's secrets.yaml template requires config.datasource.password unless passwordSecret,
+    # passwordFile or datasourceSecret is set, and setting `password` makes the chart RENDER a committed
+    # Secret containing it. Host, user, port, database and sslmode are plain values the chart assembles
+    # into DATA_SOURCE_URI (no credentials in the string; its url.UserPassword percent-encodes them).
+    # passwordSecret references a Secret created on the VM, never committed, never handled by CI.
     config:
       datasource:
         host: postgres.kanban-data.svc.cluster.local
@@ -46,41 +41,33 @@ spec:
         passwordSecret:
           name: postgres-exporter
           key: password
-      # BUG FIXED live (13-07 Task 2): extraArgs must nest under config:, not sit at the values
-      # top level.
+      # extraArgs must nest under config:, not sit at the values top level.
       #
-      # A top-level `extraArgs:` key is a real key elsewhere in this chart's values.yaml (line
-      # 226 area, next to logLevel/logFormat) but the Deployment template
-      # (templates/deployment.yaml) reads `.Values.config.extraArgs`, not `.Values.extraArgs` --
-      # the wrong nesting is silently ignored (Helm does not reject unknown values keys), so the
-      # rendered container args were only `--config.file=... --web.listen-address=...`, with
-      # neither flag below ever reaching the exporter binary. Confirmed live via
-      # `k3s kubectl get deployment ... -o jsonpath='{.spec.template.spec.containers[0].args}'`,
-      # which showed the two flags missing entirely; the postgres-exporter dashboard's "PostgreSQL
-      # Uptime"/"Query rate"/"Average query runtime" panels stayed empty as a direct result.
+      # Decisions:
+      # A top-level `extraArgs:` is a real key elsewhere in this chart's values.yaml, but the Deployment
+      # template reads `.Values.config.extraArgs`; the wrong nesting is silently ignored (Helm does not
+      # reject unknown values keys). The rendered container args then lacked both flags below (observed
+      # live via `kubectl get deployment -o jsonpath`), leaving the dashboard's "PostgreSQL Uptime",
+      # "Query rate" and "Average query runtime" panels empty.
       extraArgs:
         - --auto-discover-databases
         - --collector.postmaster
         - --collector.stat_statements
 
-    # The NetworkPolicy contract (13-04, D-11): only a pod carrying this label may reach Postgres
-    # port 5432 from the monitoring namespace.
+    # Only a pod carrying this label may reach Postgres 5432 from the monitoring namespace
+    # (see k8s/data/postgres/networkpolicy.yaml).
     podLabels:
       kanban-board/postgres-client: "true"
 
     serviceMonitor:
       enabled: true
-      # Stable job/instance so the postgres-exporter dashboard's hard-coded matchers (Task 3)
-      # survive pod restarts -- same relabeling shape as kube-prometheus-stack.yaml's node-exporter
-      # ServiceMonitor.
+      # Stable job/instance so the postgres-exporter dashboard's hard-coded matchers survive pod restarts.
       relabelings:
         - sourceLabels: [__meta_kubernetes_pod_node_name]
           targetLabel: instance
 
-    # MEASURED (restart-ladder, 13-09, 2026-09-27): shared rung with kube-state-metrics/
-    # node-exporter/prometheusOperator/alloy. Passing rung 16Mi, failed at 8Mi (dmesg OOMKilled).
-    # Adopted 16Mi/10Mi -- verified clean (RestartCount=0, full workload cycle) from a fresh
-    # recreate.
+    # MEASURED (restart ladder, 2026-09-27): passed 16Mi, failed at 8Mi (dmesg OOMKilled). Adopted
+    # 16Mi limit / 10Mi request.
     resources:
       requests:
         memory: 10Mi

@@ -1,6 +1,5 @@
-# Flux image automation (D-15, D-16): two Docker Hub repos, one ImagePolicy each tracking the
-# sortable `main-<run_number>-<sha7>` tag scheme (13-01), one ImageUpdateAutomation pushing tag
-# bumps to main. Plan 13-02.
+# Flux image automation: two Docker Hub repos, one ImagePolicy each tracking the sortable
+# `main-<run_number>-<sha7>` tag scheme, one ImageUpdateAutomation pushing tag bumps to main.
 ---
 apiVersion: image.toolkit.fluxcd.io/v1
 kind: ImageRepository

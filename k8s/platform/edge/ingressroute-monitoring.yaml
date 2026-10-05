@@ -1,20 +1,12 @@
-# Placeholder edge route for the monitoring hostname (Plan 13-06, added live during the
-# maintenance window). certificate-monitoring.yaml (13-04) creates the Certificate and gets it
-# issued via HTTP-01, but nothing in the phase up to this point creates a route that actually
-# SERVES grafana-tls for this hostname's SNI -- without one, Traefik has no router matching
-# `kanban-board-rud-vlad-473-monitoring.duckdns.org` and falls back to its own self-signed
-# default cert, which the plan's own verify script (13-06-PLAN.md, "the monitoring host
-# handshakes with a production certificate") catches: confirmed live 2026-09-26, `openssl
-# s_client -servername kanban-board-rud-vlad-473-monitoring.duckdns.org` returned
-# `CN=TRAEFIK DEFAULT CERT` instead of the real Let's Encrypt certificate already sitting in the
-# grafana-tls Secret.
+# Placeholder edge route that serves grafana-tls for the monitoring hostname until the real Grafana
+# routes (k8s/monitoring/configs/ingressroute.yaml) replace it.
 #
-# 13-07's own plan text (Task 1) already assumes `k3s kubectl get ingressroute grafana -n
-# monitoring` and a `grafana-http` redirect route exist by the time it runs, and adds a
-# `grafana-login-rate-limit` Middleware to this IngressRoute -- so this file intentionally uses
-# the exact names 13-07 expects, with a placeholder backend (`grafana-placeholder`, a Service
-# with no Endpoints/EndpointSlice -- Traefik answers 503 for it, a clean and safe "nothing here
-# yet" response) until 13-07 replaces `spec.routes[].services` with the real Grafana Service.
+# Decisions:
+# Without a router matching the hostname's SNI, Traefik falls back to its self-signed default cert
+# (observed 2026-09-26: `openssl s_client -servername` returned `CN=TRAEFIK DEFAULT CERT` while the real
+# Let's Encrypt cert sat in the grafana-tls Secret). The names `grafana` and `grafana-http` match the
+# real routes. `grafana-placeholder` is a Service with no Endpoints, so Traefik answers 503, a clean
+# "nothing here yet".
 apiVersion: v1
 kind: Service
 metadata:
@@ -62,8 +54,8 @@ spec:
   entryPoints:
     - web
   routes:
-    # Same ACME-safe shape as the prod/nonprod app-http routes (I10) -- the negation keeps
-    # cert-manager's HTTP-01 solver path out of the redirect by construction.
+    # Same ACME-safe shape as the app-http routes (I10): the negation keeps cert-manager's HTTP-01 solver
+    # path out of the redirect by construction.
     - match: Host(`kanban-board-rud-vlad-473-monitoring.duckdns.org`) && !PathPrefix(`/.well-known/acme-challenge/`)
       kind: Rule
       middlewares:
