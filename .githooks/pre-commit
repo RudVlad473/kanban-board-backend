@@ -119,6 +119,26 @@ else
   exit 1
 fi
 
+# Comment policy is fail-open without Python 3 because CI is the backstop; refusing every commit would
+# block contributors who cannot run this stdlib-only gate locally.
+COMMENT_PYTHON=""
+if command -v python3 >/dev/null 2>&1; then
+  COMMENT_PYTHON=$(command -v python3)
+elif command -v python >/dev/null 2>&1 && python --version 2>&1 | grep -Eq '^Python 3\.'; then
+  COMMENT_PYTHON=$(command -v python)
+fi
+
+if [ -n "$COMMENT_PYTHON" ]; then
+  echo "Checking code-comment policy..."
+  "$COMMENT_PYTHON" scripts/verify-comments.py check < /dev/null
+  if [ $? -ne 0 ]; then
+    echo "Comment policy check failed (docs/CODE_STYLE.md rule 14). Commit refused."
+    exit 1
+  fi
+else
+  echo "WARNING: Python 3 is unavailable; skipping code-comment policy check. CI comment-lint remains required."
+fi
+
 echo "Checking formatting..."
 ./gradlew spotlessCheck < /dev/null
 if [ $? -ne 0 ]; then

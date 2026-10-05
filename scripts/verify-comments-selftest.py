@@ -79,6 +79,13 @@ def test_shell_heredoc_dash_and_quoted_tag():
     assert comment_texts("shell", src) == ["after"], comment_texts("shell", src)
 
 
+def test_shell_ansi_c_quote_leaves_later_comments_visible():
+    src = 'value=$\'a\\\'b"c\\\\d$e \'\n# after\n'
+    events, _, warnings = _gate.lex_shell(src)
+    assert [t for ev in events for _, t in ev.lines] == ["after"]
+    assert warnings == []
+
+
 def test_yaml_comments_and_lookalikes():
     src = (
         "# top\n"
@@ -290,6 +297,11 @@ def test_r4_todo_needs_a_resolvable_target():
         assert rules(JAVA, "// %s nope\nclass A {}\n" % word) == ["tracked-todo"], word
 
 
+def test_r4_todo_can_continue_on_following_comment_lines():
+    text = "// TODO: src/Real.java\n// - repair the wrapped comment\nclass A {}\n"
+    assert rules(JAVA, text) == []
+
+
 def test_suspects_are_reported_but_never_violations():
     res = _gate.lint(JAVA, "// moved in 13-06\n// Task 3 did it\n// see docs/Gone.md\nclass A {}\n", VIEW)
     assert res.violations == [], res.violations
@@ -307,6 +319,11 @@ def test_functional_lines_are_suppressed():
     assert rules("s.sh", text) == []
     yaml = 'images:\n  - newTag: x # {"$imagepolicy": "flux-system:a:tag"} D-07\n'
     assert rules("k8s/o/kustomization.yaml", yaml) == []
+
+
+def test_planner_discipline_allow_is_a_functional_marker():
+    text = "// planner-discipline-allow: D-07\nclass A {}\n"
+    assert rules(JAVA, text) == []
 
 
 def test_aaa_markers_are_not_prose():

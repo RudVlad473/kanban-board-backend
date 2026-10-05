@@ -114,6 +114,7 @@ FUNCTIONAL_RES = (
     re.compile(r"\btype:\s*ignore\b"),
     re.compile(r"\bpragma:"),
     re.compile(r"\bnosec\b"),
+    re.compile(r"\bplanner-discipline-allow:"),
 )
 DOCKERFILE_DIRECTIVE_RE = re.compile(r"^(?:syntax|escape|check)\s*=")
 
@@ -402,7 +403,7 @@ _HEREDOC_RE = re.compile(r"<<(-?)\s*(?:([\"'])([A-Za-z_]\w*)\2|\\?([A-Za-z_]\w*)
 def lex_shell(text):
     """Return (events, code_lines, warnings); heredoc bodies and quoted text are content."""
     events, code_lines, warnings = [], [], []
-    sq = dq = False
+    sq = dq = ansi_sq = False
     queue = []  # pending heredocs: (terminator, strip_tabs)
     for ln, line in enumerate(text.split("\n"), 1):
         if queue:
@@ -416,7 +417,12 @@ def lex_shell(text):
         i = 0
         while i < len(line):
             c = line[i]
-            if sq:
+            if ansi_sq:
+                if c == "\\":
+                    i += 1
+                elif c == "'":
+                    ansi_sq = False
+            elif sq:
                 sq = c != "'"
             elif dq:
                 if c == "\\":
@@ -424,6 +430,9 @@ def lex_shell(text):
                 elif c == '"':
                     dq = False
             elif c == "\\":
+                i += 1
+            elif c == "$" and line[i + 1 : i + 2] == "'":
+                ansi_sq = True
                 i += 1
             elif c == "'":
                 sq = True
@@ -445,7 +454,7 @@ def lex_shell(text):
         else:
             code_lines.append((ln, line.rstrip()))
         queue.extend(pending)
-    if sq or dq or queue:
+    if sq or dq or ansi_sq or queue:
         warnings.append("shell lexer ended inside a quote or heredoc")
     return events, code_lines, warnings
 
@@ -756,22 +765,24 @@ def lint(path, text, view):
             for kind, tok in suspect_hits(t, view, path, masked):
                 result.suspects.append((kind, ln, tok))
                 flags.append("suspect:" + kind)
-            for m in TODO_RE.finditer(t):
-                ok = TODO_OK_RE.match(t, m.start())
-                target = ok.group(1).rstrip(".,;:)") if ok else None
-                good = bool(ok) and (
-                    re.match(r"https?://\S+$", target) or re.match(r"#\d+$", target) or view.exists_near(target, path)
-                )
-                if not good:
-                    result.violations.append(
-                        Violation(
-                            "tracked-todo",
-                            path,
-                            ln,
-                            "%s must read '%s: <URL | #N | existing repo path> - <what>'" % (m.group(1), m.group(1)),
-                        )
+        joined = " ".join(t for _, t in block.lines)
+        for m in TODO_RE.finditer(joined):
+            ok = TODO_OK_RE.match(joined, m.start())
+            target = ok.group(1).rstrip(".,;:)") if ok else None
+            good = bool(ok) and (
+                re.match(r"https?://\S+$", target) or re.match(r"#\d+$", target) or view.exists_near(target, path)
+            )
+            if not good:
+                line = next(ln for ln, t in block.lines if TODO_RE.search(t))
+                result.violations.append(
+                    Violation(
+                        "tracked-todo",
+                        path,
+                        line,
+                        "%s must read '%s: <URL | #N | existing repo path> - <what>'" % (m.group(1), m.group(1)),
                     )
-                    flags.append("tracked-todo")
+                )
+                flags.append("tracked-todo")
         lines = block.trimmed()
         prose = [t for _, t in lines if is_prose(t)]
         if len(prose) >= MIN_PROSE_FOR_SUMMARY_RULE and lines:

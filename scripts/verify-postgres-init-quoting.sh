@@ -101,10 +101,11 @@ fail() {
   FAIL_COUNT=$((FAIL_COUNT + 1))
 }
 
-# Runs a single-statement psql query inside the container over forced TCP (127.0.0.1), supplying
-# the password via docker exec -e so it never touches this shell's own environment or history.
-# Forcing TCP matters: the image's default pg_hba.conf trusts local socket connections, so a
-# socket-based check would pass without ever exercising password authentication.
+# Run a forced-TCP, single-statement psql query inside the container.
+#
+# Supply the password through docker exec -e so it never reaches this shell's environment or history.
+# TCP matters because the image's default pg_hba.conf trusts local sockets; a socket-based check would
+# pass without exercising password authentication.
 run_psql() {
   local user="$1" pw="$2" db="$3" sql="$4"
   docker exec -e PGPASSWORD="$pw" "$CONTAINER_NAME" \

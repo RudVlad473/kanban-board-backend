@@ -19,6 +19,7 @@
 #     and dated, images are pinned, no Secret is committed, no redirect route matches the ACME challenge
 #     path. It replaced the Compose-era compose-published-ports, caddy-image-tag and deploy-scp-coverage
 #     jobs, removed together with their subject.
+#   comment-lint: scripts/verify-comments-selftest.py proves the comment-policy gate can fire before it checks the tree.
 name: Invariant Checks
 
 on:
@@ -38,6 +39,22 @@ on:
       - ".planning/**"
 
 jobs:
+  comment-lint:
+    name: Code comments follow the documented policy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install the gate's one dependency
+        run: python3 -m pip install --disable-pip-version-check --quiet pyyaml
+
+      - name: Verify the gate's invariants can fire
+        run: python3 scripts/verify-comments-selftest.py
+
+      - name: Verify code-comment policy
+        run: python3 scripts/verify-comments.py check
+
   public-dashboards:
     name: Public Grafana dashboards carry nothing the public renderer cannot resolve
     runs-on: ubuntu-latest

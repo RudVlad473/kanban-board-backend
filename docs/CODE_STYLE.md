@@ -646,6 +646,45 @@ public class BoardFullReadTest extends AbstractAppMockMvcTest {
 `TestPlacementArchTest` is the enforcing mechanism, matching how rules 7 and 11 already cite
 `LayeringArchTest`.
 
+### 14. Treat code comments as a reviewable contract, not a transcript
+
+Keep a comment only when it records intent, a boundary condition, an external constraint, or a
+durable decision that code cannot express. Apply this one-pass review before adding or changing a
+comment:
+
+1. Delete a restatement of code.
+2. Turn deferred work into `TODO: <URL | #N | existing repo path> - <what>`.
+3. Prefer a test, type, lint rule, or ADR when it can enforce the claim.
+4. Keep one summary line, then a blank line before any detail.
+5. Put a long decision record behind `Decisions:`, `Known holes:`, or `Why this is the way it is:`.
+6. Name another identifier only when the name carries a contract or deliberate absence.
+
+**Why:** comments otherwise duplicate implementation and silently rot. `scripts/verify-comments.py`
+enforces the mechanically checkable parts of this rule; whether a comment is useful, at the right
+abstraction level, and imperative remains review-only judgement. It intentionally excludes FROZEN
+Flyway migrations and ROLLOUT_GATED Postgres init scripts, because comment bytes can affect their
+runtime behavior.
+
+Discouraged:
+
+```java
+// D-99 added this setting during the cleanup.
+// TODO clean this up later.
+@Getter
+private String value;
+```
+
+Preferred:
+
+```properties
+# planner-discipline-allow: lombok.config
+lombok.addLombokGeneratedAnnotation = true
+```
+
+The first comment gives neither a resolvable reason nor an actionable target. The second is a
+functional marker consumed by repository tooling; do not rewrite or remove such markers without
+updating that tooling.
+
 ## Adding a rule
 
 New rules are appended as a new `###` section under `## Rules`, numbered with the next integer. Each rule must carry the same three parts: a rule statement, a bolded **Why** line, and a bad-vs-good code example.
