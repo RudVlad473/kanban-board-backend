@@ -14,18 +14,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /**
- * Proves {@link EventIdGenerator} (GAP-07) delegates to a real, exactly-distinct, time-ordered id
- * source rather than merely compiling against {@code RandFlakeGenerator}. Distinctness is now
- * guaranteed by construction: {@code RandFlakeGenerator}'s low bits are a monotonic shared
- * sequence, not a random draw, so a same-millisecond collision is structurally impossible rather
- * than an ordinary, measured event (quick task 260813-os9 replaced the prior random-low-bits design
- * after quick task 260813-ncx measured its ~6.5%-per-1000-calls collision rate) -- see {@link
- * GenerateTest#shouldReturnDistinctValues_whenCalledManyTimesRapidly()}'s Javadoc. No mocks
- * (CODE_STYLE rule 4): {@link EventIdGenerator} touches neither Kafka nor a database, so a plain
- * Spring context is sufficient to autowire it -- this class still extends {@link
- * AbstractPostgresContainerTest} because the test profile carries no datasource without a container
- * (04.2, D-01), so booting the full context requires one even though this class's own assertions
- * never touch it.
+ * Proves {@link EventIdGenerator} delegates to a distinct, time-ordered id source.
+ *
+ * <p>No mocks (CODE_STYLE rule 4): the generator touches neither Kafka nor a database. Extends
+ * {@link AbstractPostgresContainerTest} because the test profile names no datasource, so booting
+ * the context needs a container even though no assertion here touches it.
  */
 @SpringBootTest
 class EventIdGeneratorTest extends AbstractPostgresContainerTest {
@@ -45,17 +38,15 @@ class EventIdGeneratorTest extends AbstractPostgresContainerTest {
         }
 
         /**
-         * Structural guarantee, not a probabilistic tolerance (quick task 260813-os9). {@code
-         * RandFlakeGenerator} now composes an id from a single shared {@code AtomicLong} holding
-         * {@code (timestampMillis << 22) | sequence}, updated via {@code updateAndGet(previous ->
-         * max(candidate, previous + 1))} -- every call observes a strictly greater payload than
-         * every prior call in the JVM, so 1000 rapid sequential calls are exactly 1000 distinct
-         * values, not merely "overwhelmingly" distinct. Provenance: quick task 260813-ncx measured
-         * the prior 23-random-bit design's same-millisecond collision rate (13/200 trials of 1000
-         * calls, ~6.5%, matching the birthday-paradox prediction) and relaxed this assertion to a
-         * measurement-derived {@code MIN_DISTINCT_IDS=993} threshold rather than fix the generator
-         * that measurement motivated; 260813-os9 fixed the generator and this assertion is
-         * tightened back to the original exact guarantee it now actually holds.
+         * 1000 rapid sequential calls yield exactly 1000 distinct values, by construction rather
+         * than by probability.
+         *
+         * <p>Why this is the way it is: {@code RandFlakeGenerator} composes each id from one shared
+         * {@code AtomicLong} holding {@code (timestampMillis << 22) | sequence}, updated via {@code
+         * updateAndGet(previous -> max(candidate, previous + 1))}, so every call sees a strictly
+         * greater payload than any prior call in the JVM. The earlier 23-random-bit design collided
+         * in 13/200 trials of 1000 calls (~6.5%, matching the birthday-paradox prediction), and
+         * this assertion was relaxed to {@code MIN_DISTINCT_IDS=993} while that design lived.
          */
         @Test
         void shouldReturnDistinctValues_whenCalledManyTimesRapidly() {
@@ -73,19 +64,15 @@ class EventIdGeneratorTest extends AbstractPostgresContainerTest {
         }
 
         /**
-         * Base36 fixed-width caveat (this plan's design_rationale): {@code RandFlakeGenerator}
-         * renders its id with {@code Long.toString(id, 36)}, which is NOT fixed-width -- as the
-         * underlying timestamp advances the string eventually gains a character, and Base36 strings
-         * of different lengths do not compare correctly under plain lexicographic comparison. At
-         * the current epoch (2018-01-01, since quick task 260813-os9) the value is a stable width
-         * and will remain so until 2053-10-19 (recomputed during 260813-os9; see its SUMMARY),
-         * confirmed as this test's third case, so this assertion holds in practice, not by a
-         * guarantee this test enforces -- nothing should be built that depends on lexicographic
-         * ordering of {@code event_id} surviving a width change. Two back-to-back calls with no
-         * clock wait are now asserted strictly increasing: the monotonic shared sequence
-         * (260813-os9) guarantees this even within the same millisecond, unlike the prior random
-         * low-bit design, and both ids share the same 12-char width so string comparison and
-         * numeric comparison agree.
+         * Two back-to-back ids sort in generation order, which holds in practice, not by a
+         * guarantee this test enforces.
+         *
+         * <p>Known holes: {@code Long.toString(id, 36)} is not fixed-width, so Base36 ids of
+         * different lengths do not compare correctly lexicographically. At the current epoch
+         * (2018-01-01) the width is stable until 2053-10-19, so nothing should depend on
+         * lexicographic ordering of {@code event_id} surviving a width change. The monotonic shared
+         * sequence makes two back-to-back calls strictly increasing even within one millisecond,
+         * and both ids share the 12-char width, so string and numeric comparison agree.
          */
         @Test
         void shouldSortBeforeSecondId_whenGeneratedAMeasurableIntervalApart()

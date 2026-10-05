@@ -19,34 +19,24 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 /**
- * Plain JUnit coverage for {@link RandFlakeGenerator#generateRandflake()} - no Spring context and
- * no container, matching {@code dto/OptionalNotBlankTest}'s precedent: the class under test touches
- * neither, and {@code config} is a named subpackage so {@code architecture/TestPlacementArchTest}
- * is satisfied.
+ * Plain JUnit coverage for {@link RandFlakeGenerator#generateRandflake()}, with no Spring context
+ * or container because the class under test touches neither.
  *
- * <p>Proves the monotonic shared-sequence redesign (quick task 260813-os9) closes the
- * same-millisecond collision quick task 260813-ncx measured (13/200 trials of 1000 rapid calls,
- * ~6.5%) structurally, across both threads and generator instances - the two cases a per-instance
- * or per-thread counter would each separately fail.
+ * <p>Proves the monotonic shared sequence closes the same-millisecond collision (13/200 trials of
+ * 1000 rapid calls, ~6.5%, under the old random-low-bits design) across both threads and generator
+ * instances, which a per-instance or per-thread counter would each fail separately.
  */
 public class RandFlakeGeneratorTest {
 
     @Nested
     class GenerateRandflakeTest {
 
-        // The largest value the *legacy* layout (23 random low bits, CUSTOM_EPOCH = 2023-01-01)
-        // could ever have produced, generously assuming that code kept running until
-        // 2027-01-01T00:00:00Z: ((2027-01-01 - 2023-01-01) << 23) | (2^23 - 1) =
-        // 1058897343291588607. Deliberately frozen as a constant, not computed live from the
-        // current wall clock - a live-computed ceiling would silently stop being a real assertion
-        // after 2027-01-01, while a frozen one holds forever, since ids only grow. Recomputed with
-        // a throwaway node --eval script during quick task 260813-os9 (see its SUMMARY for the
-        // exact script and output); the recomputation intentionally includes the legacy layout's
-        // maximum possible random low-bit contribution (2^23 - 1), which the plan's own
-        // illustrative figure (1058897343283200000, the shifted timestamp alone with an implicit
-        // random value of 0) omitted - the higher, fully-maximal value is the correct "largest
-        // value the old layout could produce" and is what this assertion needs to be a genuine
-        // ceiling rather than one with an ~8.4-million-wide gap near the boundary.
+        // Largest id the legacy layout (23 random low bits, CUSTOM_EPOCH = 2023-01-01) could have
+        // produced running until 2027-01-01T00:00:00Z.
+        //
+        // ((2027-01-01 - 2023-01-01) << 23) | (2^23 - 1) = 1058897343291588607. Frozen, not
+        // computed live: a live ceiling stops being a real assertion after 2027-01-01, as ids only
+        // grow.
         private static final long LEGACY_LAYOUT_CEILING = 1058897343291588607L;
 
         @Test

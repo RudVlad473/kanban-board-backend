@@ -11,19 +11,14 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.cors.CorsConfigurationSource;
 
 /**
- * Asserts the {@link CorsConfig#corsConfigurationSource(java.util.List)} bean's resolved
- * configuration (D-10..D-12), not real browser preflight behavior. CORS is browser-enforced --
- * {@code MockMvc} dispatches in-process and never constructs a genuine cross-origin preflight
- * {@code OPTIONS} request, so it cannot prove what a real browser will actually allow. This class
- * instead asserts what the backend <em>advertises</em> through the resolved {@link
- * org.springframework.web.cors.CorsConfiguration} -- the strongest claim available at this tier. Do
- * not "upgrade" this to a preflight test at this tier; that would need a real-socket test (e.g.
- * REST Assured against {@code AbstractAppE2ETest}) instead.
+ * Asserts what {@link CorsConfig#corsConfigurationSource(java.util.List)} advertises, not real
+ * browser preflight behavior.
  *
- * <p>Extends {@link AbstractPostgresContainerTest} directly, matching {@code
- * KanbanBoardApplicationTests}'s precedent, rather than {@code AbstractAppTest} -- this test needs
- * no users, boards, or any other fixture data, so inheriting {@code AbstractAppTest}'s full
- * per-test fixture build (docs/CODE_STYLE.md rule 4) would be unjustified overhead.
+ * <p>Why this is the way it is: {@code MockMvc} dispatches in-process and never builds a
+ * cross-origin preflight, so only what the backend advertises is provable at this tier. Do not
+ * upgrade this to a preflight test here; that needs a real-socket test (REST Assured against {@code
+ * AbstractAppE2ETest}). Extends {@link AbstractPostgresContainerTest} because the test needs no
+ * fixture data (docs/CODE_STYLE.md rule 4).
  */
 @SpringBootTest
 class CorsConfigTest extends AbstractPostgresContainerTest {

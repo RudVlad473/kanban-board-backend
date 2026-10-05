@@ -20,12 +20,11 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 /**
- * Proves the test-profile BCrypt cost factor (quick task 260811-ixj) is genuinely in force rather
- * than silently ignored, and that the production fallback stays at Spring Security's default of 10.
- * Extends {@link AbstractPostgresContainerTest} directly, matching {@code CorsConfigTest}'s
- * precedent, rather than {@code AbstractAppTest} -- this test needs no user/board/column/task
- * fixture data, and inheriting {@code AbstractAppTest}'s per-test fixture build is exactly the cost
- * this quick task removes, so pulling it in here would be self-defeating.
+ * Proves the test-profile BCrypt cost factor is in force and the production fallback stays at
+ * Spring Security's default of 10.
+ *
+ * <p>Extends {@link AbstractPostgresContainerTest} directly: {@code AbstractAppTest}'s per-test
+ * fixture build is the cost the cheaper factor removes.
  */
 @SpringBootTest
 class PasswordEncoderStrengthTest extends AbstractPostgresContainerTest {
@@ -43,10 +42,8 @@ class PasswordEncoderStrengthTest extends AbstractPostgresContainerTest {
             // act
             var hash = passwordEncoder.encode(plaintext);
 
-            // assert -- a BCrypt hash is "$<algorithm>$<cost>$<salt+digest>"; splitting on '$'
-            // yields ["", algorithm, cost, salt+digest]. A typo'd or misplaced
-            // security.bcrypt.strength property key makes this red (cost stays 10), not quietly
-            // slow.
+            // assert -- splitting a BCrypt hash on '$' yields ["", algorithm, cost, salt+digest]; a
+            // misplaced security.bcrypt.strength key leaves cost at 10 and fails here.
             String costSegment = Splitter.on('$').splitToList(hash).get(2);
             Assertions.assertThat(costSegment).isEqualTo("04");
         }

@@ -28,25 +28,16 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 /**
- * Regression guard for API-01: proves the generated OpenAPI document declares the {@code
- * ProblemDetail} error envelope on every operation, and that the declared schema matches what both
- * independent envelope producers ({@link com.vrudenko.kanban_board.handler.GlobalExceptionHandler}
- * and {@link com.vrudenko.kanban_board.security.ProblemDetailAuthenticationEntryPoint}) actually
- * emit.
+ * Regression guard: the OpenAPI document declares the {@code ProblemDetail} envelope on every
+ * operation, and it matches what both envelope producers emit.
  *
- * <p>Extends {@link AbstractAppMockMvcTest} rather than {@code AbstractPostgresContainerTest}
- * (which {@link OpenApiDocsTest} uses) deliberately: {@link ProblemDetailSchemaFidelity}'s
- * assertions need {@code signinCookie()} and a real owned board to provoke genuine {@code 404}/
- * {@code 400} responses. Splitting this class in two to spare {@link ErrorResponseCoverage}'s
- * fixture-free methods a fixture build would break the cohesion of a contract that is only
- * meaningful when its two halves — "every operation declares the six codes" and "the declared
- * schema is what actually gets emitted" — are read together.
- *
- * <p>Reads the document exactly as {@link OpenApiDocsTest} does: {@code @Value} into the {@code
- * springdoc.api-docs.path} property, {@code mockMvc.perform(get(apiDocsPath))}, then parses the
- * response body with an {@link ObjectMapper}. Never autowires the {@code OpenAPI} bean — springdoc
- * caches the built document, so a test holding the live instance could mutate state shared with
- * every later assertion in the same Spring context.
+ * <p>Why this is the way it is: extends {@link AbstractAppMockMvcTest}, not {@code
+ * AbstractPostgresContainerTest}, because {@link ProblemDetailSchemaFidelity} needs {@code
+ * signinCookie()} and an owned board to provoke real 404/400 responses. Splitting the class would
+ * break the cohesion of a contract that is meaningful only when "every operation declares the six
+ * codes" and "the declared schema is what gets emitted" are read together. The document is read as
+ * in {@link OpenApiDocsTest}; the {@code OpenAPI} bean is never autowired, because springdoc caches
+ * it and a live instance would share mutable state with later assertions.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -136,9 +127,8 @@ class ProblemDetailOpenApiCustomizerTest extends AbstractAppMockMvcTest {
             var paths = document.path("paths");
             var operationCount = 0;
 
-            // act: count every operation the coverage sweep above walks, so an empty or
-            // failed-to-generate `paths` object cannot satisfy an every-operation sweep over zero
-            // operations
+            // act: count every operation the sweep walks, so an empty `paths` object cannot satisfy
+            // an every-operation sweep over zero operations
             var pathNames = paths.fieldNames();
             while (pathNames.hasNext()) {
                 var pathItem = paths.path(pathNames.next());
@@ -150,11 +140,8 @@ class ProblemDetailOpenApiCustomizerTest extends AbstractAppMockMvcTest {
                 }
             }
 
-            // assert: floor of 20 with deliberate slack under the real observed count -- this app
-            // runs its tests under the `test` profile, so the `nonprod`-profiled reset controller
-            // is
-            // absent from the document, and the observed count is the non-profiled controllers only
-            // (measured: 24 operations at the time this assertion was written -- see the SUMMARY)
+            // assert: floor of 20 with slack under the 24 operations observed when written; the
+            // `nonprod`-profiled reset controller is absent under the `test` profile
             Assertions.assertThat(operationCount).isGreaterThanOrEqualTo(20);
         }
 
@@ -167,8 +154,7 @@ class ProblemDetailOpenApiCustomizerTest extends AbstractAppMockMvcTest {
             var boardsGetResponses =
                     document.path("paths").path(ApiPaths.BOARDS).path("get").path("responses");
 
-            // assert: the customizer inserts, it does not replace -- springdoc's own generated 200
-            // for the boards listing must still be present
+            // assert: the customizer inserts, never replaces, springdoc's generated 200
             Assertions.assertThat(boardsGetResponses.has("200")).isTrue();
         }
     }
@@ -243,8 +229,7 @@ class ProblemDetailOpenApiCustomizerTest extends AbstractAppMockMvcTest {
                             .getResponse();
             var body = objectMapper.readTree(response.getContentAsString());
 
-            // assert: this is the only sample carrying the field-error map, so it actually covers
-            // the `errors` property rather than leaving it declared but unexercised
+            // assert: the only sample carrying the field-error map, so it exercises `errors`
             assertResponseMatchesDeclaredSchema(document, body);
         }
 
@@ -264,12 +249,8 @@ class ProblemDetailOpenApiCustomizerTest extends AbstractAppMockMvcTest {
         }
 
         /**
-         * Asserts, in both directions, that a real sampled response body agrees with the {@code
-         * ProblemDetail} schema read from the same document: every JSON field name emitted is a
-         * declared property (nothing is emitted the spec does not describe), and every property the
-         * schema marks {@code required} is present in the body (nothing the spec promises is
-         * missing). Reports the offending key names in its failure message rather than a bare
-         * boolean.
+         * Asserts both ways that a sampled body agrees with the {@code ProblemDetail} schema: every
+         * emitted field is declared, and every {@code required} property is present.
          */
         private void assertResponseMatchesDeclaredSchema(JsonNode document, JsonNode responseBody) {
             var schema = document.path("components").path("schemas").path("ProblemDetail");

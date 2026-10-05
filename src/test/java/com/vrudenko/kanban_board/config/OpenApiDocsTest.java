@@ -18,25 +18,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Regression guard for the OpenAPI document endpoint SpringDoc exposes at {@code
- * springdoc.api-docs.path}. This was a live production defect (todo
- * 2026-08-09-fix-broken-api-docs-swagger-endpoint-swagger-annotations-ver.md): {@code
- * io.confluent:kafka-avro-serializer} transitively pulled in a pre-jakarta {@code
- * swagger-annotations} artifact that shadowed the jakarta one SpringDoc 2.8.8 actually needs,
- * causing every {@code GET /api/docs} call to 500 with {@code NoSuchMethodError:
- * Parameter.validationGroups()}.
+ * Regression guard for the OpenAPI endpoint at {@code springdoc.api-docs.path}.
  *
- * <p>Extends {@link AbstractPostgresContainerTest} directly, matching {@code CorsConfigTest}'s
- * precedent, rather than {@code AbstractAppTest} -- this test needs no users, boards, or any other
- * fixture data, so inheriting {@code AbstractAppTest}'s full per-test fixture build
- * (docs/CODE_STYLE.md rule 4) would be unjustified overhead.
- *
- * <p>{@code MockMvc} does NOT apply {@code server.servlet.context-path} the way a real embedded
- * servlet container does (docs/CODE_STYLE.md rule 4, {@code AbstractAppMockMvcTest}'s Javadoc), so
- * this class requests the bare {@code springdoc.api-docs.path} value, while a real deployment
- * serves the same document under {@code /api}. That is a documented tier limitation, not an
- * oversight -- the live `/api/docs` path is exercised separately by the operator check in this
- * quick task's Task 2.
+ * <p>Why this is the way it is: {@code io.confluent:kafka-avro-serializer} transitively pulled in a
+ * pre-jakarta {@code swagger-annotations} artifact that shadowed the jakarta one SpringDoc 2.8.8
+ * needs, so every {@code GET /api/docs} returned 500 with {@code NoSuchMethodError:
+ * Parameter.validationGroups()}. Extends {@link AbstractPostgresContainerTest}, not {@code
+ * AbstractAppTest}, because it needs no fixtures (docs/CODE_STYLE.md rule 4). {@code MockMvc}
+ * ignores {@code server.servlet.context-path}, so this class requests the bare path while a
+ * deployment serves it under {@code /api}; that is a tier limit, not an oversight.
  */
 @SpringBootTest
 @AutoConfigureMockMvc

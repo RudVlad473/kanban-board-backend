@@ -12,26 +12,16 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Executable form of 04.2's actual success criterion (04.2-01-PLAN.md's {@code must_haves}): that
- * one Spring context, booted against a real PostgreSQL container, proves all four mechanisms this
- * phase depends on coexist -- Testcontainers lifecycle, Flyway V1-V4, Hibernate {@code
- * ddl-auto=validate} against the migrated schema, and Spring Session JDBC's own schema initializer.
- * Every assertion here queries the live catalog directly rather than trusting context startup
- * succeeding silently, so a future regression in any one of the four mechanisms fails a specific,
- * named assertion instead of merely "some test somewhere broke."
+ * Executable form of the schema-provenance criterion: Testcontainers, Flyway V1-V4, Hibernate
+ * {@code ddl-auto=validate} and Spring Session JDBC's initializer coexist in one context.
  *
- * <p>Deliberately does not extend {@link
- * com.vrudenko.kanban_board.support.fixtures.AbstractAppTest}: this class needs no
- * user/board/column/task fixtures, and {@code AbstractAppTest} is still wired to H2 in this plan --
- * extending it here would pull in fixture creation against the wrong datasource entirely.
+ * <p>Queries the live catalog directly, so a regression in any one mechanism fails a named
+ * assertion. Does not extend {@code AbstractAppTest}: it needs no fixtures.
  */
 @SpringBootTest
-// 04.2-02 Task 1: this class now asserts against the profile's own configuration, with no
-// overrides. application-test.properties itself carries spring.flyway.enabled at its default
-// (enabled) and spring.jpa.hibernate.ddl-auto=validate -- the temporary @TestPropertySource
-// this class carried in 04.2-01 (before the whole suite cut over) has been deleted, since
-// keeping it would be a second, driftable schema-configuration path (D-05, docs/CODE_STYLE.md
-// rule 8).
+// No @TestPropertySource: application-test.properties already enables Flyway and sets
+// ddl-auto=validate, and an override would be a second, driftable schema-configuration path
+// (docs/CODE_STYLE.md rule 8).
 class FlywaySchemaProvenanceTest extends AbstractPostgresContainerTest {
 
     @Autowired private JdbcTemplate jdbcTemplate;
@@ -93,11 +83,11 @@ class FlywaySchemaProvenanceTest extends AbstractPostgresContainerTest {
     }
 
     /**
-     * Each assertion here targets an artifact that exists only because a Flyway migration named it
-     * explicitly -- Hibernate's naming strategy emits an {@code fk}/{@code uk} + hash name (never
-     * these hand-chosen names), and emits no column defaults and no non-annotated indexes. The
-     * final test is the negative half: zero constraints anywhere in the schema matching Hibernate's
-     * generated-name form, proving Hibernate created nothing here at all.
+     * Artifacts that exist only because a Flyway migration named them explicitly: Hibernate emits
+     * {@code fk}/{@code uk} plus a hash name, no column defaults and no non-annotated indexes.
+     *
+     * <p>The final test is the negative half: no constraint in the schema matches Hibernate's
+     * generated-name form.
      */
     @Nested
     class FlywayOnlyArtifacts {

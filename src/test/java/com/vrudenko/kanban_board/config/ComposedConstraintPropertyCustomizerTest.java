@@ -42,19 +42,16 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Regression guard for {@link ComposedConstraintPropertyCustomizer}: proves that constraints
- * arriving through a composed custom validation annotation actually reach the generated OpenAPI
- * document, and that the merge never loosens a value swagger-core already published from a direct
- * annotation.
+ * Regression guard for {@link ComposedConstraintPropertyCustomizer}: composed-annotation
+ * constraints reach the generated OpenAPI document and the merge never loosens a published value.
  *
- * <p>Extends {@link AbstractPostgresContainerTest} rather than {@code AbstractAppTest} or {@code
- * AbstractAppMockMvcTest} -- these assertions read a generated document and need no users, boards,
- * or session cookies (docs/CODE_STYLE.md rule 4); {@link OpenApiDocsTest} and {@link
- * ProblemDetailOpenApiCustomizerTest} are the same-shaped precedents. {@code MockMvc} does not
- * apply {@code server.servlet.context-path}, so {@link #fetchDocument()} requests the bare {@code
- * springdoc.api-docs.path} ({@code /docs}), never {@code /api/docs}. Never autowires the {@code
- * OpenAPI} bean directly -- springdoc caches the built document, and a test holding the live
- * instance would share mutable state with every later assertion in this Spring context.
+ * <p>Why this is the way it is: extends {@link AbstractPostgresContainerTest}, not {@code
+ * AbstractAppTest}/{@code AbstractAppMockMvcTest}, because the assertions read a generated document
+ * and need no fixtures (docs/CODE_STYLE.md rule 4). {@code MockMvc} ignores {@code
+ * server.servlet.context-path}, so {@link #fetchDocument()} requests the bare {@code
+ * springdoc.api-docs.path} ({@code /docs}), never {@code /api/docs}. The {@code OpenAPI} bean is
+ * never autowired: springdoc caches the built document, so a live instance would share mutable
+ * state with every later assertion.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -67,10 +64,8 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
     private String apiDocsPath;
 
     JsonNode fetchDocument() throws Exception {
-        // Asserts 200 explicitly (secondary finding, quick task 260904-ss1 round 4, 2026-09-05):
-        // without this, a 500 (or any non-2xx) response body still parses as JSON (an empty
-        // object, or a ProblemDetail error body) and every absence-asserting test in this class
-        // (e.g. shouldLeavePatternAbsent_...) would pass VACUOUSLY against it instead of failing.
+        // Check for 200 explicitly: a non-2xx body still parses as JSON, and every
+        // absence-asserting test below would then pass vacuously.
         var response = mockMvc.perform(get(apiDocsPath)).andExpect(status().isOk()).andReturn();
         var body = response.getResponse().getContentAsString();
         var objectMapper = new ObjectMapper();
@@ -78,9 +73,8 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
     }
 
     /**
-     * Reads the {@code @Pattern} meta-annotation's own {@code regexp()} off a composed constraint
-     * annotation type -- never a hand-copied literal, so a future regex edit on the annotation
-     * cannot silently drift out of sync with what this test expects.
+     * Reads the {@code @Pattern} meta-annotation's {@code regexp()}, never a hand-copied literal,
+     * so a regex edit cannot drift from what this test expects.
      */
     private String metaPatternOf(Class<? extends Annotation> annotationType) {
         var pattern = annotationType.getAnnotation(Pattern.class);
@@ -91,18 +85,13 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
     }
 
     /**
-     * D1 (quick task 260904-ss1 round 4, 2026-09-05). The published pattern for an annotation whose
-     * {@code flags()} is non-empty (today, only {@link OptionalNotBlank}'s {@code DOTALL}) is no
-     * longer {@code regexp()} verbatim -- {@code ComposedConstraintPropertyCustomizer} translates
-     * it to an ECMA-262-safe equivalent first. Deriving the EXPECTED value from that same
-     * production translation method mirrors {@link #metaPatternOf(Class)}'s "never hand-copy"
-     * property, so an edit to the annotation's own regex cannot leave this test asserting a stale
-     * literal.
+     * Derives the expected pattern from the production ECMA-262 translation, for annotations with
+     * non-empty {@code flags()} (today only {@link OptionalNotBlank}).
      *
-     * <p>It CANNOT catch a translation that is merely wrong -- mutate {@code ecmaEquivalentOf} and
-     * every expectation derived here mutates with it. That guard is {@code
-     * shouldPublishThisExactLiteralTranslation_whenPatternIsOptionalNotBlank}, whose hand-written
-     * literal is deliberately independent of production.
+     * <p>Known holes: it cannot catch a merely wrong translation, because mutating {@code
+     * ecmaEquivalentOf} mutates every expectation derived here. {@code
+     * shouldPublishThisExactLiteralTranslation_whenPatternIsOptionalNotBlank} is that guard, with a
+     * hand-written literal independent of production.
      */
     private String ecmaTranslatedPatternOf(Class<? extends Annotation> annotationType) {
         var pattern = annotationType.getAnnotation(Pattern.class);
@@ -119,13 +108,9 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
     }
 
     /**
-     * Reads the {@code io.swagger.v3.oas.annotations.media.Schema} meta-annotation itself off a
-     * composed constraint annotation type, mirroring {@link #metaPatternOf(Class)} -- callers read
-     * {@code .description()}/{@code .example()} off the returned annotation rather than a
-     * hand-copied literal, so a future edit to the annotation cannot silently drift out of sync
-     * with what a test expects (secondary finding, quick task 260904-ss1 round 4, 2026-09-05:
-     * {@code collectSchemaMeta}'s {@code description} branch was mutation-blind before this helper
-     * existed -- deleting it kept every test in this class green).
+     * Reads the {@code io.swagger.v3.oas.annotations.media.Schema} meta-annotation off a composed
+     * constraint annotation, so callers read {@code description()}/{@code example()} rather than
+     * hand-copied literals.
      */
     private io.swagger.v3.oas.annotations.media.Schema metaSchemaOf(
             Class<? extends Annotation> annotationType) {
@@ -155,20 +140,14 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
     }
 
     /**
-     * Evaluates a candidate value against ONE property's own published {@code pattern}/{@code
-     * minLength}/{@code maxLength}, shared by {@link EquivalenceWithRealValidator} (checking a
-     * hand-picked sample) and {@link ExampleInvariant} (checking every published {@code example}
-     * against its own property). {@code pattern} is evaluated with {@code find()}, not {@code
-     * matches()} -- JSON Schema {@code pattern} is a SEARCH, so {@code find()} is the semantics a
-     * spec-compliant validator implements, and testing {@code matches()} here would over-constrain
-     * these equivalence checks.
+     * Evaluates a value against one property's published {@code pattern}, {@code minLength} and
+     * {@code maxLength}, with {@code pattern} as a {@code find()} search.
      *
-     * <p>That is deliberately NOT the whole story, and {@code
-     * shouldAcceptValidValueUnderFullMatch_whenPatternIsAMultiRegexConjunction} is the counterpart
-     * that covers the rest: a generated client may full-match the published pattern instead, which
-     * is a weaker guarantee than the spec but a real consumer behavior. Search semantics belong
-     * here (they are what correctness means); full-match belongs there (it is what portability
-     * means). Neither test subsumes the other.
+     * <p>Why this is the way it is: JSON Schema {@code pattern} is a search, so {@code find()} is
+     * what a spec-compliant validator implements and {@code matches()} would over-constrain. A
+     * generated client may full-match instead, a weaker but real behavior covered by {@code
+     * shouldAcceptValidValueUnderFullMatch_whenPatternIsAMultiRegexConjunction}; neither test
+     * subsumes the other.
      */
     private boolean valueSatisfiesPublishedConstraints(JsonNode propertyNode, String value) {
         var minLength = readInt(propertyNode, "minLength");
@@ -184,10 +163,8 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
     }
 
     /**
-     * The full-match counterpart {@link #valueSatisfiesPublishedConstraints} deliberately does not
-     * cover -- length bounds are irrelevant here on purpose (a generated client's own full-match
-     * check is only ever against {@code pattern}, never against JSON Schema's separate {@code
-     * minLength}/{@code maxLength} keywords).
+     * The full-match counterpart; length bounds are omitted because a generated client full-matches
+     * only {@code pattern}, never {@code minLength}/{@code maxLength}.
      */
     private boolean valueSatisfiesPublishedPatternUnderFullMatch(
             JsonNode propertyNode, String value) {
@@ -196,9 +173,8 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
     }
 
     /**
-     * Shared by {@link EquivalenceWithRealValidator} and the D1 regression test below -- whether
-     * the real {@link Validator} accepts {@code dto} as far as {@code propertyName} is concerned (a
-     * violation on a DIFFERENT property of the same DTO does not count against it).
+     * Whether the real {@link Validator} accepts {@code dto} as far as {@code propertyName} is
+     * concerned; a violation on a different property does not count.
      */
     private boolean realValidatorAccepts(Object dto, String propertyName) {
         Set<ConstraintViolation<Object>> violations = validator.validate(dto);
@@ -282,12 +258,12 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
 
         /**
          * The published {@code minLength} must accept every value the real {@code Validator}
-         * accepts. It is counted in code points where {@code @Size} counts UTF-16 code units, so an
-         * astral-heavy value has fewer of the former than the latter and is the case where the two
-         * disagree -- see the decision record at the {@code Size} branch of {@code contribute}.
+         * accepts.
          *
-         * <p>This is the assertion that record defers to. Written against a value the validator
-         * genuinely accepts, so it fails if the conversion is ever dropped or inverted.
+         * <p>It counts code points where {@code @Size} counts UTF-16 units, so an astral-heavy
+         * value is where they disagree; this is the assertion the decision record at the {@code
+         * Size} branch of {@code contribute} defers to. The value is one the validator accepts, so
+         * it fails if the conversion is dropped or inverted.
          */
         @Test
         void shouldAcceptAstralValueTheValidatorAccepts_whenPublishedMinLengthIsEvaluated()
@@ -314,19 +290,15 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
         }
 
         /**
-         * The independent oracle for the ECMA-262 translation. Every OTHER pattern assertion in
-         * this class derives its expectation from production code -- {@link #metaPatternOf(Class)}
-         * reads the annotation, and {@link #ecmaTranslatedPatternOf(Class)} calls {@code
-         * ecmaEquivalentOf} itself. That is right for catching drift and useless for catching a
-         * WRONG translation: mutate the translation and the expectation mutates in lockstep, so the
-         * assertion passes either way. Confirmed 2026-09-05 by reverting the {@code \S} branch to
-         * emit Java's {@code \S} verbatim -- the exact ASCII-vs-Unicode defect the translation
-         * exists to fix -- and watching all 15 tests in this class stay green.
+         * The independent oracle for the ECMA-262 translation: a hand-written literal that must
+         * stay hand-written.
          *
-         * <p>This literal is hand-written ON PURPOSE and must stay hand-written. It is the only
-         * assertion here that fails when the translation changes MEANING rather than merely
-         * stopping, so replacing it with a derived value silently removes the translation's only
-         * real guard.
+         * <p>Why this is the way it is: every other pattern assertion derives its expectation from
+         * production code, which catches drift but not a wrong translation, since the expectation
+         * mutates in lockstep. Observed 2026-09-05: reverting the {@code \S} branch to emit Java's
+         * {@code \S} verbatim (the ASCII-vs-Unicode defect the translation exists to fix) left all
+         * 15 tests in this class green. This literal is the only assertion that fails when the
+         * translation changes meaning.
          */
         @Test
         void shouldPublishThisExactLiteralTranslation_whenPatternIsOptionalNotBlank()
@@ -365,9 +337,8 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
                                     metaPatternOf(OptionalNotBlank.class)));
             var failures = new ArrayList<String>();
 
-            // act: the conjunction must be non-blank and must not degrade into either single
-            // constituent regex alone -- that is exactly the failure Task 2's "   " equivalence
-            // case is built to catch behaviorally; this is the document-level presence check
+            // act: document-level presence check that the conjunction does not degrade into either
+            // single constituent regex; the "   " equivalence case catches that behaviorally
             for (var row : rows) {
                 var actual =
                         readText(propertyNode(document, row.schema(), row.property()), "pattern");
@@ -390,16 +361,13 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
         }
 
         /**
-         * A multi-regex conjunction must accept a valid value under FULL-MATCH evaluation, not only
+         * A multi-regex conjunction must accept a valid value under full-match evaluation, not only
          * under the unanchored search JSON Schema specifies.
          *
-         * <p>Spec-compliant validators search, so an all-lookahead conjunction satisfies them and
-         * every other test here passes with one. Generated clients are the consumers that break: a
-         * generator emitting {@code Pattern.matches} / {@code re.fullmatch}, or wrapping the
-         * published pattern in its own anchors, evaluates a zero-width expression against a
-         * non-empty value and rejects it -- client-side, before any request is sent. Pinning the
-         * full-match reading is what forces the conjunction's last term to consume rather than
-         * assert.
+         * <p>An all-lookahead conjunction satisfies a searching validator, but a generated client
+         * that full-matches or anchors the pattern evaluates a zero-width expression against a
+         * non-empty value and rejects it before any request is sent. Pinning full-match forces the
+         * conjunction's last term to consume rather than assert.
          */
         @Test
         void shouldAcceptValidValueUnderFullMatch_whenPatternIsAMultiRegexConjunction()
@@ -486,10 +454,9 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
                 throws Exception {
             // arrange
             var document = fetchDocument();
-            // minLength values are hand-written, NOT read from ValidationConstants: the
-            // published bound is ceil(@Size min / 2) per D3, and deriving it from the same
-            // formula production uses would mirror a wrong formula instead of catching it.
-            // maxLength is still published verbatim, so it stays constant-derived.
+            // minLength values are hand-written, not read from ValidationConstants: the published
+            // bound is ceil(@Size min / 2), and deriving it from production's formula would mirror
+            // a wrong formula. maxLength is published verbatim, so it stays constant-derived.
             record Row(String schema, String property, Integer minLength, Integer maxLength) {}
             var rows =
                     List.of(
@@ -588,11 +555,9 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
         void
                 shouldRaiseMinLengthAboveTheDirectNotBlank_whenSaveSubtaskTitleAlsoComposesSubtaskTitle()
                         throws Exception {
-            // arrange: F1 -- the live document used to publish minLength 1 (from the direct
-            // @NotBlank) while @SubtaskTitle enforces @Size(min = 3), a documented-looser-than-
-            // enforced defect this bean fixes as a side effect. The published bound is 2 rather
-            // than 3 because D3 converts UTF-16 units to code points; what matters for F1 is that
-            // it exceeds the direct @NotBlank's 1.
+            // arrange: the live document used to publish minLength 1 (from the direct @NotBlank)
+            // while @SubtaskTitle enforces @Size(min = 3). The published bound is 2, not 3, because
+            // UTF-16 units convert to code points; it only needs to exceed the @NotBlank's 1.
             var document = fetchDocument();
 
             // act
@@ -621,32 +586,21 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
         }
 
         /**
-         * D1 (quick task 260904-ss1 round 4, 2026-09-05). Before the fix, {@code
-         * ComposedConstraintPropertyCustomizer.contribute()} republished {@link OptionalNotBlank}'s
-         * {@code regexp()} verbatim and silently dropped {@code flags() = {DOTALL}} -- so the
-         * published pattern's {@code .} never matched a newline, and its {@code \S} was read as
-         * ECMA-262's Unicode-aware version rather than Java's ASCII-only one. Both proven live to
-         * make the published pattern REJECT a value the real {@link Validator} ACCEPTS: a
-         * multi-line title, and a value made solely of {@code U+00A0} non-breaking spaces (Java's
-         * {@code \s} is ASCII-only, so {@code \S} matches {@code U+00A0}; ECMA's {@code \s} is
-         * Unicode-aware and includes it, so ECMA's {@code \S} does not).
+         * The published pattern for {@link OptionalNotBlank} must agree with the real {@link
+         * Validator} on a multi-line value and on a value made only of {@code U+00A0}.
          *
-         * <p>Evaluated here with Java's regex engine against the FIXED, translated pattern, not a
-         * live ECMA-262 engine -- no JS engine is wired into this build or its test classpath (no
-         * GraalJS/Nashorn dependency; confirmed absent by attempting {@code
-         * ScriptEngineManager().getEngineByName("nashorn")}, which returns {@code null} on this
-         * JDK). That substitution is sound here specifically BECAUSE of how the fix works: {@code
-         * ComposedConstraintPropertyCustomizer#ecmaEquivalentOf} rewrites every {@code \s}/{@code
-         * \S} shorthand into an explicit ASCII character class before publishing, so the published
-         * string this test reads back contains NO construct whose meaning differs between the two
-         * dialects -- the one thing that could make Java's engine disagree with ECMA's has been
-         * engineered out of the string itself. Independently confirmed against a REAL ECMA-262
-         * engine during development (Node.js v24.19.0, 2026-09-05, not part of this build/CI):
-         * {@code /^(?:[\s\S]*[^ \t\n\x0B\f\r][\s\S]*)$/.test("a\nb")} → {@code true}, the same
-         * full-match test against three {@code U+00A0} characters → {@code true} -- both agreeing
-         * with the assertions below and with a scratch {@code Pattern.compile(".*\\S.*",
-         * Pattern.DOTALL).matcher(value).matches()} run against the real annotation's own
-         * regex/flags.
+         * <p>Why this is the way it is: {@code ComposedConstraintPropertyCustomizer.contribute()}
+         * once republished {@code regexp()} verbatim and dropped {@code flags() = {DOTALL}}, so the
+         * published {@code .} never matched a newline and {@code \S} read as ECMA-262's
+         * Unicode-aware version, rejecting values Java accepts. The pattern is evaluated with
+         * Java's regex engine because no JS engine is on the test classpath (observed 2026-09-05:
+         * {@code ScriptEngineManager().getEngineByName("nashorn")} returns {@code null}). That is
+         * sound because {@code ecmaEquivalentOf} rewrites every {@code \s}/{@code \S} into an
+         * explicit character class, leaving no construct whose meaning differs between dialects.
+         * Cross-checked against Node.js v24.19.0 on 2026-09-05, outside the build: {@code
+         * /^(?:[\s\S]*[^ \t\n\x0B\f\r][\s\S]*)$/.test("a\nb")} is {@code true}, as is the same
+         * full-match against three {@code U+00A0} characters. Falsifier: a published pattern that
+         * changes meaning between dialects invalidates the Java-engine evaluation.
          */
         @Test
         void shouldMatchRealValidatorOnMultilineAndNbspOnlyValues_whenPatternIsOptionalNotBlank()
@@ -668,9 +622,8 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
                     realValidatorAccepts(
                             UpdateTaskRequestDTO.builder().title(nbspOnly).build(), "title");
 
-            // assert: both the real validator's own verdict (proving the fixture values are the
-            // ones the defect report described) and the document/validator agreement (the actual
-            // regression guard)
+            // assert: the validator's own verdict proves the fixtures; the document/validator
+            // agreement is the regression guard
             Assertions.assertThat(validatorAcceptsMultiline)
                     .as("real validator: multiline")
                     .isTrue();
@@ -684,14 +637,12 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
         }
 
         /**
-         * D3 decision record (quick task 260904-ss1 round 4, 2026-09-05) -- NOT a fix, a pinned
-         * observation. {@code @Size} counts UTF-16 code units; published {@code maxLength} counts
-         * Unicode code points. A value built from astral characters can satisfy the published
-         * {@code maxLength} while violating the real {@code @Size(max = ...)} it was computed from
-         * (see {@code contribute()}'s {@code Size} branch for the full analysis and the decision
-         * this pins). This test exists so a future change to that decision is deliberate: if it
-         * starts failing, the maxLength-computation strategy changed and this comment block needs
-         * updating to match, not silently deleting.
+         * Pins an observation, not a fix: {@code @Size} counts UTF-16 units but published {@code
+         * maxLength} counts code points.
+         *
+         * <p>An astral-heavy value can satisfy the latter and violate the former. See the {@code
+         * Size} branch of {@code contribute()} for the decision. If this starts failing, the
+         * maxLength strategy changed and that decision needs updating, not silently deleting.
          */
         @Test
         void shouldAcceptAnAstralHeavyValueThatViolatesTheRealSizeMax_perD3Decision()
@@ -700,10 +651,8 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
             var document = fetchDocument();
             var seventeenEmoji = "😀".repeat(17);
 
-            // act: a spec-compliant JSON Schema validator counts CODE POINTS against maxLength,
-            // never Java's UTF-16-unit String.length() -- deliberately NOT routed through
-            // valueSatisfiesPublishedConstraints, which uses value.length() and would therefore
-            // conflate the very two units this decision record is about
+            // act: a spec-compliant validator counts code points against maxLength, so this does
+            // not go through valueSatisfiesPublishedConstraints, which uses value.length()
             var codePointCount = seventeenEmoji.codePointCount(0, seventeenEmoji.length());
             var utf16UnitCount = seventeenEmoji.length();
             var publishedMaxLength =
@@ -713,8 +662,8 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
                     realValidatorAccepts(
                             SaveSubtaskRequestDTO.builder().title(seventeenEmoji).build(), "title");
 
-            // assert: the divergence this decision record pins -- 17 code points (<= max=32,
-            // published check ACCEPTS) but 34 UTF-16 units (> max=32, real validator REJECTS)
+            // assert: 17 code points (<= max=32, published check accepts) but 34 UTF-16 units
+            // (> 32, real validator rejects)
             Assertions.assertThat(codePointCount).isEqualTo(17);
             Assertions.assertThat(utf16UnitCount).isEqualTo(34);
             Assertions.assertThat(publishedMaxLength)
@@ -727,47 +676,28 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
     }
 
     /**
-     * Proves the published document and the real {@link Validator} reach the SAME accept/reject
-     * verdict for the fields listed in {@code cases} below -- the actual correctness contract;
-     * {@link PublishedConstraints} only proves values are present, not that they mean the same
-     * thing the enforcer means. Not literally "every field" this bean touches: {@code email} on
-     * {@code SignupRequestDTO}/{@code SigninRequestDTO} carries no case here, and could not
-     * meaningfully carry one -- this class's own {@link #valueSatisfiesPublishedConstraints} never
-     * reads the published {@code format} keyword (it checks only {@code pattern}/{@code
-     * minLength}/{@code maxLength}), so an equivalence case against {@code email} would compare the
-     * real {@code @Email} validator against a document-side check that structurally cannot see the
-     * one thing that field publishes (corrected, secondary finding, quick task 260904-ss1 round 4,
-     * 2026-09-05 -- this Javadoc previously claimed "every field", which was never true).
+     * Proves the published document and the real {@link Validator} reach the same accept/reject
+     * verdict for the fields in {@code cases}.
      *
-     * <p>The published {@code pattern} is evaluated here with Java's regex engine, not ECMA-262.
-     * That is exact for every {@code pattern} construct currently in use in the {@code cases} below
-     * (character classes, anchors, lookaheads are common to both dialects) with ONE documented
-     * exception: Java's {@code $} also matches immediately before a final line terminator (a
-     * trailing {@code \n}), while ECMA-262's {@code $} (without the {@code m} flag) matches only
-     * true end-of-input -- so a value ending in {@code "\n"} could read as accepted under Java's
-     * engine and rejected under a real ECMA-262 one for a pattern anchored with {@code $}. No case
-     * below exercises a trailing-newline value, so this divergence is latent here, not exercised; a
-     * future case that adds one must not rely on this test's Java-engine evaluation alone
-     * (corrected, secondary finding, 2026-09-05 -- this Javadoc previously claimed Java's
-     * evaluation was "exact for every construct currently in use" with no exception, which was not
-     * true).
+     * <p>Known holes: {@code email} on {@code SignupRequestDTO}/{@code SigninRequestDTO} has no
+     * case, because {@link #valueSatisfiesPublishedConstraints} never reads the published {@code
+     * format} keyword. The published {@code pattern} is evaluated with Java's regex engine, not
+     * ECMA-262; they differ for {@code $}, which Java also matches before a final line terminator,
+     * so a value ending in {@code "\n"} could pass under Java and fail under ECMA-262 for a {@code
+     * $}-anchored pattern. No case below uses a trailing newline, so a future case that adds one
+     * must not rely on this evaluation alone.
      */
     @Nested
     class EquivalenceWithRealValidator {
 
         /**
-         * The published bound and the enforced one are allowed to disagree here, in this direction
-         * only.
+         * Published and enforced bounds may disagree in this direction only: the published bound is
+         * the looser one.
          *
-         * <p>{@code @Size} counts UTF-16 code units and the published {@code minLength} counts code
-         * points, so the published bound is deliberately the looser of the two -- a short ASCII
-         * value clears it and the real validator still rejects it, costing a 400 the validator was
-         * always going to produce. The opposite direction is never tolerable and is not expressible
-         * here: it fails unconditionally above.
-         *
-         * <p>Keep this set exact. Every entry is a case someone decided to accept; a divergence
-         * that appears without being added is a defect, which is what makes the strict comparison
-         * worth keeping rather than relaxing to a one-way implication.
+         * <p>{@code @Size} counts UTF-16 units and the published {@code minLength} counts code
+         * points, so a short ASCII value clears the published bound and the validator still rejects
+         * it, costing a 400 it would have produced anyway. The opposite direction fails
+         * unconditionally above. Keep this set exact: a divergence not added here is a defect.
          */
         private static final Set<String> TOLERATED_LOOSER_THAN_ENFORCER =
                 Set.of("SaveSubtaskRequestDTO.title='ab'");
@@ -905,11 +835,10 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
     }
 
     /**
-     * Proves every published {@code example}, anywhere in the document, satisfies that same
-     * property's own published {@code pattern}/{@code minLength}/{@code maxLength} -- an example
-     * that fails its own constraint is worse than none, since a client copying it straight into a
-     * request gets a 400. Walks EVERY schema/property rather than a checked-in list, so a future
-     * annotation gaining an example is covered with no edit to this test.
+     * Proves every published {@code example} satisfies its own property's published constraints.
+     *
+     * <p>Walks every schema rather than a checked-in list, so a new example is covered with no edit
+     * here.
      */
     @Nested
     class ExampleInvariant {
@@ -948,28 +877,21 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
                 }
             }
 
-            // assert: the non-vacuity guard first -- a document with zero examples would otherwise
-            // satisfy the loop trivially and read as green
+            // assert: non-vacuity first, since zero examples would satisfy the loop trivially
             Assertions.assertThat(exampleCount).isGreaterThanOrEqualTo(3);
             Assertions.assertThat(failures).isEmpty();
         }
     }
 
     /**
-     * D4 (quick task 260904-ss1 round 4, 2026-09-05). {@link Password}'s {@code @Schema}
-     * description used to include an internal build-tooling rationale verbatim ("a password-shaped
-     * literal in source is exactly what this repository's gitleaks pre-commit scan looks for"),
-     * disclosing this repo's secret-scanning setup to every API consumer. Truncated at "...one
-     * special character." with the rationale moved to a plain {@code //} comment above the
-     * annotation, where only this codebase's own contributors read it.
+     * Pins that {@link Password}'s {@code @Schema} description discloses no build-tooling
+     * rationale.
      *
-     * <p>Reading {@code expected} off {@link #metaSchemaOf(Class)} rather than a hand-copied
-     * literal also closes the mutation-blind gap the secondary findings flagged: {@code
-     * collectSchemaMeta}'s {@code description} branch used to be deletable with every test in this
-     * class still green, because nothing compared the published value against the annotation's own
-     * -- this test would now fail if that branch were removed, since {@code expected} would be
-     * non-null while the published description reverted to whatever the schema already had (null,
-     * for these two properties).
+     * <p>The description once quoted the gitleaks pre-commit rationale verbatim, exposing the
+     * repository's secret-scanning setup to API consumers; it now ends at "...one special
+     * character." Reading {@code expected} off {@link #metaSchemaOf(Class)} also makes deleting
+     * {@code collectSchemaMeta}'s {@code description} branch fail this test, since {@code expected}
+     * would be non-null while the published description stayed null.
      */
     @Nested
     class PublishedDescriptions {
@@ -995,15 +917,12 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
     }
 
     /**
-     * Guards every {@link BmpOnly} declaration, which is asserted by a human and believed by {@code
-     * ComposedConstraintPropertyCustomizer} when it publishes an exact {@code @Size} bound rather
-     * than the halved one.
+     * Guards every {@link BmpOnly} declaration, which a human asserts and {@code
+     * ComposedConstraintPropertyCustomizer} believes.
      *
-     * <p>Drives each marked annotation's own {@code @Pattern} against a value containing an astral
-     * character and requires a rejection, and pins the unmarked constraints as unmarked so the
-     * marker cannot spread to one whose pattern permits astral characters everywhere else in the
-     * value. This catches a declaration that has gone stale; it does not prove one correct, and no
-     * test could -- a passing sample is not a proof of BMP confinement.
+     * <p>Drives each marked annotation's {@code @Pattern} with an astral character and requires
+     * rejection, and pins the unmarked constraints as unmarked. This catches a stale declaration;
+     * it cannot prove one correct, since a passing sample does not prove BMP confinement.
      */
     @Nested
     class BmpOnlyDeclarations {
@@ -1057,14 +976,12 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
     }
 
     /**
-     * D2 (quick task 260904-ss1 round 4, 2026-09-05). Regression guard for {@link
-     * ComposedConstraintPropertyCustomizer.Accumulator#reassertOn}'s tighten-only contract,
-     * exercised directly through this bean's two public interface methods with a hand-built {@link
-     * AnnotatedType}/{@link OpenAPI} -- no {@code @SpringBootTest} context needed, since the whole
-     * point is precise control over what sits on the schema BETWEEN phase 1 ({@link
-     * ComposedConstraintPropertyCustomizer#customize}) and phase 2 ({@link
-     * ComposedConstraintPropertyCustomizer#customise}), which the full document-generation pipeline
-     * does not offer a seam for.
+     * Regression guard for {@code Accumulator#reassertOn}'s tighten-only contract, using a
+     * hand-built {@link AnnotatedType}/{@link OpenAPI} instead of a Spring context.
+     *
+     * <p>The full pipeline offers no seam to control what sits on the schema between phase 1
+     * ({@link ComposedConstraintPropertyCustomizer#customize}) and phase 2 ({@link
+     * ComposedConstraintPropertyCustomizer#customise}).
      */
     @Nested
     class ReassertOnTightenOnly {
@@ -1110,9 +1027,8 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
             Assertions.assertThat(propertySchema.getMaxLength())
                     .isEqualTo(ValidationConstants.MAX_SUBTASK_TITLE_LENGTH);
 
-            // something else -- swagger-core's own second internal pass per Observation 2 on the
-            // class Javadoc, or, latently, a field-level @Schema -- loosens the SAME schema
-            // object before phase 2 runs
+            // Something else (swagger-core's second internal pass, or a field-level @Schema)
+            // loosens the same schema object before phase 2 runs.
             propertySchema.setMinLength(1);
             propertySchema.setMaxLength(999);
 
@@ -1137,8 +1053,7 @@ class ComposedConstraintPropertyCustomizerTest extends AbstractPostgresContainer
                     annotatedTypeFor(SaveSubtaskRequestDTO.class, "title", parentSchema);
             customizer.customize(propertySchema, annotatedType);
 
-            // something else set a STRICTER minLength/maxLength/pattern than this bean computed --
-            // e.g. a field-level @Schema(minLength = 10, maxLength = 20, pattern = "^Sprint .*$")
+            // Something else sets stricter values than computed, e.g. a field-level @Schema.
             propertySchema.setMinLength(10);
             propertySchema.setMaxLength(20);
             propertySchema.setPattern("^Sprint .*$");
