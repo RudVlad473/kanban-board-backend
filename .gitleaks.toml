@@ -1,31 +1,33 @@
 title = "kanban-board-backend gitleaks configuration"
 
-# Quick task 260816-hn1 ("wire up secret scanning"). Extends the built-in default rule set
-# rather than replacing it, so upstream rule maintenance (new patterns, fixed false positives)
-# keeps flowing in on every gitleaks version bump. See 260816-hn1-MEASUREMENTS.md for the full
-# baseline triage this file's allowlist entries are evidence for -- every entry below cites the
-# specific finding it exempts and the file:line/commit evidence that made it a false positive.
-# A blanket path exemption (e.g. for .planning/, the directory that motivated this task in the
-# first place) is deliberately out of bounds -- see that plan's approach_analysis for why.
+# Extend the built-in default rule set rather than replacing it, so upstream rule maintenance (new
+# patterns, fixed false positives) keeps flowing in on every gitleaks version bump.
+#
+# Decisions:
+# Every allowlist entry below cites the specific finding it exempts and the file:line/commit evidence
+# that made it a false positive; the baseline triage is
+# `.planning/quick/260816-hn1-wire-up-secret-scanning-gitleaks-truffle/260816-hn1-MEASUREMENTS.md`.
+# A blanket path exemption (e.g. for .planning/, the directory that motivated adding the scan) is
+# deliberately out of bounds; the reasoning is in
+# `.planning/quick/260816-hn1-wire-up-secret-scanning-gitleaks-truffle/260816-hn1-PLAN.md`.
 [extend]
 useDefault = true
 
 # --- curl-auth-user: GitHub Actions `${{ secrets.* }}` template interpolation ------------------
-# 12 of the 13 baseline findings (deploy.yml lines across 5 historical commits, plus a copy of
-# the same shell idiom quoted in .planning/phases/05-infra-migration/05-PATTERNS.md) are the
-# identical false positive: `curl -u "$DOCKERHUB_USER:${{ secrets.DOCKERHUB_TOKEN }}"`. The
-# rule's regex matches the `-u user:pass` shape, but the "password" half is a GitHub Actions
-# secret *reference*, not a literal value -- the real token is injected by the Actions runner at
-# execution time from an encrypted repository secret and never appears in the tree at all.
-# Verified empirically (260816-hn1-MEASUREMENTS.md, Task 1): `git show <commit>:.github/workflows/deploy.yml`
-# at every flagged commit shows the literal `${{ secrets.DOCKERHUB_TOKEN }}` template string, not
-# a resolved value, at every one of the 12 sites.
+# Allowlist `curl -u user:${{ secrets.X }}`: a GitHub Actions secret reference, not a literal credential.
 #
-# Scoped to the rule itself (not a global allowlist) and matched against the finding's `match`
-# text (the whole matched substring, not just the extracted secret group) so it only ever
-# exempts a curl-auth-user finding whose captured password half is literally a GitHub Actions
-# secrets-block reference -- a real credential accidentally pasted into a curl -u call on any
-# other line, in any file, would still be caught.
+# Decisions:
+# 12 of the 13 baseline findings (deploy.yml lines across 5 historical commits, plus a copy of the same
+# shell idiom quoted in a planning document) are this one false positive,
+# `curl -u "$DOCKERHUB_USER:${{ secrets.DOCKERHUB_TOKEN }}"`. The rule matches the `-u user:pass` shape,
+# but the "password" half is a secret *reference*: the runner injects the real token at execution time from
+# an encrypted repository secret, and it never appears in the tree. Verified empirically: `git show
+# <commit>:.github/workflows/deploy.yml` at every flagged commit shows the literal
+# `${{ secrets.DOCKERHUB_TOKEN }}` template string at every one of the 12 sites.
+# Scoped to the rule itself (not a global allowlist) and matched against the finding's `match` text (the
+# whole matched substring, not just the extracted secret group), so it exempts only a curl-auth-user
+# finding whose captured password half is literally a secrets-block reference: a real credential pasted
+# into a curl -u call on any other line, in any file, would still be caught.
 [[rules]]
 id = "curl-auth-user"
 
@@ -36,12 +38,14 @@ id = "curl-auth-user"
       '''\$\{\{\s*secrets\.''',
     ]
 
-# --- aws-access-token: synthetic falsification canary (260816-hn1-MEASUREMENTS.md) -------------
-# `AKIATESTFAKEKEY23456` is a deliberately-fake, correctly-shaped AWS access key used to prove
-# (Task 1: gitleaks dir vs .gitignore; Task 2: the pre-commit hook's refusal path) that scanning
-# actually works. It appears only in documentation describing those tests, never as a real
-# credential or in application/infra config. Scoped to this exact literal string via regexTarget
-# = "match" so it exempts nothing else -- a real AWS key elsewhere would still be caught.
+# --- aws-access-token: synthetic falsification canary ---------------------------------------------
+# Allowlist the deliberately-fake `AKIATESTFAKEKEY23456`.
+#
+# Decisions:
+# It is a correctly-shaped AWS access key used to prove that scanning works (`gitleaks dir` vs .gitignore;
+# the pre-commit hook's refusal path). It appears only in documentation describing those tests, never as a
+# real credential or in application/infra config. Scoped to this exact literal via regexTarget = "match",
+# so a real AWS key elsewhere would still be caught.
 [[rules]]
 id = "aws-access-token"
 
@@ -53,20 +57,18 @@ id = "aws-access-token"
     ]
 
 # --- generic-api-key: src/main/resources/application.properties:10 (commit 5121740f61) --------
-# Deliberately NOT allowlisted. This finding is a real, hardcoded local-dev Postgres password
-# (`spring.datasource.password=...` against `jdbc:postgresql://localhost:5432/test-kanban`)
-# committed on 2025-06-05, long before the environment-variable-based datasource config
-# (`${DB_HOST}`/`${DB_USER}`/`${DB_PASS}`) that HEAD uses today. It is a genuine credential
-# value, not a false positive, so it is not this file's place to silently exempt it -- see
-# 260816-hn1-MEASUREMENTS.md's triage table and the plan's blocking checkpoint (Fork A) for the
-# human verdict on whether this constitutes a "genuine credential found in history" in the sense
-# that gates this quick task's own scope.
+# Deliberately NOT allowlisted: a real, hardcoded local-dev Postgres password, not a false positive.
 #
-# It IS suppressed from CI's hard gate, but by a different, narrower mechanism than an allowlist
-# entry here: .gitleaks-baseline.json (repo root, committed, redacted) fingerprints this exact
-# finding by commit+file+line, and .github/workflows/secret-scan.yml passes it via
-# --baseline-path. A baseline suppresses only fingerprints already recorded in that file -- any
-# new finding anywhere still fails CI. This distinction matters: an allowlist entry here would
-# make gitleaks stop reporting this finding under ANY invocation (hook included, though the hook
-# never revisits old history anyway); the baseline only affects the one workflow that explicitly
-# opts into it, and remains fully auditable by reading the committed JSON.
+# Decisions:
+# `spring.datasource.password=...` against `jdbc:postgresql://localhost:5432/test-kanban`, committed
+# 2025-06-05, long before the environment-variable datasource config (`${DB_HOST}`/`${DB_USER}`/
+# `${DB_PASS}`) HEAD uses today. It is a genuine credential value, so this file does not silently exempt
+# it; the triage table and the human verdict on whether it counts as a "genuine credential found in
+# history" are in
+# `.planning/quick/260816-hn1-wire-up-secret-scanning-gitleaks-truffle/260816-hn1-MEASUREMENTS.md`.
+# It IS suppressed from CI's hard gate, but by a narrower mechanism than an allowlist entry:
+# `.gitleaks-baseline.json` (repo root, committed, redacted) fingerprints this exact finding by
+# commit+file+line, and .github/workflows/secret-scan.yml passes it via --baseline-path. A baseline
+# suppresses only fingerprints already recorded in it, so any new finding anywhere still fails CI. An
+# allowlist entry would make gitleaks stop reporting the finding under ANY invocation; the baseline
+# affects only the workflow that opts in, and stays auditable in the committed JSON.

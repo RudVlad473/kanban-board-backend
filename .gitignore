@@ -45,13 +45,13 @@ out/
 !.env.prod.example
 !.env.nonprod.example
 
-### Secret scanning (quick task 260816-hn1) ###
-# gitleaks report output. A gitleaks report contains matched secret *values* in plaintext
-# even with --redact applied to the console/log stream in some report formats -- the JSON
-# report's `Secret`/`Match` fields are only redacted when --redact is passed, and this path
-# must never be committed regardless, since it is scratch measurement output, not a
-# reviewable artifact. See 260816-hn1-MEASUREMENTS.md for why this exists and what
-# redaction guarantee was actually verified empirically before any report was trusted.
+### Secret scanning ###
+# gitleaks report output: scratch measurement output, never committed.
+#
+# A report can contain matched secret *values* in plaintext: the JSON report's `Secret`/`Match` fields are
+# redacted only when --redact is passed, and some report formats are not covered even then. The redaction
+# guarantee actually verified is recorded in
+# .planning/quick/260816-hn1-wire-up-secret-scanning-gitleaks-truffle/260816-hn1-MEASUREMENTS.md.
 .gitleaks-reports/
 
 ### Python (scripts/*.py gates and self-tests) ###
