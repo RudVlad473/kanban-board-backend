@@ -53,24 +53,24 @@ public class UserService implements UserDetailsService {
         return user.get();
     }
 
-    // Exists so an entity a caller already holds can be mapped without the redundant second row
-    // read a find-by-id variant would cost on this repo's most timing-sensitive endpoint
-    // (AuthenticationController.signin, F1). The alternative of injecting UserMapper directly
-    // into a controller was rejected because LayeringArchTest's rule 1 polices only the
-    // repository package and could not see that precedent land (D-01, quick task 260812-hs4).
-    // Deliberately not @Transactional -- it performs no database access, and its input entity is
-    // already detached when signin calls it (findByEmail above carries no @Transactional).
+    // Map an entity the caller already holds, saving the second row read a find-by-id variant
+    // would add on the signin path.
+    //
+    // Decisions:
+    // Not @Transactional: no database access, and signin passes an already-detached entity
+    // (findByEmail carries no @Transactional).
+    // A controller must not inject UserMapper instead: LayeringArchTest's rule 1 polices only the
+    // repository package, so that precedent would land unseen.
     public UserResponseDTO toResponseDTO(UserEntity entity) {
         return userMapper.toResponseDTO(entity);
     }
 
-    // D-07: checked, expected duplicate-email path -- signup reveals this explicitly as a 409
-    // rather than swallowing it into a generic auth failure. users.email carries a unique
-    // constraint at the database level too (uk_users_email, V1__init.sql), so a race between two
-    // concurrent signups for the same email that both pass this check-then-act guard still cannot
-    // create two rows -- the loser hits DataIntegrityViolationException instead, backstopped by
-    // GlobalExceptionHandler's broader arm (also a 409), the same pattern BoardService.updateById
-    // already relies on for board-name uniqueness.
+    // Reveal a duplicate email as an explicit 409 rather than a generic auth failure.
+    //
+    // Decisions:
+    // Two concurrent signups can both pass this check-then-act guard; uk_users_email (V1__init.sql)
+    // stops the second row, and the loser's DataIntegrityViolationException is also mapped to 409
+    // by GlobalExceptionHandler.
     public UserResponseDTO save(SignupRequestDTO userDTO) {
         if (userRepository.existsByEmail(userDTO.getEmail())) {
             throw AppDuplicateResourceException.withMessage(
@@ -107,10 +107,8 @@ public class UserService implements UserDetailsService {
         return boardService.save(boardDTO, user);
     }
 
-    // GAP-05 (D-10..D-12). userId comes from @CurrentUserId (the session) in UserController --
-    // never a path variable or request-body field -- so this method has no ownership chain to
-    // verify: UserService is the identity root, findById(String) above already is the sanctioned
-    // direct-repository load (docs/CODE_STYLE.md rule 2).
+    // No ownership check: userId comes from the session (@CurrentUserId), never from the request,
+    // and UserService is the identity root (docs/CODE_STYLE.md rule 2).
     @Transactional
     public UserResponseDTO findThemeByUserId(String userId) {
         var user = findById(userId);
@@ -118,9 +116,8 @@ public class UserService implements UserDetailsService {
         return userMapper.toResponseDTO(user);
     }
 
-    // No entityManager.flush()/version-compare here, unlike TaskService/ColumnService/
-    // SubtaskService's Update* methods -- UserEntity carries no @Version field and this write is
-    // deliberately last-write-wins (see UpdateThemeRequestDTO's Javadoc, T-06-29).
+    // Last-write-wins by design: UserEntity has no @Version, so unlike the other Update* methods
+    // there is no flush and version compare (see UpdateThemeRequestDTO).
     @Transactional
     public UserResponseDTO updateTheme(String userId, UpdateThemeRequestDTO dto) {
         var user = findById(userId);
