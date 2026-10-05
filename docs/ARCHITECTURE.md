@@ -159,11 +159,13 @@ reasoning.
 
 ### Process View — path of a mutation
 
-![Flowchart: path of a mutation through the activity-log pipeline](diagrams/process/activity-pipeline.png)
+<img src="diagrams/process/activity-pipeline.png" width="710" alt="Flowchart: path of a mutation from the request thread through commit, the kafka-publish executor, the kanban.activity topic and the consumer thread to the activity_log table or the dead-letter topic">
 <sub>[diagram source](diagrams/process/activity-pipeline.mmd)</sub>
 
 *Process view only, per [DIAGRAM_CONVENTIONS.md](DIAGRAM_CONVENTIONS.md) — it shows runtime
-communication, not deployment topology.*
+communication, not deployment topology.* The boxes are threads, topics and tables, not classes: the
+publisher is `KafkaEventPublisher` and the consumer thread runs `ActivityLogConsumer` and then
+`ActivityLogRecorder`. Both topics have one partition.
 
 ### Sequence view of the same mutation
 

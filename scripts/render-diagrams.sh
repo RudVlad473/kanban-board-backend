@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Render docs/diagrams/*.mmd to their committed *.png, and check the committed set for drift, through
-# one digest-pinned renderer, so a PNG's exact pixels no longer depend on which machine rendered it.
+# Render docs/diagrams/<view>/<subject>.mmd to its committed .png, and check the committed set for drift,
+# through one digest-pinned renderer, so a PNG's exact pixels no longer depend on which machine rendered it.
 #
 # Decisions:
 # No render command existed as of 2026-09-05 and `mmdc` was not installed (searched docs/, scripts/,
@@ -24,10 +24,17 @@ readonly MERMAID_CLI_IMAGE="ghcr.io/mermaid-js/mermaid-cli/mermaid-cli@sha256:a6
 # and is -8.37% in height. Opposite signs rule out a scale artifact: this is genuine layout drift from a
 # different mermaid version than produced the committed set, which is why height gets a tolerance and
 # width does not.
-# Blind spot: this reads only the PNG's IHDR chunk (width, height, bit depth, colour type). A diagram
-# whose labels changed without changing its bounding box passes. A perceptual pixel diff would close that
-# gap; it is the upgrade path if docs/diagrams/ ever grows enough to justify the dependency (ImageMagick
-# is not installed on this box; Pillow is present but this script does not depend on it).
+# Natural width: docs/diagrams/mermaid-config.json turns off flowchart.useMaxWidth and sequence.useMaxWidth.
+# Measured 2026-10-05, mmdc lays diagrams out in an 800 px viewport and, with the default useMaxWidth, shrinks
+# every SVG to fit inside it (784 px) before rasterising, so `-s` multiplied pixels but never layout width: 784
+# x 1, x 2 and x 4 were exactly the old committed widths. With the config the layout keeps its natural width,
+# the scale is uniformly 2, and a PNG is a 2x raster of a diagram whose CSS width is the PNG width divided by 2.
+# Because that width now tracks the content, a label edit that changes the bounding box fails the width check
+# here. Styling stays in each flowchart's own init line, so inline blocks rendered by GitHub look the same.
+# Blind spot, narrowed: this still reads only the PNG's IHDR chunk (width, height, bit depth, colour type). A
+# label edit that leaves the bounding box unchanged passes. A perceptual pixel diff would close that gap; it is
+# the upgrade path if docs/diagrams/ ever grows enough to justify the dependency (ImageMagick is not installed
+# on this box; Pillow is present but this script does not depend on it).
 # Colour mode, reported not gated: the committed PNGs are all colour type 2 (RGB, no alpha). `mmdc` has no
 # flag to force that: Puppeteer's screenshot output is colour type 6 (RGBA) regardless of `-b white`.
 # Flattening RGBA to RGB would need Pillow or ImageMagick, which this script deliberately does not depend
@@ -38,10 +45,10 @@ readonly MERMAID_CLI_IMAGE="ghcr.io/mermaid-js/mermaid-cli/mermaid-cli@sha256:a6
 # documentation commit plus a 2.36GB image pull per run, for a docs-only check. This pin plus the
 # Maintenance Note in `docs/INFRA_ARCHITECTURE.md` is the mechanism instead; run this by hand.
 # Fallback for a machine with no Docker: `pnpm dlx @mermaid-js/mermaid-cli@11.17.0 -i <name>.mmd -o
-# <name>.png -s <scale> -b white` reproduces the same layout engine version but NOT the same geometry:
-# Puppeteer renders text with the HOST's installed fonts, which the npm package cannot pin, so identical
-# input produces different bounding boxes on a different machine. A documented, non-reproducible
-# fallback, not a substitute for the pinned container (`pnpm dlx`, never `npx`).
+# <name>.png -s <scale> -b white -c docs/diagrams/mermaid-config.json` reproduces the same layout engine
+# version but NOT the same geometry: Puppeteer renders text with the HOST's installed fonts, which the npm
+# package cannot pin, so identical input produces different bounding boxes on a different machine. A
+# documented, non-reproducible fallback, not a substitute for the pinned container (`pnpm dlx`, never `npx`).
 
 set -euo pipefail
 
@@ -55,7 +62,7 @@ usage() {
 Usage:
   render-diagrams.sh                 Render every diagram in the manifest in place.
   render-diagrams.sh --all           Same as above.
-  render-diagrams.sh <name>          Render just <name> (no .mmd suffix) in place.
+  render-diagrams.sh <name>          Render just <name> (view/subject, no .mmd suffix) in place.
   render-diagrams.sh --check --all   Render every diagram into a scratch dir and compare against
                                       the committed PNG; prints one row per diagram and exits
                                       non-zero on any mismatch. Writes nothing under docs/diagrams/.
@@ -109,10 +116,12 @@ render_one() {
 
   if [[ "$out_dir" == "$DIAGRAMS_DIR" ]]; then
     docker run --rm -u "$(id -u):$(id -g)" -v "$src_mount" \
-      "$MERMAID_CLI_IMAGE" -i "/data/${name}.mmd" -o "/data/${name}.png" -s "$scale" -b white
+      "$MERMAID_CLI_IMAGE" -i "/data/${name}.mmd" -o "/data/${name}.png" -s "$scale" -b white \
+      -c /data/mermaid-config.json
   else
     docker run --rm -u "$(id -u):$(id -g)" -v "$src_mount" -v "${out_dir}:/out" \
-      "$MERMAID_CLI_IMAGE" -i "/data/${name}.mmd" -o "/out/${name}.png" -s "$scale" -b white
+      "$MERMAID_CLI_IMAGE" -i "/data/${name}.mmd" -o "/out/${name}.png" -s "$scale" -b white \
+      -c /data/mermaid-config.json
   fi
 }
 

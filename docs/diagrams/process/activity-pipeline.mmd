@@ -1,11 +1,12 @@
-flowchart TD
-    C(["Client"]) -->|"PATCH /tasks/{id}/move"| S["TaskService — @Transactional"]
-    S -->|ApplicationEventPublisher| TX{{"transaction commit"}}
-    TX ==>|"HTTP 200 — never waits on Kafka"| C
-    TX -->|AFTER_COMMIT| P["KafkaEventPublisher<br/>@Async kafkaPublishExecutor"]
-    P -->|"Avro SpecificRecord"| K[["kanban.activity"]]
-    K --> L["ActivityLogConsumer<br/>Kafka listener thread"]
-    L -->|"exhaustive switch, no default arm"| D{"processed OK?"}
-    D -->|yes| R["ActivityLogRecorder<br/>idempotent insert"]
-    R --> DB[("activity_log")]
-    D -.->|"no -- 3 retries exhausted"| DLT[["kanban.activity.dlt"]]
+%%{init: {"flowchart": {"subGraphTitleMargin": {"top": 15, "bottom": 15}, "curve": "linear"}}}%%
+flowchart TB
+    http(["Mutating HTTP request<br/>(request thread)"]) --> tx["Mutation<br/>@Transactional"]
+    tx --> commit{{"Transaction commit"}}
+    commit ==>|"response returns"| resp(["HTTP response<br/>never waits on Kafka"])
+    commit -->|"AFTER_COMMIT"| pub["Publisher<br/>kafka-publish-* executor"]
+    pub -.->|"schema-id lookup,<br/>never registers"| registry[["Schema Registry"]]
+    pub -->|"Avro, keyed by event id"| topic[["kanban.activity<br/>1 partition"]]
+    topic --> consumer["Consumer thread<br/>group activity-log"]
+    consumer --> ok{"Processed?"}
+    ok -->|"yes"| db[("activity_log<br/>insert, idempotent on event_id")]
+    ok -.->|"no: 3 retries,<br/>1 s apart"| dlt[["kanban.activity.dlt"]]

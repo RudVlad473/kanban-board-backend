@@ -34,3 +34,7 @@ rendered layout — the two keywords are documented aliases), then re-render the
 reviewable change. Do this in the same change as (or after) the broader seven-diagram re-render
 tracked in the sibling todo above, not before it, so the two related PNG replacements land together
 rather than as two separate diffs touching the same file.
+
+## Resolution
+
+2026-10-05: resolved by quick task 261005-sun. The diagram now lives at `docs/diagrams/process/activity-pipeline.mmd`, opens with the shared init line, uses `flowchart TB`, and was re-rendered under the pinned renderer with `docs/diagrams/mermaid-config.json`.
