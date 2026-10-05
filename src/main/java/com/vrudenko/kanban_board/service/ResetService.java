@@ -25,31 +25,28 @@ import org.springframework.kafka.core.KafkaAdmin;
 import org.springframework.stereotype.Service;
 
 /**
- * Plan 08-02 (RESET-01): orchestrates the two-store nonprod reset -- Postgres (delegated to {@link
- * ResetTruncateService}) and the {@code kanban.activity}/{@code kanban.activity.dlt} Kafka topics
- * (this class).
+ * Orchestrate the two-store nonprod reset: Postgres (delegated to {@link ResetTruncateService}) and
+ * the {@code kanban.activity}/{@code kanban.activity.dlt} Kafka topics (this class).
  *
- * <p><b>Why the transactional truncate lives on a separate bean, not a private method here:</b>
- * Spring's {@code @Transactional} is proxy-based -- it only intercepts calls arriving from outside
- * the bean. A self-invoked {@code this.someTransactionalMethod()} call never passes through the
- * proxy, so the annotation would be silently ignored. {@link ResetTruncateService} is therefore its
- * own {@code @Service}, called here through the normal Spring-managed reference.
+ * <p>Decisions:
  *
- * <p><b>Why the {@code @KafkaListener} containers are paused for the duration of the reset:</b>
- * without pausing, a record the consumer already polled (but had not yet persisted) at the instant
- * the Postgres truncate ran could still land in {@code activity_log} moments later, silently
- * repopulating the very table this method just emptied. Stopping every listener container before
- * either store is touched, and restarting them only once both truncates have completed (or failed),
- * removes that race entirely.
+ * <p><b>The transactional truncate lives on a separate bean:</b> Spring's {@code @Transactional} is
+ * proxy-based and only intercepts calls arriving from outside the bean. A self-invoked {@code
+ * this.someTransactionalMethod()} never passes through the proxy, so the annotation would be
+ * silently ignored. {@link ResetTruncateService} is therefore its own {@code @Service}.
  *
- * <p><b>Why {@code AdminClient.deleteRecords()} rather than deleting and recreating the topic:</b>
- * {@code KafkaAdmin.deleteTopics()} as a runtime method was only added in spring-kafka 4.0; this
- * project's Spring Boot 3.5.16 BOM manages spring-kafka in the 3.3.x line, so that method does not
- * exist here. Deleting and recreating a topic out from under a live listener is also its own
- * unbounded failure mode independent of that version gap. {@code deleteRecords()} is the narrower,
- * safer primitive: it moves a partition's log-start offset forward to a chosen point, satisfying
- * D-03's literal "zero rows" without ever touching topic existence, and composes cleanly with the
- * listener-pause above.
+ * <p><b>The {@code @KafkaListener} containers are paused for the duration of the reset:</b> a
+ * record the consumer had already polled but not persisted when the Postgres truncate ran could
+ * land in {@code activity_log} moments later and repopulate the table just emptied. Stopping every
+ * container before either store is touched, and restarting them once both truncates have completed
+ * (or failed), removes that race.
+ *
+ * <p><b>{@code AdminClient.deleteRecords()} rather than deleting and recreating the topic:</b>
+ * {@code KafkaAdmin.deleteTopics()} as a runtime method was only added in spring-kafka 4.0, and
+ * this project's Spring Boot 3.5.16 BOM manages spring-kafka in the 3.3.x line, so it does not
+ * exist here. Deleting and recreating a topic under a live listener is also its own unbounded
+ * failure mode. {@code deleteRecords()} moves a partition's log-start offset forward without
+ * touching topic existence, and composes with the listener pause.
  */
 @Profile("nonprod")
 @Service
@@ -71,10 +68,8 @@ public class ResetService {
     @Autowired private EntityManager entityManager;
 
     /**
-     * Runs, in order: (1) stop every listener container, (2) trim both activity topics to their
-     * current high watermark, (3) truncate every Postgres table, (4) restart every listener
-     * container -- step 4 in a {@code finally} so a failure in step 2 or 3 still leaves the
-     * consumer running afterward rather than permanently stalled.
+     * Reset both stores. The listener containers restart in a {@code finally}, so a failure in the
+     * topic trim or the truncate never leaves the consumer permanently stalled.
      */
     public void resetAll() {
         kafkaListenerEndpointRegistry
@@ -92,35 +87,31 @@ public class ResetService {
     }
 
     /**
-     * Nonprod targeted-delete mode (quick task 260829-ii3): cascade-deletes each listed user's
-     * boards/columns/tasks/subtasks (via {@link UserService#deleteById}, the same cascade the
-     * account-deletion path already uses -- no new deletion mechanism is introduced here) plus that
-     * user's own {@code activity_log} rows, leaving every other user's data and both Kafka activity
-     * topics untouched.
+     * Cascade-delete each listed user's data and {@code activity_log} rows, leaving every other
+     * user and both Kafka topics untouched.
      *
-     * <p><b>Existence-check-before-any-delete invariant.</b> Every supplied id is verified to
-     * exist, in one batched {@code IN (...)} query, before a single delete runs, all inside this
-     * one {@code @Transactional} method. Without this ordering, a caller who has already cleared
-     * the shared-secret gate could submit a batch containing one real id plus one guessed id and
-     * use the partial-success/404 split as a rudimentary "does this exact user id exist" oracle.
-     * Checking first makes the observable outcome binary -- all deleted, or none deleted plus a 404
-     * -- with no partial-state tell.
+     * <p>The cascade is {@link UserService#deleteById}: boards, columns, tasks and subtasks.
+     *
+     * <p>Decisions:
+     *
+     * <p><b>Existence check before any delete.</b> Every id is verified to exist, in one batched
+     * {@code IN (...)} query, before a single delete runs, all inside this one
+     * {@code @Transactional} method. Otherwise a caller past the shared-secret gate could submit
+     * one real id plus one guessed id and use the partial-success/404 split as an oracle for "does
+     * this user id exist". Checking first makes the outcome binary: all deleted, or none deleted
+     * plus a 404.
      *
      * <p><b>Accepted, bounded race with {@code ActivityLogConsumer} (not engineered away).</b>
-     * {@link UserService#deleteById}'s cascade publishes real domain events (e.g. {@code
+     * {@link UserService#deleteById}'s cascade publishes domain events (e.g. {@code
      * BoardDeletedEvent}) that {@code KafkaEventPublisher} sends {@code @Async} on {@code
-     * AFTER_COMMIT}. If {@code ActivityLogConsumer} processes one of those events for a
-     * just-deleted user AFTER this method's own synchronous {@code activity_log} cleanup below has
-     * already run and after this transaction has committed, a single stray {@code activity_log} row
-     * referencing that now-nonexistent user can reappear. This is deliberately NOT solved by
-     * pausing every Kafka listener the way {@link #resetAll()} does for the full reset: that would
-     * stall the entire activity feed for every unrelated, still-live user for the duration of a
-     * call meant to be narrowly scoped to a handful of target users -- a disproportionate blast
-     * radius for a feature explicitly scoped to keep Kafka out of it. The affected id can never be
-     * a valid delete target again once its user row is gone, so the risk is self-limited -- the
-     * same accepted-race pattern documented on {@code
-     * SecurityConfiguration#sessionAuthenticationStrategy}'s concurrent-session-ceiling TOCTOU
-     * overshoot.
+     * AFTER_COMMIT}. If {@code ActivityLogConsumer} processes one for a just-deleted user after
+     * this method's {@code activity_log} cleanup ran and this transaction committed, a single stray
+     * {@code activity_log} row referencing that now-nonexistent user can reappear. Not solved by
+     * pausing the Kafka listeners as {@link #resetAll()} does: that would stall the activity feed
+     * for every unrelated live user during a call meant to be scoped to a few target users. The
+     * affected id can never be a valid delete target again once its user row is gone, so the risk
+     * is self-limited; it is the same accepted-race pattern as {@code
+     * SecurityConfiguration#sessionAuthenticationStrategy}'s concurrent-session-ceiling overshoot.
      */
     @Transactional
     public void deleteUsers(List<String> userIds) {
@@ -140,12 +131,12 @@ public class ResetService {
     }
 
     /**
-     * Trims {@link KafkaTopics#ACTIVITY} and {@link KafkaTopics#ACTIVITY_DLT} (both declared
-     * single-partition -- see {@code KafkaConsumerConfig}) to their current end offset. A topic
-     * that does not exist yet ({@link UnknownTopicOrPartitionException}) is treated as already
-     * empty and skipped -- a reset issued before any traffic has ever touched the broker must still
-     * succeed. Any other failure propagates, so a genuine Kafka-side problem surfaces as a failed
-     * {@code resetAll()} call rather than a silently-partial reset.
+     * Trim {@link KafkaTopics#ACTIVITY} and {@link KafkaTopics#ACTIVITY_DLT} (both
+     * single-partition, see {@code KafkaConsumerConfig}) to their current end offset.
+     *
+     * <p>A topic that does not exist yet ({@link UnknownTopicOrPartitionException}) counts as
+     * already empty, so a reset before any traffic still succeeds. Any other failure propagates, so
+     * a Kafka-side problem fails {@code resetAll()} instead of leaving a silently partial reset.
      */
     void truncateActivityTopics() {
         try (AdminClient admin = AdminClient.create(kafkaAdmin.getConfigurationProperties())) {

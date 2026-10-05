@@ -46,23 +46,22 @@ public class TaskService {
     @Autowired private EventIdGenerator eventIdGenerator;
 
     /**
-     * {@code @Transactional} here (rather than relying on the caller, {@link
-     * ColumnService#addTaskByColumnId}, already being {@code @Transactional}) makes the
-     * after-commit {@code TaskCreatedEvent} publish guarantee self-contained:
-     * {@code @TransactionalEventListener} silently skips delivery when no transaction is active, so
-     * a future direct call to this method with no {@code @Transactional} caller would otherwise
-     * drop the event with no error and no log line. {@code REQUIRED} propagation is a no-op inside
-     * an existing transaction, so current callers see no behaviour change.
+     * Create the task at the end of its column and publish {@code TaskCreatedEvent} after commit.
+     *
+     * <p>{@code @Transactional} is declared here, not left to {@link
+     * ColumnService#addTaskByColumnId}, so the after-commit publish does not depend on the caller:
+     * {@code @TransactionalEventListener} silently skips delivery with no active transaction, which
+     * would drop the event with no error and no log line. {@code REQUIRED} propagation is a no-op
+     * inside an existing transaction.
      */
     @Transactional
     public TaskResponseDTO save(SaveTaskRequestDTO dto, ColumnEntity column) {
         var task = taskMapper.fromSaveTaskRequestDTO(dto);
         task.setColumn(column);
 
-        // Supersedes TaskEntity.position's `= 0` field initialiser, which exists only so plan 01
-        // could ship a NOT NULL column safely. The real next-slot position is the current sibling
-        // count in this column — positions are kept contiguous from zero by every mutation in this
-        // class, so "current count" and "next append-at-end index" are the same number.
+        // Positions stay contiguous from zero in every mutation here, so the sibling count is the
+        // next append-at-end index (TaskEntity.position's `= 0` initialiser is a NOT NULL
+        // placeholder).
         task.setPosition(Ints.checkedCast(taskRepository.countByColumnId(column.getId())));
 
         taskRepository.save(task);
@@ -94,7 +93,6 @@ public class TaskService {
         return Ints.checkedCast(taskRepository.countByColumnId(pair.getSecond().getId()));
     }
 
-    // TODO: make a service interface
     public TaskEntity findById(String userId, String taskId) {
         var pair = ownershipVerifierService.verifyOwnershipOfTask(userId, taskId);
 
@@ -102,23 +100,21 @@ public class TaskService {
     }
 
     /**
-     * Explicit version check is required in addition to {@code @Version}: this load-then-save flow
-     * runs entirely within one transaction, so Hibernate's own dirty-checking optimistic lock
-     * (which fires on the UPDATE statement) does not by itself model the "client read at version N,
-     * another client already wrote version N+1, this client's write should be rejected" scenario
-     * across separate HTTP requests. Comparing the caller-supplied {@code dto.getVersion()} against
-     * the just-loaded managed entity's version, before any field is mutated, is what actually
-     * catches a stale read-then-write race and turns it into a rejected request instead of a silent
-     * overwrite.
+     * Update the task if the caller's version matches, rejecting a stale write.
+     *
+     * <p>The explicit version check is required in addition to {@code @Version}: this
+     * load-then-save flow runs inside one transaction, so Hibernate's dirty-check lock (which fires
+     * on the UPDATE) cannot model "client read version N, another client wrote N+1, reject this
+     * write" across separate HTTP requests. Comparing {@code dto.getVersion()} to the just-loaded
+     * entity's version before any mutation turns that race into a rejected request instead of a
+     * silent overwrite.
      */
     @Transactional
     public TaskResponseDTO updateById(String userId, String taskId, UpdateTaskRequestDTO dto) {
         var task = findById(userId, taskId);
 
-        // dto.getVersion() is read ONLY here, for this stale-write precondition check — it is
-        // never assigned onto `task`. The version value that actually gets persisted is generated
-        // entirely by Hibernate's own @Version increment mechanism when the UPDATE statement runs
-        // (forced below via entityManager.flush()), independent of whatever value the client sent.
+        // dto.getVersion() is read only for this precondition and never assigned onto `task`: the
+        // persisted version comes from Hibernate's own @Version increment.
         if (!task.getVersion().equals(dto.getVersion())) {
             throw new OptimisticLockingFailureException(
                     "Task was modified by another request, please refetch.");
@@ -133,14 +129,12 @@ public class TaskService {
 
         taskRepository.save(task);
 
-        // Hibernate only bumps the in-memory @Version field once the UPDATE statement actually
-        // runs, which normally happens at transaction commit, not at save(). Flushing here forces
-        // that UPDATE (and the version increment) to happen before the response DTO is built, so
-        // the caller sees the new version instead of the stale pre-update one (D-01).
+        // Hibernate bumps the in-memory @Version only when the UPDATE runs, normally at commit.
+        // Flush so the response DTO carries the new version, not the stale pre-update one.
         entityManager.flush();
 
-        // Published only after the version guard above has passed, so a rejected update publishes
-        // nothing. columnId derived from the verified task's own column, never a raw path variable
+        // Published only after the version guard has passed, so a rejected update publishes
+        // nothing. columnId comes from the verified task, never a path variable
         // (docs/CODE_STYLE.md rule 2).
         eventPublisher.publishEvent(
                 new TaskUpdatedEvent(
@@ -155,24 +149,25 @@ public class TaskService {
     }
 
     /**
-     * Reuses the exact explicit version-check-before-mutate pattern from {@link #updateById} (see
-     * its Javadoc for why the explicit check is required in addition to {@code @Version}). Also
-     * verifies ownership of the TARGET column (not just the task) via {@link
-     * OwnershipVerifierService#verifyOwnershipOfColumn}, and rejects a move across board boundaries
-     * (MOVE-03) before the version check — a wrong-board target is a request-shape problem
-     * independent of concurrency, so 400 is the more specific signal to return first.
+     * Move the task to a target column and position, applying {@link #updateById}'s explicit
+     * version check before mutating.
      *
-     * <p><b>Renumbering contract (GAP-03/D-04):</b> {@code dto.getTargetPosition()} is nullable —
-     * {@code null} means "append at the end of the target column," preserving the pre-D-04 move
-     * behaviour for clients that never send it. Positions are kept contiguous from zero within
-     * their column at all times; a request for a position beyond the destination's sibling count is
-     * clamped to the end rather than rejected, so the natural drag-to-end gesture always succeeds.
-     * The bulk shifts below run as plain JPQL, which bypasses the persistence context — they
-     * deliberately never touch the moved task's own pre-shift position, so the still-managed {@code
-     * task} entity in this method never goes stale, and shifted siblings do NOT have their
-     * {@code @Version} bumped (bulk JPQL never loads them as managed entities): a client editing a
-     * sibling task should not be 409'd just because someone else reordered a different task in the
-     * same column.
+     * <p>Ownership of the TARGET column is verified too, and a cross-board move is rejected before
+     * the version check: a wrong-board target is a request-shape problem independent of
+     * concurrency, so 400 is the more specific signal.
+     *
+     * <p>Decisions:
+     *
+     * <p><b>Renumbering contract:</b> {@code dto.getTargetPosition()} is nullable; {@code null}
+     * means "append at the end of the target column", preserving the behaviour for clients that
+     * never send it. Positions stay contiguous from zero within a column; a position beyond the
+     * destination's sibling count is clamped to the end rather than rejected, so the natural
+     * drag-to-end gesture always succeeds. The bulk shifts run as plain JPQL, which bypasses the
+     * persistence context: they never touch the moved task's own pre-shift position, so the
+     * still-managed {@code task} never goes stale, and shifted siblings do NOT have their
+     * {@code @Version} bumped (bulk JPQL never loads them as managed entities). A client editing a
+     * sibling task is not 409'd just because someone else reordered a different task in the same
+     * column.
      */
     @Transactional
     public TaskResponseDTO moveToColumn(String userId, String taskId, MoveTaskRequestDTO dto) {
@@ -211,10 +206,11 @@ public class TaskService {
                         : Math.min(requestedPosition, maxValidPosition);
 
         if (sameColumn) {
-            // Same-column reorder: steps 2 and 3 of the plan's cross-column recipe compose into
-            // one signed shift over the range strictly between the old and new position, excluding
-            // the moved task's own oldPosition on both ends so its still-managed row is never
-            // touched by the bulk statement.
+            // A same-column reorder is one signed shift over the positions strictly between
+            // the old and new position.
+            //
+            // It composes the cross-column close-gap and open-slot steps and excludes the moved
+            // task's own oldPosition on both ends, so its managed row is never touched.
             if (effectivePosition < oldPosition) {
                 taskRepository.shiftPositions(
                         targetColumnId, 1, effectivePosition, oldPosition - 1);
@@ -251,10 +247,11 @@ public class TaskService {
     }
 
     /**
-     * The ids below are captured into locals BEFORE the deletes run, on purpose: once {@code
-     * taskRepository.deleteById(...)} executes there is nothing left to derive {@code boardId} from
-     * for the {@code TaskDeletedEvent}, and Phase 3's consumer runs with no {@code SecurityContext}
-     * and cannot look it up itself.
+     * Delete the task and publish {@code TaskDeletedEvent}.
+     *
+     * <p>The ids are captured into locals BEFORE the deletes run: afterwards nothing is left to
+     * derive {@code boardId} from, and the event's consumer runs with no {@code SecurityContext}
+     * and cannot look it up.
      */
     @Transactional
     public void deleteById(String userId, String taskId) {
@@ -279,39 +276,33 @@ public class TaskService {
     }
 
     /**
-     * For callers (e.g. {@link ColumnService#deleteAllByBoardId}) that already verified ownership
-     * of {@code column} — skips re-verifying it and batches the subtask/task deletes instead of
-     * looping one delete per task, so the query count doesn't scale with the number of tasks.
+     * Delete a column's tasks and subtasks in batches, for callers that already verified ownership
+     * of {@code column}, so the query count does not scale with the number of tasks.
      *
-     * <p>The batch deletes below are bulk JPQL statements, which bypass the persistence context —
-     * Hibernate doesn't know the deleted rows are gone, so anything still tracked in this session
-     * (relevant when a caller loops this over many columns/boards in one transaction, e.g. account
-     * deletion) can go stale. Flushing and clearing afterward keeps the session consistent with the
-     * DB for whatever runs next in the same transaction.
+     * <p>The batch deletes are bulk JPQL, which bypasses the persistence context: anything still
+     * tracked in this session (a caller looping over many columns or boards in one transaction,
+     * e.g. account deletion) can go stale, so flushing and clearing afterward keeps it consistent
+     * with the DB.
+     *
+     * <p>Decisions:
      *
      * <p><b>{@code @Version} bypass, by design:</b> {@code taskRepository.deleteAllByIdInBatch} and
-     * {@code SubtaskRepository.deleteAllByTaskIdIn} (invoked via {@link
-     * SubtaskService#deleteAllByTaskIds}) both issue a raw bulk JPQL/SQL {@code DELETE ... WHERE id
-     * IN (...)} statement. Bulk statements never load the target rows as managed entities, so there
-     * is nothing for Hibernate to dirty-check {@code @Version} against — these deletes proceed
-     * unconditionally even if the row's version was concurrently bumped by another transaction a
-     * moment earlier. This is an <b>accepted, delete-wins tradeoff</b>, not an oversight: a delete
-     * racing a version-mismatched update simply discards the update's effect on a row that is being
-     * removed anyway, which is the correct outcome for a delete (there is no "stale delete" to
-     * detect — the row either exists to be deleted or it doesn't). Retrofitting per-row {@code AND
-     * version = ?} clauses onto a multi-row bulk statement doesn't fit its semantics (each row
-     * could have a different expected version) and would reintroduce the per-entity-load N+1 cost
-     * this batch delete exists to avoid — so it is intentionally not done here. Contrast with
-     * {@link ColumnService#deleteAllByBoardId}, whose column-delete step is a <i>derived</i>
-     * (fetch-then- remove-per-entity) delete and therefore DOES honor {@code @Version} — the two
-     * sibling delete paths are deliberately asymmetric.
+     * {@code SubtaskRepository.deleteAllByTaskIdIn} (via {@link SubtaskService#deleteAllByTaskIds})
+     * issue a raw bulk {@code DELETE ... WHERE id IN (...)}, which never loads the rows as managed
+     * entities, so there is nothing to dirty-check {@code @Version} against. The deletes proceed
+     * even if another transaction just bumped a row's version. This is an accepted, delete-wins
+     * tradeoff: a delete racing a version-mismatched update discards the update's effect on a row
+     * being removed anyway, and there is no "stale delete" to detect. Per-row {@code AND version =
+     * ?} clauses do not fit a multi-row bulk statement (each row could expect a different version)
+     * and would reintroduce the per-entity-load N+1 this batch delete avoids. Contrast {@link
+     * ColumnService#deleteAllByBoardId}, whose column-delete step is a <i>derived</i>
+     * (fetch-then-remove) delete and DOES honor {@code @Version}: the two paths are deliberately
+     * asymmetric.
      *
-     * <p><b>No per-task or per-subtask event is published here (fork D-D, resolved D1):</b> this
-     * cascade fires from {@link ColumnService#deleteById} or {@link
-     * ColumnService#deleteAllByBoardId}, whose own {@code ColumnDeletedEvent}/{@code
-     * BoardDeletedEvent} is the event a caller sees. Deliberate — see {@link
-     * ColumnService#deleteAllByBoardId}'s Javadoc for why fanning out per-child events here would
-     * reintroduce the N+1 this batch delete exists to avoid.
+     * <p><b>No per-task or per-subtask event is published:</b> this cascade fires from {@link
+     * ColumnService#deleteById} or {@link ColumnService#deleteAllByBoardId}, whose own {@code
+     * ColumnDeletedEvent}/{@code BoardDeletedEvent} is the event a caller sees. Fanning out
+     * per-child events would reintroduce the N+1 (see {@link ColumnService#deleteAllByBoardId}).
      */
     @Transactional
     void deleteAllByColumn(ColumnEntity column) {

@@ -61,13 +61,14 @@ public class BoardService {
     }
 
     /**
-     * The id below is captured into a local BEFORE the cascade and the delete run, on purpose —
-     * same reason as {@code TaskService#deleteById}'s Javadoc: once {@code
-     * boardRepository.deleteById(...)} executes there is nothing left to derive {@code boardId}
-     * from for the {@code BoardDeletedEvent}. Fires exactly once per directly-requested delete —
-     * cascaded columns/tasks/subtasks underneath publish nothing of their own (fork D-D, resolved
-     * D1); {@link #deleteAllByUserId} therefore emits one {@code BoardDeletedEvent} per board, not
-     * one combined account-deletion event.
+     * Delete the board and cascade to its columns, tasks and subtasks, publishing one {@code
+     * BoardDeletedEvent}.
+     *
+     * <p>The id is captured into a local BEFORE the cascade and the delete run (see {@link
+     * TaskService#deleteById}): afterwards nothing is left to derive {@code boardId} from. The
+     * event fires once per directly-requested delete; cascaded children publish nothing of their
+     * own, so {@link #deleteAllByUserId} emits one event per board, not one combined
+     * account-deletion event.
      */
     @Transactional
     public void deleteById(String userId, String boardId) {
@@ -100,15 +101,15 @@ public class BoardService {
     }
 
     /**
-     * GAP-04's nested read ({@code GET /boards/{boardId}/full}) -- the one deliberate exception to
-     * this codebase's flat-DTO convention, justified in {@code 06-05-PLAN.md}'s {@code
-     * flat_dto_exception_justification} block. Ownership is verified FIRST via {@link #findById},
-     * exactly like every other method in this class, and the fetch-join query below runs against
-     * the <b>verified entity's own id</b> ({@code verifiedBoard.getId()}), never the raw {@code
-     * boardId} path parameter -- a nested response discloses strictly more than any flat one, so
-     * the ownership check matters more here, not less. The fetch join and the mapping both happen
-     * inside this {@code @Transactional} method, so the returned DTO tree is fully materialised
-     * before the transaction ends and no unfetched association is ever touched outside it.
+     * Return the board with its columns, tasks and subtasks nested, for {@code GET
+     * /boards/{boardId}/full}: the one deliberate exception to this codebase's flat-DTO convention.
+     *
+     * <p>Ownership is verified FIRST via {@link #findById}, and the fetch-join query runs against
+     * the <b>verified entity's own id</b>, never the raw {@code boardId} path parameter: a nested
+     * response discloses strictly more than a flat one, so the ownership check matters more here,
+     * not less. The fetch join and the mapping both happen inside this {@code @Transactional}
+     * method, so the DTO tree is fully materialised before the transaction ends and no unfetched
+     * association is touched outside it.
      */
     @Transactional
     public BoardFullResponseDTO findFullById(String userId, String boardId) {
@@ -123,25 +124,21 @@ public class BoardService {
     }
 
     /**
-     * Explicit version check is required in addition to {@code @Version}, for the same reason
-     * {@link ColumnService#updateById} needs one: this load-then-save flow runs entirely within one
-     * transaction, so Hibernate's own dirty-checking optimistic lock (which fires on the UPDATE
-     * statement) does not by itself model a stale-read-then-write race across separate HTTP
-     * requests. Comparing the caller-supplied {@code boardDTO.getVersion()} against the just-loaded
-     * managed entity's version, before any field is mutated -- and before the duplicate-name guard
-     * below, matching {@code ColumnService}'s "compare before any other logic" ordering -- is what
-     * actually catches that race (D-13).
+     * Rename the board if the caller's version matches, rejecting a stale write or a duplicate
+     * name.
+     *
+     * <p>The explicit version check is required in addition to {@code @Version}: this
+     * load-then-save flow runs inside one transaction, so Hibernate's UPDATE-time dirty-check lock
+     * cannot catch a stale read-then-write across separate HTTP requests. It runs before any field
+     * is mutated and before the duplicate-name guard.
      */
     @Transactional
     public BoardResponseDTO updateById(
             String userId, String boardId, UpdateBoardRequestDTO boardDTO) {
         var boardToUpdate = findById(userId, boardId);
 
-        // boardDTO.getVersion() is read ONLY here, for this stale-write precondition check -- it
-        // is never assigned onto `boardToUpdate`. The version value that actually gets persisted
-        // is generated entirely by Hibernate's own @Version increment mechanism when the UPDATE
-        // statement runs (forced below via entityManager.flush()), independent of whatever value
-        // the client sent.
+        // boardDTO.getVersion() is read only for this precondition and never assigned onto
+        // `boardToUpdate`: the persisted version comes from Hibernate's own @Version increment.
         if (!boardToUpdate.getVersion().equals(boardDTO.getVersion())) {
             throw new OptimisticLockingFailureException(
                     "Board was modified by another request, please refetch.");
@@ -160,16 +157,13 @@ public class BoardService {
 
         var savedBoard = boardRepository.save(boardToUpdate);
 
-        // Hibernate only bumps the in-memory @Version field once the UPDATE statement actually
-        // runs, which normally happens at transaction commit, not at save(). Flushing here forces
-        // that UPDATE (and the version increment) to happen before the response DTO is built, so
-        // the caller sees the new version instead of the stale pre-update one -- same reasoning as
-        // ColumnService.updateById.
+        // Hibernate bumps the in-memory @Version only when the UPDATE runs, normally at commit.
+        // Flush so the response DTO carries the new version, not the stale pre-update one.
         entityManager.flush();
 
-        // Published only after both guards above have passed, so a rejected update (stale
-        // version, duplicate name) publishes nothing. Ids derived from the verified entity, never
-        // a raw path variable (docs/CODE_STYLE.md rule 2).
+        // Published only after both guards have passed, so a rejected update (stale version,
+        // duplicate name) publishes nothing. Ids come from the verified entity, never a raw path
+        // variable (docs/CODE_STYLE.md rule 2).
         eventPublisher.publishEvent(
                 new BoardUpdatedEvent(
                         eventIdGenerator.generate(),
@@ -181,38 +175,33 @@ public class BoardService {
     }
 
     /**
-     * {@code @Transactional} here (rather than relying on the caller, {@link
-     * UserService#addBoardByUserId}, already being {@code @Transactional}) makes the after-commit
-     * {@code BoardCreatedEvent} publish guarantee self-contained — see {@link
-     * TaskService#save(com.vrudenko.kanban_board.dto.task_dto.SaveTaskRequestDTO,
-     * com.vrudenko.kanban_board.entity.ColumnEntity)}'s Javadoc for the full reasoning.
+     * Create the board for {@code user} and publish {@code BoardCreatedEvent} after commit.
+     *
+     * <p>{@code @Transactional} is declared here so the after-commit publish does not depend on the
+     * caller; see {@link TaskService#save}.
      */
     @Transactional
     public BoardResponseDTO save(SaveBoardRequestDTO dto, UserEntity user) {
         var board = boardMapper.fromSaveBoardRequestDTO(dto);
 
-        // Compare-before-mutate ordering, matching updateById's "check before any other logic"
-        // precedent above: the uniqueness lookup runs before any field is written onto the
-        // entity, so a rejected create leaves it untouched. Runs only when the DTO supplied an
-        // id -- the generated path pays no extra lookup.
+        // Reject a caller-supplied id that already exists, before any field is written, so a
+        // rejected create leaves the entity untouched. The generated-id path pays no extra lookup.
         //
-        // Check-then-act window is deliberate, not an oversight: two concurrent creates naming
-        // the same id can both pass this lookup, and the loser hits the primary key directly.
-        // That failure surfaces through GlobalExceptionHandler's broader
-        // handleDataIntegrityViolation arm as a 409 carrying DATA_INTEGRITY_VIOLATION instead of
-        // this method's checked DUPLICATE_RESOURCE -- the same relationship the board-name
-        // uniqueness guard in UserService#addBoardByUserId already has with
-        // uk_boards_user_id_name. The database's primary key is the real guarantee; this check
-        // exists only to produce the friendlier, checked envelope for the common non-racing case.
-        //
-        // Decision record: caller-supplied ids must not be extended to columns, tasks or
-        // subtasks. BoardEntity.column, ColumnEntity.task and TaskEntity.subtasks all order by id
-        // ascending (@OrderBy("id")) as a creation-order proxy, and base36 string ordering does
-        // not preserve the numeric ordering that proxy depends on (a shorter string sorts before
-        // a longer one regardless of magnitude). Boards are safe only because no board collection
-        // carries that ordering. Extending this feature to those three resources without first
-        // replacing @OrderBy("id") with an explicit ordering column would silently corrupt their
-        // iteration order.
+        // Decisions:
+        // The check-then-act window is deliberate: two concurrent creates naming the same id can
+        // both pass this lookup, and the loser hits the primary key directly. That surfaces through
+        // GlobalExceptionHandler's handleDataIntegrityViolation arm as a 409
+        // DATA_INTEGRITY_VIOLATION instead of this method's checked DUPLICATE_RESOURCE, the same
+        // relationship the board-name guard in UserService#addBoardByUserId has with
+        // uk_boards_user_id_name. The database's primary key is the real guarantee; this check only
+        // gives the friendlier envelope in the common non-racing case.
+        // Caller-supplied ids must not be extended to columns, tasks or subtasks.
+        // BoardEntity.column, ColumnEntity.task and TaskEntity.subtasks order by id ascending
+        // (@OrderBy("id")) as a creation-order proxy, and base36 string ordering does not preserve
+        // the numeric ordering that proxy depends on (a shorter string sorts before a longer one
+        // regardless of magnitude). Boards are safe only because no board collection carries that
+        // ordering. Extending this without first replacing @OrderBy("id") with an explicit
+        // ordering column would silently corrupt their iteration order.
         if (dto.getId() != null && boardRepository.existsById(dto.getId())) {
             throw AppDuplicateResourceException.withMessage(
                     "Board with id '" + dto.getId() + "' already exists");
@@ -220,18 +209,15 @@ public class BoardService {
 
         board.setUser(user);
 
-        // Truncated to microseconds because the `created_at` column is timestamp(6) -- PostgreSQL
-        // drops anything finer -- and this same in-memory Instant both seeds the response DTO
-        // below and re-emerges verbatim on every later database read; without truncation those two
-        // paths could return different values for the same board.
+        // Truncated to microseconds because `created_at` is timestamp(6) and PostgreSQL drops
+        // anything finer; this same Instant seeds the response DTO and re-emerges on every later
+        // read, so without truncation the two paths could return different values.
         var createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
         board.setCreatedAt(createdAt);
 
-        // Assign the caller-supplied id only when one was sent; a null dto.getId() leaves the
-        // entity's id null, so RandFlakeGenerator still supplies it exactly as it did before this
-        // field existed. Honoured by Hibernate only because both
-        // RandFlakeGenerator#allowAssignedIdentifiers and its 4-arg generate(...) override return
-        // the pre-set value instead of overwriting it.
+        // A null dto.getId() leaves the entity's id null, so RandFlakeGenerator supplies it as it
+        // did before the field existed. A pre-set id is kept only because both
+        // RandFlakeGenerator#allowAssignedIdentifiers and its 4-arg generate(...) honour it.
         if (dto.getId() != null) {
             board.setId(dto.getId());
         }
