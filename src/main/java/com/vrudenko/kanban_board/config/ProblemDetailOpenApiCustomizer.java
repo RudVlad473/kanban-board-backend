@@ -21,26 +21,23 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 
 /**
- * Makes the generated OpenAPI document declare the {@code ProblemDetail} error envelope on every
- * operation (API-01). springdoc's reflection-based generation only documents a controller method's
- * declared return type -- it has no visibility into a {@code @ControllerAdvice} class elsewhere in
- * the application, so without this bean every {@code 400/401/403/404/409/500} this API actually
- * returns is absent from the document. The two producers this class describes are {@link
- * com.vrudenko.kanban_board.handler.GlobalExceptionHandler} (fourteen {@code @ExceptionHandler}
- * arms) and {@link com.vrudenko.kanban_board.security.ProblemDetailAuthenticationEntryPoint} (the
- * one rejection path the handler structurally cannot reach: a genuinely unauthenticated request).
+ * Declare the {@code ProblemDetail} error envelope on every operation of the generated OpenAPI
+ * document; springdoc's return-type reflection cannot see a {@code @ControllerAdvice}.
  *
- * <p>This is deliberately one global customizer bean, not per-endpoint springdoc/swagger
- * annotation. D-08 rejects the per-endpoint mechanism by name, precisely because it has to be
- * remembered on every future controller method -- the failure mode API-01 exists to eliminate. A
- * new controller needs no change here: {@link #customise(OpenAPI)} walks every operation actually
- * present in the live document rather than a checked-in list.
+ * <p>Describes two producers: {@link com.vrudenko.kanban_board.handler.GlobalExceptionHandler} and
+ * {@link com.vrudenko.kanban_board.security.ProblemDetailAuthenticationEntryPoint}, the one
+ * rejection path the handler structurally cannot reach (a genuinely unauthenticated request).
  *
- * <p>The {@code code} property's enum (see {@link #problemDetailSchema()}) is derived from {@link
- * ErrorCode#values()} at document-build time, never hand-listed, so the spec and the enum cannot
- * drift apart. {@link ProblemDetailOpenApiCustomizerTest} is the regression guard proving both the
- * per-operation coverage and the agreement between this declared schema and what the two producers
- * above actually emit on real responses.
+ * <p>Decisions:
+ *
+ * <p>One global customizer bean, not per-endpoint annotations: those must be remembered on every
+ * future controller method, the failure mode this bean exists to remove. {@link
+ * #customise(OpenAPI)} walks every operation in the live document, so a new controller needs no
+ * change.
+ *
+ * <p>The {@code code} enum is derived from {@link ErrorCode#values()} at document-build time, never
+ * hand-listed, so spec and enum cannot drift. {@link ProblemDetailOpenApiCustomizerTest} guards
+ * per-operation coverage and agreement with what the two producers actually emit.
  */
 @Component
 public class ProblemDetailOpenApiCustomizer implements GlobalOpenApiCustomizer {
@@ -50,8 +47,8 @@ public class ProblemDetailOpenApiCustomizer implements GlobalOpenApiCustomizer {
             "#/components/schemas/" + PROBLEM_DETAIL_SCHEMA_NAME;
 
     // Insertion-ordered so a document diff stays stable across rebuilds. Each description names the
-    // concrete ErrorCode members a consumer will actually see on that status, taken from
-    // GlobalExceptionHandler's handler arms and ProblemDetailAuthenticationEntryPoint.
+    // ErrorCode members a consumer sees on that status, per GlobalExceptionHandler's arms and
+    // ProblemDetailAuthenticationEntryPoint.
     private static final Map<String, String> ERROR_RESPONSES = buildErrorResponses();
 
     private static Map<String, String> buildErrorResponses() {
@@ -102,10 +99,9 @@ public class ProblemDetailOpenApiCustomizer implements GlobalOpenApiCustomizer {
                 var responses = operation.getResponses();
                 ERROR_RESPONSES.forEach(
                         (statusCode, description) -> {
-                            // Conditional insert is load-bearing: it leaves springdoc's own
-                            // generated 200/201 intact, and lets a future operation override one of
-                            // these six with something more specific without this bean stamping
-                            // over it.
+                            // Conditional insert keeps springdoc's own 200/201 intact and lets a
+                            // future operation override one of these six without being stamped
+                            // over.
                             if (!responses.containsKey(statusCode)) {
                                 responses.addApiResponse(
                                         statusCode, problemDetailResponse(description));
@@ -116,13 +112,12 @@ public class ProblemDetailOpenApiCustomizer implements GlobalOpenApiCustomizer {
     }
 
     /**
-     * Returns a fresh {@link ApiResponse} instance on every call. The natural alternative -- build
-     * six response objects once and attach the same six instances to all ~24 operations -- makes
-     * the in-memory document a graph with shared mutable nodes: a future customizer that sets a
-     * description on one operation's 404 would silently mutate every operation's 404. This trades
-     * ~140 extra short-lived allocations, built once per document generation, for a document model
-     * with no aliasing hazard. Serialized output is identical either way -- the schema is a $ref in
-     * both cases, so nothing is duplicated on the wire.
+     * Return a fresh {@link ApiResponse} on every call.
+     *
+     * <p>Sharing six instances across ~24 operations would make the document a graph with shared
+     * mutable nodes: a customizer that set a description on one operation's 404 would silently
+     * mutate every 404. That costs ~140 short-lived allocations per document generation; the
+     * serialized output is identical because the schema is a $ref either way.
      */
     private ApiResponse problemDetailResponse(String description) {
         var mediaType =
@@ -135,13 +130,13 @@ public class ProblemDetailOpenApiCustomizer implements GlobalOpenApiCustomizer {
     }
 
     /**
-     * Builds the {@code ProblemDetail} component schema by hand -- never by reflecting over the
-     * {@code ProblemDetail} class. {@code ProblemDetailJacksonMixin} flattens {@code
-     * ProblemDetail.getProperties()} onto the root via {@code @JsonAnyGetter} (pinned by {@code
-     * GlobalExceptionHandlerTest}'s {@code jsonPath("$.properties").doesNotExist()}), so a
-     * reflected schema would document a nested {@code properties} object that never appears on the
-     * wire and would omit {@code code}/{@code errors} entirely -- publishing a confidently wrong
-     * contract, worse than today's absent one.
+     * Build the {@code ProblemDetail} component schema by hand, never by reflecting over the class.
+     *
+     * <p>{@code ProblemDetailJacksonMixin} flattens {@code ProblemDetail.getProperties()} onto the
+     * root via {@code @JsonAnyGetter} (pinned by {@code GlobalExceptionHandlerTest}'s {@code
+     * jsonPath("$.properties").doesNotExist()}), so a reflected schema would document a nested
+     * {@code properties} object that never appears on the wire and omit {@code code}/{@code
+     * errors}: a confidently wrong contract, worse than an absent one.
      */
     private Schema<?> problemDetailSchema() {
         var schema =

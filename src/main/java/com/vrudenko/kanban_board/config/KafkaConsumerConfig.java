@@ -28,16 +28,15 @@ import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.springframework.util.backoff.FixedBackOff;
 
 /**
- * Provisions both {@code activitylog} Kafka topics explicitly (RELY-01, D-07, D-08) and wires the
- * retry-then-dead-letter machinery that isolates a poison message from the rest of the feed.
+ * Provision both {@code activitylog} Kafka topics and wire the retry-then-dead-letter handling that
+ * isolates a poison message from the rest of the feed.
  *
- * <p>A duplicate {@code eventId} never reaches this error handler by design: {@link
+ * <p>A duplicate {@code eventId} never reaches the error handler: {@link
  * com.vrudenko.kanban_board.activitylog.ActivityLogRecorder} completes normally on both its fast
- * path and its constraint backstop, so only a genuine failure (a malformed payload, a down
- * database, a serialisation error) ever propagates out of the listener method and reaches {@link
- * DefaultErrorHandler}. The deserialization-failure path this handler depends on requires the
- * {@code ErrorHandlingDeserializer} property block in {@code application.properties}: without it a
- * malformed payload fails inside the poll loop before this handler ever sees the record.
+ * path and its constraint backstop, so only a genuine failure (malformed payload, down database,
+ * serialisation error) propagates out of the listener. Dead-lettering a deserialization failure
+ * requires the {@code ErrorHandlingDeserializer} block in {@code application.properties}; without
+ * it a malformed payload fails inside the poll loop before this handler sees the record.
  */
 @Configuration
 public class KafkaConsumerConfig implements DisposableBean {
@@ -62,19 +61,20 @@ public class KafkaConsumerConfig implements DisposableBean {
     }
 
     /**
-     * Any {@code @Bean} of type {@code KafkaTemplate} anywhere in the app disables Spring Boot's
-     * autoconfigured {@code KafkaAutoConfiguration.kafkaTemplate()} bean outright — it is guarded
-     * by a bare-type {@code @ConditionalOnMissingBean(KafkaTemplate.class)}, which does not
-     * distinguish between generic parameterisations, so {@link #deadLetterKafkaTemplate} alone was
-     * enough to suppress it. Every unqualified {@code @Autowired KafkaTemplate<String, Object>} in
-     * the app (including {@link KafkaEventPublisher}) then silently resolved to the DLT-flavoured
-     * template instead — which, before this bean existed, built its own producer properties
-     * directly from {@code KafkaProperties} rather than the autoconfigured {@code ProducerFactory},
-     * so it never picked up a {@code KafkaConnectionDetails} override (e.g. Testcontainers'
-     * {@code @ServiceConnection}) the way the real default template does. This bean restores an
-     * explicit, {@code @Primary} default template so unqualified injection sites get the correct
-     * one again; {@link #deadLetterKafkaTemplate} remains reachable only by its bean name /
-     * {@code @Qualifier}.
+     * Declare the {@code @Primary} default template so unqualified injection does not resolve to
+     * the dead-letter template.
+     *
+     * <p>Decisions:
+     *
+     * <p>Any {@code @Bean} of type {@code KafkaTemplate} disables Spring Boot's {@code
+     * KafkaAutoConfiguration.kafkaTemplate()} outright: it is guarded by a bare-type
+     * {@code @ConditionalOnMissingBean(KafkaTemplate.class)}, blind to generic parameterisation. So
+     * {@link #deadLetterKafkaTemplate} alone suppressed it, and every unqualified {@code @Autowired
+     * KafkaTemplate<String, Object>} (including {@link KafkaEventPublisher}) silently resolved to
+     * the DLT-flavoured template, which built its producer properties from {@code KafkaProperties}
+     * and so ignored a {@code KafkaConnectionDetails} override (e.g. Testcontainers'
+     * {@code @ServiceConnection}). {@link #deadLetterKafkaTemplate} stays reachable only by bean
+     * name or {@code @Qualifier}.
      */
     @Bean
     @Primary
@@ -84,40 +84,30 @@ public class KafkaConsumerConfig implements DisposableBean {
     }
 
     /**
-     * A dead-lettered deserialization failure carries the raw {@code byte[]} as its record value.
-     * Routing it through the application's own JSON-valued producer template would base64-encode
-     * those bytes, destroying the one artefact an operator actually needs to inspect — so this
-     * template gets its own byte-preserving delegating serializer instead. Its producer properties
-     * are read from the autoconfigured {@code kafkaProducerFactory} bean (not rebuilt from {@code
-     * KafkaProperties} directly) so this template inherits the same bootstrap servers — including
-     * any {@code KafkaConnectionDetails} override — and timeouts as {@link #kafkaTemplate}, rather
-     * than hard-coding a second, ConnectionDetails-blind copy.
+     * Build a template whose serializer preserves a dead-lettered {@code byte[]} record value,
+     * which the application's JSON-valued template would base64-encode.
      *
-     * <p>{@code delegates} must be a {@link LinkedHashMap}, not a plain {@code HashMap}: {@link
-     * DelegatingByTypeSerializer} constructed with {@code assumeType=true} walks the map's
-     * iteration order and dispatches to the first entry whose key {@code isAssignableFrom} the
-     * value's runtime class. {@code Object.class} is assignable from every type, including {@code
-     * byte[]}, so with a plain {@code HashMap} (whose bucket order is not insertion order) every
-     * dead-lettered {@code byte[]} payload could just as easily match {@code Object.class} first,
-     * silently routing it through {@link JsonSerializer} and base64-encoding the very bytes this
-     * template exists to preserve. This was a genuine production bug, not a test artifact: only
-     * live Testcontainers verification against the real dead-letter path (Plan 02's reliability
-     * suite) surfaced it, since {@code ./gradlew compileJava} and any mocked test cannot observe
-     * {@code HashMap} iteration order. A {@link LinkedHashMap} makes the more-specific {@code
-     * byte[].class} entry always win over the catch-all {@code Object.class} entry, regardless of
-     * hashing.
+     * <p>Producer properties come from the autoconfigured {@code kafkaProducerFactory} bean, so
+     * this template inherits its bootstrap servers (including any {@code KafkaConnectionDetails}
+     * override) and timeouts instead of a ConnectionDetails-blind copy built from {@code
+     * KafkaProperties}.
      *
-     * <p>{@code producerFactory} is intentionally not declared as its own {@code @Bean}: {@code
+     * <p>Decisions:
+     *
+     * <p>{@code delegates} must be a {@link LinkedHashMap}: {@link DelegatingByTypeSerializer} with
+     * {@code assumeType=true} walks iteration order and uses the first entry whose key {@code
+     * isAssignableFrom} the value's class, and {@code Object.class} matches {@code byte[]}. With a
+     * {@code HashMap} a dead-lettered payload could hit {@code Object.class} first, go through
+     * {@link JsonSerializer} and be base64-encoded. This was a production bug, surfaced only by
+     * live Testcontainers verification of the real dead-letter path; {@code HashMap} iteration
+     * order is invisible to {@code compileJava} and to mocked tests.
+     *
+     * <p>The producer factory is deliberately not its own {@code @Bean}: {@code
      * KafkaAutoConfiguration.kafkaProducerFactory()} is guarded by a bare-type
-     * {@code @ConditionalOnMissingBean(ProducerFactory.class)}, so a second {@code @Bean} of that
-     * type anywhere in the app -- regardless of its generic parameterisation -- would silently
-     * suppress the autoconfigured producer factory (and, with it, its {@code
-     * KafkaConnectionDetails} override), exactly the landmine {@link #kafkaTemplate}'s Javadoc
-     * documents for {@code KafkaTemplate} itself. Instead, the reference is kept on this
-     * {@code @Configuration} instance (itself a plain, non-{@code ProducerFactory}-typed bean) and
-     * closed from {@link #destroy()} on context shutdown, so the extra producer this template opens
-     * does not leak its connections and buffers without ever becoming a discoverable {@code
-     * ProducerFactory} bean.
+     * {@code @ConditionalOnMissingBean(ProducerFactory.class)}, so a second {@code ProducerFactory}
+     * bean of any parameterisation would suppress it and its {@code KafkaConnectionDetails}
+     * override. The reference is kept on this {@code @Configuration} and closed from {@link
+     * #destroy()}.
      */
     @Bean
     public KafkaTemplate<String, Object> deadLetterKafkaTemplate(
@@ -135,9 +125,8 @@ public class KafkaConsumerConfig implements DisposableBean {
     }
 
     /**
-     * Closes {@link #deadLetterProducerFactory} on context shutdown. See {@link
-     * #deadLetterKafkaTemplate} for why this producer factory is closed here instead of being
-     * registered as its own {@code @Bean}.
+     * Close the dead-letter producer factory, which is not a bean (see {@link
+     * #deadLetterKafkaTemplate}).
      */
     @Override
     public void destroy() {
@@ -147,25 +136,22 @@ public class KafkaConsumerConfig implements DisposableBean {
     }
 
     /**
-     * Three retries at a ~1s fixed interval (D-04's literal reading of "3 retries") before routing
-     * to {@link KafkaTopics#ACTIVITY_DLT}, pinned to partition 0 since the dead-letter topic has
-     * exactly one partition and inheriting a source partition number the target topic does not have
-     * would be wrong. Every recovery (i.e. every dead-lettering) is logged at error level naming
-     * the source topic, partition, offset and cause, so a draining feed shows up as a log line
-     * instead of silence.
+     * Retry three times at a ~1s fixed interval, then dead-letter to {@link
+     * KafkaTopics#ACTIVITY_DLT}.
      *
-     * <p>{@code @Qualifier("deadLetterKafkaTemplate")} is required on the parameter below, even
-     * though its name already matches the bean name exactly. Spring's autowire-candidate resolution
-     * checks for a {@code @Primary} bean among the candidates for a type <em>before</em> it ever
-     * falls back to matching by parameter name -- with two {@code KafkaTemplate<String, Object>}
-     * beans in this class and {@link #kafkaTemplate} marked {@code @Primary}, a bare, unqualified
-     * parameter here silently resolved to the default JSON-valued template instead of {@link
-     * #deadLetterKafkaTemplate}, regardless of the parameter's name. The dead-lettered {@code
-     * byte[]} payload was then always JSON/base64-encoded by the wrong template, no matter how
-     * correctly {@link #deadLetterKafkaTemplate}'s own delegating serializer was configured. Only
-     * live Testcontainers verification against the real dead-letter path (Plan 02's reliability
-     * suite) could have caught this: {@code ./gradlew compileJava} cannot see which bean an
-     * ambiguous, unqualified autowire point actually resolves to at runtime.
+     * <p>Records are pinned to partition 0: the topic has one partition, so a source partition
+     * number could not exist there. Every dead-lettering is logged at error level with source
+     * topic, partition, offset and cause, so a draining feed is a log line, not silence.
+     *
+     * <p>Decisions:
+     *
+     * <p>{@code @Qualifier("deadLetterKafkaTemplate")} is required even though the parameter name
+     * matches the bean name: Spring looks for a {@code @Primary} candidate <em>before</em> falling
+     * back to parameter-name matching, so with {@link #kafkaTemplate} {@code @Primary} a bare
+     * parameter silently resolved to the default JSON-valued template and always base64-encoded the
+     * dead-lettered {@code byte[]}. Only live Testcontainers verification of the real dead-letter
+     * path caught it; {@code compileJava} cannot see which bean an ambiguous autowire point
+     * resolves to at runtime.
      */
     @Bean
     public DefaultErrorHandler activityErrorHandler(
@@ -181,9 +167,8 @@ public class KafkaConsumerConfig implements DisposableBean {
                     @Override
                     public void failedDelivery(
                             ConsumerRecord<?, ?> record, Exception ex, int deliveryAttempt) {
-                        // DefaultErrorHandler already logs each individual retry attempt at WARN;
-                        // the additional signal this phase requires is on final dead-lettering,
-                        // handled by recovered() below.
+                        // No-op: DefaultErrorHandler already logs each retry at WARN, and
+                        // recovered() covers the final dead-lettering.
                     }
 
                     @Override

@@ -17,16 +17,15 @@ import org.springframework.security.web.session.HttpSessionEventPublisher;
 @RequiredArgsConstructor
 public class BeanConfiguration {
     /**
-     * The BCrypt cost factor accepts an injectable strength so the {@code test} Spring profile can
-     * run cheaper (quick task 260811-ixj) than production. The {@code :10} fallback IS the
-     * production value -- Spring Security's own {@code BCryptPasswordEncoder} default -- so any
-     * deployment that never activates the {@code test} profile (i.e. every real deployment) is
-     * unchanged; only {@code application-test.properties} overrides this key, to 4. {@link
-     * BCryptPasswordEncoder} rejects any value below 4, so this lever cannot be over-pulled by a
-     * later edit. {@link com.vrudenko.kanban_board.security.AuthenticationController}'s
-     * {@code @PostConstruct} equalizer hash (F1 timing-equalization fix) is derived from this bean,
-     * so it automatically tracks whatever strength is configured here -- it is not weakened by a
-     * lower cost factor, only made cheaper to compute.
+     * Build the BCrypt encoder with an injectable strength, so the {@code test} profile can run
+     * cheaper than production.
+     *
+     * <p>The {@code :10} fallback IS the production value (Spring Security's own default), so a
+     * deployment that never activates the {@code test} profile is unchanged. Only {@code
+     * application-test.properties} overrides it, to 4; {@link BCryptPasswordEncoder} rejects
+     * anything below 4. {@link com.vrudenko.kanban_board.security.AuthenticationController}'s
+     * {@code @PostConstruct} equalizer hash derives from this bean, so it tracks the configured
+     * strength: cheaper to compute, not weakened.
      */
     @Bean
     public PasswordEncoder passwordEncoder(@Value("${security.bcrypt.strength:10}") int strength) {

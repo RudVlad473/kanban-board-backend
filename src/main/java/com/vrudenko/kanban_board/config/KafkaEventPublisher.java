@@ -14,27 +14,25 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
- * The only place in {@code src/main} that touches the Kafka client API. Listens for any {@link
- * ActivityEvent} published via {@code ApplicationEventPublisher} while inside a transaction, and
- * sends it to {@link KafkaTopics#ACTIVITY} strictly after that transaction commits — never during
- * it, so a committed mutation's HTTP outcome never depends on Kafka reachability (D-01). A failed
- * send is logged, never silently swallowed (D-02); the mutation itself has already succeeded and
- * returned to the caller by the time this method runs.
+ * Send each {@link ActivityEvent} published inside a transaction to {@link KafkaTopics#ACTIVITY}
+ * strictly after commit.
  *
- * <p>Dispatched via {@code @Async} onto the {@code kafkaPublishExecutor} pool ({@link
- * AsyncConfig}): {@code KafkaTemplate.send()} blocks the calling thread inside {@code
- * KafkaProducer.doSend -> waitOnMetadata} for up to {@code max.block.ms} even before returning its
- * future, so without this the AFTER_COMMIT listener thread — the request thread in production, the
- * fixture-setup thread in tests — would still stall for that bound on every mutation. Running
- * off-thread means neither production requests nor test fixture creation ever wait on Kafka
- * reachability at all.
+ * <p>A committed mutation's HTTP outcome therefore never depends on Kafka reachability. This is the
+ * only place in {@code src/main} that touches the Kafka client API. A failed send is logged, never
+ * swallowed; the mutation has already succeeded and returned by then.
  *
- * <p>Since Phase 4 (Schema Registry), the event is mapped to its Avro {@code SpecificRecord} via
- * {@link ActivityEventAvroMapper} before being sent. No try/catch wraps that mapping or the send:
- * per D-01, a registry-down or schema-rejected failure is the same failure class as a broker-down
- * failure, and Confluent's serializer wraps both kinds of failure in a Kafka {@code
- * SerializationException} that becomes a failed future rather than a synchronous throw — so the
- * existing {@code whenComplete} callback below already catches it with zero new code.
+ * <p>Decisions:
+ *
+ * <p>Dispatch is {@code @Async} onto the {@code kafkaPublishExecutor} pool ({@link AsyncConfig}):
+ * {@code KafkaTemplate.send()} blocks its caller inside {@code KafkaProducer.doSend ->
+ * waitOnMetadata} for up to {@code max.block.ms} before returning its future, so the AFTER_COMMIT
+ * thread (the request thread in production, the fixture-setup thread in tests) stalled for that
+ * bound on every mutation. Without {@code @Async} this was a real 20 to 25 minute full-suite hang.
+ *
+ * <p>No try/catch wraps the Avro mapping ({@link ActivityEventAvroMapper}) or the send: a
+ * registry-down or schema-rejected failure is the same class as a broker-down one, and Confluent's
+ * serializer wraps both in a Kafka {@code SerializationException} that becomes a failed future
+ * rather than a synchronous throw, so the {@code whenComplete} callback already catches it.
  */
 @Component
 public class KafkaEventPublisher {
@@ -43,15 +41,11 @@ public class KafkaEventPublisher {
     @Autowired private KafkaTemplate<String, Object> kafkaTemplate;
     @Autowired private ActivityEventAvroMapper activityEventAvroMapper;
 
-    // @Async fixes a real 20-25min full-suite hang (see class Javadoc): without it this method
-    // blocks its caller inside KafkaTemplate.send() regardless of the bounded producer timeout.
     @Async("kafkaPublishExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onActivityEvent(ActivityEvent event) {
-        // The failure path is already handled inside whenComplete (logged above), and this
-        // listener has nothing further to do with either outcome - so the chained Future
-        // returned by whenComplete() is deliberately unused, not accidentally dropped. Assigning
-        // it to `unused` documents that intent to ErrorProne's FutureReturnValueIgnored check.
+        // The chained future from whenComplete() is deliberately unused; assigning it to `unused`
+        // tells ErrorProne's FutureReturnValueIgnored check that dropping it is intended.
         var unused =
                 kafkaTemplate
                         .send(
