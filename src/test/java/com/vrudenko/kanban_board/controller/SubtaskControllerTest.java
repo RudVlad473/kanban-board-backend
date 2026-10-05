@@ -104,10 +104,6 @@ class SubtaskControllerTest extends AbstractAppTest {
                     .andExpect(status().isOk())
                     .andReturn();
         }
-
-        // Consider adding a test for when the board does not exist,
-        // or when a user tries to delete a board they do not own,
-        // depending on the desired behavior and service implementation.
     }
 
     @Nested

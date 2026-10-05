@@ -23,18 +23,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
 /**
- * Tracer proving GAP-05 end to end: a request travels controller ({@link
- * com.vrudenko.kanban_board.controller.UserController}) to session-resolved identity
- * ({@code @CurrentUserId}) to service ({@link com.vrudenko.kanban_board.service.UserService}) to
- * database and back, over real HTTP. Modeled on {@link
- * com.vrudenko.kanban_board.e2e.subtask.SubtaskLockingTest}.
+ * Tracer for the theme preference: controller, session-resolved identity ({@code @CurrentUserId}),
+ * service and database, round trip over MockMvc.
  *
- * <p>Downgraded to the in-process MockMvc tier (D-03, verdict-table row 15). This class keeps using
- * the real-signin cookie relay ({@link AbstractAppMockMvcTest#signinCookie()}) throughout, never
- * the {@code .with(user())} shortcut: the logout round trip below is the entire proof that the
- * preference lives in the {@code users} table rather than in the session, and the per-user
- * isolation case needs a second, genuinely distinct session for a second, genuinely distinct
- * principal.
+ * <p>Why this is the way it is: it uses the real-signin cookie relay ({@link
+ * AbstractAppMockMvcTest#signinCookie()}), never {@code .with(user())}, because the logout round
+ * trip is the proof the preference lives in the {@code users} table and not the session, and the
+ * per-user isolation case needs a second genuine session.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -68,10 +63,9 @@ public class ThemePersistenceTest extends AbstractAppMockMvcTest {
             // act
             var response = mockMvc.perform(get(THEME_URL)).andReturn().getResponse();
 
-            // assert: ProblemDetailAuthenticationEntryPoint (plan 07.1-03) now produces a real
-            // 401 for a genuinely unauthenticated request (no session cookie at all) -- 403 is
-            // reserved for an authenticated-but-forbidden case (D-04, D-05), which this route
-            // never exercises since it has no ownership dimension.
+            // assert: an unauthenticated request gets 401 from
+            // ProblemDetailAuthenticationEntryPoint;
+            // 403 is for authenticated-but-forbidden, which this route (no ownership) never hits.
             Assertions.assertThat(response.getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
         }
     }
@@ -193,11 +187,11 @@ public class ThemePersistenceTest extends AbstractAppMockMvcTest {
         }
 
         /**
-         * The load-bearing case in this plan: it is the one test that actually distinguishes
-         * server-side persistence (D-10) from a client-side or {@code HttpSession}-scoped
-         * preference. A test that only PUTs then GETs within one session would pass against a
-         * session-scoped implementation too and would prove nothing about the requirement -- the
-         * logout + fresh signin in between is what makes this a real round trip through the {@code
+         * The load-bearing case: the one test that distinguishes server-side persistence from a
+         * client-side or session-scoped preference.
+         *
+         * <p>A PUT then GET within one session would pass against a session-scoped implementation;
+         * the logout and fresh signin in between make this a real round trip through the {@code
          * users} table.
          */
         @Test
@@ -234,12 +228,9 @@ public class ThemePersistenceTest extends AbstractAppMockMvcTest {
             // arrange
             Cookie firstUserCookie = signinCookie();
 
-            // createUser() only exposes an unpredictable, internally-generated password, so a
-            // second, independently sign-in-able user is created with an explicit password here
-            // instead (AbstractAppTest.createUser(String) overload) -- still a real users row,
-            // just not routed through the HTTP signup endpoint. generateValidPassword() (not a
-            // raw dataFactory word) because this password is posted to the real POST /signin
-            // route below, which validates its body as of D-06.
+            // createUser() exposes only an unpredictable password, so create the second user with
+            // an explicit generateValidPassword() (the POST /signin body is validated): still a
+            // real users row.
             var secondUserPassword = generateValidPassword();
             var secondUser = createUser(secondUserPassword);
             var secondUserCookie = signinCookie(secondUser.getEmail(), secondUserPassword);

@@ -190,11 +190,9 @@ public class UserServiceTest extends AbstractAppTest {
             // Act
             userService.updateTheme(userId, dto);
 
-            // Assert: the column holds the enum's STRING form (UserEntity.theme is
-            // @Enumerated(EnumType.STRING)), not an ordinal integer -- a future reordering of
-            // ThemePreference's members would silently corrupt an ordinal-mapped column without
-            // this check, and this is invisible at the HTTP/Jackson layer since Jackson
-            // serializes an enum as its name either way.
+            // assert: the column holds the enum's STRING form (@Enumerated(EnumType.STRING)), not
+            // an ordinal; reordering ThemePreference's members would silently corrupt an ordinal
+            // column, and Jackson serializes an enum as its name either way, so only this sees it.
             var storedTheme =
                     jdbcTemplate.queryForObject(
                             "SELECT theme FROM users WHERE id = ?", String.class, userId);

@@ -14,18 +14,18 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
-// TODO: rewrite these repetative tests using parametrized approach
+/* TODO: .planning/todos/pending/2026-08-10-investigate-refactoring-existing-tests-to-parameterized.md - rewrite these repetitive tests as parameterized tests */
 @SpringBootTest
 public class OwnershipVerifierServiceTest extends AbstractAppTest {
     @Autowired OwnershipVerifierService ownershipVerifierService;
 
-    // Because SubtaskEntity.task, TaskEntity.column, ColumnEntity.board, and BoardEntity.user are
-    // all default-EAGER @ManyToOne (no @Fetch override), Hibernate collapses a fresh
-    // subtaskRepository.findById() into one SQL statement with LEFT JOINs across the whole
-    // ownership chain, and the subsequent per-level findById() calls in this service hit the L1
-    // persistence-context cache instead of issuing new SQL (verified below). So walking the chain
-    // is not actually N+1 for a single ownership check — this test guards against that changing
-    // (e.g. if a `fetch = FetchType.LAZY` override is added later without updating the queries).
+    // Guards that walking the ownership chain is not N+1 for a single check.
+    //
+    // Why this is the way it is: SubtaskEntity.task, TaskEntity.column, ColumnEntity.board and
+    // BoardEntity.user are default-EAGER @ManyToOne, so Hibernate collapses one
+    // subtaskRepository.findById() into a single statement with LEFT JOINs, and the later
+    // per-level findById() calls hit the L1 cache. A `fetch = FetchType.LAZY` override would break
+    // that.
     @Nested
     class QueryCountTest {
         @Test

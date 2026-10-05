@@ -28,11 +28,11 @@ public class TaskServiceTest extends AbstractAppTest {
 
     @Autowired ColumnService columnService;
 
-    // Proves this plan's central design claim (GAP-03): the bulk-shift renumbering mechanism
-    // makes a move's statement count constant, not linear in the number of siblings in the source
-    // column. Uses countQueries, the sanctioned prepared-statement counter (docs/CODE_STYLE.md
-    // rule 4) — the weaker, HQL/JPQL-only counter it deliberately avoids misses findById() lookups
-    // entirely.
+    // Pins that the bulk-shift renumbering makes a move's statement count constant, not linear in
+    // the source column's sibling count.
+    //
+    // Uses countQueries, the sanctioned prepared-statement counter (docs/CODE_STYLE.md rule 4); the
+    // HQL/JPQL-only counter misses findById() lookups.
     @Nested
     class MoveToColumnQueryCountTest {
         @Test

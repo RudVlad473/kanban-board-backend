@@ -30,13 +30,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 /**
- * Tracer proving GAP-04 end to end: one authenticated GET on {@code /boards/{boardId}/full} runs
- * through the controller, {@link com.vrudenko.kanban_board.service.BoardService#findFullById}'s
- * ownership-verified fetch-join query, and the composed {@link
- * com.vrudenko.kanban_board.mapper.BoardFullMapper} chain, returning board, columns, tasks and
- * subtasks four levels deep in a single nested document. Modeled on {@link
- * com.vrudenko.kanban_board.e2e.board.BoardCreationE2ETest}/{@link
- * com.vrudenko.kanban_board.e2e.subtask.SubtaskLockingTest}.
+ * Tracer for {@code GET /boards/{boardId}/full}: one authenticated request returns board, columns,
+ * tasks and subtasks four levels deep through {@code BoardService#findFullById} and the {@code
+ * BoardFullMapper} chain.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -312,11 +308,9 @@ public class BoardFullReadTest extends AbstractAppMockMvcTest {
         }
     }
 
-    // Confirms the nested read is a genuine replacement for the four-round-trip fan-out, not a
-    // lossy summary of it, and that the four flat endpoints are untouched by this plan.
-    // Quick task 260825-h7m: also asserts equivalence at the board level itself (name, version,
-    // createdAt), not only from the columns down -- the board level was the untested gap through
-    // which createdAt reached production missing from this document.
+    // Confirms the nested read replaces the four-round-trip fan-out without loss and leaves the
+    // four flat endpoints untouched. Also asserts board-level fields (name, version, createdAt),
+    // the gap through which createdAt once reached production missing from this document.
     @Nested
     class FlatEquivalence {
         @Test
@@ -465,22 +459,17 @@ public class BoardFullReadTest extends AbstractAppMockMvcTest {
                             flatTasksResponse.getResponse().getContentAsString(),
                             TaskResponseDTO[].class);
 
-            // assert -- same elements as the flat endpoints, order-agnostic. A strict
-            // element-for-element order match against the flat endpoints was tried first and
-            // found genuinely flaky: neither ColumnRepository.findAllByBoardId nor
-            // TaskRepository.findAllByColumnId carries an explicit ORDER BY (verified -- no
-            // ordering feature has landed in this wave), so their row order is whatever
-            // PostgreSQL's query planner happens to produce for that query shape on that run,
-            // observed directly to vary run-to-run for the SAME data. GAP-04's nested query has a
-            // structurally different (multi-level JOIN) shape, so there is no reliable way to make
-            // its natural order coincide with the flat endpoints' incidental order without adding
-            // an explicit ORDER BY to the flat repositories themselves -- out of this plan's scope
-            // (ColumnRepository.java/TaskRepository.java belong to the sibling ordering plan
-            // running in a separate worktree). What IS reliably true, and asserted below: the
-            // nested response carries exactly the same elements as the flat endpoints (nothing
-            // dropped or duplicated by the fetch-join/Set conversion), and the nested arrays have
-            // their own well-defined, deterministic order (id-ascending, via @OrderBy("id") on the
-            // entity collections) rather than HashSet's undefined iteration order.
+            // assert -- same elements as the flat endpoints, order-agnostic.
+            //
+            // Why this is the way it is: a strict element-for-element order match was found flaky.
+            //
+            // Neither ColumnRepository.findAllByBoardId nor TaskRepository.findAllByColumnId has an
+            // explicit ORDER BY, so their row order is whatever PostgreSQL's planner produces,
+            // observed to vary run to run for the same data. The nested query's multi-level JOIN
+            // has a different shape, so its order cannot be made to coincide without an ORDER BY on
+            // the flat repositories. Asserted instead: the nested response has exactly the same
+            // elements (nothing dropped or duplicated by the fetch-join/Set conversion) in a
+            // deterministic id-ascending order (@OrderBy("id") on the entity collections).
             var nestedColumnIds = nestedBody.getColumns().stream().map(c -> c.getId()).toList();
             var flatColumnIds = Arrays.stream(flatColumns).map(ColumnResponseDTO::getId).toList();
             Assertions.assertThat(nestedColumnIds)

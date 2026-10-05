@@ -145,10 +145,6 @@ public class BoardControllerTest extends AbstractAppTest {
                     .andExpect(status().isOk())
                     .andReturn();
         }
-
-        // Consider adding a test for when the board does not exist,
-        // or when a user tries to delete a board they do not own,
-        // depending on the desired behavior and service implementation.
     }
 
     @Nested
@@ -214,7 +210,6 @@ public class BoardControllerTest extends AbstractAppTest {
             var userId = getOwningUser().getId();
             var boardId = mockPopulatedBoard.getId();
             var url = getBoardPrefix() + "/" + boardId;
-            // Assuming blank name is invalid
             var updateDto =
                     UpdateBoardRequestDTO.builder()
                             .name("")
@@ -341,13 +336,10 @@ public class BoardControllerTest extends AbstractAppTest {
                     .andExpect(status().isNotFound());
         }
 
-        // Regression test for 260811-qru finding F-04: SaveColumnRequestDTO.name's @Size
-        // constraint carried the wrong message constant (ValidationConstants.
-        // NAME_LENGTH_VALIDATION_MESSAGE, the board-name-flavored text with board-name
-        // bounds 1-64) instead of COLUMN_NAME_LENGTH_VALIDATION_MESSAGE (column bounds
-        // 3-32) -- confirmed live (unlike the sibling SubtaskTitle mismatch, F-05, this
-        // field is not wrapped in a composed @ReportAsSingleViolation annotation, so the
-        // wrong message text really does reach the client).
+        // Pins that SaveColumnRequestDTO.name's @Size carries the column message, not the board's.
+        //
+        // The board text (bounds 1-64) reached clients because, unlike SubtaskTitle, this field is
+        // not wrapped in a composed @ReportAsSingleViolation. Column bounds are 3-32.
         @Test
         void testWithAuthenticatedUser_shouldReturnColumnSpecificMessage_whenNameIsTooShort()
                 throws Exception {

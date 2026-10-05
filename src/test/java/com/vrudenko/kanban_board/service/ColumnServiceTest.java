@@ -332,9 +332,7 @@ public class ColumnServiceTest extends AbstractAppTest {
 
         /**
          * Proves the cascade ({@code TaskService#deleteAllByColumn}) is a fixed number of bulk
-         * statements regardless of how many tasks live in the column being deleted — the property
-         * batching exists to provide, and nothing before this test exercised it at the
-         * column-delete entry point.
+         * statements regardless of how many tasks the deleted column holds.
          */
         @Test
         void shouldCostSameQueryCount_regardlessOfTaskCountInColumn() {
@@ -399,12 +397,12 @@ public class ColumnServiceTest extends AbstractAppTest {
         }
 
         /**
-         * Proves a column delete actually removes its tasks, using {@code fk_tasks_column} ({@code
-         * V1__init.sql}, no {@code ON DELETE CASCADE}) as the proof mechanism: if {@link
-         * ColumnService#deleteById} left {@code mockPopulatedColumn}'s tasks behind, the column row
-         * could not be deleted at all without violating that foreign key, and this method would
-         * have thrown instead of completing. A clean return is therefore itself the assertion that
-         * the task cascade ran, in addition to the explicit before/after count check below.
+         * Proves a column delete removes its tasks, using {@code fk_tasks_column} ({@code
+         * V1__init.sql}, no {@code ON DELETE CASCADE}) as the mechanism.
+         *
+         * <p>If {@link ColumnService#deleteById} left the tasks behind, deleting the column row
+         * would violate that foreign key and this method would throw, so a clean return is itself
+         * the assertion, besides the explicit before/after count below.
          */
         @Test
         void shouldDeleteAllTasks_whenColumnHasTasks() {

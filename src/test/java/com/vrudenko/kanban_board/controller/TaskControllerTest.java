@@ -83,9 +83,6 @@ class TaskControllerTest extends AbstractAppTest {
 
     @Nested
     class DeleteById {
-        // TODO: add tests for cascade deletion (i.e. when deleting task, all its
-        // subtasks should be
-        // deleted too)
         @Test
         void testWithAuthenticatedUser_shouldDeleteTask_whenBoardExists() throws Exception {
             // Arrange
@@ -103,10 +100,6 @@ class TaskControllerTest extends AbstractAppTest {
                     .andExpect(status().isOk())
                     .andReturn();
         }
-
-        // Consider adding a test for when the board does not exist,
-        // or when a user tries to delete a board they do not own,
-        // depending on the desired behavior and service implementation.
     }
 
     @Nested
@@ -193,9 +186,7 @@ class TaskControllerTest extends AbstractAppTest {
                             .description(updateDto.getDescription())
                             .version(mockPopulatedTask.getVersion() + 1)
                             .position(mockPopulatedTask.getPosition())
-                            .build(); // Columns preservation would need to be checked
-            // differently
-            // or
+                            .build();
 
             // Act
             // Assert
@@ -391,9 +382,8 @@ class TaskControllerTest extends AbstractAppTest {
                     .andReturn();
         }
 
-        // The rest of SaveSubtaskRequestDTO.title's blank-title boundary matrix (null,
-        // whitespace-only, empty-string) lives at the DTO tier in
-        // SubtaskTitleMessageTest.SaveSubtaskRequestDTOTest, per docs/CODE_STYLE.md rule 4.
+        // The rest of the blank-title boundary matrix lives at the DTO tier, in
+        // SubtaskTitleMessageTest (docs/CODE_STYLE.md rule 4).
         @Test
         void testWithAuthenticatedUser_shouldReturnBadRequest_whenJsonBodyIsEmpty()
                 throws Exception {

@@ -35,7 +35,6 @@ public class BoardServiceTest extends AbstractAppTest {
 
     @Autowired TaskService taskService;
 
-    // addColumnByBoardId
     @Test
     void testAddColumnByBoardId_shouldReturnColumn_whenBoardExists() {
         // Arrange
@@ -60,7 +59,6 @@ public class BoardServiceTest extends AbstractAppTest {
                 .isEqualTo(columnName);
     }
 
-    // findAll
     @Test
     void testFindAll_shouldReturnBoards_whenBoardExists() {
         // Act
@@ -70,7 +68,6 @@ public class BoardServiceTest extends AbstractAppTest {
         Assertions.assertThat(boards).isNotEmpty();
     }
 
-    // deleteById
     @Test
     void testDeleteById_shouldDeleteBoard_whenBoardExists() {
         // Arrange
@@ -153,7 +150,6 @@ public class BoardServiceTest extends AbstractAppTest {
         Assertions.assertThat(boardAmountBeforeAttempt).isSameAs(boardAmountAfterAttempt);
     }
 
-    // update by id
     @Test
     void testUpdateById_shouldUpdateBoard_whenBoardExists() {
         // Arrange
@@ -241,7 +237,6 @@ public class BoardServiceTest extends AbstractAppTest {
         Assertions.assertThat(existingBoard).isEqualTo(boardAfterFailedUpdate);
     }
 
-    // findAllByUserId
     @Test
     void testFindAllByUserId_shouldReturnBoard_whenBoardExists() {
         // arrange
@@ -267,7 +262,6 @@ public class BoardServiceTest extends AbstractAppTest {
         Assertions.assertThat(boards).isEmpty();
     }
 
-    // updateById -- per-user name uniqueness guard (D-09, GAP-01)
     @Nested
     class UpdateByIdUniquenessTest {
         @Test
@@ -329,9 +323,8 @@ public class BoardServiceTest extends AbstractAppTest {
         }
     }
 
-    // createdAt (D-13/A1 follow-on: 260825-dfd) -- population, reload stability and
-    // rename-immutability, at the service tier independently of BoardControllerTest's HTTP-boundary
-    // equivalent.
+    // createdAt population, reload stability and rename-immutability, at the service tier
+    // independently of BoardControllerTest's HTTP-boundary equivalent.
     @Nested
     class CreatedAtTest {
         @Test
@@ -402,10 +395,8 @@ public class BoardServiceTest extends AbstractAppTest {
         }
     }
 
-    // findFullById -- GAP-04's nested read must cost a statement count invariant to graph size,
-    // never 1+1+N+M. See docs/CODE_STYLE.md rule 4 for why countQueries()
-    // (getPrepareStatementCount)
-    // is the only sanctioned way to assert this.
+    // findFullById's statement count must be invariant to graph size, never 1+1+N+M; countQueries()
+    // (getPrepareStatementCount) is the sanctioned counter (docs/CODE_STYLE.md rule 4).
     @Nested
     class FindFullByIdQueryCountTest {
         private String buildBoardGraph(
@@ -414,13 +405,9 @@ public class BoardServiceTest extends AbstractAppTest {
                     userService.addBoardByUserId(
                             userId,
                             SaveBoardRequestDTO.builder()
-                                    // RandomStringUtils, not dataFactory.getRandomWord -- this
-                                    // helper is called twice per test for the same user, and
-                                    // DataFactory's fixed, short word list makes a name collision
-                                    // (AppDuplicateResourceException) a real, recurring risk rather
-                                    // than a theoretical one. Matches the pattern already used
-                                    // elsewhere in this file
-                                    // (testUpdateById_shouldUpdateBoard_...).
+                                    // RandomStringUtils, not dataFactory.getRandomWord: this helper
+                                    // runs twice per user and DataFactory's short word list makes a
+                                    // name collision (AppDuplicateResourceException) likely.
                                     .name(
                                             RandomStringUtils.randomAlphabetic(
                                                     ValidationConstants.MAX_BOARD_NAME_LENGTH
@@ -487,13 +474,11 @@ public class BoardServiceTest extends AbstractAppTest {
             var largeGraphQueryCount =
                     countQueries(() -> boardService.findFullById(userId, largeBoardId));
 
-            // assert -- invariance: doubling columns/tasks/subtasks must not change the statement
-            // count. If the fetch join were ever removed and lazy loading took over instead, this
-            // would grow with graph size and fail -- falsified by hand during this plan's task 2:
-            // with the fetch join, both graphs cost 3 statements (2 from ownership verification's
-            // user+board lookups, 1 from the fetch join itself); swapping the fetch join for a
-            // plain findById made the count scale with graph size (9 vs. 23, observed), and the
-            // assertion correctly went red. See 06-05-SUMMARY.md.
+            // assert -- doubling columns/tasks/subtasks must not change the statement count.
+            //
+            // Observed with the fetch join: both graphs cost 3 statements (2 for ownership
+            // verification's user+board lookups, 1 for the fetch join). Swapping in a plain
+            // findById made the count scale with graph size (9 vs. 23) and this assertion went red.
             Assertions.assertThat(largeGraphQueryCount).isEqualTo(smallGraphQueryCount);
         }
     }
