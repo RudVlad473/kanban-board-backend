@@ -1,11 +1,8 @@
 # diagram-key<TAB>scale -- the key is view/subject; scale is the Puppeteer scale factor (`-s`).
 # Scale is uniformly 2: a PNG is a 2x raster, so its natural width is the PNG width divided by 2.
 # scripts/verify-diagrams.py enforces the uniform scale and the width limits that follow from it.
-architecture-activity-feed-read	2
 scenarios/error-status-split	2
 process/activity-pipeline	2
-architecture-mutation-sequence	2
-architecture-signin-scenario	2
 scenarios/signin	2
 scenarios/signup	2
 scenarios/push-to-deploy	2

@@ -379,7 +379,7 @@ nested classes:
 
 [docs/AUTH_FLOWS.md](../AUTH_FLOWS.md) (client view),
 [docs/ARCHITECTURE.md](../ARCHITECTURE.md) "Scenario — signin and session establishment" and its
-[diagram source](../diagrams/architecture-signin-scenario.mmd).
+[diagram source](../diagrams/scenarios/signin.mmd).
 
 ## Timing equalization and the password encoder
 

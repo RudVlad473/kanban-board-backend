@@ -68,15 +68,15 @@ follows the identical path through `AuthenticationController#authenticate` (`sec
 AuthenticationController.java`) after its own persistence step; only signin is drawn here to keep
 the diagram legible.
 
-**Want the client's-eye view instead?** [AUTH_FLOWS.md](AUTH_FLOWS.md) is written for a frontend or
-QA engineer planning E2E tests against this API rather than for a security reviewer — it draws
-`signup` in full via `diagrams/scenarios/signup.mmd` (not just in prose, below), draws this same
-signin flow again from that HTTP-first angle via `diagrams/scenarios/signin.mmd`, and adds the
-session/cookie/CORS facts (the concurrent-session ceiling, the two session lifetimes, `SameSite`,
-credentialed CORS) that will otherwise silently break a Playwright suite.
+![Sequence diagram: signin and session establishment](diagrams/scenarios/signin.png)
+<sub>[diagram source](diagrams/scenarios/signin.mmd)</sub>
 
-![Sequence diagram: signin and session establishment](diagrams/architecture-signin-scenario.png)
-<sub>[diagram source](diagrams/architecture-signin-scenario.mmd)</sub>
+**Want the client's-eye view instead?** [AUTH_FLOWS.md](AUTH_FLOWS.md) is written for a frontend or
+QA engineer planning E2E tests against this API rather than for a security reviewer. It embeds this
+same signin diagram next to the full response table, draws `signup` in full via
+`diagrams/scenarios/signup.mmd`, and adds the session/cookie/CORS facts (the concurrent-session
+ceiling, the two session lifetimes, `SameSite`, credentialed CORS) that will otherwise silently
+break a Playwright suite.
 
 Simplified: the diagram omits `signup`'s extra persistence step
 (`UserService#save`, before this same `authenticate` helper runs) and the auto-rollback
@@ -167,36 +167,16 @@ communication, not deployment topology.* The boxes are threads, topics and table
 publisher is `KafkaEventPublisher` and the consumer thread runs `ActivityLogConsumer` and then
 `ActivityLogRecorder`. Both topics have one partition.
 
-### Sequence view of the same mutation
-
-*Which question this answers: in call-and-response order, what actually calls what for one
-concrete mutation, and exactly where does the HTTP response return relative to the Kafka send?*
-Process View — the flowchart above shows the shape of the pipeline; this sequence diagram grounds
-it in one real endpoint, `PATCH /tasks/{taskId}/move`
-(`controller/TaskMoveController.java` → `service/TaskService.java#moveToColumn`).
-
-![Sequence diagram: TaskMovedEvent mutation, response timing vs. Kafka publish](diagrams/architecture-mutation-sequence.png)
-<sub>[diagram source](diagrams/architecture-mutation-sequence.mmd)</sub>
-
-Simplified: the same-column vs. cross-column position-shifting branch inside `moveToColumn` is
-collapsed into `shiftPositions(...)`; see the method itself for the two-case split. The dead-letter
-retry path (3 retries, then `kanban.activity.dlt`) is omitted here since the flowchart above already
-covers it.
-
-### Process View — reading the activity feed
-
-*Which question this answers: how does a paginated `GET` turn into a total, deterministic order
-instead of merely "roughly newest first"?* Process View —
-`controller/ActivityController.java` → `service/ActivityLogService.java#findAllByBoardId`.
-
-![Sequence diagram: reading the paginated activity feed](diagrams/architecture-activity-feed-read.png)
-<sub>[diagram source](diagrams/architecture-activity-feed-read.mmd)</sub>
-
-Simplified: `Pageable`'s own max-page-size clamp (`spring.data.web.pageable.max-page-size`) is
-enforced by Spring Data before this method runs and is not drawn. The offset-pagination
-snapshot-consistency caveat this method's own Javadoc records (a concurrent insert can still shift
-a later page by one row) is a property of offset pagination in general, not something this
-sequence diagram can show frame-by-frame.
+A concrete case: `PATCH /tasks/{taskId}/move` (`TaskMoveController` → `TaskService#moveToColumn`,
+`@Transactional`). The service compares the client's `version` with the loaded task's before it
+changes anything, so a stale version throws `OptimisticLockingFailureException`, which is answered
+**409** and never publishes an event. On a match it shifts sibling positions, saves, calls
+`entityManager.flush()` so the `UPDATE` and the `@Version` increment happen now and the response
+carries the new version, and only then calls `publishEvent(TaskMovedEvent)`. That call only queues
+the event: the response (200) returns once the transaction commits, and the after-commit listener
+sends to Kafka on its own thread after the client already has it, so a broker outage cannot change
+the HTTP outcome (D-01). The same-column and cross-column position-shifting cases inside
+`moveToColumn` are described on the method itself.
 
 The failure-path decisions are the substance here:
 
@@ -226,6 +206,20 @@ The failure-path decisions are the substance here:
   times at 1s, then dead-letters to `kanban.activity.dlt`. The dead-letter path uses its own
   byte-preserving `KafkaTemplate` — routing a raw `byte[]` payload through the application's normal
   template would base64-encode the exact artifact an operator needs to inspect.
+
+### Process View — reading the activity feed
+
+`GET /boards/{boardId}/activity` (`ActivityController` → `ActivityLogService#findAllByBoardId`) is a
+plain paginated read with no Kafka involved. After the ownership check, the service discards any
+sort the caller sent and imposes `createdAt` descending, then `id` descending. The `id` tiebreak is
+what makes offset pagination a total order rather than merely newest-first: rows that share a
+`createdAt` instant would otherwise have no defined relative position, so a row could appear on two
+pages or on none. The response is the raw Spring Data `Page` shape (`content`, `totalElements`, ...).
+`Pageable`'s own max-page-size clamp (`spring.data.web.pageable.max-page-size`, 100) is enforced by
+Spring Data before the service runs. Offset pagination still cannot give a stable snapshot across
+concurrent writes: a row inserted while a client pages can shift a later page by one, so an item may
+be seen twice or missed — the method's own Javadoc records this, and keyset pagination is the fix
+and is not shipped.
 
 ## Schema governance
 

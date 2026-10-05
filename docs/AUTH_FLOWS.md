@@ -7,12 +7,11 @@ test suite driving them?* It is a **Scenarios (+1)** view per
 [DIAGRAM_CONVENTIONS.md](DIAGRAM_CONVENTIONS.md) -- end-to-end, client-observable, traced at the
 HTTP boundary rather than through Spring's internal machinery.
 
-[docs/ARCHITECTURE.md](ARCHITECTURE.md) already carries a signin sequence diagram, drawn for a
-different reader and a different question: a *security reviewer* asking "is this endpoint safe?",
-naming findings by id (F1, F6, D-08) and drawing the BCrypt timing equalizer and the accepted
-TOCTOU window in detail. That diagram stays the authoritative security-review artifact. This
-document is complementary, not competing -- it draws the same underlying code from the client's
-side of the wire, adds `POST /api/signup` (not drawn there at all), and closes with the
+[docs/ARCHITECTURE.md](ARCHITECTURE.md) embeds the same signin diagram for a different reader and a
+different question: a *security reviewer* asking "is this endpoint safe?", naming findings by id
+(F1, F6, D-08) and covering the BCrypt timing equalizer and the accepted TOCTOU window. This
+document is complementary, not competing -- it reads the same code from the client's side of the
+wire, adds `POST /api/signup` (not drawn in ARCHITECTURE.md at all), and closes with the
 session/cookie/CORS facts a Playwright suite needs and a security review does not.
 
 ## Sign up
