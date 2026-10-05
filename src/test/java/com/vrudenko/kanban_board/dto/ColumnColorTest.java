@@ -10,10 +10,8 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 /**
- * Validator-tier coverage for {@link com.vrudenko.kanban_board.dto.annotation.ColumnColor}, proving
- * the full boundary matrix: null (omitted) passes, a valid {@code #RRGGBB} value in either case
- * passes, and every malformed shape (missing hash, wrong digit count, non-hex letters,
- * trailing/leading whitespace) produces exactly one violation on {@code color}.
+ * Validator-tier boundary matrix for {@link com.vrudenko.kanban_board.dto.annotation.ColumnColor}:
+ * null and valid {@code #RRGGBB} pass, every malformed shape yields one violation on {@code color}.
  */
 public class ColumnColorTest {
     private Validator validator;
@@ -166,8 +164,7 @@ public class ColumnColorTest {
 
         @Test
         void shouldReturnOneViolationOnColor_whenColorHasTrailingNewline() {
-            // arrange: proves @Pattern's Matcher.matches() whole-region semantics -- a trailing
-            // newline after an otherwise-valid value must not slip past (trade-off 3).
+            // arrange: whole-region matches() semantics: a trailing newline must not slip past.
             var dto = SaveColumnRequestDTO.builder().name("Column").color("#ff0000\n").build();
 
             // act
@@ -182,8 +179,7 @@ public class ColumnColorTest {
 
         @Test
         void shouldReturnOneViolationOnColor_whenColorHasSurroundingSpaces() {
-            // arrange: Bean Validation does not trim -- a value with real content padded by
-            // whitespace must still be rejected.
+            // arrange: Bean Validation does not trim, so padded real content must still fail.
             var dto = SaveColumnRequestDTO.builder().name("Column").color(" #ff0000 ").build();
 
             // act

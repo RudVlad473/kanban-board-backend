@@ -14,21 +14,16 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 /**
- * Pins {@link com.vrudenko.kanban_board.dto.annotation.SubtaskTitle}'s constraint behavior on
- * subtask-title DTOs generally — both its length-constraint message and, for {@link
- * SaveSubtaskRequestDTO#getTitle()}, the null/whitespace/empty-string boundary matrix that sits
- * alongside its co-located {@code @NotBlank} (moved down from the controller tier per {@code
- * docs/CODE_STYLE.md} rule 4).
+ * Pins {@link com.vrudenko.kanban_board.dto.annotation.SubtaskTitle}'s length-constraint message
+ * and {@link SaveSubtaskRequestDTO#getTitle()}'s null/whitespace/empty boundary matrix.
  *
- * <p>{@code @ReportAsSingleViolation} on {@code SubtaskTitle} collapses any failure of its
- * composing {@code @Size} constraint onto the composed annotation's own {@code message()} default,
- * {@code "Subtask title cannot be empty"} — which means the inner {@code @Size}'s {@code message}
- * attribute is never rendered to a caller, no matter what it is set to. This test pins that
- * behavior directly (falsified below, not merely asserted) so that the source-legibility fix of
- * correcting the inner message to {@code SUBTASK_TITLE_LENGTH_VALIDATION_MESSAGE} is not mistaken
- * for a behavior change. If {@code @ReportAsSingleViolation} is ever removed from {@code
- * SubtaskTitle}, the inner {@code @Size} message becomes client-visible for the first time, this
- * test goes red, and the constant's correctness starts to matter for real.
+ * <p>Why this is the way it is: {@code @ReportAsSingleViolation} on {@code SubtaskTitle} collapses
+ * any failure of its composing {@code @Size} onto the composed annotation's own {@code message()},
+ * {@code "Subtask title cannot be empty"}, so the inner {@code @Size} message is never rendered to
+ * a caller. This test pins that so correcting the inner message to {@code
+ * SUBTASK_TITLE_LENGTH_VALIDATION_MESSAGE} is not mistaken for a behavior change. Falsifier: if
+ * {@code @ReportAsSingleViolation} is removed, the inner message becomes client-visible and this
+ * test goes red.
  */
 class SubtaskTitleMessageTest {
     private Validator validator;

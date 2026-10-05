@@ -13,9 +13,8 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 /**
- * Validator-tier coverage for {@link OptionalNotBlank}, proving "optional but not blank" on every
- * field it is applied to: a whitespace-only value is rejected with exactly one violation, a null
- * (omitted) value still passes, and a value with real content padded by whitespace still passes.
+ * Validator-tier coverage for {@link OptionalNotBlank}: whitespace-only is rejected with one
+ * violation, null passes, real content padded by whitespace passes.
  */
 public class OptionalNotBlankTest {
     private Validator validator;

@@ -7,12 +7,11 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 /**
- * Pins two properties {@link com.vrudenko.kanban_board.dto.annotation.BoardId}'s {@code @Pattern}
- * depends on but cannot itself express: (1) {@link ValidationConstants#MAX_BOARD_ID_LENGTH} is at
- * least as long as any id {@link RandFlakeGenerator} can ever emit, and (2) every id the generator
- * can ever emit matches {@link ValidationConstants#BOARD_ID_PATTERN}. Without this class the regex
- * and the generator could drift apart silently -- e.g. narrowing the length constant would be a
- * change with no compiler or runtime signal that the app now rejects ids it issues itself.
+ * Pins that {@link ValidationConstants#MAX_BOARD_ID_LENGTH} covers every id {@link
+ * RandFlakeGenerator} can emit and that each matches {@link ValidationConstants#BOARD_ID_PATTERN}.
+ *
+ * <p>Narrowing either side would make the app reject ids it issues itself, with no compiler or
+ * runtime signal.
  */
 public class BoardIdTest {
     @Test

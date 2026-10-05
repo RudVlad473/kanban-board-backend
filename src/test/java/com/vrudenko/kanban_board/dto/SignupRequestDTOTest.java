@@ -18,24 +18,16 @@ public class SignupRequestDTOTest {
     private Validator validator;
     DataFactory dataFactory = new DataFactory();
 
-    // Guaranteed-valid: dataFactory.getEmailAddress()'s word-based local-part branch occasionally
-    // draws a multi-word entry from DataFactory's dirty corpus (e.g. the literal "or maybe") and
-    // concatenates it with a second word with no separator, producing an email with an embedded
-    // space that fails @AppEmail's @Email format check -- see
-    // AbstractAppTest.generateValidEmail()'s Javadoc for the full root-cause writeup. This was the
-    // exact, previously-unresolved cause of this file's own flakiness, documented below until now.
+    // Random letters, not dataFactory.getEmailAddress(): its local part can embed a space and fail
+    // @AppEmail (root cause: AbstractAppTest.generateValidEmail()).
     private final String validEmail =
             RandomStringUtils.randomAlphabetic(10).toLowerCase(Locale.ROOT) + "@example.com";
     private final String validDisplayName = dataFactory.getName();
-    // Locale.ROOT pinned explicitly: under a Turkish default locale, toLowerCase/toUpperCase
-    // apply the dotted/dotless-I mapping, which would corrupt these password fixtures and
-    // produce spurious failures in the "no uppercase char"/"no lowercase char" validation cases
-    // below that depend on them.
+    // Locale.ROOT: a Turkish default locale applies dotted/dotless-I mapping and would corrupt the
+    // "no uppercase"/"no lowercase" cases.
     //
-    // Guaranteed-bounded length: dataFactory.getRandomWord(MIN_PASSWORD_LENGTH) has no upper bound
-    // on the returned word's length, so concatenating it with the two suffixes below risked
-    // occasionally exceeding MAX_PASSWORD_LENGTH and failing @Password's @Size constraint --
-    // RandomStringUtils.randomAlphabetic gives a length guarantee dataFactory's word corpus cannot.
+    // Random letters bound the length: dataFactory.getRandomWord() has no upper bound and could
+    // exceed MAX_PASSWORD_LENGTH.
     private final String validPassword =
             RandomStringUtils.randomAlphabetic(ValidationConstants.MIN_PASSWORD_LENGTH)
                     .toLowerCase(Locale.ROOT)
