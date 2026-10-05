@@ -9,12 +9,11 @@ import org.mapstruct.MappingConstants;
 import org.mapstruct.ReportingPolicy;
 
 /**
- * Middle level of GAP-04's nested board read composition ({@link BoardFullMapper} uses this, this
- * uses {@link TaskFullMapper}). {@code ColumnEntity.task} is a singular field name on a {@code
- * List}-typed field -- verified, existing, and deliberately not renamed (see {@link
- * BoardFullMapper}'s Javadoc for the full reasoning) -- so the explicit {@code @Mapping} below is
- * required: without it MapStruct silently leaves {@code tasks} null under {@code
- * ReportingPolicy.IGNORE}.
+ * Map a column with its tasks, between {@link BoardFullMapper} and {@link TaskFullMapper}.
+ *
+ * <p>{@code ColumnEntity.task} is a singular name on a {@code Set}-typed field, deliberately not
+ * renamed (see {@link BoardFullMapper}), so the explicit {@code @Mapping} is required: without it
+ * MapStruct silently leaves {@code tasks} null under {@code ReportingPolicy.IGNORE}.
  */
 @Mapper(
         componentModel = MappingConstants.ComponentModel.SPRING,

@@ -10,25 +10,25 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface ColumnRepository extends JpaRepository<ColumnEntity, String> {
-    // Explicit @Query (rather than a derived-name rename) so every existing call site keeps
-    // compiling unchanged — see TaskRepository#findAllByColumnId's Javadoc for the full rationale
-    // behind the (position, id) two-key total order.
+    // Explicit @Query, not a derived-name rename, so existing call sites keep compiling. The
+    // (position, id) sort is a total order.
     @Query(
             "select c from ColumnEntity c where c.board.id = :boardId order by c.position asc, c.id asc")
     List<ColumnEntity> findAllByBoardId(@Param("boardId") String boardId);
 
     void deleteAllByBoardId(String boardId);
 
-    // Doubles as the "next position" probe for ColumnService.save, exactly like
-    // TaskRepository#countByColumnId — positions are kept contiguous from zero, so the current
-    // sibling count is the next append-at-end slot.
+    // Doubles as the next-position probe for ColumnService.save: positions are contiguous from
+    // zero, so the sibling count is the next append-at-end slot.
     long countByBoardId(String boardId);
 
     /**
-     * Board-scoped analog of {@link TaskRepository#shiftPositions} — see that method's Javadoc for
-     * the full rationale (single bulk statement, mandatory parent-id predicate, bulk-JPQL
-     * persistence-context bypass). Here the parent scope is {@code board.id} rather than {@code
-     * column.id}.
+     * Shift every column's {@code position} within one board by {@code delta}, for positions in the
+     * inclusive [fromPosition, toPosition] range, as a single bulk statement.
+     *
+     * <p>The {@code board.id} predicate is mandatory, and bulk JPQL bypasses the persistence
+     * context: callers must exclude the position of any column they still hold managed in the same
+     * transaction.
      */
     @Modifying
     @Query(

@@ -13,10 +13,11 @@ import org.springframework.data.repository.query.Param;
 public interface SubtaskRepository extends JpaRepository<SubtaskEntity, String> {
     void deleteAllByTaskId(String taskId);
 
-    // Explicit bulk JPQL delete (rather than the derived deleteAllByTaskIdIn, which Spring Data
-    // JPA implements as fetch-then-remove-per-entity): a single DELETE statement, and it executes
-    // immediately, so it's guaranteed to run before a subsequent bulk delete on `tasks` in the
-    // same transaction — the derived form doesn't flush in time for that, causing an FK violation.
+    // Explicit bulk JPQL delete, not the derived deleteAllByTaskIdIn.
+    //
+    // Spring Data JPA implements the derived form as fetch-then-remove-per-entity. A single DELETE
+    // executes immediately, so it runs before a later bulk delete on `tasks` in the same
+    // transaction; the derived form does not flush in time and causes an FK violation.
     @Modifying
     @Query("delete from SubtaskEntity s where s.task.id in :taskIds")
     void deleteAllByTaskIdIn(@Param("taskIds") Collection<String> taskIds);

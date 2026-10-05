@@ -18,19 +18,16 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-// @EqualsAndHashCode(callSuper = false) -- deliberately disabled (matches TaskEntity's identical
-// precedent), not merely a version-field exclusion. GAP-04's TaskEntity.subtasks
-// (Set<SubtaskEntity>)
-// needs a hashCode/equals that safely and correctly identifies distinct rows during Hibernate's
-// HashSet population. The previous field-based equals/hashCode (title, isCompleted, task) could
-// NOT do that: two sibling subtasks under the same task with the same isCompleted value (the
-// common case -- every subtask defaults to false) collide unless their titles happen to differ,
-// which is not guaranteed. A real collision was observed directly: BoardFullReadTest's
-// flat-vs-nested equivalence test lost a subtask this way before this fix. Falling back to
-// Object's identity-based equals/hashCode is safe here (and matches TaskEntity, which already
-// made this exact choice): Hibernate's session-level identity map guarantees the same Java
-// reference is reused for the same row within one persistence context, so identity equality is
-// correct for Set membership, not merely a workaround.
+// @EqualsAndHashCode(callSuper = false) is deliberately absent: identity-based equals/hashCode.
+//
+// Decisions:
+// TaskEntity.subtasks is a Hibernate-populated Set<SubtaskEntity>, which needs equals/hashCode
+// that identify distinct rows. The old field-based version (title, isCompleted, task) could not:
+// two sibling subtasks under one task with the same isCompleted (every subtask defaults to false)
+// collide unless their titles differ. Observed directly: BoardFullReadTest's flat-vs-nested
+// equivalence test lost a subtask this way. Identity equality is safe because Hibernate's
+// session-level identity map reuses one Java reference per row within a persistence context, so
+// it is correct for Set membership, not a workaround.
 @Table(name = "subtasks")
 public class SubtaskEntity extends BaseEntity implements BaseSubtask {
     @ManyToOne

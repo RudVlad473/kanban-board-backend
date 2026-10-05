@@ -20,25 +20,23 @@ import lombok.*;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-// @EqualsAndHashCode(callSuper = false)
+// No @EqualsAndHashCode on purpose: identity equality, see the comment on `subtasks`.
 @Table(name = "tasks")
 public class TaskEntity extends BaseEntity implements BaseTask {
     @ManyToOne
     @JoinColumn(name = "column_id")
     private ColumnEntity column;
 
-    // Set, not List: see BoardRepository's Javadoc for the full MultipleBagFetchException /
-    // row-multiplication reasoning behind every collection in the GAP-04 fetch-join chain being a
-    // Set. Safe against a HashSet-population hashCode call: both SubtaskEntity (this Set's
-    // element type) and TaskEntity itself now use Object's identity-based equals/hashCode (see
-    // each entity's own comment), never recursing back through a field.
+    // Set, not List: the board->column->task->subtasks fetch-join chain needs it (see
+    // BoardRepository's Javadoc for the MultipleBagFetchException reasoning).
     //
-    // @OrderBy("id") gives this collection's iteration order a defined, deterministic ordering
-    // (plain HashSet has none) that matches SubtaskRepository.findAllByTaskId's effective
-    // no-explicit-ORDER-BY (natural/insertion) order closely enough for GAP-04's nested-vs-flat
-    // equivalence test to hold -- ULIDs are roughly creation-time-ordered, so id-ascending
-    // approximates insertion order without hardcoding a position sequence that belongs to a
-    // separate ordering feature.
+    // Identity-based equals/hashCode keeps HashSet population safe: SubtaskEntity and TaskEntity
+    // both use Object's, so a hash never recurses through a field.
+    //
+    // @OrderBy("id") gives the collection a deterministic order (a plain HashSet has none).
+    // Generated ids are roughly creation-time-ordered, so id-ascending approximates insertion
+    // order closely enough for the nested-vs-flat read equivalence test, without hardcoding a
+    // position sequence that belongs to a separate ordering feature.
     @OneToMany(mappedBy = "task")
     @OrderBy("id")
     private Set<SubtaskEntity> subtasks;

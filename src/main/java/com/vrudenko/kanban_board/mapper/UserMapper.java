@@ -14,16 +14,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 /**
- * If interface or an abstract class is used here, it should provide an implementation, otherwise it
- * won't work
+ * Declare no method that accepts a {@code UserEntity} and returns a request DTO.
  *
- * <p>This mapper intentionally declares no method that accepts a {@code UserEntity} and returns a
- * request DTO. {@code UserEntity} implements Spring Security's {@link
+ * <p>{@code UserEntity} implements Spring Security's {@link
  * org.springframework.security.core.userdetails.UserDetails}, so its {@code getPassword()} returns
- * the stored bcrypt hash, and request DTOs declare a matching {@code password} property. Under this
- * mapper's {@code unmappedTargetPolicy = ReportingPolicy.IGNORE}, MapStruct would silently map the
- * two by name. If such a method is ever genuinely needed, it must carry an explicit {@code
- * &#064;Mapping(target = "password", ignore = true)}. See quick task {@code 260803-ns9}.
+ * the stored bcrypt hash, and request DTOs declare a matching {@code password} property. Under
+ * {@code unmappedTargetPolicy = ReportingPolicy.IGNORE}, MapStruct would silently map the two by
+ * name. If such a method is ever genuinely needed, it must declare an explicit mapping that ignores
+ * the {@code password} target.
  */
 @Mapper(
         componentModel = MappingConstants.ComponentModel.SPRING,

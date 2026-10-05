@@ -10,36 +10,34 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface TaskRepository extends JpaRepository<TaskEntity, String> {
-    // Explicit @Query (rather than a derived findAllByColumnIdOrderByPositionAscIdAsc rename) so
-    // every existing call site keeps compiling unchanged. The (position, id) two-key sort is a
-    // total order, not decoration: ids are creation-ordered ULIDs, so ties on `position` (see
-    // TaskService#moveToColumn's Javadoc on the accepted concurrent-insert race) still resolve
-    // deterministically instead of falling back to undefined database row order. Same precedent as
-    // the activity feed's own two-key (createdAt, id) sort (Phase 3 Plan 03).
+    // Explicit @Query, not a derived-name rename, so existing call sites keep compiling. The
+    // (position, id) sort is a total order: a tie on `position` (possible under a concurrent
+    // insert) resolves deterministically instead of falling back to undefined row order.
     @Query(
             "select t from TaskEntity t where t.column.id = :columnId order by t.position asc, t.id asc")
     List<TaskEntity> findAllByColumnId(@Param("columnId") String columnId);
 
-    // countByColumnId doubles as the "next position" probe for TaskService.save: since positions
-    // are kept contiguous from zero by every mutation in this class, the current sibling count is
-    // exactly the next append-at-end slot. No separate max-position query is needed.
+    // Doubles as the next-position probe for TaskService.save: positions are contiguous from zero,
+    // so the sibling count is the next append-at-end slot.
     long countByColumnId(String columnId);
 
     /**
-     * Bulk-shifts every task's {@code position} within one column by {@code delta}, for positions
-     * in the inclusive [fromPosition, toPosition] range. A single bulk statement rather than a
-     * per-row loop, mirroring {@link SubtaskRepository#deleteAllByTaskIdIn}'s precedent: statement
-     * count stays constant regardless of sibling count, and the concurrency race window is the
-     * width of one statement instead of a read-modify-write loop.
+     * Shift every task's {@code position} within one column by {@code delta}, for positions in the
+     * inclusive [fromPosition, toPosition] range, as a single bulk statement.
      *
-     * <p>The {@code t.column.id} predicate is mandatory — a shift statement without it renumbers
-     * the entire {@code tasks} table across every user's boards, not just the intended column.
+     * <p>Decisions:
      *
-     * <p>Bulk JPQL bypasses the persistence context: Hibernate does not know a row it updates this
-     * way is stale in any already-managed entity. Callers must scope the [fromPosition, toPosition]
-     * range to exclude the position of any entity they still hold managed in the same transaction
-     * (see {@link com.vrudenko.kanban_board.service.TaskService#moveToColumn}, which always
-     * excludes the moved task's own pre-shift position from every range it passes here).
+     * <p>One statement instead of a per-row loop keeps the statement count constant regardless of
+     * sibling count and narrows the concurrency race window to one statement.
+     *
+     * <p>The {@code t.column.id} predicate is mandatory: without it the statement renumbers the
+     * entire {@code tasks} table across every user's boards.
+     *
+     * <p>Bulk JPQL bypasses the persistence context, so Hibernate does not know a row updated this
+     * way is stale in an already-managed entity. Callers must scope the range to exclude the
+     * position of any entity they still hold managed in the same transaction ({@link
+     * com.vrudenko.kanban_board.service.TaskService#moveToColumn} always excludes the moved task's
+     * own pre-shift position).
      */
     @Modifying
     @Query(

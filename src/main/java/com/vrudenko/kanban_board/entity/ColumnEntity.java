@@ -18,8 +18,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-// @Data (bundled equals/hashCode) and @EqualsAndHashCode(callSuper = false) deliberately dropped
-// in favor of plain @Getter/@Setter -- see the field-level comment on `task` below for why.
+// No @Data or @EqualsAndHashCode on purpose: see the comment on `task`.
 @Entity
 @Getter
 @Setter
@@ -34,23 +33,17 @@ public class ColumnEntity extends BaseEntity implements BaseColumn {
     @JoinColumn(name = "board_id")
     private BoardEntity board;
 
-    // Set, not List: GAP-04's BoardRepository.findByIdWithColumnsTasksAndSubtasks chains a
-    // LEFT JOIN FETCH across board->column->task->subtasks in one query. Every collection in that
-    // chain (including BoardEntity.column) is a Set -- see BoardRepository's Javadoc for the full
-    // MultipleBagFetchException / row-multiplication reasoning.
+    // Set, not List: the board->column->task->subtasks fetch-join chain needs it (see
+    // BoardRepository's Javadoc for the MultipleBagFetchException reasoning).
     //
-    // Field-based equals/hashCode (this class's previous @Data/@EqualsAndHashCode) is unsafe for
-    // a Hibernate-populated Set: ColumnEntity became a Set ELEMENT the moment BoardEntity.column
-    // switched to Set<ColumnEntity>, and two sibling columns under the same board can share every
-    // field this class actually varies on (name is the only field with real per-column entropy;
-    // `board` is identical for all siblings by definition, `task` is an empty Set for every column
-    // with no tasks yet, and `position` currently defaults to 0 for every column, since no
-    // renumbering logic exists yet) -- a `name` collision (plausible with a small random-word
-    // pool in tests) would incorrectly merge two distinct columns. Falling back to Object's
-    // identity-based equals/hashCode (this class's now-plain @Getter/@Setter, no
-    // @EqualsAndHashCode) is safe: Hibernate's session-level identity map guarantees the same Java
-    // reference is reused for the same row within one persistence context, matching the fix
-    // already applied to TaskEntity and SubtaskEntity for the identical reason.
+    // Decisions:
+    // Identity-based equals/hashCode, not field-based. ColumnEntity is a Set ELEMENT of
+    // BoardEntity.column, and two sibling columns can share every field the old version varied on:
+    // `name` is the only field with real per-column entropy (`board` is identical for siblings,
+    // `task` is an empty Set for a column with no tasks), so a `name` collision (plausible with a
+    // small random-word pool in tests) would merge two distinct columns. Identity equality is safe:
+    // Hibernate's session-level identity map reuses one Java reference per row within a
+    // persistence context. TaskEntity and SubtaskEntity made the same choice for the same reason.
     @OneToMany(mappedBy = "column")
     @OrderBy("id")
     private Set<TaskEntity> task;

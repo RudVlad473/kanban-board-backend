@@ -32,19 +32,15 @@ public class BoardEntity extends BaseEntity implements BaseBoard {
     @Column(nullable = false)
     private String name;
 
-    // Set, not List, excluded from equals/hashCode, and explicitly ordered -- see
-    // BoardRepository's Javadoc for the full MultipleBagFetchException / row-multiplication
-    // reasoning behind every collection in the GAP-04 fetch-join chain being a Set.
+    // Set, not List, excluded from equals/hashCode, and explicitly ordered (BoardRepository's
+    // Javadoc has the MultipleBagFetchException reasoning).
     //
-    // The @EqualsAndHashCode.Exclude here is a defensive belt-and-suspenders choice, not currently
-    // load-bearing: ColumnEntity now uses identity-based equals/hashCode (its own comment explains
-    // why), so it no longer recurses back into this field the way its previous @Data-generated
-    // hashCode would have. A mutable collection still has no business being part of an entity's
-    // equals/hashCode regardless, so the exclusion stays.
+    // The @EqualsAndHashCode.Exclude is defensive, not currently load-bearing: ColumnEntity uses
+    // identity-based equals/hashCode, so it no longer recurses back into this field. A mutable
+    // collection has no business in an entity's equals/hashCode regardless.
     //
-    // @OrderBy("id") gives this collection's iteration order a defined, deterministic ordering
-    // (plain HashSet has none) -- see TaskEntity.subtasks's comment for why id-ascending is the
-    // right choice here, not a hardcoded position sequence.
+    // @OrderBy("id") gives a deterministic order (a plain HashSet has none); see
+    // TaskEntity.subtasks for why id-ascending is right here.
     @EqualsAndHashCode.Exclude
     @OneToMany(mappedBy = "board")
     @OrderBy("id")
@@ -54,22 +50,19 @@ public class BoardEntity extends BaseEntity implements BaseBoard {
     @JoinColumn(name = "user_id")
     private UserEntity user;
 
-    // Excluded from equals/hashCode for the same reason `column` above is: this field's whole
-    // purpose (D-13) is to change on every update, and this class -- unlike ColumnEntity/
-    // TaskEntity, which dropped field-based equals/hashCode entirely -- still derives them from
-    // its fields via @EqualsAndHashCode. A mutable field driving equals/hashCode is exactly the
-    // hazard those two entities' comments describe: an object already stored in a HashSet/HashMap
-    // keyed by its old hashCode becomes unreachable once the field it was hashed on changes.
+    // Excluded from equals/hashCode: this field changes on every update.
+    //
+    // This class still derives equals/hashCode from its fields, and an object already stored in a
+    // HashSet/HashMap keyed by its old hashCode becomes unreachable once a field it was hashed on
+    // changes.
     @EqualsAndHashCode.Exclude
     @Version
     @Column(nullable = false)
     private Long version;
 
-    // Not @EqualsAndHashCode.Exclude, unlike `version` above: that field mutates on every update,
-    // so a mutable field driving hashCode would strand an object already stored in a hash-based
-    // collection once the field changed. This field is written once in BoardService.save() before
-    // the entity is ever persisted and never mutated afterward, so that hazard does not apply --
-    // deliberately included in equals/hashCode alongside `name` and `user`.
+    // Included in equals/hashCode, unlike `version`: it is written once in BoardService.save()
+    // before the entity is persisted and never mutated, so it cannot strand an object in a
+    // hash-based collection.
     @Column(nullable = false)
     private Instant createdAt;
 }

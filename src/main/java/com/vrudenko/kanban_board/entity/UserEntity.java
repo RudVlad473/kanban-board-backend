@@ -29,7 +29,6 @@ import org.springframework.security.core.userdetails.UserDetails;
 @AllArgsConstructor
 @Table(name = "users")
 public class UserEntity extends BaseEntity implements BaseUser, UserDetails {
-    // Base user
     @Column(nullable = false, unique = true)
     private String email;
 
@@ -38,28 +37,26 @@ public class UserEntity extends BaseEntity implements BaseUser, UserDetails {
     @OneToMany(mappedBy = "user")
     private List<BoardEntity> boards;
 
-    // No authentication method other than password exists today. A null hash here is not a
-    // forward-looking allowance -- it is an account that can never authenticate, because
-    // passwordEncoder.matches(plaintext, null) is permanently false. The database now rejects
-    // that write instead of silently accepting it. See
-    // docs/plans/backend-modernization/04-password-hash-not-null-ddl.sql for the production-side
-    // half of this change; ddl-auto is unset in the real Postgres profile, so this annotation
-    // alone does not touch the production schema.
+    // Reject a null hash at the database: it would be an account that can never authenticate.
+    //
+    // No authentication method other than password exists, and
+    // passwordEncoder.matches(plaintext, null) is permanently false. ddl-auto is unset in the real
+    // Postgres profile, so this annotation alone does not change the production schema; see
+    // docs/plans/backend-modernization/04-password-hash-not-null-ddl.sql for the production half.
     @Column(nullable = false)
     @JsonIgnore
     private String passwordHash;
 
-    // D-12: default LIGHT for every user with no explicit preference. The annotation below is
-    // mandatory here -- UserEntity carries Lombok's @Builder, and a @Builder-annotated class
-    // silently discards a plain field initialiser unless that annotation is present, which would
-    // otherwise write null into this NOT NULL column on every signup (UserService.addUser builds
-    // via UserEntity.builder()).
+    // Default LIGHT for every user with no explicit preference.
+    //
+    // @Builder.Default is mandatory: @Builder silently discards a plain field initialiser without
+    // it, which would write null into this NOT NULL column on every signup (UserService.addUser
+    // builds via UserEntity.builder()).
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default
     private ThemePreference theme = ThemePreference.LIGHT;
 
-    // SECURITY INFO
     @Override
     @JsonIgnore
     public Collection<? extends GrantedAuthority> getAuthorities() {

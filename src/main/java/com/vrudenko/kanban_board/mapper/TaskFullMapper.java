@@ -8,12 +8,11 @@ import org.mapstruct.MappingConstants;
 import org.mapstruct.ReportingPolicy;
 
 /**
- * Leaf level of GAP-04's nested board read composition ({@link BoardFullMapper} uses {@link
- * ColumnFullMapper} uses this). Reuses the existing {@link SubtaskMapper} unchanged via {@code
- * uses} -- {@code TaskEntity.subtasks} is already plural (unlike {@code BoardEntity.column}/{@code
- * ColumnEntity.task}, see {@link ColumnFullMapper}), so no explicit {@code @Mapping} is needed at
- * this level, and a subtask has no children of its own, so no {@code SubtaskFullResponseDTO} is
- * needed either.
+ * Map a task with its subtasks, reusing {@link SubtaskMapper} via {@code uses}.
+ *
+ * <p>{@code TaskEntity.subtasks} is already plural, so unlike the levels above no explicit
+ * {@code @Mapping} is needed, and a subtask has no children, so no {@code SubtaskFullResponseDTO}
+ * is needed either.
  */
 @Mapper(
         componentModel = MappingConstants.ComponentModel.SPRING,
