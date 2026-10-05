@@ -38,8 +38,8 @@ session/cookie/CORS facts a Playwright suite needs and a security review does no
 | `409` | `DATA_INTEGRITY_VIOLATION` | A race between two simultaneous signups for the same address -- the database's unique constraint backstops the checked guard above; the loser of the race lands here instead |
 | `401` | `BAD_CREDENTIALS` | The account was created, but automatically signing it in immediately afterward failed for any reason -- the just-created account is rolled back (deleted) and the client sees a generic credentials failure, not a 403, despite an intermediate access-denied exception internally |
 
-![Sequence diagram: signup and auto-authentication](diagrams/auth-signup-scenario.png)
-<sub>[diagram source](diagrams/auth-signup-scenario.mmd)</sub>
+![Sequence diagram: signup and auto-authentication](diagrams/scenarios/signup.png)
+<sub>[diagram source](diagrams/scenarios/signup.mmd)</sub>
 
 **What this means for a test:** two traps are easy to miss. First, the `201`'s `Location` header
 names `/api/users/me`, and that route has no `GET` handler yet -- a test that follows the
@@ -67,8 +67,8 @@ run must either randomize the email address per run or reset state between runs.
 | `400` | `VALIDATION_FAILED` | Request body fails bean validation -- same shape as signup's `400` |
 | `401` | `BAD_CREDENTIALS` | Unknown email, wrong password, **or** the caller is already at the 2-session ceiling -- all three collapse to the exact same response |
 
-![Sequence diagram: signin and the collapsed 401](diagrams/auth-signin-scenario.png)
-<sub>[diagram source](diagrams/auth-signin-scenario.mmd)</sub>
+![Sequence diagram: signin and the collapsed 401](diagrams/scenarios/signin.png)
+<sub>[diagram source](diagrams/scenarios/signin.mmd)</sub>
 
 **What this means for a test:** a `401` on this route has three distinct causes a client cannot
 tell apart -- an unregistered email, a wrong password, and a rejected third concurrent session for

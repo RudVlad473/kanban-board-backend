@@ -38,8 +38,8 @@ architecture — the discipline this project adopted specifically because a plai
 what" diagram would not have surfaced the CI pipeline building an x86_64-only image for an ARM64
 deploy target (see `DIAGRAM_CONVENTIONS.md`'s own note on this).
 
-![Flowchart: physical/deployment view of the production topology](diagrams/infra-physical-deployment.png)
-<sub>[diagram source](diagrams/infra-physical-deployment.mmd)</sub>
+![Flowchart: physical/deployment view of the production topology](diagrams/physical/production-host.png)
+<sub>[diagram source](diagrams/physical/production-host.mmd)</sub>
 
 **Externally reachable vs. internal-only:** `svclb-traefik-*` is the ONLY Pod in the cluster
 carrying a `hostPort` (80, 443) — confirmed live via `k3s kubectl get pods -A -o json` filtered for
@@ -127,8 +127,8 @@ pull-based GitOps (D-14)** — this workflow ends at image push. There is no `de
 image-automation controllers and `kustomize-controller` own the rest of the path, entirely inside
 the cluster.
 
-![Sequence diagram: delivery path from push to main to a running deploy](diagrams/infra-delivery-scenario.png)
-<sub>[diagram source](diagrams/infra-delivery-scenario.mmd)</sub>
+![Sequence diagram: delivery path from push to main to a running deploy](diagrams/scenarios/push-to-deploy.png)
+<sub>[diagram source](diagrams/scenarios/push-to-deploy.mmd)</sub>
 
 **Externally reachable vs. internal-only (delivery path):** the GitHub Actions runner reaches
 Docker Hub over the public internet to push images, and nothing else in the delivery path touches
@@ -189,8 +189,8 @@ Compose-era `DOCKER-USER` chain this section used to describe governs nothing on
 all (k3s's NodePort/hostPort DNAT never traverses it); `KANBAN-INGRESS` (Plan 13-08) is its
 Docker-independent replacement.
 
-![Flowchart: inbound packet path through the VM's network layers](diagrams/infra-packet-path-scenario.png)
-<sub>[diagram source](diagrams/infra-packet-path-scenario.mmd)</sub>
+![Flowchart: inbound packet path through the VM's network layers](diagrams/scenarios/inbound-packet-path.png)
+<sub>[diagram source](diagrams/scenarios/inbound-packet-path.mmd)</sub>
 
 **Reproduce this yourself on the VM** with the command that proves the ruleset:
 `iptables -t mangle -S PREROUTING` (should show `-A PREROUTING -i eth0 -j KANBAN-INGRESS` as the
@@ -281,7 +281,7 @@ configuration.
 
 **Also on this list, added 2026-09-11 (found while reviewing the README for resume-readiness):**
 `README.md`'s "Production deployment" section embeds its own copy of
-`docs/diagrams/infra-physical-deployment.mmd` plus a paragraph describing the same topology. Found
+`docs/diagrams/physical/production-host.mmd` plus a paragraph describing the same topology. Found
 stale (still describing the pre-Phase-11 Neon topology, no observability stack, no Netcup Cloud
 Firewall boundary) despite this document and the `.mmd` source already having been kept current —
 nothing on this list previously named the README copy, so it drifted silently exactly like the
@@ -290,11 +290,14 @@ document's own Physical/Deployment facts change.
 
 **Also on this list, added 2026-09-05 (quick task 260905-tw0):**
 
-- **`docs/diagrams/*.mmd` and the render pipeline.** Every diagram's PNG is regenerated from its
-  `.mmd` source with `scripts/render-diagrams.sh`, against the digest-pinned renderer named in that
-  script's own header. Goes stale if a `.mmd` is hand-edited without re-running the script (its
-  `--check` mode catches exactly that), or if the pinned digest is bumped without re-verifying it
-  against the registry (see the script's own header for how).
+- **`docs/diagrams/physical/`, `docs/diagrams/scenarios/` and the render pipeline.** Every
+  diagram's PNG is regenerated from its `.mmd` source with `scripts/render-diagrams.sh`, against the
+  digest-pinned renderer named in that script's own header. Goes stale if a `.mmd` is hand-edited
+  without re-running the script (its `--check` mode catches exactly that), or if the pinned digest
+  is bumped without re-verifying it against the registry (see the script's own header for how).
+  `python3 scripts/verify-diagrams.py check` is the inventory guard: it fails when a diagram sits
+  outside its view folder, a PNG lacks its `.mmd` twin or a doc names a diagram path that no longer
+  exists.
 - **The VM's iptables facts — `KANBAN-INGRESS`'s contents (Plan 13-08, superseding
   `DOCKER-USER` as the packet-path Scenario's subject in Plan 13-09).** The source of truth is
   `infra/vm/k3s-host-firewall.sh` (installed on the VM per `infra/vm/README.md`'s convention),

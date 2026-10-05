@@ -70,8 +70,8 @@ the diagram legible.
 
 **Want the client's-eye view instead?** [AUTH_FLOWS.md](AUTH_FLOWS.md) is written for a frontend or
 QA engineer planning E2E tests against this API rather than for a security reviewer — it draws
-`signup` in full via `diagrams/auth-signup-scenario.mmd` (not just in prose, below), draws this same
-signin flow again from that HTTP-first angle via `diagrams/auth-signin-scenario.mmd`, and adds the
+`signup` in full via `diagrams/scenarios/signup.mmd` (not just in prose, below), draws this same
+signin flow again from that HTTP-first angle via `diagrams/scenarios/signin.mmd`, and adds the
 session/cookie/CORS facts (the concurrent-session ceiling, the two session lifetimes, `SameSite`,
 credentialed CORS) that will otherwise silently break a Playwright suite.
 
@@ -100,8 +100,8 @@ filter-chain rejection with no controller/service ever invoked; the other three 
 `@ExceptionHandler` dispatch from `GlobalExceptionHandler` (`handler/GlobalExceptionHandler.java`)
 after a controller or service method actually ran and threw.
 
-![Sequence diagram: how a rejected request differs across 401/403/400/409](diagrams/architecture-error-response-split.png)
-<sub>[diagram source](diagrams/architecture-error-response-split.mmd)</sub>
+![Sequence diagram: how a rejected request differs across 401/403/400/409](diagrams/scenarios/error-status-split.png)
+<sub>[diagram source](diagrams/scenarios/error-status-split.mmd)</sub>
 
 Simplified: the four `rect` blocks are drawn as one diagram for side-by-side comparison, not as one
 literal request — each block starts its own independent request. `AuthorizationFilter` and

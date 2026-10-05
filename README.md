@@ -196,7 +196,7 @@ flowchart TB
     flux -- "reconcile Kustomizations,<br/>HelmReleases into k3s" --> k3s_box
 ```
 
-<sub>Source: [docs/diagrams/infra-physical-deployment.mmd](docs/diagrams/infra-physical-deployment.mmd)
+<sub>Source: [docs/diagrams/physical/production-host.mmd](docs/diagrams/physical/production-host.mmd)
 — the Physical/Deployment view per [docs/DIAGRAM_CONVENTIONS.md](docs/DIAGRAM_CONVENTIONS.md). This
 is a simplified rendering of that file for README readability; the full diagram (Docker Hub, GitHub
 Actions, Flux's GitOps loop in full) lives at the source path, and if the two ever disagree, the
@@ -268,7 +268,7 @@ Full delivery-path detail, including the exact mechanism for the image-tag bump 
 independent per-environment reconciliation (D-16), is in
 [docs/INFRA_ARCHITECTURE.md](docs/INFRA_ARCHITECTURE.md); the same path is drawn as a sequence
 diagram at
-[docs/diagrams/infra-delivery-scenario.mmd](docs/diagrams/infra-delivery-scenario.mmd).
+[docs/diagrams/scenarios/push-to-deploy.mmd](docs/diagrams/scenarios/push-to-deploy.mmd).
 
 ## Quality & security gates
 
@@ -302,19 +302,20 @@ history behind the NVD API key preflight check.
 ## Diagrams
 
 One diagram is embedded above; the rest live under
-[docs/diagrams/](docs/diagrams/) as Mermaid sources, each rendered inline where it's discussed in
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) or [docs/AUTH_FLOWS.md](docs/AUTH_FLOWS.md):
+[docs/diagrams/](docs/diagrams/) as Mermaid sources with rendered PNGs, one folder per Kruchten 4+1
+view (see [docs/DIAGRAM_CONVENTIONS.md](docs/DIAGRAM_CONVENTIONS.md)). Each is rendered where it is
+discussed in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/AUTH_FLOWS.md](docs/AUTH_FLOWS.md)
+or [docs/INFRA_ARCHITECTURE.md](docs/INFRA_ARCHITECTURE.md):
 
-| Diagram                                                 | Answers                                                                                                            |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `infra-physical-deployment.mmd`                         | What runs where, on what hardware — embedded above                                                                 |
-| `infra-delivery-scenario.mmd`                           | How a push to `master` becomes a running deploy, job by job                                                        |
-| `architecture-signin-scenario.mmd`                      | What happens between a `POST` of credentials and a session cookie landing in Postgres                              |
-| `architecture-error-response-split.mmd`                 | Which layer rejects a request for each of 401/403/400/409, and whether it ever reaches a controller                |
-| `process/activity-pipeline.mmd`                         | The path of a mutation through the activity-log pipeline (process view)                                            |
-| `architecture-mutation-sequence.mmd`                    | The same pipeline grounded in one real endpoint, response timing vs. the Kafka send                                |
-| `architecture-activity-feed-read.mmd`                   | How a paginated `GET` becomes a total, deterministic order                                                         |
-| `auth-signin-scenario.mmd` / `auth-signup-scenario.mmd` | The signin/signup flows drawn from an HTTP-first, frontend/QA angle — see [docs/AUTH_FLOWS.md](docs/AUTH_FLOWS.md) |
+| View     | Diagram                                                                         | Answers                                                                                             |
+| -------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Physical | [`physical/production-host`](docs/diagrams/physical/production-host.mmd)        | What runs where, on what hardware (embedded above)                                                  |
+| Process  | [`process/activity-pipeline`](docs/diagrams/process/activity-pipeline.mmd)      | The path of a mutation through the activity-log pipeline, thread by thread                          |
+| Scenario | [`scenarios/signin`](docs/diagrams/scenarios/signin.mmd)                        | What happens between a `POST` of credentials and a session cookie landing in Postgres               |
+| Scenario | [`scenarios/signup`](docs/diagrams/scenarios/signup.mmd)                        | Signup, its auto-authentication and the rollback when that authentication fails                     |
+| Scenario | [`scenarios/error-status-split`](docs/diagrams/scenarios/error-status-split.mmd) | Which layer rejects a request for each of 401/403/400/409, and whether it ever reaches a controller |
+| Scenario | [`scenarios/push-to-deploy`](docs/diagrams/scenarios/push-to-deploy.mmd)        | How a push to `main` becomes a running deploy, job by job                                           |
+| Scenario | [`scenarios/inbound-packet-path`](docs/diagrams/scenarios/inbound-packet-path.mmd) | The path of one inbound packet through the VM's network layers                                   |
 
 ## Project status
 
