@@ -41,8 +41,7 @@ spec:
       configMap:
         create: true
         content: |
-          // Discover every pod across the cluster, then keep only namespace/pod/container/app
-          // labels -- the Kubernetes-label shape the rewritten dashboards (Task 3) query against.
+          // Discover every pod, then keep only namespace/pod/container/app labels, the shape the dashboards query.
           discovery.kubernetes "pods" {
             role = "pod"
           }
@@ -68,9 +67,8 @@ spec:
             }
           }
 
-          // Tails container logs through the Kubernetes API (kubelet log endpoint) -- no
-          // docker.sock, no hostPath /var/log mount. This is the mechanism that makes this
-          // task's mounts.varlog/dockercontainers: false above safe rather than a coverage gap.
+          // Tail container logs through the Kubernetes API (kubelet log endpoint): no docker.sock, no hostPath
+          // /var/log mount, which is what makes mounts.varlog/dockercontainers: false above safe, not a coverage gap.
           loki.source.kubernetes "pods" {
             targets    = discovery.relabel.pod_logs.output
             forward_to = [loki.write.default.receiver]
