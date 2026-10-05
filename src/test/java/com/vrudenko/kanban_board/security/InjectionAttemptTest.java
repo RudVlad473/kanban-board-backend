@@ -40,35 +40,27 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * D-16/D-17/D-18: adversarial payload coverage proving the guarantees this codebase's JPA/Hibernate
- * parameter binding and Jakarta Validation boundaries are believed to hold, rather than merely
- * assumed to hold. Structured as one {@code @Nested} group per D-16 payload category: {@link
- * SqlInjection}, {@link StoredXss}, {@link OversizedBoundary}, {@link MalformedPathVariable}.
+ * Adversarial payload coverage for parameter binding and validation boundaries.
  *
- * <p>Runs through real {@link MockMvc} into the real Testcontainers-backed PostgreSQL instance
- * ({@code docs/CODE_STYLE.md} rule 4) -- a mocked repository would prove nothing about parameter
- * binding, which is the entire property under test here. Authenticates via {@link
- * AbstractAppMockMvcTest#signinCookie()}, calling it once per test and replaying the returned
- * cookie on every subsequent request in that method, rather than the {@code .with(user(userId))}
- * shortcut {@code controller/*ControllerTest} classes use: several cases here make three or more
- * authenticated requests per test method, and {@code .with(user(userId))} establishes a brand-new
- * HTTP session on every call (via {@code HttpSessionSecurityContextRepository}) -- which trips
- * {@code SecurityConfiguration}'s own {@code MAX_CONCURRENT_SESSIONS = 2} ceiling on the third call
- * for the same principal, since {@code SessionManagementFilter} treats each of those as a fresh
- * login -- verified empirically by quick task 260813-m9x, which found the filter holds its own
- * DSL-composed, in-memory-registry-backed {@code SessionAuthenticationStrategy}, a different
- * instance from the {@code sessionAuthenticationStrategy} bean the real signin path invokes
- * explicitly (see {@code SecurityConfiguration}'s corrected {@code sessionManagement} comment). A
- * real signin only establishes one session, so replaying its cookie never hits that ceiling -- this
- * is a genuine, non-obvious interaction discovered while writing this class (invisible in
- * production, where the one real signin path always pre-establishes its session before the security
- * context is ever saved), recorded in this plan's SUMMARY rather than fixed, since nothing in
- * {@code src/main} is wrong.
+ * <p>One nested group per category: {@link SqlInjection}, {@link StoredXss}, {@link
+ * OversizedBoundary}, {@link MalformedPathVariable}.
  *
- * <p><b>Prohibition, restated from the plan:</b> if any case in this class fails, the correct
- * response is to investigate the binding assumption, never to add input sanitization/escaping to
- * production code. There is no raw or concatenated SQL anywhere in {@code src/main}; this class
- * exists to prove that stays true, not to introduce a second layer of defence.
+ * <p>Runs through real {@link MockMvc} into the Testcontainers-backed PostgreSQL ({@code
+ * docs/CODE_STYLE.md} rule 4): a mocked repository would prove nothing about parameter binding.
+ *
+ * <p>Why this is the way it is: it authenticates through {@link
+ * AbstractAppMockMvcTest#signinCookie()} once per test and replays the cookie, not through {@code
+ * .with(user(userId))}. That shortcut establishes a new HTTP session on every call, which trips
+ * {@code MAX_CONCURRENT_SESSIONS = 2} on the third call for one principal, because {@code
+ * SessionManagementFilter} holds its own DSL-composed, in-memory-registry-backed {@code
+ * SessionAuthenticationStrategy}, a different instance from the {@code
+ * sessionAuthenticationStrategy} bean the real signin path invokes. A real signin establishes one
+ * session, so replaying its cookie never hits the ceiling; the interaction is invisible in
+ * production, where signin pre-establishes its session before the security context is saved.
+ *
+ * <p>Prohibition: if any case fails, investigate the binding assumption, never add input
+ * sanitization to production code. There is no raw or concatenated SQL in {@code src/main}; this
+ * class exists to prove that stays true.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -91,21 +83,18 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
     private static final String BOARD_URL = ApiPaths.BOARDS + ApiPaths.BOARD_ID;
     private static final String BOARD_FULL_URL = BOARD_URL + ApiPaths.FULL;
 
-    // -- SQL-meta-character payloads (D-16, D-18). None of these fit BoardName's `@Pattern`
-    // (letters/digits/spaces only, see SqlInjection's Board name cases below), so the full
-    // round-trip proof runs against Column/Task/Subtask free-text fields instead -- Board name gets
-    // its own dedicated rejection test proving the character whitelist blocks these cleanly.
+    // SQL-meta-character payloads. None fit BoardName's `@Pattern` (letters/digits/spaces only), so
+    // the full round-trip proof runs against Column/Task/Subtask free-text fields, and Board name
+    // gets its own rejection test.
     private static final String SQL_STATEMENT_TERMINATOR_PAYLOAD = "test'; DROP TABLE columns; --";
     private static final String SQL_COMMENT_TAUTOLOGY_PAYLOAD = "x' OR '1'='1' --";
     private static final String SQL_TABLE_DROP_PAYLOAD = "Robert'); DROP TABLE students;--";
 
-    // D-16's XSS/stored-script group: proves the payload round-trips verbatim, never that it is
-    // sanitized. See StoredXss's class Javadoc for the explicit scope statement.
+    // Stored-script payload: proves it round-trips verbatim, never that it is sanitized.
     private static final String XSS_SCRIPT_PAYLOAD = "<script>alert('xss')</script>";
 
-    // quick task 260904-obv (X-1): color's rejection is the deliberate counterpoint to the group's
-    // D-16 verbatim-round-trip decision -- these two payloads must be REJECTED (400), never stored,
-    // because color's format is closed, not because a sanitization policy was introduced.
+    // color's rejection is the counterpoint to the verbatim round-trip decision: these payloads are
+    // rejected (400), never stored, because color's format is closed, not because of sanitization.
     private static final String XSS_ATTRIBUTE_BREAKOUT_PAYLOAD = "\" onload=\"alert(1)";
 
     private ColumnResponseDTO createColumn(Cookie cookie, String boardId, String name)
@@ -172,15 +161,11 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
     }
 
     /**
-     * {@code TaskController.addSubtaskByTaskId} binds its DTO without {@code @RequestBody} (filed:
-     * {@code 2026-08-09-fix-subtask-creation-dto-missing-requestbody-binds-as-mode.md}), so a
-     * JSON-bodied POST to the subtask-creation route does not populate {@code title} the way every
-     * sibling creation endpoint does. Rather than work around or fix that separately-tracked defect
-     * here, this class proves the subtask round-trip through {@code PUT .../subtasks/{subtaskId}}
-     * (which DOES carry {@code @RequestBody}) against a subtask created through the service layer
-     * via {@link #createSubtask()} -- the persistence/binding guarantee under test is identical
-     * either way, since both routes ultimately flow through the same {@code
-     * SubtaskRepository.save}.
+     * Round-trips a subtask title through {@code PUT .../subtasks/{subtaskId}} against a subtask
+     * created through the service layer via {@link #createSubtask()}.
+     *
+     * <p>Both this route and the creation route flow through {@code SubtaskRepository.save}, so the
+     * persistence/binding guarantee under test is the same either way.
      */
     private SubtaskResponseDTO updateSubtaskTitle(
             Cookie cookie,
@@ -224,12 +209,12 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
     class SqlInjection {
 
         /**
-         * D-18's full four-step proof, run against Column name -- the least-restricted free-text
-         * field available (no {@code @Pattern}, unlike Board name). (1) submit the payload, (2)
-         * read the created resource back and assert byte-for-byte equality, (3) assert the sibling
-         * fixture columns from {@code setup()} still exist, (4) perform one further normal
-         * create-and-read against the same table, proving the table itself -- not merely this one
-         * row -- survived.
+         * The full four-step proof against Column name, the least-restricted free-text field (no
+         * {@code @Pattern}, unlike Board name).
+         *
+         * <p>(1) submit the payload, (2) read the created resource back byte-for-byte, (3) assert
+         * the sibling fixture columns from {@code setup()} still exist, (4) perform a further
+         * normal create-and-read, proving the table itself survived, not merely this row.
          */
         @Test
         void
@@ -317,8 +302,7 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
         @Test
         void shouldRoundTripAsInertData_whenSubtaskTitleIsStatementTerminatingPayload()
                 throws Exception {
-            // arrange: created through the service layer (createSubtask(), AbstractAppTest) so this
-            // case sidesteps the separately-tracked addSubtaskByTaskId @RequestBody defect entirely
+            // arrange: the subtask is created through the service layer via createSubtask()
             var cookie = signinCookie();
             var boardId = mockPopulatedBoard.getId();
             var columnId = mockPopulatedColumn.getId();
@@ -347,11 +331,8 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
         }
 
         /**
-         * Board name's own {@code @Pattern} (letters, digits, spaces only) rejects every classic
-         * SQL-meta-character payload before it ever reaches JPA -- a defence-in-depth property
-         * discovered while writing this class, not something introduced by it. This proves the
-         * rejection is clean (400, never 500), matching D-16's "malformed input degrades cleanly"
-         * guarantee for this field.
+         * Board name's {@code @Pattern} (letters, digits, spaces only) rejects every classic
+         * SQL-meta-character payload before JPA, with a clean 400, never a 500.
          */
         @Test
         void shouldReturnCleanValidationError_whenBoardNameIsStatementTerminatingPayload()
@@ -375,9 +356,9 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
         }
 
         /**
-         * A punctuation-free, SQL-keyword-bearing board name (satisfies {@code @BoardName}'s
-         * whitelist) still round-trips as inert literal text -- proving the parameter-binding
-         * guarantee holds for Board name too, independent of the whitelist above.
+         * A punctuation-free, SQL-keyword-bearing board name that satisfies {@code @BoardName}'s
+         * whitelist still round-trips as inert text, so parameter binding holds independently of
+         * the whitelist.
          */
         @Test
         void shouldRoundTripAsInertData_whenBoardNameContainsSqlKeywordsWithoutMetaCharacters()
@@ -425,12 +406,12 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
     @Nested
     class StoredXss {
 
-        // D-16: this group's claim is only that a stored script/HTML payload round-trips verbatim
-        // -- nothing server-side chokes on it, alters it, or executes it. Sanitizing for safe HTML
-        // rendering is explicitly out of scope by decision: this is a JSON API, and escaping for
-        // display is the consuming frontend's responsibility, not this backend's. No test in this
-        // group asserts the payload is escaped/stripped -- only that it is preserved and handled
-        // cleanly.
+        // This group claims only that a stored script/HTML payload round-trips verbatim: nothing
+        // server-side chokes on, alters or executes it.
+        //
+        // Sanitizing for safe HTML rendering is out of scope by decision: this is a JSON API, and
+        // escaping for display is the consuming frontend's responsibility. No test here asserts
+        // the payload is escaped or stripped.
 
         @Test
         void shouldRoundTripVerbatim_whenColumnNameIsScriptPayload() throws Exception {
@@ -493,9 +474,8 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
         }
 
         /**
-         * Board name's {@code @Pattern} whitelist blocks {@code <}/{@code >} the same way it blocks
-         * SQL meta-characters -- proven here for symmetry with {@code SqlInjection}'s equivalent
-         * Board name case, and to confirm the rejection is clean (400), never a 500.
+         * Board name's {@code @Pattern} whitelist blocks {@code <}/{@code >} as it blocks SQL
+         * meta-characters: a clean 400, never a 500.
          */
         @Test
         void shouldReturnCleanValidationError_whenBoardNameIsScriptPayload() throws Exception {
@@ -518,14 +498,13 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
         }
 
         /**
-         * D-16's counterpoint case (X-1): unlike every other free-text field in this group, {@code
-         * color} has a genuine closed format ({@code #RRGGBB}), so a script/HTML payload is
-         * rejected at the DTO boundary rather than round-tripped verbatim. The rejection is proven
-         * on STATUS and on absence from persistence -- never on absence from the response body,
-         * since an unrecognized JSON key is silently dropped by Jackson's default configuration and
-         * would return 201 even if {@code color} did not exist at all; asserting only "the payload
-         * is not reflected in the response" would pass against that codebase too, which is why this
-         * proof anchors on the 400 field-error envelope and a fresh GET.
+         * {@code color} has a closed format ({@code #RRGGBB}), so a script/HTML payload is rejected
+         * at the DTO boundary instead of round-tripped verbatim.
+         *
+         * <p>Rejection is proven on status and on absence from persistence, never on absence from
+         * the response body: Jackson silently drops an unrecognized JSON key, so a body-only check
+         * would pass even if {@code color} did not exist. This anchors on the 400 field-error
+         * envelope and a fresh GET.
          */
         @ParameterizedTest
         @ValueSource(strings = {XSS_SCRIPT_PAYLOAD, XSS_ATTRIBUTE_BREAKOUT_PAYLOAD})
@@ -553,10 +532,8 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
             Assertions.assertThat(result.getResponse().getStatus())
                     .isEqualTo(HttpStatus.BAD_REQUEST.value());
 
-            // assert: no column was created at all -- the exact set of column ids is unchanged,
-            // which is a stronger proof than checking the payload's absence from each column's
-            // color (a 400 rejects the whole create, so no column carrying this payload as its
-            // color could exist either way)
+            // assert: no column was created (the set of column ids is unchanged), which is stronger
+            // than checking the payload's absence from each column's color
             var afterAttempt = listColumns(cookie, boardId);
             Assertions.assertThat(afterAttempt.stream().map(ColumnResponseDTO::getId).toList())
                     .containsExactlyInAnyOrderElementsOf(priorColumnIds);
@@ -566,20 +543,14 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
     @Nested
     class OversizedBoundary {
 
-        // D-16: every case below derives its lengths from ValidationConstants rather than a
-        // hard-coded number, and tests both directions of the boundary -- exactly MAX (must
-        // succeed) and MAX + 1 (must be a 400 field error) -- proving the constraint sits exactly
-        // where ValidationConstants says it does, not merely that some limit exists.
+        // Every case derives its lengths from ValidationConstants and tests both directions of the
+        // boundary, exactly MAX (succeeds) and MAX + 1 (400 field error).
         //
-        // Quick task 260811-p9c converged the VALIDATION_FAILED vs CONSTRAINT_VIOLATION split
-        // this comment used to describe: all seven controller/ classes now carry class-level
-        // @Validated (enforced by LayeringArchTest), so a @Valid @RequestBody field-constraint
-        // failure -- the case exercised below -- throws MethodArgumentNotValidException and
-        // returns VALIDATION_FAILED with a per-field "errors" map identically everywhere, not
-        // just on the three controllers (BoardController, UserController, ActivityController)
-        // that carried @Validated before this task. CONSTRAINT_VIOLATION remains the code for
-        // the OTHER kind of failure -- a @PathVariable @NotBlank constraint violation -- covered
-        // separately by MalformedPathVariable below and by
+        // All seven controller/ classes carry class-level @Validated (enforced by
+        // LayeringArchTest), so a @Valid @RequestBody failure throws
+        // MethodArgumentNotValidException and returns VALIDATION_FAILED with a per-field "errors"
+        // map everywhere. CONSTRAINT_VIOLATION is the code for a @PathVariable @NotBlank violation,
+        // covered by MalformedPathVariable below and by
         // ErrorEnvelopeConsistencyTest#PathVariableConstraintEnvelope.
 
         private String lettersOfLength(int length) {
@@ -608,8 +579,7 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
         @Test
         void shouldRejectWithValidationFailed_whenBoardNameExceedsMaxLengthByOne()
                 throws Exception {
-            // arrange: BoardController carries @Validated -- MethodArgumentNotValidException,
-            // VALIDATION_FAILED, per-field errors map
+            // arrange
             var cookie = signinCookie();
             var name = lettersOfLength(ValidationConstants.MAX_BOARD_NAME_LENGTH + 1);
 
@@ -635,7 +605,7 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
             var boardId = mockPopulatedBoard.getId();
             var name = lettersOfLength(ValidationConstants.MAX_COLUMN_NAME_LENGTH);
 
-            // act & assert: POST /boards/{boardId}/columns is on BoardController (@Validated)
+            // act & assert
             mockMvc.perform(
                             post(BOARD_COLUMNS_URL, boardId)
                                     .cookie(cookie)
@@ -696,8 +666,7 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
         @Test
         void shouldRejectWithValidationFailed_whenTaskTitleExceedsMaxLengthByOne()
                 throws Exception {
-            // arrange: this creation route is on ColumnController, which now carries @Validated
-            // like every other controller (260811-p9c) -- same envelope as Board/Column name above
+            // arrange
             var cookie = signinCookie();
             var boardId = mockPopulatedBoard.getId();
             var columnId = mockPopulatedColumn.getId();
@@ -744,8 +713,7 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
         @Test
         void shouldRejectWithValidationFailed_whenTaskDescriptionExceedsMaxLengthByOne()
                 throws Exception {
-            // arrange: ColumnController now carries @Validated (260811-p9c) -- same envelope as
-            // every other controller
+            // arrange
             var cookie = signinCookie();
             var boardId = mockPopulatedBoard.getId();
             var columnId = mockPopulatedColumn.getId();
@@ -794,8 +762,7 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
         @Test
         void shouldRejectWithValidationFailed_whenSubtaskTitleExceedsMaxLengthByOne()
                 throws Exception {
-            // arrange: SubtaskController now carries @Validated (260811-p9c) -- same envelope as
-            // Task above
+            // arrange
             var cookie = signinCookie();
             var boardId = mockPopulatedBoard.getId();
             var columnId = mockPopulatedColumn.getId();
@@ -823,18 +790,14 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
     @Nested
     class MalformedPathVariable {
 
-        // D-16: a path-traversal-shaped id, an id containing SQL meta-characters, and a plainly
-        // non-ULID string, each exercised against at least one route per resource type. Every case
-        // asserts the response is 400 or 404 -- never a 5xx. The actual observed status per case is
-        // recorded in this plan's SUMMARY (Claude's discretion per CONTEXT.md: neither status is
-        // pinned single-valued, since the routing layer and the service layer legitimately produce
-        // different codes for different malformed shapes).
+        // Path-traversal, SQL-meta-character and non-ULID ids against every resource type: each
+        // case asserts 400 or 404, never a 5xx.
         //
-        // URI-template variable substitution (mockMvc.perform(get(template, malformedId))) is used
-        // throughout rather than raw string concatenation, so a "../.." payload is treated as a
-        // single opaque path-segment value (percent-encoded by Spring's UriComponentsBuilder) --
-        // exactly what a JSON API client sending that literal string as an id would produce -- and
-        // never resolved as real relative navigation against this test's own request path.
+        // Neither status is pinned: the routing layer and the service layer legitimately produce
+        // different codes for different malformed shapes. URI-template substitution
+        // (mockMvc.perform(get(template, malformedId))) is used rather than concatenation, so
+        // "../.." is one opaque, percent-encoded path segment, as a JSON API client would send it,
+        // never resolved as relative navigation.
 
         @ParameterizedTest
         @ValueSource(strings = {"../../../etc/passwd", "1' OR '1'='1", "not-a-real-ulid-value"})
@@ -928,16 +891,13 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
     @Nested
     class MalformedBoardId {
 
-        // Quick task 260908-dl3: id follows this class's own D-16 shape -- reuses the file's
-        // existing XSS payload constants, and proves rejection on status, the VALIDATION_FAILED
-        // envelope, AND persistence, never on absence from the response body alone. Jackson
-        // silently drops an unrecognised JSON key, so a body-only proof would pass even against a
-        // build where the id field was never wired at all -- the same reasoning StoredXss's color
-        // case documents.
+        // Board-id cases reuse the XSS payload constants and prove rejection on status, the
+        // VALIDATION_FAILED envelope and persistence, never on the response body alone.
         //
-        // Every length case below is derived from ValidationConstants.MAX_BOARD_ID_LENGTH rather
-        // than a literal, and tests both directions of the boundary, matching OversizedBoundary's
-        // convention above.
+        // Jackson silently drops an unrecognised JSON key, so a body-only proof would pass even if
+        // the id field were never wired (same reasoning as StoredXss's color case). Every length
+        // case derives from ValidationConstants.MAX_BOARD_ID_LENGTH and tests both sides of the
+        // boundary.
 
         private String boardIdOfLength(int length) {
             return "1".repeat(length);
@@ -979,9 +939,8 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
         }
 
         /**
-         * The generator emits lowercase base36 only -- an uppercase id is a value this application
-         * never issues, so a caller-supplied one must be rejected even though it is otherwise
-         * well-formed (correct charset per letter, correct length).
+         * The generator emits lowercase base36 only, so an uppercase id is one this application
+         * never issues and must be rejected though otherwise well-formed.
          */
         @Test
         void shouldRejectWithValidationFailed_whenBoardIdIsUppercase() throws Exception {
@@ -1008,8 +967,8 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
         }
 
         /**
-         * The acceptance case at the bound is not optional padding -- it is what stops this whole
-         * group from passing against an implementation that rejects every id unconditionally.
+         * The acceptance case at the bound stops this group passing against an implementation that
+         * rejects every id.
          */
         @Test
         void shouldAccept_whenBoardIdIsExactlyMaxLength() throws Exception {

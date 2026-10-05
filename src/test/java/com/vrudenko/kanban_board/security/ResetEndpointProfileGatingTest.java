@@ -14,10 +14,11 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
- * Plan 08-02 (D-02's standing invariant): proves neither reset bean, nor its dedicated security
- * chain, is registered when the {@code nonprod} profile is inactive. Runs under the plain {@code
- * test} profile only (no {@code @ActiveProfiles} override), so it participates in the pre-commit
- * {@code fastTest} gate like any other untagged class.
+ * Proves neither reset bean, nor its dedicated security chain, is registered when the {@code
+ * nonprod} profile is inactive.
+ *
+ * <p>Runs under the plain {@code test} profile (no {@code @ActiveProfiles} override), so it
+ * participates in the pre-commit {@code fastTest} gate.
  */
 @SpringBootTest
 class ResetEndpointProfileGatingTest extends AbstractPostgresContainerTest {

@@ -49,24 +49,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * D-19/D-20: a single, consolidated sweep proving every one of this application's protected routes
- * rejects both an unauthenticated request (401) and a cross-user request against another user's
- * resource (403). Centralizes the "is every endpoint actually gated" guarantee, which was
- * previously scattered across four-plus {@code *ControllerTest} classes with no single answer.
+ * One sweep proving every protected route rejects an unauthenticated request (401) and a cross-user
+ * request against another user's resource (403).
  *
- * <p>{@link #routeTable()} is the single source of truth: one row per protected route, re-derived
- * by reading all seven {@code controller/} classes directly (not transcribed from CONTEXT.md's
- * "~19" or RESEARCH.md's estimate, both of which predate plan 07.1-06's controller-signature
- * changes) -- {@code BoardController} 6, {@code ColumnController} 5, {@code TaskController} 4,
- * {@code SubtaskController} 3, {@code UserController} 2, {@code TaskMoveController} 1, {@code
- * ActivityController} 1 = 22. See this plan's SUMMARY for the full per-controller breakdown.
+ * <p>{@link #routeTable()} is the single source of truth: one row per protected route, derived from
+ * the seven {@code controller/} classes (22 routes: Board 6, Column 5, Task 4, Subtask 3, User 2,
+ * TaskMove 1, Activity 1).
  *
- * <p>Request bodies in the table are deliberately static, fixed constants, never built from live
- * fixture state: every service method in this codebase resolves its target entity through the
- * ownership-verified loader (D-20, {@code docs/CODE_STYLE.md} rule 2) BEFORE touching any other
- * field on the request body, so a syntactically valid-but-semantically-arbitrary body (e.g. {@code
- * version = 0}) still exercises the intended 401/403 code path -- the actual field values only
- * matter to callers past the ownership gate, which the rejected requests here never reach.
+ * <p>Why this is the way it is: request bodies are static constants, never built from fixture
+ * state. Every service resolves its target through the ownership-verified loader ({@code
+ * docs/CODE_STYLE.md} rule 2) before touching any other body field, so an arbitrary valid body
+ * (e.g. {@code version = 0}) still exercises the 401/403 path; field values matter only past the
+ * ownership gate, which the rejected requests never reach.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -92,8 +86,7 @@ public class AuthorizationGatingTest extends AbstractAppMockMvcTest {
     private static final String SUBTASK_URL = SUBTASKS_URL + ApiPaths.SUBTASK_ID;
     private static final String USER_THEME_URL = ApiPaths.USERS + ApiPaths.ME + ApiPaths.THEME;
 
-    // Static, fixture-independent request bodies -- see class Javadoc for why arbitrary-but-valid
-    // field values are sufficient here (the ownership check always runs first).
+    // Static, fixture-independent bodies; see the class Javadoc for why arbitrary values suffice.
     private static final SaveBoardRequestDTO SAVE_BOARD_BODY =
             SaveBoardRequestDTO.builder().name("Gating Sweep Board").build();
     private static final UpdateBoardRequestDTO UPDATE_BOARD_BODY =
@@ -130,10 +123,11 @@ public class AuthorizationGatingTest extends AbstractAppMockMvcTest {
     }
 
     /**
-     * One row per protected route. {@code crossUserApplicable = false} marks the four routes that
-     * address no other user's resource by construction (D-19/D-20) -- {@code GET/POST /boards},
-     * {@code GET/PUT /users/me/theme} -- which get a scoped-to-caller assertion instead of a 403 in
-     * {@link ScopedToCaller}, rather than being silently skipped from the sweep.
+     * One row per protected route.
+     *
+     * <p>{@code crossUserApplicable = false} marks the four routes that address no other user's
+     * resource by construction ({@code GET/POST /boards}, {@code GET/PUT /users/me/theme}); they
+     * get a scoped-to-caller assertion in {@link ScopedToCaller} instead of being skipped.
      */
     private record RouteCase(
             String displayName,
@@ -344,9 +338,8 @@ public class AuthorizationGatingTest extends AbstractAppMockMvcTest {
     @Nested
     class NoSessionSweep {
         /**
-         * Every protected route, with no session cookie and no authenticated principal at all --
-         * rejected at the {@link ProblemDetailAuthenticationEntryPoint}, before the request ever
-         * reaches a controller.
+         * Every protected route, requested with no session cookie, is rejected at {@link
+         * ProblemDetailAuthenticationEntryPoint} before reaching a controller.
          */
         @ParameterizedTest(name = "{0}")
         @MethodSource("com.vrudenko.kanban_board.security.AuthorizationGatingTest#routeTable")
@@ -361,12 +354,12 @@ public class AuthorizationGatingTest extends AbstractAppMockMvcTest {
     @Nested
     class CrossUserSweep {
         /**
-         * Every route that addresses a specific resource, requested by {@link #getForeignUser()}
-         * against {@link #getOwningUser()}'s resources -- D-20: the foreign user genuinely owns its
-         * own board+column (not an empty account), so a 403 here proves ownership is actually
-         * enforced rather than merely proving an empty result set. Authenticated via {@code
-         * .with(user(foreignUserId))}, matching the shortcut this codebase's {@code
-         * controller/*ControllerTest} classes already use for already-authenticated scenarios.
+         * Every route addressing a specific resource, requested by {@link #getForeignUser()}
+         * against {@link #getOwningUser()}'s resources, returns 403.
+         *
+         * <p>The foreign user owns its own board and column, so a 403 proves ownership is enforced,
+         * not merely an empty result set. Authenticated via {@code .with(user(foreignUserId))}, as
+         * the {@code controller/*ControllerTest} classes do.
          */
         @ParameterizedTest(name = "{0}")
         @MethodSource(
@@ -397,9 +390,8 @@ public class AuthorizationGatingTest extends AbstractAppMockMvcTest {
 
     @Nested
     class ScopedToCaller {
-        // The four routes with no meaningful cross-user case (they are scoped to the caller by
-        // construction, per D-19/D-20 -- see class Javadoc): asserted here that the foreign user
-        // sees only its own data, never the owning user's, rather than a 403.
+        // The four routes with no meaningful cross-user case are scoped to the caller by
+        // construction: the foreign user sees only its own data, never the owning user's.
 
         @Test
         void shouldReturnOnlyForeignUsersOwnBoards_whenForeignUserListsBoards() throws Exception {
@@ -497,15 +489,13 @@ public class AuthorizationGatingTest extends AbstractAppMockMvcTest {
 
     @Nested
     class PermitAllExclusions {
-        // D-19: /signin and /signup are the two deliberately excluded permitAll() routes -- proven
-        // reachable without a session here, rather than merely stated in prose, so the exclusion is
-        // something this test would itself catch if it silently regressed.
+        // /signin and /signup are the two deliberately excluded permitAll() routes; proven
+        // reachable without a session here so a silent regression would be caught.
 
         @Test
         void shouldBeReachableWithoutSession_whenPostingToSignin() throws Exception {
-            // arrange: a syntactically valid-shaped but nonexistent-credential signin body -- the
-            // point of this test is that the request reaches AuthenticationController at all
-            // (never a 401 from the security filter chain itself), not that it succeeds
+            // arrange: a well-shaped nonexistent-credential body; the point is that the request
+            // reaches AuthenticationController at all, not that it succeeds
             var body =
                     SigninRequestDTO.builder()
                             .email(generateValidEmail())
@@ -558,17 +548,13 @@ public class AuthorizationGatingTest extends AbstractAppMockMvcTest {
 
     @Nested
     class Completeness {
-        // D-19/Task 3: closes the "a future route ships with no table row" failure mode.
-        // RequestMappingHandlerMapping is queried for every handler method registered under
-        // com.vrudenko.kanban_board.controller -- the seven domain controllers, all of which carry
-        // class-level @PreAuthorize("isAuthenticated()"). AuthenticationController's two
-        // permitAll()
-        // routes live in com.vrudenko.kanban_board.security, a different package, so the package
-        // filter below already excludes them without a separate SecurityConfiguration lookup; the
-        // same is true of SpringDoc's own generated controllers. This is a deliberate, simpler
-        // equivalent of "subtract the permitAll() routes" -- documented here so it reads as a
-        // choice
-        // rather than a skipped step.
+        // Closes the "a future route ships with no table row" failure mode: every handler under
+        // com.vrudenko.kanban_board.controller must have a routeTable() row.
+        //
+        // The seven domain controllers all carry class-level @PreAuthorize("isAuthenticated()").
+        // AuthenticationController's two permitAll() routes live in the security package, which
+        // the package filter already excludes (as it does SpringDoc's controllers): a deliberately
+        // simpler equivalent of subtracting the permitAll() routes.
 
         private record DiscoveredRoute(HttpMethod httpMethod, String pattern) {}
 
@@ -617,8 +603,8 @@ public class AuthorizationGatingTest extends AbstractAppMockMvcTest {
                             .map(r -> new DiscoveredRoute(r.method(), r.pathTemplate()))
                             .collect(Collectors.toSet());
 
-            // assert: guard against a vacuous pass -- the reflective scan must have actually found
-            // something, and at least as many routes as this plan's own re-derived count (22)
+            // assert: guard against a vacuous pass: the scan must find at least as many routes (22)
+            // as the table holds
             Assertions.assertThat(discovered).isNotEmpty();
             Assertions.assertThat(discovered.size()).isGreaterThanOrEqualTo(22);
 

@@ -16,23 +16,17 @@ import org.springframework.boot.test.context.SpringBootTest;
 import static io.restassured.RestAssured.given;
 
 /**
- * Asserts the full published session-cookie contract (HARDEN-07) against a real {@code Set-Cookie}
- * header produced by a genuine signin over the real-socket transport.
+ * Asserts the full published session-cookie contract against a real {@code Set-Cookie} header from
+ * a genuine signin over a real socket.
  *
- * <p><b>Why real-socket tier, not MockMvc (rule 4, {@code docs/CODE_STYLE.md}):</b> {@code
- * AbstractAppMockMvcTest} uses no real HTTP transport at all, so it never produces a
- * container-serialised {@code Set-Cookie} header and cannot observe any of these attributes. Spring
- * Session JDBC is on the classpath, so the cookie is written by Spring Session's own {@code
- * DefaultCookieSerializer} -- not directly by the embedded servlet container's {@code
- * SessionCookieConfig} -- which is what Spring Boot's session auto-configuration maps {@code
- * server.servlet.session.cookie.*} onto. Left unset, that serializer derives {@code Secure} from
- * whether the *current request* was secure, a per-request value; setting it explicitly (Task 2)
- * makes the attribute unconditional instead, which is exactly what this test has to observe on the
- * wire rather than infer from the properties file.
- *
- * <p>{@code @Tag("realSocket")} excludes this class from the pre-commit {@code fastTest} gate
- * (docs/CODE_STYLE.md rule 4's tag-based, not name-based, gate membership) -- a real socket
- * round-trip has no place slowing down every commit.
+ * <p>Why this is the way it is: {@code AbstractAppMockMvcTest} uses no real HTTP transport, so it
+ * never produces a container-serialised {@code Set-Cookie} header. With Spring Session JDBC on the
+ * classpath the cookie is written by {@code DefaultCookieSerializer}, not the servlet container's
+ * {@code SessionCookieConfig}, and left unset that serializer derives {@code Secure} from whether
+ * the current request was secure; this test observes the explicit, unconditional attribute on the
+ * wire instead of inferring it from the properties file. The {@code realSocket} tag keeps the class
+ * out of the pre-commit {@code fastTest} gate (docs/CODE_STYLE.md rule 4): a real socket round trip
+ * does not belong in every commit.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Tag("realSocket")
@@ -45,9 +39,8 @@ public class SessionCookieAttributesE2ETest extends AbstractAppE2ETest {
     class SigninCookieAttributes {
         @Test
         void shouldCarryHardenedAttributes_whenSignedIn() {
-            // arrange & act -- a fresh signin, mirroring AbstractAppE2ETest.signin() but
-            // extracting the full cookie object (attributes included) rather than just its value,
-            // since signin() only ever returns the value.
+            // arrange & act -- a fresh signin that extracts the full cookie object, attributes
+            // included, since signin() only returns the value.
             Cookie cookie =
                     given().contentType(ContentType.JSON)
                             .body(

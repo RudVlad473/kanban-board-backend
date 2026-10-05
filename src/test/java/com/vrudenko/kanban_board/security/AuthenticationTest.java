@@ -31,56 +31,35 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Consolidates the three real-HTTP authentication/session test classes that used to live here
- * separately (D-02 Candidate 1, RESEARCH.md): {@code AuthenticationControllerTest} (signin/signup
- * happy/unhappy paths), {@code SessionPersistenceE2ETest} (Spring Session JDBC persistence, the
- * concurrent-session ceiling, session-fixation rotation) and {@code UserPersistenceE2ETest}
- * (bcrypt-hash persistence via signup). All three covered {@link AuthenticationController}'s {@code
- * authenticate} helper from six angles; merging them keeps that coverage in one navigable file
- * instead of three.
+ * Real-HTTP authentication and session tests: signin/signup, session persistence, the session
+ * ceiling, fixation rotation, and bcrypt-hash persistence.
  *
- * <p>Runs at the in-process {@code @SpringBootTest}/{@link MockMvc} tier (D-03 rows 21-22), never
- * {@code RANDOM_PORT}. The {@code Signin}/{@code Signup} groups drive real {@code POST}s directly;
- * the session-persistence and user-persistence groups drive them through {@link
- * AbstractAppMockMvcTest#signinCookie()} and inline {@code mockMvc.perform} POSTs for the
- * signin/signup calls the shared helper cannot express (a rejection, or a cookie relayed from a
- * prior response) -- never through {@code .with(user(userId))}, which would bypass {@code
- * AuthenticationController.authenticate} entirely (RESEARCH.md Pitfall 2).
+ * <p>Runs at the in-process {@code @SpringBootTest}/{@link MockMvc} tier, never through {@code
+ * .with(user(userId))}, which would bypass {@code AuthenticationController.authenticate} entirely.
  *
- * <p><b>Review conclusion for {@code SecurityConfiguration:38}</b> (carried from {@code
- * SessionPersistenceE2ETest}): {@code HttpSessionSecurityContextRepository} was reviewed and
- * deliberately kept as-is by the fix that added Spring Session JDBC. Spring Session's {@code
- * SessionRepositoryFilter} registers at order {@code Integer.MIN_VALUE + 50}, ahead of {@code
- * springSecurityFilterChain} at {@code -100}, so {@code request.getSession()} is already backed by
- * {@code JdbcIndexedSessionRepository} by the time the repository writes to it -- no code change to
- * {@code SecurityConfiguration} was needed to make the security context land in the database.
- *
- * <p><b>Why {@code SignupPasswordHashPersistence}/{@code SignupThenSignin} still earn their
- * place</b> (carried from {@code UserPersistenceE2ETest}) despite the {@code Signup.Authenticated}
- * group above already asserting a 201 from {@code POST /signup} -- and, because {@code
- * AuthenticationController.signup} auto-authenticates the new user before returning, already
- * implying a hash was written and matched:
+ * <p>Why this is the way it is: {@code HttpSessionSecurityContextRepository} was reviewed and kept
+ * when Spring Session JDBC was added. Spring Session's {@code SessionRepositoryFilter} registers at
+ * order {@code Integer.MIN_VALUE + 50}, ahead of {@code springSecurityFilterChain} at {@code -100},
+ * so {@code request.getSession()} is already backed by {@code JdbcIndexedSessionRepository} when
+ * the repository writes to it. {@code SignupPasswordHashPersistence} and {@code SignupThenSignin}
+ * still earn their place although {@code Signup.Authenticated} asserts a 201:
  *
  * <ol>
- *   <li>The {@code Signup.Authenticated} proof rides entirely on signup auto-login, an ordinary
- *       product decision, not an invariant. The day signup stops authenticating the new user before
- *       returning, that entire persistence guarantee evaporates and not one test goes red. These
- *       two groups assert the row directly, so they survive that refactor.
- *   <li>No other group in this file signs in as a user created through the HTTP signup endpoint --
- *       {@code Signin.Authenticated} authenticates {@link #getOwningUser()}, which {@code
- *       AbstractAppTest} creates via {@code userService.save(...)} directly, a different entry path
- *       that never touches the controller.
- *   <li>If the hash went missing today, the only visible symptom would be "signup returns 401",
- *       which reads as a credentials or validation bug and points a reader at the wrong classes. A
- *       failure that says {@code PASSWORD_HASH} was null points straight at persistence.
- *   <li>Nothing else states that what is stored is a hash rather than the plaintext -- that
- *       property is currently only inferrable by reading {@code UserMapper}, {@code
- *       BeanConfiguration} and {@code UserAuthenticationProvider} together.
+ *   <li>That proof rides on signup auto-login, a product decision, not an invariant. If signup
+ *       stops authenticating the new user, the persistence guarantee evaporates and no test goes
+ *       red. These groups assert the row directly.
+ *   <li>No other group signs in as a user created through the HTTP signup endpoint: {@code
+ *       Signin.Authenticated} uses {@link #getOwningUser()}, created via {@code
+ *       userService.save(...)}.
+ *   <li>A missing hash would otherwise surface as "signup returns 401", pointing a reader at
+ *       credentials or validation; a failure saying {@code PASSWORD_HASH} was null points at
+ *       persistence.
+ *   <li>Nothing else states that what is stored is a hash, not the plaintext.
  * </ol>
  *
- * <p>{@code SignupPasswordHashPersistence} reads the row back with raw SQL against {@code USERS}
- * rather than through {@code UserRepository}, so the ORM mapping layer -- the layer that would be
- * at fault if a hash went missing -- never sits between the assertion and what is actually stored.
+ * <p>{@code SignupPasswordHashPersistence} reads the row back with raw SQL against {@code USERS},
+ * not {@code UserRepository}, so the ORM mapping layer never sits between the assertion and what is
+ * stored.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -95,34 +74,28 @@ public class AuthenticationTest extends AbstractAppMockMvcTest {
     @Value("${server.servlet.session.cookie.name}")
     private String COOKIE_NAME;
 
-    // MockMvc does not apply server.servlet.context-path (CODE_STYLE.md rule 4), but
-    // SecurityConfiguration's LogoutFilter is registered against CONTEXT_PATH + ApiPaths.LOGOUT
-    // -- so the Logout group below must build the full prefixed URL itself, unlike every other
-    // group in this class, or the request silently never reaches LogoutFilter at all.
+    // MockMvc ignores server.servlet.context-path, but LogoutFilter matches CONTEXT_PATH +
+    // ApiPaths.LOGOUT, so the Logout group must build the full prefixed URL or never reach it.
     @Value("${server.servlet.context-path}")
     private String CONTEXT_PATH;
 
     /**
-     * Prefix common to every hash {@code BeanConfiguration}'s {@code BCryptPasswordEncoder}
-     * produces. Derived as a constant here rather than fetched/read off a real user's hash, so
-     * these tests do not depend on the repository's row shape -- only on what a bcrypt hash always
-     * looks like.
+     * Prefix of every hash {@code BeanConfiguration}'s {@code BCryptPasswordEncoder} produces, so
+     * the tests depend on what a bcrypt hash looks like, not on the repository's row shape.
      */
     private static final String BCRYPT_HASH_MARKER = "$2a$";
 
     private static final String SPRING_SECURITY_CONTEXT_ATTRIBUTE = "SPRING_SECURITY_CONTEXT";
 
     /**
-     * Signs in and returns the {@code PRIMARY_ID} of the {@code SPRING_SESSION} row the signin
-     * created. {@code SPRING_SESSION} carries no foreign key to users, so {@code AbstractAppTest}'s
-     * {@code @AfterEach userService.deleteAll()} never clears these rows and they accumulate across
-     * the whole suite run in the shared containerised Postgres database. Identifying the new row by
-     * set difference (rather than an absolute count or ordering) is what keeps this deterministic
-     * regardless of how many sessions earlier tests left behind. JUnit runs sequentially here (no
-     * {@code junit-platform.properties} declares parallelism), so exactly one new id is expected.
-     * Never compare the returned session cookie value to {@code SESSION_ID} -- {@code
-     * DefaultCookieSerializer} Base64-encodes the cookie by default, so the two are not equal and
-     * would fail an equality assertion for a reason unrelated to this fix.
+     * Signs in and returns the {@code PRIMARY_ID} of the {@code SPRING_SESSION} row it created.
+     *
+     * <p>The new row is found by set difference, not an absolute count: {@code SPRING_SESSION} has
+     * no foreign key to users, so {@code AbstractAppTest}'s {@code @AfterEach
+     * userService.deleteAll()} never clears these rows and they accumulate across the suite. JUnit
+     * runs sequentially here, so exactly one new id is expected. Never compare the session cookie
+     * to {@code SESSION_ID}: {@code DefaultCookieSerializer} Base64-encodes the cookie, so they are
+     * never equal.
      */
     private String signinAndCaptureNewSessionPrimaryId() throws Exception {
         var idsBefore =
@@ -142,30 +115,23 @@ public class AuthenticationTest extends AbstractAppMockMvcTest {
     }
 
     /**
-     * Generates a collision-proof signup email. {@code users.email} is {@code unique = true}, and
-     * {@code AuthenticationController.signup} converts any internal failure -- including a
-     * unique-constraint violation -- into a 401 like every other failure, so a {@code dataFactory}
-     * email colliding with one of {@code AbstractAppTest}'s two per-test fixture users would fail
-     * this test as a bogus credentials error rather than the persistence problem it is meant to
-     * catch. A fixed literal prefix plus a random UUID removes that failure class entirely; the
-     * {@code SignupPasswordHashPersistence} group keys its row lookup on the email, unlike its
-     * neighbours, so the collision-proofing matters more here than a shared {@code dataFactory}
-     * convention would. The generated shape also satisfies {@code @AppEmail}'s underlying
-     * {@code @Email} constraint, even though the signup path does not currently cascade validation
-     * into the request body.
+     * Generates a collision-proof signup email: a fixed prefix plus a random UUID.
+     *
+     * <p>{@code AuthenticationController.signup} turns any failure, including a unique-constraint
+     * violation on {@code users.email}, into a 401, so a {@code dataFactory} email colliding with a
+     * fixture user would fail a test as a bogus credentials error. {@code
+     * SignupPasswordHashPersistence} keys its row lookup on the email, so collisions matter more
+     * here.
      */
     private String collisionProofEmail() {
         return "user-persistence-" + UUID.randomUUID() + "@example.com";
     }
 
     /**
-     * Performs a real HTTP signup and returns the email/password pair used, for later lookup. Since
-     * quick task 260812-hs4, the signup response body carries the created user's identity ({@code
-     * id}, {@code email}, {@code displayName}, {@code theme}, per D-01) -- this helper still
-     * returns the submitted email/password pair rather than reading the response, purely because
-     * its callers ({@code SignupPasswordHashPersistence}, {@code SignupThenSignin}) look the row up
-     * by the submitted email and need the plaintext password to re-authenticate, both of which the
-     * response body does not carry.
+     * Performs a real HTTP signup and returns the email/password pair used.
+     *
+     * <p>Callers look the row up by the submitted email and need the plaintext password to
+     * re-authenticate; the response body carries neither.
      */
     private String[] signupOverHttp() throws Exception {
         var email = collisionProofEmail();
@@ -216,12 +182,9 @@ public class AuthenticationTest extends AbstractAppMockMvcTest {
             }
 
             /**
-             * Proves D-01/D-05 empirically rather than merely asserting the key exists: the {@code
-             * theme} value in the response body must equal {@link #getOwningUser()}'s own {@code
-             * theme}, which is itself a {@code UserResponseDTO} field, so all four are directly
-             * comparable. Because {@code UserService.findByEmail} is deliberately not
-             * {@code @Transactional}, this simultaneously proves mapping a detached {@code
-             * UserEntity} does not blow up.
+             * The response {@code theme} must equal {@link #getOwningUser()}'s own theme. {@code
+             * UserService.findByEmail} is deliberately not {@code @Transactional}, so this also
+             * proves mapping a detached {@code UserEntity} does not blow up.
              */
             @Test
             void testWithValidCredential_shouldReturnCallerIdentity_whenUserExists()
@@ -257,9 +220,8 @@ public class AuthenticationTest extends AbstractAppMockMvcTest {
             }
 
             /**
-             * T-hs4-01: an exact-set assertion on the top-level field names, not a per-key absence
-             * check -- so this also fails on any *future* field silently appearing in this
-             * response, not only the bcrypt hash this test was written against.
+             * An exact-set assertion on the top-level field names, not per-key absence, so any
+             * future field silently appearing in this response fails too, not only the bcrypt hash.
              */
             @Test
             void testWithValidCredential_shouldExposeOnlyIdentityFields_whenUserExists()
@@ -289,11 +251,6 @@ public class AuthenticationTest extends AbstractAppMockMvcTest {
                 Assertions.assertThat(rawBody).doesNotContain(BCRYPT_HASH_MARKER);
             }
 
-            /**
-             * T-hs4-04. ESCAPE HATCH: if this assertion goes red, delete it, file a todo naming the
-             * missing header, and record the finding in the summary -- do not expand this task into
-             * security-header configuration.
-             */
             @Test
             void testWithValidCredential_shouldReturnNonCacheableResponse_whenUserExists()
                     throws Exception {
@@ -321,7 +278,6 @@ public class AuthenticationTest extends AbstractAppMockMvcTest {
         @Nested
         class Unauthenticated {
             @Test
-            // we don't want to populate cookies for each request, only for successful ones
             void testWithInvalidCredential_shouldNotPopulateCookie_whenUserDoesntExist()
                     throws Exception {
                 // Arrange
@@ -346,10 +302,9 @@ public class AuthenticationTest extends AbstractAppMockMvcTest {
             }
         }
 
-        // D-06/D-08: field validation on the signin body actually fires and is distinguishable
-        // from a genuine credential failure -- see RESEARCH.md Pattern 3 for why @Valid's
-        // pre-method-body timing makes this fall out with zero ordering code, and Pitfall 5 for
-        // why "falls out naturally" still needs its own regression test.
+        // Signin-body field validation fires and is distinguishable from a genuine credential
+        // failure; @Valid runs before the method body, but that still needs its own regression
+        // test.
         @Nested
         class FieldValidation {
             @Test
@@ -374,10 +329,8 @@ public class AuthenticationTest extends AbstractAppMockMvcTest {
             }
         }
 
-        // D-08: the generic BadCredentialsException collapse must stay indistinguishable for
-        // every genuine credential failure -- an unregistered (but well-formed) email and a
-        // registered email with a wrong (but well-shaped) password must produce the exact same
-        // response, not merely the same status code.
+        // The generic BadCredentialsException collapse must stay indistinguishable: an unregistered
+        // email and a wrong password must produce the exact same response, not merely status.
         @Nested
         class AntiEnumeration {
             @Test
@@ -404,11 +357,9 @@ public class AuthenticationTest extends AbstractAppMockMvcTest {
             void
                     shouldReturnByteIdenticalBody_whenComparingUnregisteredEmailAndWrongPasswordSignins()
                             throws Exception {
-                // arrange: two structurally different failure causes -- an email that was never
-                // registered, and a registered email paired with an incorrect (but
-                // otherwise-valid-shaped) password. Asserting byte-identical bodies, not merely
-                // matching status codes, is what actually proves neither response leaks which
-                // case occurred.
+                // arrange: an unregistered email, and a registered email with a wrong password.
+                // Byte-identical bodies, not just matching statuses, prove neither response leaks
+                // which case occurred.
                 var unregisteredEmailBody =
                         SigninRequestDTO.builder()
                                 .email(collisionProofEmail())
@@ -482,8 +433,8 @@ public class AuthenticationTest extends AbstractAppMockMvcTest {
             }
 
             /**
-             * D-01: mirrors {@code Signin.Authenticated}'s identity-payload test. The hash-leak
-             * risk (T-hs4-01) is identical on this endpoint and gets an identical exact-set guard.
+             * Mirrors {@code Signin.Authenticated}'s identity-payload test, with the same exact-set
+             * guard against leaking the hash.
              */
             @Test
             void testWithValidCredential_shouldReturnCreatedIdentity_whenUserExists()
@@ -525,11 +476,9 @@ public class AuthenticationTest extends AbstractAppMockMvcTest {
             }
 
             /**
-             * D-02 regression guard -- meaningful precisely because it is red today: the header
-             * currently names the signup route itself (see {@code AuthenticationController}) rather
-             * than the caller-identity resource. Composed from {@code CONTEXT_PATH} plus the same
-             * {@link ApiPaths} constants the handler builds from, so this assertion cannot drift
-             * from what the handler actually produces (D-04).
+             * The Location header must name the caller-identity resource, not the signup route
+             * itself (see {@code AuthenticationController}). Built from {@code CONTEXT_PATH} plus
+             * the same {@link ApiPaths} constants the handler uses, so it cannot drift.
              */
             @Test
             void testWithValidCredential_shouldPointLocationAtCallerIdentityUri_whenUserExists()
@@ -560,16 +509,14 @@ public class AuthenticationTest extends AbstractAppMockMvcTest {
             }
         }
 
-        // D-06: field constraints on the signup body actually fire, per-field, rather than being
-        // silently skipped -- see AbstractAppTest.generateValidPassword()'s Javadoc for the exact
-        // @Password constraint these bodies are constructed to isolate.
+        // Signup-body field constraints fire per field rather than being skipped;
+        // AbstractAppTest.generateValidPassword() documents the @Password constraint isolated here.
         @Nested
         class FieldValidation {
             @Test
             void shouldReturnBadRequestWithValidationFailedCode_whenEmailIsMalformed()
                     throws Exception {
-                // arrange: password/displayName are valid -- email is the only violated
-                // constraint
+                // arrange: password/displayName are valid; email is the only violated constraint
                 var body =
                         SignupRequestDTO.builder()
                                 .email("not-an-email")
@@ -592,10 +539,8 @@ public class AuthenticationTest extends AbstractAppMockMvcTest {
             @Test
             void shouldReturnBadRequestWithValidationFailedCode_whenPasswordLacksUppercase()
                     throws Exception {
-                // arrange: email/displayName are valid -- lower-casing an otherwise-valid
-                // generateValidPassword() strips its one guaranteed uppercase character while
-                // keeping the lowercase/digit/special-char classes intact, isolating password as
-                // the only violated constraint
+                // arrange: email/displayName are valid; lower-casing generateValidPassword() strips
+                // its one uppercase character, isolating password as the only violated constraint
                 var weakPassword = generateValidPassword().toLowerCase(Locale.ROOT);
                 var body =
                         SignupRequestDTO.builder()
@@ -619,8 +564,7 @@ public class AuthenticationTest extends AbstractAppMockMvcTest {
             @Test
             void shouldReturnBadRequestWithValidationFailedCode_whenDisplayNameIsWhitespaceOnly()
                     throws Exception {
-                // arrange: email/password are valid -- a 3-space displayName is the only
-                // violated constraint
+                // arrange: email/password are valid; a 3-space displayName is the only violation
                 var body =
                         SignupRequestDTO.builder()
                                 .email(collisionProofEmail())
@@ -640,13 +584,12 @@ public class AuthenticationTest extends AbstractAppMockMvcTest {
         }
 
         /**
-         * D-07 (deliberate trade-off, recorded here so it reads as a decision rather than an
-         * oversight to any later reviewer or the {@code /claude-security} scan in plan 07.1-09):
-         * signup reveals whether an email is already registered via an explicit 409, rather than
-         * collapsing into signin's generic 401. Knowingly accepted email enumeration on signup for
-         * this project's personal/portfolio scope, weighed against the cost of building a full
-         * email-verification flow -- see {@code T-07.1-04-02} in {@code 07.1-04-PLAN.md}'s threat
-         * register.
+         * Signup reveals whether an email is registered, via an explicit 409 rather than signin's
+         * generic 401.
+         *
+         * <p>Decisions: knowingly accepted email enumeration on signup for this project's
+         * personal/portfolio scope, weighed against the cost of an email-verification flow.
+         * Recorded so a later reviewer reads it as a decision, not an oversight.
          */
         @Nested
         class DuplicateEmail {
@@ -698,14 +641,12 @@ public class AuthenticationTest extends AbstractAppMockMvcTest {
             }
 
             /**
-             * D-09: field validation must run, and win, before the duplicate-email check -- proven
-             * empirically here, not just inferred from {@code @Valid}'s pre-method-body timing
-             * (RESEARCH.md Pitfall 5). A malformed *email* cannot simultaneously equal an
-             * already-registered email, since every registered email already passed
-             * {@code @AppEmail} to be created -- so this violates {@code @Password} instead while
-             * reusing a genuinely duplicate email, which still exercises the same ordering
-             * question: does the duplicate-email 409 or the validation-failure 400 win when a
-             * single request qualifies for both?
+             * Field validation runs, and wins, before the duplicate-email check.
+             *
+             * <p>A malformed email cannot also equal a registered one, since every registered email
+             * passed {@code @AppEmail}, so this violates {@code @Password} while reusing a genuine
+             * duplicate email, which poses the same ordering question: does the 409 or the 400 win
+             * when a request qualifies for both?
              */
             @Test
             void shouldReturnBadRequestNotConflict_whenSignupIsBothInvalidAndDuplicate()
@@ -756,11 +697,9 @@ public class AuthenticationTest extends AbstractAppMockMvcTest {
         @Test
         void shouldCreateSpringSessionTables_whenApplicationStarts() {
             // arrange
-            // act: PostgreSQL folds unquoted identifiers to lower case, the opposite of H2.
-            // Spring Session's schema-postgresql.sql creates both tables unquoted, so the
-            // catalog holds lower-case names -- and the plain SELECT ... FROM statements
-            // elsewhere in this class still work unquoted, because the query's identifiers are
-            // folded the same way the DDL's were.
+            // act: PostgreSQL folds unquoted identifiers to lower case, and Spring Session's schema
+            // creates both tables unquoted, so the catalog holds lower-case names; unquoted SELECTs
+            // elsewhere in this class fold the same way.
             var sessionTableCount =
                     jdbcTemplate.queryForObject(
                             "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema ="
@@ -856,26 +795,23 @@ public class AuthenticationTest extends AbstractAppMockMvcTest {
     class ConcurrentSessionCeiling {
 
         /**
-         * Specifies enforced behaviour, not a tripwire. {@code SecurityConfiguration:61-67}
-         * declares {@code maximumSessions(2).maxSessionsPreventsLogin(true)}; enforcement comes
-         * from the {@code sessionAuthenticationStrategy} bean -- a {@code
-         * CompositeSessionAuthenticationStrategy} composing {@code
-         * ConcurrentSessionControlAuthenticationStrategy} (backed by a {@code
-         * SpringSessionBackedSessionRegistry}, so the count is a live read of {@code
-         * SPRING_SESSION.PRINCIPAL_NAME}) and {@code ChangeSessionIdAuthenticationStrategy} --
-         * invoked explicitly from {@code AuthenticationController.authenticate}'s {@code mapTry}
-         * lambda, before the {@code SecurityContext} is saved. The same call site is shared by
-         * {@code signup}, so the ceiling and id rotation apply there too.
+         * A third concurrent signin for one principal is rejected with {@code 401 Invalid username
+         * or password}.
          *
-         * <p>The rejection surfaces as {@code 401 Invalid username or password} --
-         * indistinguishable from a wrong password. This is deliberate, not an oversight: the {@code
-         * SessionAuthenticationException} thrown by the strategy is collapsed by the Vavr {@code
-         * Try} in {@code authenticate}, then by that method's blanket {@code catch}, into a {@code
-         * BadCredentialsException}. Distinguishing the two responses would hand an attacker an
-         * oracle for "these credentials are valid, this account just has sessions open"; the
-         * usability cost -- a real user hitting the ceiling learns nothing about why -- is accepted
-         * and recorded here, not silently swallowed. Do not "fix" this by adding a dedicated
-         * exception handler for {@code SessionAuthenticationException}.
+         * <p>Why this is the way it is: {@code SecurityConfiguration} declares {@code
+         * maximumSessions(2).maxSessionsPreventsLogin(true)}, but enforcement comes from the {@code
+         * sessionAuthenticationStrategy} bean, a {@code CompositeSessionAuthenticationStrategy} of
+         * {@code ConcurrentSessionControlAuthenticationStrategy} (backed by a {@code
+         * SpringSessionBackedSessionRegistry}, so the count is a live read of {@code
+         * SPRING_SESSION.PRINCIPAL_NAME}) and {@code ChangeSessionIdAuthenticationStrategy},
+         * invoked from {@code AuthenticationController.authenticate}'s {@code mapTry} lambda before
+         * the {@code SecurityContext} is saved; {@code signup} shares it. The rejection is
+         * indistinguishable from a wrong password on purpose: the Vavr {@code Try} and then the
+         * blanket {@code catch} in {@code authenticate} collapse the {@code
+         * SessionAuthenticationException} into a {@code BadCredentialsException}, and a distinct
+         * response would be an oracle for "these credentials are valid, the account just has
+         * sessions open". The usability cost is accepted. Do not add a dedicated exception handler
+         * for {@code SessionAuthenticationException}.
          */
         @Test
         void shouldRejectThirdSignin_whenConcurrentSessionCeilingIsReached() throws Exception {
@@ -923,16 +859,13 @@ public class AuthenticationTest extends AbstractAppMockMvcTest {
     class SessionFixation {
 
         /**
-         * Proves the session id is rotated across the pre-auth -> post-auth privilege transition
-         * (closes {@code T-shl-01}). {@code ChangeSessionIdAuthenticationStrategy} -- the second
-         * delegate in {@code sessionAuthenticationStrategy} -- only rotates an id when {@code
-         * request.getSession(false)} is non-null; a signin with no cookie attached has nothing to
-         * rotate and would pass vacuously without proving anything. Presenting the first signin's
-         * cookie on the second request is what makes the pre-existing session real and the rotation
-         * observable.
+         * The session id is rotated across the pre-auth to post-auth transition.
          *
-         * <p>Cookie values are Base64-encoded by {@code DefaultCookieSerializer}, so they are
-         * compared to each other here, never to a {@code SPRING_SESSION.SESSION_ID} column value.
+         * <p>{@code ChangeSessionIdAuthenticationStrategy} rotates only when {@code
+         * request.getSession(false)} is non-null, so a signin with no cookie would pass vacuously;
+         * presenting the first signin's cookie on the second request makes the rotation observable.
+         * Cookie values are Base64-encoded by {@code DefaultCookieSerializer}, so they are compared
+         * to each other, never to a {@code SESSION_ID} column.
          */
         @Test
         void shouldRotateSessionId_whenSigninPresentsAnExistingSession() throws Exception {
@@ -975,25 +908,20 @@ public class AuthenticationTest extends AbstractAppMockMvcTest {
     class Logout {
 
         /**
-         * {@code /claude-security} F3 (07.1-09): {@code SecurityConstants.SESSION_NAME} was a
-         * {@code @Value}-annotated {@code public static} field on a plain class with no
-         * {@code @Component}/{@code @Configuration} -- Spring never instantiates or injects it, so
-         * the field stayed {@code null} at runtime forever. {@code SecurityConfiguration}'s {@code
-         * logout.deleteCookies(SecurityConstants.SESSION_NAME)} therefore always registered a
-         * {@code CookieClearingLogoutHandler} with a single {@code null} cookie name; on every
-         * logout, that handler tried {@code new Cookie(null, null)}, which the Servlet API's {@code
-         * CookieNameValidator} rejects with {@code IllegalArgumentException("Cookie name must not
-         * be null or empty")} -- thrown from inside {@code LogoutFilter}, before {@code
-         * DispatcherServlet} ever sees the request, so every real {@code POST /api/logout} 500'd.
-         * This went uncaught by {@code ThemePersistenceTest}'s own logout call because that test
-         * posts to the bare {@code ApiPaths.LOGOUT} path with no context-path prefix -- which never
-         * matches {@code LogoutFilter}'s configured {@code CONTEXT_PATH + ApiPaths.LOGOUT} matcher
-         * under {@code MockMvc} (context-path is not auto-applied), so the handler chain, and this
-         * bug, was never actually exercised. This test builds the correctly-prefixed URL so it
-         * genuinely reaches {@code LogoutFilter}. Fixed by reading the cookie name through a real
-         * {@code @Value}-injected instance field on {@code SecurityConfiguration} instead of the
-         * dead static one; {@code SecurityConstants} itself was deleted as unreachable dead code
-         * with no other callers.
+         * Regression guard: a real {@code POST /api/logout} clears the session cookie instead of
+         * failing with a 500.
+         *
+         * <p>Why this is the way it is: {@code SecurityConstants.SESSION_NAME} was a {@code public
+         * static} field with {@code @Value} on a plain class Spring never injects, so it stayed
+         * {@code null} and {@code logout.deleteCookies(...)} registered a {@code
+         * CookieClearingLogoutHandler} with a null cookie name. Every logout then threw {@code
+         * IllegalArgumentException("Cookie name must not be null or empty")} from {@code
+         * LogoutFilter}, before {@code DispatcherServlet}. {@code ThemePersistenceTest}'s own
+         * logout call missed it because it posted to the bare {@code ApiPaths.LOGOUT} with no
+         * context-path prefix, which never matches {@code LogoutFilter}'s {@code CONTEXT_PATH +
+         * ApiPaths.LOGOUT} matcher under {@code MockMvc}. This test builds the prefixed URL. The
+         * cookie name is now read through a {@code @Value}-injected instance field on {@code
+         * SecurityConfiguration}.
          */
         @Test
         void shouldClearSessionCookieAndReturnOk_whenLogoutSucceeds() throws Exception {
@@ -1024,35 +952,25 @@ public class AuthenticationTest extends AbstractAppMockMvcTest {
             var email = credentials[0];
             var plaintextPassword = credentials[1];
 
-            // act: raw SQL against the actual table, not through UserRepository -- PostgreSQL
-            // folds these unquoted identifiers to lower case, and the table/columns queried
-            // below are the ones V1__init.sql creates (users / password_hash / email). The
-            // rows.get(0).get("PASSWORD_HASH") lookup below still works regardless of the actual
-            // catalog casing because Spring's ColumnMapRowMapper backs each row with a
-            // case-insensitive map.
+            // act: raw SQL against the real table, not UserRepository; PostgreSQL folds unquoted
+            // identifiers to lower case, and the rows.get(0).get("PASSWORD_HASH") lookup still
+            // works because Spring's ColumnMapRowMapper backs each row with a case-insensitive map.
             var rows =
                     jdbcTemplate.queryForList(
                             "SELECT PASSWORD_HASH FROM USERS WHERE EMAIL = ?", email);
 
-            // assert: exactly one row -- asserted before reading the value, so a zero-row match
-            // fails as a legible count assertion instead of an index-out-of-bounds, and the test
-            // cannot pass vacuously. Absolute count, not a before/after delta: unlike
-            // SPRING_SESSION rows (no FK to users), AbstractAppTest's @AfterEach
-            // userService.deleteAll() really does remove user rows, and the email is unique per
-            // run, so "exactly one row matches this email" is deterministic without deltas.
+            // assert: exactly one row, checked before reading the value so a zero-row match fails
+            // legibly instead of as an index error. An absolute count is deterministic: the email
+            // is unique per run and AbstractAppTest's @AfterEach deleteAll() removes user rows.
             Assertions.assertThat(rows).hasSize(1);
 
             var persistedHash = (String) rows.get(0).get("PASSWORD_HASH");
 
-            // Never assert a specific hash value: BCrypt salts every encode, so the same
-            // password yields a different hash each run. Assert the marker prefix plus
-            // inequality/non-containment against the plaintext instead. As of quick task
-            // 260803-m3i, UserEntity declares @Column(nullable = false) on PASSWORD_HASH, and
-            // V4__add_password_hash_not_null.sql enforces that same constraint at the DB level --
-            // but no assertion in this class was changed by that task, and this class
-            // deliberately still asserts what the column actually holds rather than what the
-            // schema forbids; a schema-constraint assertion belongs alongside the entity, not
-            // here.
+            // Never assert a specific hash value: BCrypt salts every encode. Assert the marker
+            // prefix plus inequality/non-containment against the plaintext instead.
+            //
+            // This asserts what the column holds, not what the schema forbids; a NOT NULL
+            // assertion belongs alongside the entity.
             Assertions.assertThat(persistedHash).isNotNull();
             Assertions.assertThat(persistedHash).startsWith(BCRYPT_HASH_MARKER);
             Assertions.assertThat(persistedHash).isNotEqualTo(plaintextPassword);
@@ -1070,9 +988,8 @@ public class AuthenticationTest extends AbstractAppMockMvcTest {
             var email = credentials[0];
             var plaintextPassword = credentials[1];
 
-            // act: a fresh mockMvc.perform call carries no cookie jar, so the signup session
-            // cookie is not replayed and this signin genuinely re-authenticates against the
-            // persisted row
+            // act: a fresh mockMvc.perform carries no cookie jar, so the signup session cookie is
+            // not replayed and this signin genuinely re-authenticates
             var result =
                     mockMvc.perform(
                                     post(ApiPaths.SIGNIN)

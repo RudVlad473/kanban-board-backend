@@ -26,33 +26,22 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 /**
- * Proves the <em>cost</em> half of signin's anti-enumeration guarantee -- that an unregistered
- * email and a wrong password each drive exactly one {@link PasswordEncoder#matches(CharSequence,
- * String)} invocation through {@link AuthenticationController#signin}. {@link
- * AuthenticationTest.Signin.AntiEnumeration} proves the <em>content</em> half (byte-identical
- * response bodies); neither test supersedes the other -- a response can be byte-identical while
- * still leaking timing, and this class exists to close that separate channel (finding F1,
- * 2026-08-10 {@code /claude-security} scan).
+ * Proves the cost half of signin's anti-enumeration guarantee: an unregistered email and a wrong
+ * password each cost one {@link PasswordEncoder#matches} call.
  *
- * <p>The {@link CountingPasswordEncoder} delegate below does not violate {@code docs/CODE_STYLE.md}
- * rule 4's no-mocks constraint: nothing is stubbed or given a canned answer. Every call forwards to
- * the real {@link PasswordEncoder} bean {@link
- * com.vrudenko.kanban_board.config.BeanConfiguration#passwordEncoder()} publishes and returns that
- * bean's real answer; the delegate only counts {@code matches(...)} calls on the side. It is wired
- * through the real Spring context via {@code @Primary}, so every production code path under test --
- * including {@link UserAuthenticationProvider}'s own injection point -- still runs unmodified.
+ * <p>The calls are counted through {@link AuthenticationController#signin}. {@link
+ * AuthenticationTest.Signin.AntiEnumeration} proves the content half (byte-identical bodies);
+ * neither supersedes the other, since a response can be byte-identical while leaking timing.
  *
- * <p>This class is deliberately separate from {@link AuthenticationTest} rather than a new
- * {@code @Nested} group inside it: the {@link CountingPasswordEncoderConfig}
- * {@code @TestConfiguration} below forks its own Spring context cache key (a distinct bean graph),
- * and isolating that fork in its own file keeps it off {@code AuthenticationTest}, which is shared
- * by far more test groups and would otherwise pay that extra context startup for everyone.
- *
- * <p>{@link CountingPasswordEncoder#matchesInvocationCount()} is per-context mutable state, reset
- * at the start of each test via {@link CountingPasswordEncoder#resetMatchesInvocationCount()}. That
- * reset is what makes a single shared counter deterministic across test methods -- safe here
- * because JUnit runs this class sequentially (no {@code junit-platform.properties} declares
- * parallelism anywhere in this project).
+ * <p>Why this is the way it is: {@link CountingPasswordEncoder} does not violate the no-mocks rule
+ * ({@code docs/CODE_STYLE.md} rule 4). It forwards every call to the real {@code
+ * BeanConfiguration#passwordEncoder()} bean, returns that bean's real answer, and only counts
+ * {@code matches(...)} calls. It is wired through {@code @Primary}, so every production path under
+ * test, including {@link UserAuthenticationProvider}'s injection point, runs unmodified. The class
+ * is separate from {@link AuthenticationTest} because {@link CountingPasswordEncoderConfig} forks
+ * its own Spring context cache key, and isolating it spares {@code AuthenticationTest}'s many
+ * groups that extra context startup. The invocation counter is per-context mutable state reset at
+ * the start of each test, which is deterministic because JUnit runs this class sequentially.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -65,11 +54,9 @@ public class SigninTimingEqualizationTest extends AbstractAppMockMvcTest {
     @Autowired private CountingPasswordEncoder countingPasswordEncoder;
 
     /**
-     * Delegating {@link PasswordEncoder} that forwards every call to a real encoder and returns its
-     * real answer, counting only how many times {@link #matches(CharSequence, String)} was invoked.
-     * Not a mock: the wrapped delegate is the application's own configured {@link PasswordEncoder}
-     * bean, so every credential comparison this test observes is a genuine BCrypt comparison
-     * against a genuine stored hash.
+     * Forwards every call to the application's own {@link PasswordEncoder} bean and returns its
+     * real answer, counting only {@link #matches(CharSequence, String)} calls. Not a mock, so every
+     * comparison is a genuine BCrypt comparison.
      */
     private static final class CountingPasswordEncoder implements PasswordEncoder {
         private final PasswordEncoder delegate;
@@ -106,12 +93,14 @@ public class SigninTimingEqualizationTest extends AbstractAppMockMvcTest {
 
     /**
      * Publishes {@link CountingPasswordEncoder} as the {@code @Primary} {@link PasswordEncoder} for
-     * this test class's Spring context only -- never a {@code @Component} in a scanned package, so
-     * it cannot leak into production wiring or any other test class's context. The explicit
-     * {@code @Qualifier("passwordEncoder")} on the delegate parameter names {@link
-     * com.vrudenko.kanban_board.config.BeanConfiguration#passwordEncoder()} directly, rather than
-     * leaning on Spring's self-reference exclusion to resolve an otherwise-ambiguous {@link
-     * PasswordEncoder} parameter.
+     * this class's Spring context only.
+     *
+     * <p>It is never a {@code @Component} in a scanned package, so it cannot leak into production
+     * wiring or another class's context.
+     *
+     * <p>{@code @Qualifier("passwordEncoder")} on the delegate parameter names {@code
+     * BeanConfiguration#passwordEncoder()} directly, instead of leaning on Spring's self-reference
+     * exclusion to resolve an ambiguous {@link PasswordEncoder} parameter.
      */
     @TestConfiguration
     static class CountingPasswordEncoderConfig {

@@ -11,24 +11,15 @@ import org.springframework.http.HttpStatus;
 import static io.restassured.RestAssured.given;
 
 /**
- * Proves Phase 5's Actuator health endpoint (INFRA-01) is reachable exactly as the production
- * Docker healthcheck will curl it -- unauthenticated, over the real resolved {@code
- * /api/actuator/health} URL -- and that the exposure allowlist ({@code application.properties}'s
- * {@code management.endpoints.web.exposure.include=health}) is a real allowlist, not an accidental
- * wildcard that would also publish {@code /env}.
+ * Proves {@code /api/actuator/health} is reachable unauthenticated, as the healthcheck curls it,
+ * and that the exposure allowlist is real, not a wildcard.
  *
- * <p><b>Why real-socket tier, not MockMvc:</b> extends {@link AbstractAppE2ETest} rather than the
- * MockMvc tier so this test exercises the actual embedded servlet container's context-path
- * stripping ({@code server.servlet.context-path=/api}) -- RESEARCH.md's Pattern 1 flags this exact
- * trap: a matcher that looks right in isolation can still let a manual, logged-in-browser curl
- * appear to work while Docker's own unauthenticated healthcheck request gets a 302/401. {@code
- * SessionPersistenceE2ETest}, the class this plan's task originally pointed to for conventions, was
- * merged into {@link AuthenticationTest} during Phase 7 (now MockMvc-tier); this class instead
- * follows the shape of this codebase's current {@code AbstractAppE2ETest} reference points, {@link
- * com.vrudenko.kanban_board.e2e.board.BoardCreationE2ETest} and {@link
- * ConcurrentSigninCeilingE2ETest}. Unlike those two, nothing here is concurrent or slow, so no
- * {@code @Tag("realSocket")} is applied -- this class runs in the pre-commit {@code fastTest} gate
- * by default (docs/CODE_STYLE.md rule 4).
+ * <p>Why this is the way it is: it extends {@link AbstractAppE2ETest}, not the MockMvc tier, to
+ * exercise the embedded servlet container's context-path stripping ({@code
+ * server.servlet.context-path=/api}); a matcher that looks right in isolation can let a
+ * logged-in-browser curl work while Docker's unauthenticated healthcheck gets a 302/401. It carries
+ * no {@code @Tag("realSocket")}: nothing here is concurrent or slow, so it runs in the pre-commit
+ * {@code fastTest} gate (docs/CODE_STYLE.md rule 4).
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 public class ActuatorHealthE2ETest extends AbstractAppE2ETest {
