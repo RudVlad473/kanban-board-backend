@@ -46,6 +46,16 @@ ArchUnit rule rather than by convention (see [Testing](#testing)).
   the error envelope above uses, because the composed annotation is the input here and it no longer
   exists once the document is built. `ComposedConstraintPropertyCustomizerTest` is the guard,
   proving both that the values are published and that they agree with the real `Validator`.
+- **Every path variable is declared, and session identity is not a parameter.** springdoc declares a
+  path parameter only for a handler argument bound with `@PathVariable`, and it published
+  `@CurrentUserId` as a required `userId` query parameter. Two mechanisms close both without
+  touching a controller: `PathTemplateParameterOpenApiCustomizer` declares every undeclared
+  `{variable}` of a route as a required string path parameter, and `CustomArgumentResolverConfig`
+  registers `@CurrentUserId` on springdoc's ignore list. `OpenApiParameterCompletenessTest` sweeps
+  every operation in the live document, so a new endpoint needs no list entry. The gap was found by
+  spike 003, where Schemathesis could not generate a request for 11 of 24 operations. There is no
+  change on the wire, but a client regenerated from the document loses `userId` and gains the
+  required ancestor path parameters.
 - **MapStruct for entity ↔ DTO.** Generated at compile time, so mapping mistakes are compile
   errors and the service layer stays free of mapping boilerplate.
 - **Shared base interfaces** (`BaseBoard`, `BaseTask`, …) tie each DTO to the entity shape it

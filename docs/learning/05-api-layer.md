@@ -54,6 +54,7 @@ in this layer is a promise to a client.
 | API-21 | Return raw Spring Data `Page<T>` for the activity feed, page size max 100 | First paginated endpoint; `PagedModel` would change every consumer |
 | API-22 | `POST /boards` accepts an optional client-supplied `id`, validated by `@BoardId` | Offline-first client creation without an open primary key |
 | API-23 | Exclude the pre-jakarta `swagger-annotations` jar from `kafka-avro-serializer` | Two jars shared one package and `GET /api/docs` returned `500` |
+| API-24 | Declare every path-template variable with `PathTemplateParameterOpenApiCustomizer`, and put `@CurrentUserId` on springdoc's ignore list | springdoc declared only `@PathVariable`-bound ids and published the session user id as a required `userId` query parameter, so Schemathesis could not fuzz 11 of 24 operations |
 
 ## Resource design and URL nesting
 
@@ -275,6 +276,8 @@ if (principal instanceof UserDetails user) {
 The "username" of the principal is the user id, not the email. The filter chain
 (`anyRequest().authenticated()` in `SecurityConfiguration`) rejects a request with no session before
 the resolver runs. Thus the resolver does not see an anonymous request on a protected route.
+`CustomArgumentResolverConfig` also puts the annotation on springdoc's ignore list, so the generated
+OpenAPI document never publishes the session user id as a client parameter.
 
 ### Why we chose it
 
@@ -1066,6 +1069,19 @@ duplicate, because the artifact ids differ. The JVM loaded the old `Parameter` c
 `GET /api/docs` returned `500` with `NoSuchMethodError: Parameter.validationGroups()`.
 [`build.gradle`](../../build.gradle) now excludes the old artifact, with the reason in a comment.
 
+**API-24.** Spike 003 pointed Schemathesis at the live document and it could not build a request for
+11 of 24 operations, because springdoc declares a path parameter only for a handler argument bound
+with `@PathVariable`, and an ancestor id that sits in the class-level route template has no
+argument. The same run showed 22 operations advertising a required `userId` query parameter that
+the server never reads. Two mechanisms fix this without touching a controller.
+[`PathTemplateParameterOpenApiCustomizer`](../../src/main/java/com/vrudenko/kanban_board/config/PathTemplateParameterOpenApiCustomizer.java)
+declares every undeclared `{variable}` as a required string path parameter, and
+`CustomArgumentResolverConfig` registers `@CurrentUserId` on springdoc's annotations-to-ignore list.
+[`OpenApiParameterCompletenessTest`](../../src/test/java/com/vrudenko/kanban_board/config/OpenApiParameterCompletenessTest.java)
+sweeps every operation in the document, so a new endpoint needs no entry in a list. Nothing changes
+on the wire. A client generated from the document loses `userId` and gains the required ancestor ids
+when it regenerates.
+
 ### How we test it
 
 - [`OpenApiDocsTest`](../../src/test/java/com/vrudenko/kanban_board/config/OpenApiDocsTest.java)
@@ -1087,6 +1103,11 @@ duplicate, because the artifact ids differ. The JVM loaded the old `Parameter` c
   - `BmpOnlyDeclarations`, `ReassertOnTightenOnly`, and
     `PublishedDescriptions.shouldNotDiscloseGitleaksScanningSetup_inPasswordDescription`.
 - The 260904-ss1 summary records the RED run: with `@Component` removed, 6 of 12 tests failed.
+- [`OpenApiParameterCompletenessTest`](../../src/test/java/com/vrudenko/kanban_board/config/OpenApiParameterCompletenessTest.java)
+  walks every operation: `PathTemplateParameters` (every `{variable}` declared as a required path
+  parameter, plus a literal four-id spot-check on the subtask `PUT`) and `SessionDerivedUserId`
+  (no `userId` query parameter). The quick-261006-dpq summary records the RED run on the unfixed
+  code: 11 operations with undeclared path variables and 22 with a `userId` leak.
 
 ### Where this is recorded
 
