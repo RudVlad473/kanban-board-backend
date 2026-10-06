@@ -16,7 +16,8 @@ the pipeline side.
 - [`.github/workflows/`](../../.github/workflows/) (six workflows), [`.github/dependabot.yml`](../../.github/dependabot.yml)
 - [`scripts/verify-*.py`](../../scripts/) (invariant gates and their self-tests)
 - [`Dockerfile`](../../Dockerfile), [`.dockerignore`](../../.dockerignore), [`docker/caddy/Dockerfile`](../../docker/caddy/Dockerfile)
-- [`docs/CODE_STYLE.md`](../CODE_STYLE.md) (judgement-level rules)
+- [`docs/CODE_STYLE.md`](../CODE_STYLE.md) (numbered code rules and what holds each)
+- [`docs/CODE_REVIEW_RUBRIC.md`](../CODE_REVIEW_RUBRIC.md) (judgement rules a reviewer applies)
 
 ## Summary of decisions
 
@@ -32,7 +33,7 @@ the pipeline side.
 | CI-08 | Spotless with Google Java Format AOSP and an explicit 5-group import order | Formatting is mechanical, so a machine enforces it |
 | CI-09 | Error Prone, pinned, gate strength chosen from a measured run; test sources stricter on 5 checks | Compile-time bug classes Spotless cannot see, with no surprise reds |
 | CI-10 | JaCoCo ratchet (90% instruction, 90% line, 75% branch) wired to `test` with `finalizedBy` | CI never runs `check`; a drift alarm must fire on the command CI runs |
-| CI-11 | Judgement rules live in `docs/CODE_STYLE.md`; the rules that can be checked go to ArchUnit | Prose drifts; an ArchUnit rule fails the build |
+| CI-11 | Judgement rules live in `docs/CODE_REVIEW_RUBRIC.md`; the rules that can be checked go to ArchUnit; `docs/CODE_STYLE.md` indexes both | Prose drifts; an ArchUnit rule fails the build |
 | CI-12 | The build auto-installs the hook through `core.hooksPath`; the hook checks and never auto-fixes | No manual setup step; no silent rewrite of staged files |
 | CI-13 | Hook order: secret scan, then `spotlessCheck`, then `fastTest`; a scanner that cannot run refuses the commit | Refuse a credential in seconds, not after four minutes of tests |
 | CI-14 | `fastTest` excludes classes by `@Tag("kafka")`/`@Tag("realSocket")`; both test tasks use 2 forks | Opt-in exclusion; 2 forks measured faster, 4 forks not |
@@ -312,8 +313,9 @@ The `test` task has `finalizedBy jacocoTestCoverageVerification`
 ### Why we chose it
 
 - **CI-08.** Formatting is mechanical, so the build enforces it. The reason for the import-group
-  order is recorded in [`docs/CODE_STYLE.md` rule 10](../CODE_STYLE.md#L435-L441). First-party
-  imports sit third on purpose. The rule text exists so that nobody "corrects" it toward the
+  order is recorded in the comment above `importOrder` in [`build.gradle`](../../build.gradle), which
+  [`docs/CODE_STYLE.md` rule 10](../CODE_STYLE.md#10-import-blocks-are-grouped-java--javax--comvrudenko--third-party--static-one-blank-line-between-groups) points to. First-party
+  imports sit third on purpose. The comment exists so that nobody "corrects" it toward the
   more common first-party-last order.
 - **CI-09.** Error Prone finds bug classes that formatting cannot: null dereferences, ignored return
   values, misused APIs. Its gate strength came from a measured run. Quick task 260802-qr8 found 5
@@ -370,10 +372,9 @@ The gates test themselves on each run: `./gradlew spotlessCheck` and `./gradlew 
 
 ### What it is
 
-[`docs/CODE_STYLE.md`](../CODE_STYLE.md) records 13 rules that Spotless cannot check. Each rule has
-a statement, a **Why** line and a bad/good code example
-([`CODE_STYLE.md`, "Adding a rule"](../CODE_STYLE.md#L649-L651)). Some rules also have an ArchUnit
-rule that fails `./gradlew test`.
+[`docs/CODE_STYLE.md`](../CODE_STYLE.md) records 14 numbered rules. Each rule names the test or linter that enforces it, or its entry in
+[`CODE_REVIEW_RUBRIC.md`](../CODE_REVIEW_RUBRIC.md) when only a reviewer can judge it
+([`CODE_STYLE.md`, "Adding a rule"](../CODE_STYLE.md#adding-a-rule)).
 
 ### How it works
 
@@ -381,27 +382,29 @@ The main rules, with their reasons from the file:
 
 | Rule | Statement | Why (from the file) | Enforced by |
 |------|-----------|---------------------|-------------|
-| [2](../CODE_STYLE.md#L40-L44) | Load entities through the ownership-verified `findById(userId, id)`, never `repository.findById` | This is the whole access-control model, and the type system does not enforce it | `LayeringArchTest.domain_services_must_load_through_ownership_verified_findById` |
-| [4](../CODE_STYLE.md#L116-L226) | No mocks; test against real Spring wiring and Testcontainers PostgreSQL | A mocked repository bypasses the ownership chain and JPA behavior the tests exist to protect | Convention |
-| [5](../CODE_STYLE.md#L249-L253) | `@Nested` per method under test; `should<Outcome>_when<Condition>`; AAA comments | The method is the unit of navigation; no separate `@DisplayName` to drift | Convention |
-| [6](../CODE_STYLE.md#L290-L294) | `Update*RequestDTO` has `@JsonInclude(NON_NULL)` and `@NotNull Long version` | A missing `version` silently disables optimistic locking | Convention |
-| [7](../CODE_STYLE.md#L332-L371) | Unwrap `Optional` with an `isEmpty()` guard, not `orElseThrow` | Consistency; a second check fits beside the guard as a peer | `LayeringArchTest` (the `findById` part) |
-| [8](../CODE_STYLE.md#L373-L377) | Test setup must be fully automated | A manual step is a step every new machine forgets | Convention; cited by the hook, gitleaks and hooks-path decisions |
-| [10](../CODE_STYLE.md#L435-L441) | Five import groups | Records why first-party sits third | Spotless |
-| [11](../CODE_STYLE.md#L513-L517) | Every `@RestController` has class-level `@Validated` | It decides which exception Spring throws, and so which error envelope the client gets | `LayeringArchTest.rest_controllers_must_carry_class_level_validated` |
-| [13](../CODE_STYLE.md#L592-L619) | Test classes live in a named subpackage | 11 test files drifted into the root package before the rule existed | `TestPlacementArchTest.test_classes_must_not_reside_directly_in_the_root_package` |
+| [2](../CODE_STYLE.md#2-load-entities-through-the-ownership-verified-loader-never-repositoryfindbyid-directly) | Load entities through the ownership-verified `findById(userId, id)`, never `repository.findById` | This is the whole access-control model, and the type system does not enforce it | `LayeringArchTest.domain_services_must_load_through_ownership_verified_findById` (a floor); review for the rest |
+| [3](../CODE_STYLE.md#3-use-assertj-fully-qualified-capture-exceptions-with-catchexception) | AssertJ fully qualified; capture exceptions with `catchException` | A captured exception lets one test keep asserting | `TestCodeStyleArchTest` |
+| [4](../CODE_STYLE.md#4-no-mocks--test-against-real-spring-wiring) | No mocks; test against real Spring wiring and Testcontainers PostgreSQL | A mocked repository bypasses the ownership chain and JPA behavior the tests exist to protect | `TestCodeStyleArchTest` |
+| [5](../CODE_STYLE.md#5-group-by-method-under-test-with-nested-name-shouldoutcome_whencondition-mark-sections-with-aaa-comments) | `@Nested` per method under test; `should<Outcome>_when<Condition>`; AAA comments | The method is the unit of navigation; no separate `@DisplayName` to drift | `TestCodeStyleArchTest` (no `@DisplayName`); review for the rest |
+| [6](../CODE_STYLE.md#6-updaterequestdto-carries-a-fixed-shape) | `Update*RequestDTO` has `@JsonInclude(NON_NULL)` and `@NotNull Long version` | A missing `version` silently disables optimistic locking | `MainCodeStyleArchTest` |
+| [7](../CODE_STYLE.md#7-unwrap-optional-with-an-isempty-guard-not-orelsethrow) | Unwrap `Optional` with an `isEmpty()` guard, not `orElseThrow` | Consistency; a second check fits beside the guard as a peer | `MainCodeStyleArchTest` |
+| [8](../CODE_STYLE.md#8-test-setup-must-be-fully-automated--never-a-manual-step-for-the-developer) | Test setup must be fully automated | A manual step is a step every new machine forgets | Review (rubric rule 8); cited by the hook, gitleaks and hooks-path decisions |
+| [10](../CODE_STYLE.md#10-import-blocks-are-grouped-java--javax--comvrudenko--third-party--static-one-blank-line-between-groups) | Five import groups | Records why first-party sits third | Spotless |
+| [11](../CODE_STYLE.md#11-every-restcontroller-carries-class-level-validated) | Every `@RestController` has class-level `@Validated` | It decides which exception Spring throws, and so which error envelope the client gets | `LayeringArchTest.rest_controllers_must_carry_class_level_validated` |
+| [12](../CODE_STYLE.md#12-an-optional-string-field-that-rejects-blank-carries-optionalnotblank-not-notblank) | `@OptionalNotBlank`, not `@NotBlank`, on an optional String | `@NotBlank` also rejects null, silently making the field required | `MainCodeStyleArchTest` for Update DTOs; review elsewhere |
+| [13](../CODE_STYLE.md#13-a-new-test-class-belongs-in-a-named-subpackage-of-comvrudenkokanban_board-never-directly-in-the-root-package) | Test classes live in a named subpackage | 11 test files drifted into the root package before the rule existed | `TestPlacementArchTest.test_classes_must_not_reside_directly_in_the_root_package` |
 
 ### Why we chose it
 
 **CI-11.** The file says an unwritten convention "silently reopens every few sessions"
-([rule 13](../CODE_STYLE.md#L607-L616)). Where a rule can be checked by structure, an ArchUnit rule
-holds it; where it needs judgement, the prose and its example hold it. Rule 8 is the rule that the
+([`CODE_STYLE.md`, "Adding a rule"](../CODE_STYLE.md#adding-a-rule)). Where a rule can be checked by structure, an ArchUnit rule
+holds it; where it needs judgement, the rubric's deciding test holds it. Rule 8 is the rule that the
 build decisions in this chapter cite most. The hooks-path bootstrap, the gitleaks Docker image and
 the rejection of detect-secrets all refer to it.
 
 ### Trade-offs and limits
 
-- `LayeringArchTest` is "a floor, not a ceiling" ([rule 7](../CODE_STYLE.md#L371)).
+- `LayeringArchTest` is "a floor, not a ceiling" ([rule 2](../CODE_STYLE.md#2-load-entities-through-the-ownership-verified-loader-never-repositoryfindbyid-directly)).
 - `TestPlacementArchTest` catches the root package only. A test in the wrong subpackage passes.
 
 ### How we test it

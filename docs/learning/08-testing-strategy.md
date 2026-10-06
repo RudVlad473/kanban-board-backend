@@ -1202,7 +1202,8 @@ The code wins in each case:
    package.
 10. The CODE_STYLE rule 13 "Why" paragraph names `ColumnDeletionTest`, `ColumnOrderingTest` and
     `TaskOrderingTest`. These were folded into other classes in 260812-eg8 and no longer exist.
-    The paragraph is historical.
+    The paragraph is historical. The 2026-10-06 split of `CODE_STYLE.md` removed that list;
+    `TestPlacementArchTest` keeps the count.
 11. [`04.2-02-SUMMARY.md`](../../.planning/milestones/v1.2-phases/04.2-testcontainers-postgres-drop-h2/04.2-02-SUMMARY.md)
     cites commits `294ba11`, `4cec7fb` and `8e5de77`. These hashes do not exist in the current
     history. The matching commits are `948e1b1`, `7c68a47` and `d9cf4a8` (same messages). This

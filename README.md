@@ -292,7 +292,8 @@ rewritten after the fact.
 
 |                                                                        |                                                                                                                           |
 | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| [docs/CODE_STYLE.md](docs/CODE_STYLE.md)                               | Judgement-level rules the formatter can't check                                                                           |
+| [docs/CODE_STYLE.md](docs/CODE_STYLE.md)                               | Numbered code rules, each naming the test or linter that holds it                                                         |
+| [docs/CODE_REVIEW_RUBRIC.md](docs/CODE_REVIEW_RUBRIC.md)               | Judgement rules no tool can check, each with the deciding test a reviewer applies                                         |
 | [docs/SESSION_LESSONS.md](docs/SESSION_LESSONS.md)                     | Operational lessons from running GSD workflows here — how work is *run*, the sibling to CODE_STYLE's how code is *written* |
 | [docs/DIAGRAM_CONVENTIONS.md](docs/DIAGRAM_CONVENTIONS.md)             | Which Kruchten 4+1 view a diagram should be, and why it matters                                                           |
 | [docs/learning/](docs/learning/)                                       | A chaptered guide explaining every major architectural decision, written for a new contributor's onboarding pass         |

@@ -344,7 +344,7 @@ This index repeats the summary table of each chapter. Use it to find a decision 
 | CI-08 | Spotless with Google Java Format AOSP and an explicit 5-group import order | Formatting is mechanical, so a machine enforces it |
 | CI-09 | Error Prone, pinned, gate strength chosen from a measured run; test sources stricter on 5 checks | Compile-time bug classes Spotless cannot see, with no surprise reds |
 | CI-10 | JaCoCo ratchet (90% instruction, 90% line, 75% branch) wired to `test` with `finalizedBy` | CI never runs `check`; a drift alarm must fire on the command CI runs |
-| CI-11 | Judgement rules live in `docs/CODE_STYLE.md`; the rules that can be checked go to ArchUnit | Prose drifts; an ArchUnit rule fails the build |
+| CI-11 | Judgement rules live in `docs/CODE_REVIEW_RUBRIC.md`; the rules that can be checked go to ArchUnit; `docs/CODE_STYLE.md` indexes both | Prose drifts; an ArchUnit rule fails the build |
 | CI-12 | The build auto-installs the hook through `core.hooksPath`; the hook checks and never auto-fixes | No manual setup step; no silent rewrite of staged files |
 | CI-13 | Hook order: secret scan, then `spotlessCheck`, then `fastTest`; a scanner that cannot run refuses the commit | Refuse a credential in seconds, not after four minutes of tests |
 | CI-14 | `fastTest` excludes classes by `@Tag("kafka")`/`@Tag("realSocket")`; both test tasks use 2 forks | Opt-in exclusion; 2 forks measured faster, 4 forks not |

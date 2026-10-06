@@ -1045,7 +1045,7 @@ and the idempotency path.
 | `TaskEntity.subtasks` comment, `TaskRepository.findAllByColumnId` comment | "ULIDs" | RandFlake ids |
 | `ActivityLogEntity` Javadoc | "the ULID `id`" | RandFlake id |
 | [`.planning/notes/2026-08-02-adopt-snowflake-style-time-ordered-id.md`](../../.planning/notes/2026-08-02-adopt-snowflake-style-time-ordered-id.md) | "RandFlake/ULID-based" generator | No ULID |
-| `docs/CODE_STYLE.md` `var` example | `UlidCreator.getUlid()` | Not used in the code |
+| `docs/CODE_STYLE.md` `var` example (removed 2026-10-06) | `UlidCreator.getUlid()` | Not used in the code |
 | `EventIdGenerator` Javadoc | "timestamp-plus-random-bits", "holds no shared mutable state" | Monotonic sequence in a static `AtomicLong` |
 | `UserEntity.passwordHash` comment; `application.properties` Spring Session comment | `ddl-auto` is unset in production | `validate` since 04.1 |
 | `ColumnEntity.task` comment | `position` "defaults to 0 for every column, since no renumbering logic exists yet" | `ColumnService.save` assigns the sibling count; reorder exists |

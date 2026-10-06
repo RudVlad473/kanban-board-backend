@@ -112,4 +112,4 @@ into gated steps, a feature flag rollout with per-stage commits) has the same fa
 
 ## Adding a lesson
 
-New lessons are appended as a new `###` section under `## Lessons`, numbered with the next integer. Each lesson carries exactly three bolded labels, in this order: **What happened**, **Why**, **The rule**. This differs from `CODE_STYLE.md`'s rule shape, which requires a bad-vs-good Java code example — that contract does not apply here, since these lessons describe process, not code. Do not copy the code-example requirement from the sibling file when adding a lesson.
+New lessons are appended as a new `###` section under `## Lessons`, numbered with the next integer. Each lesson carries exactly three bolded labels, in this order: **What happened**, **Why**, **The rule**. This differs from `CODE_STYLE.md`'s rule shape, which points each rule at the test or linter that holds it, or at its entry in `CODE_REVIEW_RUBRIC.md`; these lessons describe process, not code, so neither applies here.

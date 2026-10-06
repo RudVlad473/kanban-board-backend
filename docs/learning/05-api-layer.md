@@ -1355,7 +1355,8 @@ without breaking clients.
 - **Error code example.** [`07.1-CONTEXT.md`](../../.planning/milestones/v1.2-phases/07.1-address-hard-blockers-and-inconsistencies-from-the-frontend/07.1-CONTEXT.md)
   D-03 gives `BOARD_NOT_FOUND` as an example. The code has only `ENTITY_NOT_FOUND`.
 - **`CODE_STYLE.md` rule 6 example.** The "preferred" `UpdateTaskRequestDTO` in rule 6 shows
-  `@TaskTitle private String title`. The real class also carries `@OptionalNotBlank`.
+  `@TaskTitle private String title`. The real class also carries `@OptionalNotBlank`. The
+  2026-10-06 split removed the example; `MainCodeStyleArchTest` now checks the real classes.
 - **Injection style.** The project `CLAUDE.md` says "No constructor injection used". Five classes
   in `src/main/java` use constructor injection through `@RequiredArgsConstructor`. Two of them are
   `ProblemDetailAuthenticationEntryPoint` and `AuthenticationController`.

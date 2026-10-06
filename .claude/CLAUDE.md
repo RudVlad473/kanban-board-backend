@@ -15,7 +15,7 @@ session auth and per-user ownership checks. Read the matching doc before changin
 - Layering, ownership checks, the 401/403/400/409 error envelope, optimistic locking, query-count
   tests, bulk deletes, schema governance: docs/ARCHITECTURE.md.
 - Signin, signup, the two-session ceiling, cookie versus server-side session lifetime: docs/AUTH_FLOWS.md.
-- Writing or changing Java code, tests included: docs/CODE_STYLE.md.
+- Writing or changing Java code, tests included: docs/CODE_STYLE.md. Reviewing a Java diff: docs/CODE_REVIEW_RUBRIC.md.
 - Authoring or updating an architecture diagram (4+1 views): docs/DIAGRAM_CONVENTIONS.md.
 - Deployment: production and nonprod run on single-node k3s reconciled by Flux from k8s/, and
   docker-compose.yml is local dev only; see docs/INFRA_ARCHITECTURE.md and docs/INFRA_RUNBOOK.md.
