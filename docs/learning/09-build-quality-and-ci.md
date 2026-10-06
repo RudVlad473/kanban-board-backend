@@ -952,6 +952,7 @@ eight Python scripts exited 0 on the current tree when this chapter was written.
 | [`security-scan.yml`](../../.github/workflows/security-scan.yml) | Mondays 06:00 UTC, manual | OWASP `dependencyCheckAnalyze` against `runtimeClasspath` |
 | [`uptime-check.yml`](../../.github/workflows/uptime-check.yml) | Every 15 minutes, manual | `curl` both public health URLs, require HTTP 200 and `"status":"UP"` |
 | [`verify-rate-limit.yml`](../../.github/workflows/verify-rate-limit.yml) | Manual only | Prove production rate-limits `/api/signin` and nonprod does not |
+| [`api-fuzz.yml`](../../.github/workflows/api-fuzz.yml) | Mondays 07:00 UTC, manual | Schemathesis 4.29.3 against a throwaway loopback stack, report-only |
 
 ### How it works
 
@@ -967,6 +968,12 @@ eight Python scripts exited 0 on the current tree when this chapter was written.
 - **verify-rate-limit.yml.** Runs `scripts/loadtest/run-rate-limit-verification.sh`, which calls
   `pnpm dlx artillery@2.0.24`, with invalid credentials so that a request that passes the limiter
   gets 401 and writes nothing.
+- **api-fuzz.yml.** Runs `scripts/fuzz/run-fuzz.py`, which boots an isolated compose project
+  (`kanban-fuzz`: Postgres and Redpanda), registers the Avro schemas, starts the app on a free
+  loopback port and fuzzes `/api/docs`. The script exits 0 whenever the run completed, so findings
+  never fail the job and a red job means the run could not happen, the same rule as
+  `security-scan.yml`. A self-test of the loopback guard and the teardown runs first. The
+  `out/fuzz/` report directory uploads as the `api-fuzz-report` artifact.
 
 ### Why we chose it
 

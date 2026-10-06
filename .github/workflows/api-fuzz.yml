@@ -1,0 +1,69 @@
+# Report-only API fuzzing: Schemathesis against a throwaway loopback stack, weekly and on demand.
+#
+# Decisions:
+# Findings never fail the job. scripts/fuzz/run-fuzz.py exits 0 when the run completed, with or
+# without findings, so a red job means the run could not happen (a stack that would not boot, a
+# Schemathesis crash, a teardown that left something behind), the same rule security-scan.yml uses.
+# Not in deploy.yml, invariant-checks.yml or .githooks/pre-commit: the run boots a database and a
+# broker, writes rows, publishes events and takes minutes, and it must never gate a PR.
+# No path filters: only push and pull_request honour them. invariant-checks.yml still lints the
+# comments of these files on the PR that adds them, because scripts/ and .github/ are outside its
+# paths-ignore.
+# The only target is a stack the script boots on the runner itself and reaches over loopback. The
+# script refuses any other base URL before it starts a process.
+name: API Fuzzing (report-only)
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '0 7 * * 1' # Mondays 07:00 UTC, an hour after security-scan.yml
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    # Runaway guard, not a measured runtime.
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      # Same control, placement and action majors as deploy.yml's run-tests job and security-scan.yml.
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v6
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Grant permission to gradlew
+        run: chmod +x gradlew
+
+      # uv comes from PyPI at an exact version, the way invariant-checks.yml installs its Python tools,
+      # so no new third-party action is trusted by tag. It lands in ~/.local/bin.
+      - name: Install uv
+        run: |
+          python3 -m pip install --disable-pip-version-check --quiet uv==0.12.11
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          uvx --version
+
+      # Proves the loopback guard and the teardown can fire before anything is booted.
+      - name: Self-test the fuzz harness
+        run: python3 scripts/fuzz/run-fuzz-selftest.py
+
+      - name: Run the fuzz pass
+        run: python3 scripts/fuzz/run-fuzz.py --report-dir out/fuzz/ci
+        # No continue-on-error: the script exits non-zero only for a harness failure.
+
+      - name: Upload fuzz report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-fuzz-report
+          path: out/fuzz/
+          if-no-files-found: warn
