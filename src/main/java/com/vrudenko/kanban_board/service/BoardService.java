@@ -3,6 +3,7 @@ package com.vrudenko.kanban_board.service;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Optional;
 
 import com.vrudenko.kanban_board.config.EventIdGenerator;
 import com.vrudenko.kanban_board.dto.board_dto.BoardFullResponseDTO;
@@ -131,6 +132,12 @@ public class BoardService {
      * load-then-save flow runs inside one transaction, so Hibernate's UPDATE-time dirty-check lock
      * cannot catch a stale read-then-write across separate HTTP requests. It runs before any field
      * is mutated and before the duplicate-name guard.
+     *
+     * Decisions:
+     * A null name means no rename, because UpdateBoardRequestDTO accepts a version-only body.
+     * The version precondition still runs first; the duplicate-name check and the name write are
+     * skipped. With nothing dirty Hibernate issues no UPDATE, so the version does not increment and
+     * BoardUpdatedEvent is still published, both the same as a no-op rename.
      */
     @Transactional
     public BoardResponseDTO updateById(
@@ -144,16 +151,18 @@ public class BoardService {
                     "Board was modified by another request, please refetch.");
         }
 
-        // A no-op rename (new name equals the current name) must not collide with the board's
-        // own existing row, so the uniqueness check is skipped entirely in that case.
-        var isNoOpRename = boardToUpdate.getName().equals(boardDTO.getName());
-        if (!isNoOpRename
-                && boardRepository.existsByUserIdAndName(
-                        boardToUpdate.getUser().getId(), boardDTO.getName())) {
-            throw new AppDuplicateResourceException("Board");
-        }
+        if (Optional.ofNullable(boardDTO.getName()).isPresent()) {
+            // A no-op rename (new name equals the current name) must not collide with the board's
+            // own existing row, so the uniqueness check is skipped entirely in that case.
+            var isNoOpRename = boardToUpdate.getName().equals(boardDTO.getName());
+            if (!isNoOpRename
+                    && boardRepository.existsByUserIdAndName(
+                            boardToUpdate.getUser().getId(), boardDTO.getName())) {
+                throw new AppDuplicateResourceException("Board");
+            }
 
-        boardToUpdate.setName(boardDTO.getName());
+            boardToUpdate.setName(boardDTO.getName());
+        }
 
         var savedBoard = boardRepository.save(boardToUpdate);
 

@@ -273,6 +273,140 @@ public class BoardControllerTest extends AbstractAppTest {
                     .andExpect(status().isBadRequest())
                     .andReturn();
         }
+
+        @Test
+        void
+                testWithAuthenticatedUser_shouldReturnOkAndLeaveNameAndVersionUnchanged_whenBodyHasOnlyVersion()
+                        throws Exception {
+            // Arrange
+            String userId = getOwningUser().getId();
+            String boardId = mockPopulatedBoard.getId();
+            String startingName = mockPopulatedBoard.getName();
+            Long startingVersion = mockPopulatedBoard.getVersion();
+            String url = getBoardPrefix() + "/" + boardId;
+            var updateDto = UpdateBoardRequestDTO.builder().version(startingVersion).build();
+
+            // Act
+            // The version stays put because Hibernate issues no UPDATE when nothing is dirty,
+            // the same as a no-op rename.
+            var response =
+                    mockMvc.perform(
+                                    put(url).with(user(userId))
+                                            .contentType(APPLICATION_JSON)
+                                            .content(objectMapper.writeValueAsString(updateDto)))
+                            .andDo(MockMvcResultHandlers.print())
+                            .andExpect(status().isOk())
+                            .andReturn();
+            var responseBody =
+                    objectMapper.readValue(
+                            response.getResponse().getContentAsString(), BoardResponseDTO.class);
+
+            var getResponse =
+                    mockMvc.perform(get(getBoardPrefix()).with(user(userId)))
+                            .andDo(MockMvcResultHandlers.print())
+                            .andExpect(status().isOk())
+                            .andReturn();
+            var reloaded =
+                    List.of(
+                                    objectMapper.readValue(
+                                            getResponse.getResponse().getContentAsString(),
+                                            BoardResponseDTO[].class))
+                            .stream()
+                            .filter(board -> board.getId().equals(boardId))
+                            .findFirst()
+                            .orElseThrow();
+
+            // Assert
+            Assertions.assertThat(responseBody.getName()).isEqualTo(startingName);
+            Assertions.assertThat(responseBody.getVersion()).isEqualTo(startingVersion);
+            Assertions.assertThat(reloaded.getName()).isEqualTo(startingName);
+            Assertions.assertThat(reloaded.getVersion()).isEqualTo(startingVersion);
+        }
+
+        @Test
+        void testWithAuthenticatedUser_shouldReturnConflict_whenBodyHasOnlyStaleVersion()
+                throws Exception {
+            // Arrange
+            String userId = getOwningUser().getId();
+            String url = getBoardPrefix() + "/" + mockPopulatedBoard.getId();
+            Long startingVersion = mockPopulatedBoard.getVersion();
+            var renameDto =
+                    UpdateBoardRequestDTO.builder()
+                            .name("Renamed first")
+                            .version(startingVersion)
+                            .build();
+            var staleVersionOnlyDto =
+                    UpdateBoardRequestDTO.builder().version(startingVersion).build();
+
+            // Act
+            mockMvc.perform(
+                            put(url).with(user(userId))
+                                    .contentType(APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(renameDto)))
+                    .andDo(MockMvcResultHandlers.print())
+                    .andExpect(status().isOk());
+
+            // Assert
+            mockMvc.perform(
+                            put(url).with(user(userId))
+                                    .contentType(APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(staleVersionOnlyDto)))
+                    .andDo(MockMvcResultHandlers.print())
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("OPTIMISTIC_LOCK_CONFLICT"));
+        }
+
+        @Test
+        void testWithAuthenticatedUser_shouldReturnConflict_whenNameBelongsToAnotherBoard()
+                throws Exception {
+            // Arrange
+            String userId = getOwningUser().getId();
+            String url = getBoardPrefix() + "/" + mockPopulatedBoard.getId();
+            var updateDto =
+                    UpdateBoardRequestDTO.builder()
+                            .name(mockEmptyBoards.getFirst().getName())
+                            .version(mockPopulatedBoard.getVersion())
+                            .build();
+
+            // Act
+            // Assert
+            mockMvc.perform(
+                            put(url).with(user(userId))
+                                    .contentType(APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(updateDto)))
+                    .andDo(MockMvcResultHandlers.print())
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("DUPLICATE_RESOURCE"));
+        }
+
+        @Test
+        void testWithAuthenticatedUser_shouldReturnOk_whenNameIsUnchanged() throws Exception {
+            // Arrange
+            String userId = getOwningUser().getId();
+            String url = getBoardPrefix() + "/" + mockPopulatedBoard.getId();
+            String currentName = mockPopulatedBoard.getName();
+            var updateDto =
+                    UpdateBoardRequestDTO.builder()
+                            .name(currentName)
+                            .version(mockPopulatedBoard.getVersion())
+                            .build();
+
+            // Act
+            var response =
+                    mockMvc.perform(
+                                    put(url).with(user(userId))
+                                            .contentType(APPLICATION_JSON)
+                                            .content(objectMapper.writeValueAsString(updateDto)))
+                            .andDo(MockMvcResultHandlers.print())
+                            .andExpect(status().isOk())
+                            .andReturn();
+
+            // Assert
+            var responseBody =
+                    objectMapper.readValue(
+                            response.getResponse().getContentAsString(), BoardResponseDTO.class);
+            Assertions.assertThat(responseBody.getName()).isEqualTo(currentName);
+        }
     }
 
     @Nested
