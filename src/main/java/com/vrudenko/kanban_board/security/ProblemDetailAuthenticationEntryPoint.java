@@ -17,11 +17,11 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.stereotype.Component;
 
 /**
- * Emit the RFC 7807 {@link ProblemDetail} envelope for a genuinely unauthenticated request, the one
- * rejection {@code GlobalExceptionHandler} structurally cannot reach.
+ * Emit the RFC 7807 ProblemDetail envelope for a genuinely unauthenticated request, the one
+ * rejection GlobalExceptionHandler structurally cannot reach.
  *
- * <p>This fires inside Spring Security's {@code ExceptionTranslationFilter}, before {@code
- * DispatcherServlet} runs, so no {@code @ExceptionHandler} is ever invoked. That is why this is a
+ * This fires inside Spring Security's ExceptionTranslationFilter, before
+ * DispatcherServlet runs, so no @ExceptionHandler is ever invoked. That is why this is a
  * second, independent producer rather than a shared method: the two run at structurally different
  * points in the request lifecycle and only converge on the JSON shape. Check the other producer for
  * drift when either envelope changes.

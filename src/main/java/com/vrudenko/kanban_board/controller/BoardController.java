@@ -82,8 +82,8 @@ public class BoardController {
     }
 
     /**
-     * Return the board with its columns, tasks and subtasks nested in one document. See {@link
-     * com.vrudenko.kanban_board.service.BoardService#findFullById} for the ownership and
+     * Return the board with its columns, tasks and subtasks nested in one document. See
+     * com.vrudenko.kanban_board.service.BoardService.findFullById for the ownership and
      * transaction reasoning.
      */
     @GetMapping(ApiPaths.BOARD_ID + ApiPaths.FULL)

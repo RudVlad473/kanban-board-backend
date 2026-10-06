@@ -16,16 +16,16 @@ import org.springframework.boot.test.context.SpringBootTest;
 import static io.restassured.RestAssured.given;
 
 /**
- * Asserts the full published session-cookie contract against a real {@code Set-Cookie} header from
+ * Asserts the full published session-cookie contract against a real Set-Cookie header from
  * a genuine signin over a real socket.
  *
- * <p>Why this is the way it is: {@code AbstractAppMockMvcTest} uses no real HTTP transport, so it
- * never produces a container-serialised {@code Set-Cookie} header. With Spring Session JDBC on the
- * classpath the cookie is written by {@code DefaultCookieSerializer}, not the servlet container's
- * {@code SessionCookieConfig}, and left unset that serializer derives {@code Secure} from whether
+ * Why this is the way it is: AbstractAppMockMvcTest uses no real HTTP transport, so it
+ * never produces a container-serialised Set-Cookie header. With Spring Session JDBC on the
+ * classpath the cookie is written by DefaultCookieSerializer, not the servlet container's
+ * SessionCookieConfig, and left unset that serializer derives Secure from whether
  * the current request was secure; this test observes the explicit, unconditional attribute on the
- * wire instead of inferring it from the properties file. The {@code realSocket} tag keeps the class
- * out of the pre-commit {@code fastTest} gate (docs/CODE_STYLE.md rule 4): a real socket round trip
+ * wire instead of inferring it from the properties file. The realSocket tag keeps the class
+ * out of the pre-commit fastTest gate (docs/CODE_STYLE.md rule 4): a real socket round trip
  * does not belong in every commit.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)

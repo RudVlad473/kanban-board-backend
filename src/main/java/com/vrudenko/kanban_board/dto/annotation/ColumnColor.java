@@ -11,19 +11,19 @@ import jakarta.validation.ReportAsSingleViolation;
 import jakarta.validation.constraints.Pattern;
 
 /**
- * Validate an optional {@code #RRGGBB} hex color string, case-insensitive on input and persisted
+ * Validate an optional #RRGGBB hex color string, case-insensitive on input and persisted
  * verbatim.
  *
- * <p>No case normalization is applied anywhere on the path, so {@code #AbCdEf} round-trips as
- * {@code #AbCdEf}.
+ * No case normalization is applied anywhere on the path, so #AbCdEf round-trips as
+ * #AbCdEf.
  *
- * <p>Decisions:
+ * Decisions:
  *
- * <p>{@link OptionalNotBlank} is deliberately NOT stacked alongside this annotation: {@link
- * ValidationConstants#COLUMN_COLOR_PATTERN} already rejects a blank or whitespace-only value (no
+ * OptionalNotBlank is deliberately NOT stacked alongside this annotation:
+ * ValidationConstants.COLUMN_COLOR_PATTERN already rejects a blank or whitespace-only value (no
  * run of six hex digits can be all whitespace), so stacking would produce two violations for the
- * same blank input, breaking the exactly-one-violation-per-invalid-input convention {@code
- * docs/CODE_STYLE.md} rule 4 depends on.
+ * same blank input, breaking the exactly-one-violation-per-invalid-input convention
+ * docs/CODE_STYLE.md rule 4 depends on.
  */
 @Documented
 @Target({ElementType.FIELD})

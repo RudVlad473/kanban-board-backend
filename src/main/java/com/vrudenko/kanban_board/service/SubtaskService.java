@@ -38,12 +38,12 @@ public class SubtaskService {
     @Autowired private EventIdGenerator eventIdGenerator;
 
     /**
-     * Create the subtask under an ownership-verified {@code task} and publish {@code
-     * SubtaskCreatedEvent} after commit.
+     * Create the subtask under an ownership-verified task and publish
+     * SubtaskCreatedEvent after commit.
      *
-     * <p>{@code @Transactional} is declared here so the after-commit publish does not depend on the
-     * caller; see {@link TaskService#save}. The user and board ids are walked from the verified
-     * {@code task}, never a raw path variable: {@link TaskService#addSubtaskByTaskId} verified
+     * The @Transactional annotation is declared here so the after-commit publish does not depend on the
+     * caller; see TaskService.save. The user and board ids are walked from the verified
+     * task, never a raw path variable: TaskService.addSubtaskByTaskId verified
      * ownership before handing it over (docs/CODE_STYLE.md rule 2).
      */
     @Transactional
@@ -85,10 +85,10 @@ public class SubtaskService {
     /**
      * Update the subtask if the caller's version matches, rejecting a stale write.
      *
-     * <p>The explicit version check is required in addition to {@code @Version}: this
+     * The explicit version check is required in addition to @Version: this
      * load-then-save flow runs inside one transaction, so Hibernate's dirty-check lock (which fires
      * on the UPDATE) cannot model "client read version N, another client wrote N+1, reject this
-     * write" across separate HTTP requests. Comparing {@code dto.getVersion()} to the just-loaded
+     * write" across separate HTTP requests. Comparing dto.getVersion() to the just-loaded
      * entity's version before any mutation turns that race into a rejected request instead of a
      * silent overwrite.
      */
@@ -135,11 +135,11 @@ public class SubtaskService {
     }
 
     /**
-     * Delete the subtask and publish {@code SubtaskDeletedEvent}.
+     * Delete the subtask and publish SubtaskDeletedEvent.
      *
-     * <p>The ids are captured into locals BEFORE the delete runs (see {@link
-     * TaskService#deleteById}): afterwards nothing is left to derive {@code taskId}/{@code boardId}
-     * from. The verified subtask's task/column/board chain is reachable via {@code @ManyToOne}
+     * The ids are captured into locals BEFORE the delete runs (see
+     * TaskService.deleteById): afterwards nothing is left to derive taskId/boardId
+     * from. The verified subtask's task/column/board chain is reachable via @ManyToOne
      * associations (EAGER by JPA default).
      */
     @Transactional
@@ -164,10 +164,10 @@ public class SubtaskService {
     }
 
     /**
-     * Delete every subtask of a task without publishing {@code SubtaskDeletedEvent}.
+     * Delete every subtask of a task without publishing SubtaskDeletedEvent.
      *
-     * <p>This cascade fires from {@link TaskService#deleteById}, whose own {@code TaskDeletedEvent}
-     * is the event a caller sees. See {@link ColumnService#deleteAllByBoardId} for the reasoning
+     * This cascade fires from TaskService.deleteById, whose own TaskDeletedEvent
+     * is the event a caller sees. See ColumnService.deleteAllByBoardId for the reasoning
      * shared by every cascade path.
      */
     void deleteAllByTaskId(String userId, String subtaskId) {
@@ -178,8 +178,8 @@ public class SubtaskService {
 
     /**
      * Batch variant for callers that already verified ownership of the parent task(s), such as a
-     * column-level bulk delete. Publishes no {@code SubtaskDeletedEvent}, like {@link
-     * #deleteAllByTaskId}.
+     * column-level bulk delete. Publishes no SubtaskDeletedEvent, like
+     * deleteAllByTaskId.
      */
     void deleteAllByTaskIds(List<String> taskIds) {
         if (taskIds.isEmpty()) {

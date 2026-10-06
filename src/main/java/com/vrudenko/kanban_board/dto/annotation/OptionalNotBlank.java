@@ -12,24 +12,24 @@ import jakarta.validation.ReportAsSingleViolation;
 import jakarta.validation.constraints.Pattern;
 
 /**
- * Reject a whitespace-only {@code String} while leaving {@code null} (an omitted, optional field)
+ * Reject a whitespace-only String while leaving null (an omitted, optional field)
  * untouched.
  *
- * <p>Stack it alongside a field's existing composed annotation (which owns that field's
- * {@code @Size} and character-class rules, e.g. {@link BoardName}, {@link TaskTitle}, {@link
- * SubtaskTitle}, {@link DisplayName}), never to replace it.
+ * Stack it alongside a field's existing composed annotation (which owns that
+ * field's @Size and character-class rules, e.g. BoardName, TaskTitle,
+ * SubtaskTitle, DisplayName), never to replace it.
  *
- * <p>Decisions:
+ * Decisions:
  *
- * <p>The composing constraint is {@link Pattern}, not {@code @NotBlank}: every built-in Bean
- * Validation constraint treats {@code null} as valid (only {@code @NotNull} / {@code @NotBlank} /
- * {@code @NotEmpty} reject it), so composing {@code @Pattern} is what makes "optional but not
- * blank" work. Swapping in {@code @NotBlank} would silently make every field this annotation is
+ * The composing constraint is Pattern, not @NotBlank: every built-in Bean
+ * Validation constraint treats null as valid (only @NotNull / @NotBlank
+ * / @NotEmpty reject it), so composing @Pattern is what makes "optional but not
+ * blank" work. Swapping in @NotBlank would silently make every field this annotation is
  * applied to mandatory.
  *
- * <p>{@code Pattern.Flag.DOTALL} is required because {@link Pattern} evaluates with {@code
- * Matcher.matches()} (a whole-string match), and an undotted {@code .} does not match a newline:
- * without {@code DOTALL} a legitimate multi-line value would be rejected outright.
+ * Pattern.Flag.DOTALL is required because Pattern evaluates with
+ * Matcher.matches() (a whole-string match), and an undotted . does not match a newline:
+ * without DOTALL a legitimate multi-line value would be rejected outright.
  */
 @Documented
 @Target({ElementType.FIELD})

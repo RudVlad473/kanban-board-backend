@@ -15,7 +15,7 @@ import lombok.Setter;
  * The root of the nested board read: every column, each with its tasks, each with its subtasks, in
  * one document instead of the four-round-trip fan-out of the flat DTO endpoints.
  *
- * <p>It is the one deliberate exception to this codebase's flat-DTO convention.
+ * It is the one deliberate exception to this codebase's flat-DTO convention.
  */
 @Getter
 @Setter

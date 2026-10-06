@@ -23,10 +23,10 @@ public interface ColumnRepository extends JpaRepository<ColumnEntity, String> {
     long countByBoardId(String boardId);
 
     /**
-     * Shift every column's {@code position} within one board by {@code delta}, for positions in the
+     * Shift every column's position within one board by delta, for positions in the
      * inclusive [fromPosition, toPosition] range, as a single bulk statement.
      *
-     * <p>The {@code board.id} predicate is mandatory, and bulk JPQL bypasses the persistence
+     * The board.id predicate is mandatory, and bulk JPQL bypasses the persistence
      * context: callers must exclude the position of any column they still hold managed in the same
      * transaction.
      */

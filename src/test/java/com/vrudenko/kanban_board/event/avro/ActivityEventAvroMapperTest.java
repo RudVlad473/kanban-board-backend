@@ -29,9 +29,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /**
- * Plain-context test of {@link ActivityEventAvroMapper}, which touches neither Kafka nor a DB.
+ * Plain-context test of ActivityEventAvroMapper, which touches neither Kafka nor a DB.
  *
- * <p>Extends {@link com.vrudenko.kanban_board.support.containers.AbstractPostgresContainerTest}
+ * Extends com.vrudenko.kanban_board.support.containers.AbstractPostgresContainerTest
  * only because the test profile names no datasource, so the context needs a container to boot.
  */
 @SpringBootTest
@@ -323,14 +323,14 @@ public class ActivityEventAvroMapperTest
         }
 
         /**
-         * Compares field by field because Avro's generated {@code setTimestamp()} truncates to
-         * {@link ChronoUnit#MILLIS}.
+         * Compares field by field because Avro's generated setTimestamp() truncates to
+         * ChronoUnit.MILLIS.
          *
-         * <p>Why this is the way it is: a full-precision {@link Instant#now()} never round-trips
-         * bit-identical through the {@code timestamp-millis} logical type (see the generated {@code
-         * AvroTaskMovedEvent.setTimestamp}), so timestamp uses {@code isCloseTo} instead of
-         * pre-truncating the input. Every other field, {@code eventId} included, is exact: neither
-         * {@code uuid} nor plain strings lose precision.
+         * Why this is the way it is: a full-precision Instant.now() never round-trips
+         * bit-identical through the timestamp-millis logical type (see the generated
+         * AvroTaskMovedEvent.setTimestamp), so timestamp uses isCloseTo instead of
+         * pre-truncating the input. Every other field, eventId included, is exact: neither
+         * uuid nor plain strings lose precision.
          */
         private void assertRoundTripEqual(ActivityEvent original, ActivityEvent roundTripped) {
             Assertions.assertThat(roundTripped).isInstanceOf(original.getClass());
@@ -427,8 +427,8 @@ public class ActivityEventAvroMapperTest
     }
 
     /**
-     * A real {@link SpecificRecord} the mapper does not know, to hit {@link
-     * ActivityEventAvroMapper#toDomain}'s required {@code default} arm: {@link SpecificRecord} is
+     * A real SpecificRecord the mapper does not know, to hit
+     * ActivityEventAvroMapper.toDomain's required default arm: SpecificRecord is
      * not sealed.
      */
     private static final class UnknownSpecificRecord implements SpecificRecord {

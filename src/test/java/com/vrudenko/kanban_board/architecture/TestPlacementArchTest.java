@@ -12,20 +12,20 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
  * Enforces docs/CODE_STYLE.md rule 13: a test class lives in a named subpackage, never the root
  * package.
  *
- * <p>Unlike {@link LayeringArchTest}, this class must import the test source set itself, since a
- * misplaced test is exactly what it looks for, so it cannot share that class's {@code
- * ImportOption.DoNotIncludeTests}.
+ * Unlike LayeringArchTest, this class must import the test source set itself, since a
+ * misplaced test is exactly what it looks for, so it cannot share that class's
+ * ImportOption.DoNotIncludeTests.
  *
- * <p>Known holes: a floor, not a ceiling. It checks only that a test sits in some named subpackage,
- * not the correct one: a column test under {@code e2e/task/} passes. Rule 4's purpose test and code
+ * Known holes: a floor, not a ceiling. It checks only that a test sits in some named subpackage,
+ * not the correct one: a column test under e2e/task/ passes. Rule 4's purpose test and code
  * review cover that.
  */
 @AnalyzeClasses(packages = "com.vrudenko.kanban_board")
 public class TestPlacementArchTest {
 
     /**
-     * A simple name ending in {@code Test}, or {@code Tests} for the Initializr-generated {@code
-     * KanbanBoardApplicationTests}, the one named exemption below.
+     * A simple name ending in Test, or Tests for the Initializr-generated
+     * KanbanBoardApplicationTests, the one named exemption below.
      */
     private static final DescribedPredicate<JavaClass> HAS_TEST_MARKER_SIMPLE_NAME =
             DescribedPredicate.describe(

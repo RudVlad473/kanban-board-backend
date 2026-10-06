@@ -16,14 +16,14 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.Pageable;
 
 /**
- * Tripwire: {@code activity_log} rows carry no foreign key to a user, so {@link
- * AbstractAppTest#cleanup()} must delete them or they survive between test methods.
+ * Tripwire: activity_log rows carry no foreign key to a user, so
+ * AbstractAppTest.cleanup() must delete them or they survive between test methods.
  *
- * <p>Two structurally identical methods make removing {@code activityLogRepository.deleteAll()}
- * from {@code AbstractAppTest.cleanup()} turn this red: whichever runs second sees the row the
- * first left behind. Assertions are scoped by a constant probe board id, {@link #PROBE_BOARD_ID},
- * not an absolute count, because the {@code AbstractKafkaContainerTest} subclasses write real
- * activity-log rows into the same database, have no {@code @AfterEach} cleanup, and use real ULID
+ * Two structurally identical methods make removing activityLogRepository.deleteAll()
+ * from AbstractAppTest.cleanup() turn this red: whichever runs second sees the row the
+ * first left behind. Assertions are scoped by a constant probe board id, PROBE_BOARD_ID,
+ * not an absolute count, because the AbstractKafkaContainerTest subclasses write real
+ * activity-log rows into the same database, have no @AfterEach cleanup, and use real ULID
  * board ids.
  */
 @SpringBootTest

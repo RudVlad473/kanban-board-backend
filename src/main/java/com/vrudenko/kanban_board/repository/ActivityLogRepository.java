@@ -12,8 +12,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 /**
- * {@code existsByEventId} is the idempotency fast path {@code ActivityLogRecorder} checks before
- * every insert. {@code findAllByBoardId} leaves ordering to the caller through {@link Pageable},
+ * existsByEventId is the idempotency fast path ActivityLogRecorder checks before
+ * every insert. findAllByBoardId leaves ordering to the caller through Pageable,
  * deliberately not encoded in the method name.
  */
 public interface ActivityLogRepository extends JpaRepository<ActivityLogEntity, String> {

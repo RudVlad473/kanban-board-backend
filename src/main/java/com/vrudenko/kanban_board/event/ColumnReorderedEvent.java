@@ -4,10 +4,10 @@ import java.time.Instant;
 
 /**
  * Announce that a column moved to a new position among its board's siblings, carrying the
- * server-derived {@code sourcePosition}/{@code targetPosition} pair.
+ * server-derived sourcePosition/targetPosition pair.
  *
- * <p>Both positions are computed integers, never user-authored text. {@code targetPosition} is the
- * <b>effective</b> post-clamp position, not the raw requested value: {@code ColumnService#reorder}
+ * Both positions are computed integers, never user-authored text. targetPosition is the
+ * effective post-clamp position, not the raw requested value: ColumnService#reorder
  * clamps a request beyond the board's sibling count down to the end.
  */
 public record ColumnReorderedEvent(

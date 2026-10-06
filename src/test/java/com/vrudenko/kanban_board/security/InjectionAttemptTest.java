@@ -42,24 +42,24 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * Adversarial payload coverage for parameter binding and validation boundaries.
  *
- * <p>One nested group per category: {@link SqlInjection}, {@link StoredXss}, {@link
- * OversizedBoundary}, {@link MalformedPathVariable}.
+ * One nested group per category: SqlInjection, StoredXss,
+ * OversizedBoundary, MalformedPathVariable.
  *
- * <p>Runs through real {@link MockMvc} into the Testcontainers-backed PostgreSQL ({@code
- * docs/CODE_STYLE.md} rule 4): a mocked repository would prove nothing about parameter binding.
+ * Runs through real MockMvc into the Testcontainers-backed PostgreSQL (
+ * docs/CODE_STYLE.md rule 4): a mocked repository would prove nothing about parameter binding.
  *
- * <p>Why this is the way it is: it authenticates through {@link
- * AbstractAppMockMvcTest#signinCookie()} once per test and replays the cookie, not through {@code
- * .with(user(userId))}. That shortcut establishes a new HTTP session on every call, which trips
- * {@code MAX_CONCURRENT_SESSIONS = 2} on the third call for one principal, because {@code
- * SessionManagementFilter} holds its own DSL-composed, in-memory-registry-backed {@code
- * SessionAuthenticationStrategy}, a different instance from the {@code
- * sessionAuthenticationStrategy} bean the real signin path invokes. A real signin establishes one
+ * Why this is the way it is: it authenticates through
+ * AbstractAppMockMvcTest.signinCookie() once per test and replays the cookie, not through
+ * .with(user(userId)). That shortcut establishes a new HTTP session on every call, which trips
+ * MAX_CONCURRENT_SESSIONS = 2 on the third call for one principal, because
+ * SessionManagementFilter holds its own DSL-composed, in-memory-registry-backed
+ * SessionAuthenticationStrategy, a different instance from the
+ * sessionAuthenticationStrategy bean the real signin path invokes. A real signin establishes one
  * session, so replaying its cookie never hits the ceiling; the interaction is invisible in
  * production, where signin pre-establishes its session before the security context is saved.
  *
- * <p>Prohibition: if any case fails, investigate the binding assumption, never add input
- * sanitization to production code. There is no raw or concatenated SQL in {@code src/main}; this
+ * Prohibition: if any case fails, investigate the binding assumption, never add input
+ * sanitization to production code. There is no raw or concatenated SQL in src/main; this
  * class exists to prove that stays true.
  */
 @SpringBootTest
@@ -161,10 +161,10 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
     }
 
     /**
-     * Round-trips a subtask title through {@code PUT .../subtasks/{subtaskId}} against a subtask
-     * created through the service layer via {@link #createSubtask()}.
+     * Round-trips a subtask title through PUT .../subtasks/{subtaskId} against a subtask
+     * created through the service layer via createSubtask().
      *
-     * <p>Both this route and the creation route flow through {@code SubtaskRepository.save}, so the
+     * Both this route and the creation route flow through SubtaskRepository.save, so the
      * persistence/binding guarantee under test is the same either way.
      */
     private SubtaskResponseDTO updateSubtaskTitle(
@@ -209,11 +209,11 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
     class SqlInjection {
 
         /**
-         * The full four-step proof against Column name, the least-restricted free-text field (no
-         * {@code @Pattern}, unlike Board name).
+         * The full four-step proof against Column name, the least-restricted free-text field
+         * (no @Pattern, unlike Board name).
          *
-         * <p>(1) submit the payload, (2) read the created resource back byte-for-byte, (3) assert
-         * the sibling fixture columns from {@code setup()} still exist, (4) perform a further
+         * (1) submit the payload, (2) read the created resource back byte-for-byte, (3) assert
+         * the sibling fixture columns from setup() still exist, (4) perform a further
          * normal create-and-read, proving the table itself survived, not merely this row.
          */
         @Test
@@ -331,7 +331,7 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
         }
 
         /**
-         * Board name's {@code @Pattern} (letters, digits, spaces only) rejects every classic
+         * Board name's @Pattern (letters, digits, spaces only) rejects every classic
          * SQL-meta-character payload before JPA, with a clean 400, never a 500.
          */
         @Test
@@ -356,7 +356,7 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
         }
 
         /**
-         * A punctuation-free, SQL-keyword-bearing board name that satisfies {@code @BoardName}'s
+         * A punctuation-free, SQL-keyword-bearing board name that satisfies @BoardName's
          * whitelist still round-trips as inert text, so parameter binding holds independently of
          * the whitelist.
          */
@@ -474,7 +474,7 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
         }
 
         /**
-         * Board name's {@code @Pattern} whitelist blocks {@code <}/{@code >} as it blocks SQL
+         * Board name's @Pattern whitelist blocks </> as it blocks SQL
          * meta-characters: a clean 400, never a 500.
          */
         @Test
@@ -498,12 +498,12 @@ public class InjectionAttemptTest extends AbstractAppMockMvcTest {
         }
 
         /**
-         * {@code color} has a closed format ({@code #RRGGBB}), so a script/HTML payload is rejected
+         * color has a closed format (#RRGGBB), so a script/HTML payload is rejected
          * at the DTO boundary instead of round-tripped verbatim.
          *
-         * <p>Rejection is proven on status and on absence from persistence, never on absence from
+         * Rejection is proven on status and on absence from persistence, never on absence from
          * the response body: Jackson silently drops an unrecognized JSON key, so a body-only check
-         * would pass even if {@code color} did not exist. This anchors on the 400 field-error
+         * would pass even if color did not exist. This anchors on the 400 field-error
          * envelope and a fresh GET.
          */
         @ParameterizedTest

@@ -61,13 +61,13 @@ public class BoardService {
     }
 
     /**
-     * Delete the board and cascade to its columns, tasks and subtasks, publishing one {@code
-     * BoardDeletedEvent}.
+     * Delete the board and cascade to its columns, tasks and subtasks, publishing one
+     * BoardDeletedEvent.
      *
-     * <p>The id is captured into a local BEFORE the cascade and the delete run (see {@link
-     * TaskService#deleteById}): afterwards nothing is left to derive {@code boardId} from. The
+     * The id is captured into a local BEFORE the cascade and the delete run (see
+     * TaskService.deleteById): afterwards nothing is left to derive boardId from. The
      * event fires once per directly-requested delete; cascaded children publish nothing of their
-     * own, so {@link #deleteAllByUserId} emits one event per board, not one combined
+     * own, so deleteAllByUserId emits one event per board, not one combined
      * account-deletion event.
      */
     @Transactional
@@ -101,13 +101,13 @@ public class BoardService {
     }
 
     /**
-     * Return the board with its columns, tasks and subtasks nested, for {@code GET
-     * /boards/{boardId}/full}: the one deliberate exception to this codebase's flat-DTO convention.
+     * Return the board with its columns, tasks and subtasks nested, for GET
+     * /boards/{boardId}/full: the one deliberate exception to this codebase's flat-DTO convention.
      *
-     * <p>Ownership is verified FIRST via {@link #findById}, and the fetch-join query runs against
-     * the <b>verified entity's own id</b>, never the raw {@code boardId} path parameter: a nested
+     * Ownership is verified FIRST via findById, and the fetch-join query runs against
+     * the verified entity's own id, never the raw boardId path parameter: a nested
      * response discloses strictly more than a flat one, so the ownership check matters more here,
-     * not less. The fetch join and the mapping both happen inside this {@code @Transactional}
+     * not less. The fetch join and the mapping both happen inside this @Transactional
      * method, so the DTO tree is fully materialised before the transaction ends and no unfetched
      * association is touched outside it.
      */
@@ -127,7 +127,7 @@ public class BoardService {
      * Rename the board if the caller's version matches, rejecting a stale write or a duplicate
      * name.
      *
-     * <p>The explicit version check is required in addition to {@code @Version}: this
+     * The explicit version check is required in addition to @Version: this
      * load-then-save flow runs inside one transaction, so Hibernate's UPDATE-time dirty-check lock
      * cannot catch a stale read-then-write across separate HTTP requests. It runs before any field
      * is mutated and before the duplicate-name guard.
@@ -175,10 +175,10 @@ public class BoardService {
     }
 
     /**
-     * Create the board for {@code user} and publish {@code BoardCreatedEvent} after commit.
+     * Create the board for user and publish BoardCreatedEvent after commit.
      *
-     * <p>{@code @Transactional} is declared here so the after-commit publish does not depend on the
-     * caller; see {@link TaskService#save}.
+     * The @Transactional annotation is declared here so the after-commit publish does not depend on the
+     * caller; see TaskService.save.
      */
     @Transactional
     public BoardResponseDTO save(SaveBoardRequestDTO dto, UserEntity user) {

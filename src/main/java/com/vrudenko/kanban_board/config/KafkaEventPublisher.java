@@ -14,25 +14,25 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
- * Send each {@link ActivityEvent} published inside a transaction to {@link KafkaTopics#ACTIVITY}
+ * Send each ActivityEvent published inside a transaction to KafkaTopics.ACTIVITY
  * strictly after commit.
  *
- * <p>A committed mutation's HTTP outcome therefore never depends on Kafka reachability. This is the
- * only place in {@code src/main} that touches the Kafka client API. A failed send is logged, never
+ * A committed mutation's HTTP outcome therefore never depends on Kafka reachability. This is the
+ * only place in src/main that touches the Kafka client API. A failed send is logged, never
  * swallowed; the mutation has already succeeded and returned by then.
  *
- * <p>Decisions:
+ * Decisions:
  *
- * <p>Dispatch is {@code @Async} onto the {@code kafkaPublishExecutor} pool ({@link AsyncConfig}):
- * {@code KafkaTemplate.send()} blocks its caller inside {@code KafkaProducer.doSend ->
- * waitOnMetadata} for up to {@code max.block.ms} before returning its future, so the AFTER_COMMIT
+ * Dispatch is @Async onto the kafkaPublishExecutor pool (AsyncConfig):
+ * KafkaTemplate.send() blocks its caller inside KafkaProducer.doSend ->
+ * waitOnMetadata for up to max.block.ms before returning its future, so the AFTER_COMMIT
  * thread (the request thread in production, the fixture-setup thread in tests) stalled for that
- * bound on every mutation. Without {@code @Async} this was a real 20 to 25 minute full-suite hang.
+ * bound on every mutation. Without @Async this was a real 20 to 25 minute full-suite hang.
  *
- * <p>No try/catch wraps the Avro mapping ({@link ActivityEventAvroMapper}) or the send: a
+ * No try/catch wraps the Avro mapping (ActivityEventAvroMapper) or the send: a
  * registry-down or schema-rejected failure is the same class as a broker-down one, and Confluent's
- * serializer wraps both in a Kafka {@code SerializationException} that becomes a failed future
- * rather than a synchronous throw, so the {@code whenComplete} callback already catches it.
+ * serializer wraps both in a Kafka SerializationException that becomes a failed future
+ * rather than a synchronous throw, so the whenComplete callback already catches it.
  */
 @Component
 public class KafkaEventPublisher {

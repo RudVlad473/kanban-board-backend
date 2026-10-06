@@ -14,10 +14,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /**
- * Proves {@link EventIdGenerator} delegates to a distinct, time-ordered id source.
+ * Proves EventIdGenerator delegates to a distinct, time-ordered id source.
  *
- * <p>No mocks (CODE_STYLE rule 4): the generator touches neither Kafka nor a database. Extends
- * {@link AbstractPostgresContainerTest} because the test profile names no datasource, so booting
+ * No mocks (CODE_STYLE rule 4): the generator touches neither Kafka nor a database. Extends
+ * AbstractPostgresContainerTest because the test profile names no datasource, so booting
  * the context needs a container even though no assertion here touches it.
  */
 @SpringBootTest
@@ -41,12 +41,12 @@ class EventIdGeneratorTest extends AbstractPostgresContainerTest {
          * 1000 rapid sequential calls yield exactly 1000 distinct values, by construction rather
          * than by probability.
          *
-         * <p>Why this is the way it is: {@code RandFlakeGenerator} composes each id from one shared
-         * {@code AtomicLong} holding {@code (timestampMillis << 22) | sequence}, updated via {@code
-         * updateAndGet(previous -> max(candidate, previous + 1))}, so every call sees a strictly
+         * Why this is the way it is: RandFlakeGenerator composes each id from one shared
+         * AtomicLong holding (timestampMillis << 22) | sequence, updated via
+         * updateAndGet(previous -> max(candidate, previous + 1)), so every call sees a strictly
          * greater payload than any prior call in the JVM. The earlier 23-random-bit design collided
          * in 13/200 trials of 1000 calls (~6.5%, matching the birthday-paradox prediction), and
-         * this assertion was relaxed to {@code MIN_DISTINCT_IDS=993} while that design lived.
+         * this assertion was relaxed to MIN_DISTINCT_IDS=993 while that design lived.
          */
         @Test
         void shouldReturnDistinctValues_whenCalledManyTimesRapidly() {
@@ -67,10 +67,10 @@ class EventIdGeneratorTest extends AbstractPostgresContainerTest {
          * Two back-to-back ids sort in generation order, which holds in practice, not by a
          * guarantee this test enforces.
          *
-         * <p>Known holes: {@code Long.toString(id, 36)} is not fixed-width, so Base36 ids of
+         * Known holes: Long.toString(id, 36) is not fixed-width, so Base36 ids of
          * different lengths do not compare correctly lexicographically. At the current epoch
          * (2018-01-01) the width is stable until 2053-10-19, so nothing should depend on
-         * lexicographic ordering of {@code event_id} surviving a width change. The monotonic shared
+         * lexicographic ordering of event_id surviving a width change. The monotonic shared
          * sequence makes two back-to-back calls strictly increasing even within one millisecond,
          * and both ids share the 12-char width, so string and numeric comparison agree.
          */

@@ -11,13 +11,13 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.cors.CorsConfigurationSource;
 
 /**
- * Asserts what {@link CorsConfig#corsConfigurationSource(java.util.List)} advertises, not real
+ * Asserts what CorsConfig.corsConfigurationSource(java.util.List) advertises, not real
  * browser preflight behavior.
  *
- * <p>Why this is the way it is: {@code MockMvc} dispatches in-process and never builds a
+ * Why this is the way it is: MockMvc dispatches in-process and never builds a
  * cross-origin preflight, so only what the backend advertises is provable at this tier. Do not
- * upgrade this to a preflight test here; that needs a real-socket test (REST Assured against {@code
- * AbstractAppE2ETest}). Extends {@link AbstractPostgresContainerTest} because the test needs no
+ * upgrade this to a preflight test here; that needs a real-socket test (REST Assured against
+ * AbstractAppE2ETest). Extends AbstractPostgresContainerTest because the test needs no
  * fixture data (docs/CODE_STYLE.md rule 4).
  */
 @SpringBootTest

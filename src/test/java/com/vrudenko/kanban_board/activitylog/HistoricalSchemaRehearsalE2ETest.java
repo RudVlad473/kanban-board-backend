@@ -43,34 +43,32 @@ import org.springframework.boot.test.context.SpringBootTest;
  * Rehearses the historical corpus against the new Avro schemas before the registry is repointed at
  * a production target.
  *
- * <p>It reads every row of this environment's real Postgres {@code activity_log} table (the durable
- * record, not the disposable Kafka topic), reconstructs each into its domain event via {@link
- * HistoricalActivityEventReconstructor}, and pushes it through the schemas end to end.
+ * It reads every row of this environment's real Postgres activity_log table (the durable
+ * record, not the disposable Kafka topic), reconstructs each into its domain event via
+ * HistoricalActivityEventReconstructor, and pushes it through the schemas end to end.
  *
- * <p>Decisions:
+ * Decisions:
  *
- * <ul>
- *   <li>Read-only against the historical database: this class opens no write transaction. {@link
- *       CorpusCheckAndRehearsalTest#shouldRehearseHistoricalCorpus_reportingSizeAndCoverage} reads
- *       rows through {@link ActivityLogRepository} or round-trips a reconstructed event in memory
- *       (direct {@code KafkaAvroSerializer}/{@code KafkaAvroDeserializer} calls against the
- *       registry). The one possible write is the final end-to-end sample, which republishes a
- *       handful of historical events for the real {@link ActivityLogConsumer}; it is structurally a
- *       no-op because {@link ActivityLogRecorder#record} is idempotent on {@code eventId} (its
- *       {@code existsByEventId} fast path) and every republished eventId already has a row in the
- *       database this class reads. Do not add an assertion that inserts a row through any other
- *       path: it would turn the rehearsal from a safe read into a mutation against the only
- *       surviving historical corpus.
- *   <li>Does not run under the {@code test} Spring profile: it carries no {@code
- *       spring.profiles.active} override, and the {@code rehearseHistoricalSchemas} Gradle task
- *       (unlike {@code test}/{@code fastTest}) never sets that property either, so Spring resolves
- *       the default profile's {@code application.properties}, whose datasource points at a real
- *       Postgres via the {@code DB_HOST}/{@code DB_NAME}/{@code DB_USER}/{@code DB_PASS}
- *       environment variables the running application uses. The Kafka broker and Schema Registry
- *       are still the Testcontainers-managed Redpanda from {@link AbstractKafkaContainerTest}; only
- *       the JPA datasource is real, which lets {@link ActivityLogRepository} read genuine
- *       historical rows instead of an empty database.
- * </ul>
+ * - Read-only against the historical database: this class opens no write transaction.
+ *   CorpusCheckAndRehearsalTest.shouldRehearseHistoricalCorpus_reportingSizeAndCoverage reads
+ *   rows through ActivityLogRepository or round-trips a reconstructed event in memory
+ *   (direct KafkaAvroSerializer/KafkaAvroDeserializer calls against the
+ *   registry). The one possible write is the final end-to-end sample, which republishes a
+ *   handful of historical events for the real ActivityLogConsumer; it is structurally a
+ *   no-op because ActivityLogRecorder.record is idempotent on eventId (its
+ *   existsByEventId fast path) and every republished eventId already has a row in the
+ *   database this class reads. Do not add an assertion that inserts a row through any other
+ *   path: it would turn the rehearsal from a safe read into a mutation against the only
+ *   surviving historical corpus.
+ * - Does not run under the test Spring profile: it carries no
+ *   spring.profiles.active override, and the rehearseHistoricalSchemas Gradle task
+ *   (unlike test/fastTest) never sets that property either, so Spring resolves
+ *   the default profile's application.properties, whose datasource points at a real
+ *   Postgres via the DB_HOST/DB_NAME/DB_USER/DB_PASS
+ *   environment variables the running application uses. The Kafka broker and Schema Registry
+ *   are still the Testcontainers-managed Redpanda from AbstractKafkaContainerTest; only
+ *   the JPA datasource is real, which lets ActivityLogRepository read genuine
+ *   historical rows instead of an empty database.
  */
 @SpringBootTest
 @Tag("rehearsal")
@@ -134,8 +132,8 @@ class HistoricalSchemaRehearsalE2ETest extends AbstractKafkaContainerTest {
     }
 
     /**
-     * Same tolerance rationale as {@link HistoricalActivityEventReconstructorTest}: Avro's {@code
-     * timestamp-millis} truncates to milliseconds by design; every other field is compared exactly.
+     * Same tolerance rationale as HistoricalActivityEventReconstructorTest: Avro's
+     * timestamp-millis truncates to milliseconds by design; every other field is compared exactly.
      */
     private void assertFieldEqual(ActivityEvent expected, ActivityEvent actual) {
         Assertions.assertThat(actual)

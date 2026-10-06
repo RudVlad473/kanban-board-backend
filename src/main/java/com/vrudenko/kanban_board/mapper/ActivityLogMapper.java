@@ -8,9 +8,9 @@ import org.mapstruct.MappingConstants;
 import org.mapstruct.ReportingPolicy;
 
 /**
- * No list variant is declared here — the service maps a {@link
- * org.springframework.data.domain.Page} through Spring Data's own element mapping ({@code
- * Page#map}), and a {@code Page} is not a {@link java.util.List}.
+ * No list variant is declared here — the service maps a
+ * org.springframework.data.domain.Page through Spring Data's own element mapping (
+ * Page#map), and a Page is not a java.util.List.
  */
 @Mapper(
         componentModel = MappingConstants.ComponentModel.SPRING,

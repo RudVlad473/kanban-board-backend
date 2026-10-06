@@ -7,10 +7,10 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 /**
- * Pins that {@link ValidationConstants#MAX_BOARD_ID_LENGTH} covers every id {@link
- * RandFlakeGenerator} can emit and that each matches {@link ValidationConstants#BOARD_ID_PATTERN}.
+ * Pins that ValidationConstants.MAX_BOARD_ID_LENGTH covers every id
+ * RandFlakeGenerator can emit and that each matches ValidationConstants.BOARD_ID_PATTERN.
  *
- * <p>Narrowing either side would make the app reject ids it issues itself, with no compiler or
+ * Narrowing either side would make the app reject ids it issues itself, with no compiler or
  * runtime signal.
  */
 public class BoardIdTest {

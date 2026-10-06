@@ -32,11 +32,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Proves every {@link GlobalExceptionHandler} branch emits an RFC 7807 {@code ProblemDetail} with a
- * stable {@code code} property.
+ * Proves every GlobalExceptionHandler branch emits an RFC 7807 ProblemDetail with a
+ * stable code property.
  *
- * <p>{@code $.code} and {@code $.errors} are asserted as top-level JSON keys, never {@code
- * $.properties.code}, which pins {@code ProblemDetailJacksonMixin}'s flattening of extension
+ * $.code and $.errors are asserted as top-level JSON keys, never
+ * $.properties.code, which pins ProblemDetailJacksonMixin's flattening of extension
  * properties.
  */
 @SpringBootTest
@@ -233,9 +233,9 @@ class GlobalExceptionHandlerTest extends AbstractAppMockMvcTest {
     /**
      * An unauthenticated request returns 401 with the same RFC 7807 envelope as every other error.
      *
-     * <p>{@link com.vrudenko.kanban_board.security.ProblemDetailAuthenticationEntryPoint} produces
-     * it, independently of this class's {@code @ExceptionHandler} methods, because {@code
-     * ExceptionTranslationFilter} rejects the request before {@code DispatcherServlet} dispatches.
+     * com.vrudenko.kanban_board.security.ProblemDetailAuthenticationEntryPoint produces
+     * it, independently of this class's @ExceptionHandler methods, because
+     * ExceptionTranslationFilter rejects the request before DispatcherServlet dispatches.
      */
     @Nested
     class UnauthenticatedTest {

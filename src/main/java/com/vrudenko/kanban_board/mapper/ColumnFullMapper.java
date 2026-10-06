@@ -9,11 +9,11 @@ import org.mapstruct.MappingConstants;
 import org.mapstruct.ReportingPolicy;
 
 /**
- * Map a column with its tasks, between {@link BoardFullMapper} and {@link TaskFullMapper}.
+ * Map a column with its tasks, between BoardFullMapper and TaskFullMapper.
  *
- * <p>{@code ColumnEntity.task} is a singular name on a {@code Set}-typed field, deliberately not
- * renamed (see {@link BoardFullMapper}), so the explicit {@code @Mapping} is required: without it
- * MapStruct silently leaves {@code tasks} null under {@code ReportingPolicy.IGNORE}.
+ * ColumnEntity.task is a singular name on a Set-typed field, deliberately not
+ * renamed (see BoardFullMapper), so the explicit @Mapping is required: without it
+ * MapStruct silently leaves tasks null under ReportingPolicy.IGNORE.
  */
 @Mapper(
         componentModel = MappingConstants.ComponentModel.SPRING,

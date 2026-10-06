@@ -13,11 +13,11 @@ public class AppDuplicateResourceException extends DataIntegrityViolationExcepti
     }
 
     /**
-     * Build the exception from an already-complete detail message, bypassing the {@code entityName}
+     * Build the exception from an already-complete detail message, bypassing the entityName
      * template.
      *
-     * <p>That template ("{@code entityName} with that name already exists") reads wrong for a
-     * duplicate signup email. A static factory, not a second {@code String} constructor: Java
+     * That template ("entityName with that name already exists") reads wrong for a
+     * duplicate signup email. A static factory, not a second String constructor: Java
      * cannot overload on parameter type alone here.
      */
     public static AppDuplicateResourceException withMessage(String message) {

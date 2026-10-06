@@ -23,12 +23,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
 /**
- * Tracer for the theme preference: controller, session-resolved identity ({@code @CurrentUserId}),
+ * Tracer for the theme preference: controller, session-resolved identity (@CurrentUserId),
  * service and database, round trip over MockMvc.
  *
- * <p>Why this is the way it is: it uses the real-signin cookie relay ({@link
- * AbstractAppMockMvcTest#signinCookie()}), never {@code .with(user())}, because the logout round
- * trip is the proof the preference lives in the {@code users} table and not the session, and the
+ * Why this is the way it is: it uses the real-signin cookie relay (
+ * AbstractAppMockMvcTest.signinCookie()), never .with(user()), because the logout round
+ * trip is the proof the preference lives in the users table and not the session, and the
  * per-user isolation case needs a second genuine session.
  */
 @SpringBootTest
@@ -190,9 +190,9 @@ public class ThemePersistenceTest extends AbstractAppMockMvcTest {
          * The load-bearing case: the one test that distinguishes server-side persistence from a
          * client-side or session-scoped preference.
          *
-         * <p>A PUT then GET within one session would pass against a session-scoped implementation;
-         * the logout and fresh signin in between make this a real round trip through the {@code
-         * users} table.
+         * A PUT then GET within one session would pass against a session-scoped implementation;
+         * the logout and fresh signin in between make this a real round trip through the
+         * users table.
          */
         @Test
         void shouldReturnDark_whenLoggingOutAndSigningInAgainAfterWritingDark() throws Exception {

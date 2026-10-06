@@ -213,8 +213,8 @@ class ResetControllerE2ETest extends AbstractKafkaContainerTest {
     }
 
     /**
-     * HTTP-level proof of the targeted-delete route, reached by omitting {@code fullReset} per
-     * {@link ResetController}'s {@code params}-based dispatch.
+     * HTTP-level proof of the targeted-delete route, reached by omitting fullReset per
+     * ResetController's params-based dispatch.
      */
     @Nested
     class DeleteUsersEndpoint {

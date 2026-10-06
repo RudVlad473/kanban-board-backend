@@ -11,10 +11,10 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * The task level of the nested board read: {@code version} and {@code position}, as in the flat
- * {@link TaskResponseDTO}, plus its subtasks.
+ * The task level of the nested board read: version and position, as in the flat
+ * TaskResponseDTO, plus its subtasks.
  *
- * <p>The leaf level reuses {@link com.vrudenko.kanban_board.dto.subtask_dto.SubtaskResponseDTO}: a
+ * The leaf level reuses com.vrudenko.kanban_board.dto.subtask_dto.SubtaskResponseDTO: a
  * subtask has no children, so a "full" variant would be a pure duplicate.
  */
 @Getter

@@ -134,7 +134,7 @@ public class TaskMoveTest extends AbstractAppMockMvcTest {
     }
 
     /**
-     * Tasks of {@code columnId}, sorted by the same {@code (position, id)} total order the
+     * Tasks of columnId, sorted by the same (position, id) total order the
      * production read path applies.
      */
     private List<TaskEntity> orderedTasks(String columnId) {

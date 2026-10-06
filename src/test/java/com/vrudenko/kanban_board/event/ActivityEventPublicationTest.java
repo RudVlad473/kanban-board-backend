@@ -30,7 +30,7 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** After-commit publication proof for every {@link ActivityEvent} this application publishes. */
+/** After-commit publication proof for every ActivityEvent this application publishes. */
 @SpringBootTest
 public class ActivityEventPublicationTest extends AbstractAppTest {
     @Autowired RecordingActivityEventListener recorder;
@@ -391,8 +391,8 @@ public class ActivityEventPublicationTest extends AbstractAppTest {
     }
 
     /**
-     * Pins "no ghost events, no dropped events" with a manually driven {@link TransactionTemplate}:
-     * {@code @Transactional} on the test method would always roll back.
+     * Pins "no ghost events, no dropped events" with a manually driven
+     * TransactionTemplate: @Transactional on the test method would always roll back.
      */
     @Nested
     class TransactionalSuppressionTest {

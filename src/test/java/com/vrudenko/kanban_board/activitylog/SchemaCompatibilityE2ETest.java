@@ -32,7 +32,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 /**
  * Turns BACKWARD compatibility from a configured setting into a demonstrated behaviour.
  *
- * <p>The first nested group asserts configuration: every one of the 14 production subjects reports
+ * The first nested group asserts configuration: every one of the 14 production subjects reports
  * BACKWARD, at subject level and not an inherited read of the registry's global default. The second
  * asserts enforcement: a backward-incompatible evolution is rejected and a compatible one accepted,
  * the control case that separates "compatibility is enforced" from "registration is broken for

@@ -59,7 +59,12 @@ java {
 
 spotless {
     java {
-        googleJavaFormat().aosp()
+        // Format code, leave Javadoc text alone.
+        //
+        // Java comments are plain text (docs/CODE_STYLE.md rule 14). With Javadoc formatting on,
+        // google-java-format 1.24.0 rewrites every blank-line paragraph break into the paragraph tag
+        // that scripts/verify-comments.py rejects, so the formatter and the comment lint would fight.
+        googleJavaFormat().aosp().formatJavadoc(false)
         target 'src/**/*.java'
         formatAnnotations()
 
@@ -648,8 +653,8 @@ tasks.withType(JavaCompile).configureEach {
 // DefaultCharset now fails the build instead of warning. The promotion is scoped to these five named checks,
 // not a blanket all-warnings-are-errors flip, so an error_prone_core bump cannot red the build by introducing
 // an unrelated new check (the version-pinning rationale above). The asymmetry is intentional: compileJava
-// has no equivalent promotion and still carries an unfixed warning-severity EscapedEntity finding at
-// UserMapper.java:23, a main-source finding outside the test-source scope.
+// has no equivalent promotion. A full compile on 2026-10-06 reported zero warnings in main sources, so the
+// gap is a policy choice, not a backlog.
 tasks.named('compileTestJava') {
     options.errorprone.error(
             'FutureReturnValueIgnored',

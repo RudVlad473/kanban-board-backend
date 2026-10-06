@@ -20,30 +20,30 @@ import org.apache.avro.specific.SpecificRecord;
 import org.springframework.stereotype.Component;
 
 /**
- * Translate between the plain {@link ActivityEvent} sealed interface and the Avro-generated {@link
- * SpecificRecord} classes, one per event type, generated from {@code src/main/avro/*.avsc}.
+ * Translate between the plain ActivityEvent sealed interface and the Avro-generated
+ * SpecificRecord classes, one per event type, generated from src/main/avro/*.avsc.
  *
- * <p>Decisions:
+ * Decisions:
  *
- * <p>A plain {@code @Component}, not a MapStruct {@code @Mapper} interface: MapStruct generates a
+ * A plain @Component, not a MapStruct @Mapper interface: MapStruct generates a
  * mapper for one concrete source type to one concrete target type, and cannot generate one whose
  * source is a sealed interface dispatched by pattern matching over 14 unrelated record shapes. Do
- * not "fix" this into a {@code @Mapper}; it is not possible.
+ * not "fix" this into a @Mapper; it is not possible.
  *
- * <p>No conversion is needed below. The {@code timestamp-millis} logical type on {@code timestamp},
- * used by every {@code .avsc} schema, generates a native {@link java.time.Instant} accessor
+ * No conversion is needed below. The timestamp-millis logical type on timestamp,
+ * used by every .avsc schema, generates a native java.time.Instant accessor
  * (confirmed by inspection under gradle-avro-plugin 1.9.1 + Avro 1.12.1; see the comment next to
- * the avro plugin declaration in {@code build.gradle}). {@code eventId} is a plain Base36 string
- * with no logical type, and Avro's native {@code int}/{@code boolean} cover {@link
- * ColumnReorderedEvent}'s positions and {@link SubtaskUpdatedEvent}'s completion flag, so every
+ * the avro plugin declaration in build.gradle). eventId is a plain Base36 string
+ * with no logical type, and Avro's native int/boolean cover
+ * ColumnReorderedEvent's positions and SubtaskUpdatedEvent's completion flag, so every
  * field passes straight through.
  */
 @Component
 public class ActivityEventAvroMapper {
 
     /**
-     * Exhaustive switch over the sealed {@link ActivityEvent}, deliberately without a {@code
-     * default} arm: a new event record is a compile error until the switch is updated, not an
+     * Exhaustive switch over the sealed ActivityEvent, deliberately without a
+     * default arm: a new event record is a compile error until the switch is updated, not an
      * unmappable event at runtime.
      */
     public SpecificRecord toAvro(ActivityEvent event) {
@@ -172,10 +172,10 @@ public class ActivityEventAvroMapper {
     }
 
     /**
-     * Dispatch on the 14 generated Avro types. Unlike {@link #toAvro(ActivityEvent)}, a {@code
-     * default} arm is required, and it throws on an unrecognised record.
+     * Dispatch on the 14 generated Avro types. Unlike toAvro(ActivityEvent), a
+     * default arm is required, and it throws on an unrecognised record.
      *
-     * <p>{@link SpecificRecord} is an ordinary interface, not sealed, so the compiler cannot prove
+     * SpecificRecord is an ordinary interface, not sealed, so the compiler cannot prove
      * exhaustiveness here.
      */
     public ActivityEvent toDomain(SpecificRecord record) {

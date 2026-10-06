@@ -7,16 +7,16 @@ import org.hibernate.generator.EventType;
 import org.hibernate.id.IdentifierGenerator;
 
 /**
- * Generate base36 ids from a Snowflake-shaped packed {@code long}: 1 unused sign bit, 41 timestamp
+ * Generate base36 ids from a Snowflake-shaped packed long: 1 unused sign bit, 41 timestamp
  * bits (lasting until 2087-09-07), 22 sequence bits.
  *
- * <p>See https://adileo.github.io/awesome-identifiers/.
+ * See https://adileo.github.io/awesome-identifiers/.
  *
- * <p>Decisions:
+ * Decisions:
  *
- * <p>Uniqueness is per-JVM, and that is the whole guarantee: two JVMs sharing a database would
+ * Uniqueness is per-JVM, and that is the whole guarantee: two JVMs sharing a database would
  * collide on the shared sequence space, since no machine-id field separates them. Accepted
- * deliberately because the app runs as a single replica ({@code k8s/base/app/app.yaml}). The old
+ * deliberately because the app runs as a single replica (k8s/base/app/app.yaml). The old
  * random-low-bits design was equally unsafe across instances, only probabilistically.
  */
 public class RandFlakeGenerator implements IdentifierGenerator {

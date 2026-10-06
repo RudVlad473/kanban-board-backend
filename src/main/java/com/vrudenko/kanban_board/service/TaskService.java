@@ -46,12 +46,12 @@ public class TaskService {
     @Autowired private EventIdGenerator eventIdGenerator;
 
     /**
-     * Create the task at the end of its column and publish {@code TaskCreatedEvent} after commit.
+     * Create the task at the end of its column and publish TaskCreatedEvent after commit.
      *
-     * <p>{@code @Transactional} is declared here, not left to {@link
-     * ColumnService#addTaskByColumnId}, so the after-commit publish does not depend on the caller:
-     * {@code @TransactionalEventListener} silently skips delivery with no active transaction, which
-     * would drop the event with no error and no log line. {@code REQUIRED} propagation is a no-op
+     * The @Transactional annotation is declared here, not left to
+     * ColumnService.addTaskByColumnId, so the after-commit publish does not depend on the
+     * caller: @TransactionalEventListener silently skips delivery with no active transaction, which
+     * would drop the event with no error and no log line. REQUIRED propagation is a no-op
      * inside an existing transaction.
      */
     @Transactional
@@ -102,10 +102,10 @@ public class TaskService {
     /**
      * Update the task if the caller's version matches, rejecting a stale write.
      *
-     * <p>The explicit version check is required in addition to {@code @Version}: this
+     * The explicit version check is required in addition to @Version: this
      * load-then-save flow runs inside one transaction, so Hibernate's dirty-check lock (which fires
      * on the UPDATE) cannot model "client read version N, another client wrote N+1, reject this
-     * write" across separate HTTP requests. Comparing {@code dto.getVersion()} to the just-loaded
+     * write" across separate HTTP requests. Comparing dto.getVersion() to the just-loaded
      * entity's version before any mutation turns that race into a rejected request instead of a
      * silent overwrite.
      */
@@ -149,23 +149,23 @@ public class TaskService {
     }
 
     /**
-     * Move the task to a target column and position, applying {@link #updateById}'s explicit
+     * Move the task to a target column and position, applying updateById's explicit
      * version check before mutating.
      *
-     * <p>Ownership of the TARGET column is verified too, and a cross-board move is rejected before
+     * Ownership of the TARGET column is verified too, and a cross-board move is rejected before
      * the version check: a wrong-board target is a request-shape problem independent of
      * concurrency, so 400 is the more specific signal.
      *
-     * <p>Decisions:
+     * Decisions:
      *
-     * <p><b>Renumbering contract:</b> {@code dto.getTargetPosition()} is nullable; {@code null}
+     * Renumbering contract: dto.getTargetPosition() is nullable; null
      * means "append at the end of the target column", preserving the behaviour for clients that
      * never send it. Positions stay contiguous from zero within a column; a position beyond the
      * destination's sibling count is clamped to the end rather than rejected, so the natural
      * drag-to-end gesture always succeeds. The bulk shifts run as plain JPQL, which bypasses the
      * persistence context: they never touch the moved task's own pre-shift position, so the
-     * still-managed {@code task} never goes stale, and shifted siblings do NOT have their
-     * {@code @Version} bumped (bulk JPQL never loads them as managed entities). A client editing a
+     * still-managed task never goes stale, and shifted siblings do NOT have
+     * their @Version bumped (bulk JPQL never loads them as managed entities). A client editing a
      * sibling task is not 409'd just because someone else reordered a different task in the same
      * column.
      */
@@ -247,10 +247,10 @@ public class TaskService {
     }
 
     /**
-     * Delete the task and publish {@code TaskDeletedEvent}.
+     * Delete the task and publish TaskDeletedEvent.
      *
-     * <p>The ids are captured into locals BEFORE the deletes run: afterwards nothing is left to
-     * derive {@code boardId} from, and the event's consumer runs with no {@code SecurityContext}
+     * The ids are captured into locals BEFORE the deletes run: afterwards nothing is left to
+     * derive boardId from, and the event's consumer runs with no SecurityContext
      * and cannot look it up.
      */
     @Transactional
@@ -277,32 +277,32 @@ public class TaskService {
 
     /**
      * Delete a column's tasks and subtasks in batches, for callers that already verified ownership
-     * of {@code column}, so the query count does not scale with the number of tasks.
+     * of column, so the query count does not scale with the number of tasks.
      *
-     * <p>The batch deletes are bulk JPQL, which bypasses the persistence context: anything still
+     * The batch deletes are bulk JPQL, which bypasses the persistence context: anything still
      * tracked in this session (a caller looping over many columns or boards in one transaction,
      * e.g. account deletion) can go stale, so flushing and clearing afterward keeps it consistent
      * with the DB.
      *
-     * <p>Decisions:
+     * Decisions:
      *
-     * <p><b>{@code @Version} bypass, by design:</b> {@code taskRepository.deleteAllByIdInBatch} and
-     * {@code SubtaskRepository.deleteAllByTaskIdIn} (via {@link SubtaskService#deleteAllByTaskIds})
-     * issue a raw bulk {@code DELETE ... WHERE id IN (...)}, which never loads the rows as managed
-     * entities, so there is nothing to dirty-check {@code @Version} against. The deletes proceed
+     * The @Version bypass, by design: taskRepository.deleteAllByIdInBatch and
+     * SubtaskRepository.deleteAllByTaskIdIn (via SubtaskService.deleteAllByTaskIds)
+     * issue a raw bulk DELETE ... WHERE id IN (...), which never loads the rows as managed
+     * entities, so there is nothing to dirty-check @Version against. The deletes proceed
      * even if another transaction just bumped a row's version. This is an accepted, delete-wins
      * tradeoff: a delete racing a version-mismatched update discards the update's effect on a row
-     * being removed anyway, and there is no "stale delete" to detect. Per-row {@code AND version =
-     * ?} clauses do not fit a multi-row bulk statement (each row could expect a different version)
-     * and would reintroduce the per-entity-load N+1 this batch delete avoids. Contrast {@link
-     * ColumnService#deleteAllByBoardId}, whose column-delete step is a <i>derived</i>
-     * (fetch-then-remove) delete and DOES honor {@code @Version}: the two paths are deliberately
+     * being removed anyway, and there is no "stale delete" to detect. Per-row AND version =
+     * ? clauses do not fit a multi-row bulk statement (each row could expect a different version)
+     * and would reintroduce the per-entity-load N+1 this batch delete avoids. Contrast
+     * ColumnService.deleteAllByBoardId, whose column-delete step is a derived
+     * (fetch-then-remove) delete and DOES honor @Version: the two paths are deliberately
      * asymmetric.
      *
-     * <p><b>No per-task or per-subtask event is published:</b> this cascade fires from {@link
-     * ColumnService#deleteById} or {@link ColumnService#deleteAllByBoardId}, whose own {@code
-     * ColumnDeletedEvent}/{@code BoardDeletedEvent} is the event a caller sees. Fanning out
-     * per-child events would reintroduce the N+1 (see {@link ColumnService#deleteAllByBoardId}).
+     * No per-task or per-subtask event is published: this cascade fires from
+     * ColumnService.deleteById or ColumnService.deleteAllByBoardId, whose own
+     * ColumnDeletedEvent/BoardDeletedEvent is the event a caller sees. Fanning out
+     * per-child events would reintroduce the N+1 (see ColumnService.deleteAllByBoardId).
      */
     @Transactional
     void deleteAllByColumn(ColumnEntity column) {

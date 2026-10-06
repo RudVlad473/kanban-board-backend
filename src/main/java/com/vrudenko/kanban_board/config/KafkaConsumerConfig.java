@@ -28,14 +28,14 @@ import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.springframework.util.backoff.FixedBackOff;
 
 /**
- * Provision both {@code activitylog} Kafka topics and wire the retry-then-dead-letter handling that
+ * Provision both activitylog Kafka topics and wire the retry-then-dead-letter handling that
  * isolates a poison message from the rest of the feed.
  *
- * <p>A duplicate {@code eventId} never reaches the error handler: {@link
- * com.vrudenko.kanban_board.activitylog.ActivityLogRecorder} completes normally on both its fast
+ * A duplicate eventId never reaches the error handler:
+ * com.vrudenko.kanban_board.activitylog.ActivityLogRecorder completes normally on both its fast
  * path and its constraint backstop, so only a genuine failure (malformed payload, down database,
  * serialisation error) propagates out of the listener. Dead-lettering a deserialization failure
- * requires the {@code ErrorHandlingDeserializer} block in {@code application.properties}; without
+ * requires the ErrorHandlingDeserializer block in application.properties; without
  * it a malformed payload fails inside the poll loop before this handler sees the record.
  */
 @Configuration
@@ -61,20 +61,20 @@ public class KafkaConsumerConfig implements DisposableBean {
     }
 
     /**
-     * Declare the {@code @Primary} default template so unqualified injection does not resolve to
+     * Declare the @Primary default template so unqualified injection does not resolve to
      * the dead-letter template.
      *
-     * <p>Decisions:
+     * Decisions:
      *
-     * <p>Any {@code @Bean} of type {@code KafkaTemplate} disables Spring Boot's {@code
-     * KafkaAutoConfiguration.kafkaTemplate()} outright: it is guarded by a bare-type
-     * {@code @ConditionalOnMissingBean(KafkaTemplate.class)}, blind to generic parameterisation. So
-     * {@link #deadLetterKafkaTemplate} alone suppressed it, and every unqualified {@code @Autowired
-     * KafkaTemplate<String, Object>} (including {@link KafkaEventPublisher}) silently resolved to
-     * the DLT-flavoured template, which built its producer properties from {@code KafkaProperties}
-     * and so ignored a {@code KafkaConnectionDetails} override (e.g. Testcontainers'
-     * {@code @ServiceConnection}). {@link #deadLetterKafkaTemplate} stays reachable only by bean
-     * name or {@code @Qualifier}.
+     * Any @Bean of type KafkaTemplate disables Spring Boot's
+     * KafkaAutoConfiguration.kafkaTemplate() outright: it is guarded by a
+     * bare-type @ConditionalOnMissingBean(KafkaTemplate.class), blind to generic parameterisation. So
+     * deadLetterKafkaTemplate alone suppressed it, and every unqualified @Autowired
+     * KafkaTemplate<String, Object> (including KafkaEventPublisher) silently resolved to
+     * the DLT-flavoured template, which built its producer properties from KafkaProperties
+     * and so ignored a KafkaConnectionDetails override (e.g.
+     * Testcontainers'@ServiceConnection). deadLetterKafkaTemplate stays reachable only by bean
+     * name or @Qualifier.
      */
     @Bean
     @Primary
@@ -84,30 +84,30 @@ public class KafkaConsumerConfig implements DisposableBean {
     }
 
     /**
-     * Build a template whose serializer preserves a dead-lettered {@code byte[]} record value,
+     * Build a template whose serializer preserves a dead-lettered byte[] record value,
      * which the application's JSON-valued template would base64-encode.
      *
-     * <p>Producer properties come from the autoconfigured {@code kafkaProducerFactory} bean, so
-     * this template inherits its bootstrap servers (including any {@code KafkaConnectionDetails}
-     * override) and timeouts instead of a ConnectionDetails-blind copy built from {@code
-     * KafkaProperties}.
+     * Producer properties come from the autoconfigured kafkaProducerFactory bean, so
+     * this template inherits its bootstrap servers (including any KafkaConnectionDetails
+     * override) and timeouts instead of a ConnectionDetails-blind copy built from
+     * KafkaProperties.
      *
-     * <p>Decisions:
+     * Decisions:
      *
-     * <p>{@code delegates} must be a {@link LinkedHashMap}: {@link DelegatingByTypeSerializer} with
-     * {@code assumeType=true} walks iteration order and uses the first entry whose key {@code
-     * isAssignableFrom} the value's class, and {@code Object.class} matches {@code byte[]}. With a
-     * {@code HashMap} a dead-lettered payload could hit {@code Object.class} first, go through
-     * {@link JsonSerializer} and be base64-encoded. This was a production bug, surfaced only by
-     * live Testcontainers verification of the real dead-letter path; {@code HashMap} iteration
-     * order is invisible to {@code compileJava} and to mocked tests.
+     * delegates must be a LinkedHashMap: DelegatingByTypeSerializer with
+     * assumeType=true walks iteration order and uses the first entry whose key
+     * isAssignableFrom the value's class, and Object.class matches byte[]. With a
+     * HashMap a dead-lettered payload could hit Object.class first, go through
+     * JsonSerializer and be base64-encoded. This was a production bug, surfaced only by
+     * live Testcontainers verification of the real dead-letter path; HashMap iteration
+     * order is invisible to compileJava and to mocked tests.
      *
-     * <p>The producer factory is deliberately not its own {@code @Bean}: {@code
-     * KafkaAutoConfiguration.kafkaProducerFactory()} is guarded by a bare-type
-     * {@code @ConditionalOnMissingBean(ProducerFactory.class)}, so a second {@code ProducerFactory}
-     * bean of any parameterisation would suppress it and its {@code KafkaConnectionDetails}
-     * override. The reference is kept on this {@code @Configuration} and closed from {@link
-     * #destroy()}.
+     * The producer factory is deliberately not its own @Bean:
+     * KafkaAutoConfiguration.kafkaProducerFactory() is guarded by a
+     * bare-type @ConditionalOnMissingBean(ProducerFactory.class), so a second ProducerFactory
+     * bean of any parameterisation would suppress it and its KafkaConnectionDetails
+     * override. The reference is kept on this @Configuration and closed from
+     * destroy().
      */
     @Bean
     public KafkaTemplate<String, Object> deadLetterKafkaTemplate(
@@ -125,8 +125,8 @@ public class KafkaConsumerConfig implements DisposableBean {
     }
 
     /**
-     * Close the dead-letter producer factory, which is not a bean (see {@link
-     * #deadLetterKafkaTemplate}).
+     * Close the dead-letter producer factory, which is not a bean (see
+     * deadLetterKafkaTemplate).
      */
     @Override
     public void destroy() {
@@ -136,21 +136,21 @@ public class KafkaConsumerConfig implements DisposableBean {
     }
 
     /**
-     * Retry three times at a ~1s fixed interval, then dead-letter to {@link
-     * KafkaTopics#ACTIVITY_DLT}.
+     * Retry three times at a ~1s fixed interval, then dead-letter to
+     * KafkaTopics.ACTIVITY_DLT.
      *
-     * <p>Records are pinned to partition 0: the topic has one partition, so a source partition
+     * Records are pinned to partition 0: the topic has one partition, so a source partition
      * number could not exist there. Every dead-lettering is logged at error level with source
      * topic, partition, offset and cause, so a draining feed is a log line, not silence.
      *
-     * <p>Decisions:
+     * Decisions:
      *
-     * <p>{@code @Qualifier("deadLetterKafkaTemplate")} is required even though the parameter name
-     * matches the bean name: Spring looks for a {@code @Primary} candidate <em>before</em> falling
-     * back to parameter-name matching, so with {@link #kafkaTemplate} {@code @Primary} a bare
+     * The @Qualifier("deadLetterKafkaTemplate") annotation is required even though the parameter name
+     * matches the bean name: Spring looks for a @Primary candidate before falling
+     * back to parameter-name matching, so with kafkaTemplate @Primary a bare
      * parameter silently resolved to the default JSON-valued template and always base64-encoded the
-     * dead-lettered {@code byte[]}. Only live Testcontainers verification of the real dead-letter
-     * path caught it; {@code compileJava} cannot see which bean an ambiguous autowire point
+     * dead-lettered byte[]. Only live Testcontainers verification of the real dead-letter
+     * path caught it; compileJava cannot see which bean an ambiguous autowire point
      * resolves to at runtime.
      */
     @Bean

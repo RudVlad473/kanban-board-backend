@@ -11,15 +11,15 @@ import org.springframework.http.HttpStatus;
 import static io.restassured.RestAssured.given;
 
 /**
- * Proves {@code /api/actuator/health} is reachable unauthenticated, as the healthcheck curls it,
+ * Proves /api/actuator/health is reachable unauthenticated, as the healthcheck curls it,
  * and that the exposure allowlist is real, not a wildcard.
  *
- * <p>Why this is the way it is: it extends {@link AbstractAppE2ETest}, not the MockMvc tier, to
- * exercise the embedded servlet container's context-path stripping ({@code
- * server.servlet.context-path=/api}); a matcher that looks right in isolation can let a
+ * Why this is the way it is: it extends AbstractAppE2ETest, not the MockMvc tier, to
+ * exercise the embedded servlet container's context-path stripping (
+ * server.servlet.context-path=/api); a matcher that looks right in isolation can let a
  * logged-in-browser curl work while Docker's unauthenticated healthcheck gets a 302/401. It carries
- * no {@code @Tag("realSocket")}: nothing here is concurrent or slow, so it runs in the pre-commit
- * {@code fastTest} gate (docs/CODE_STYLE.md rule 4).
+ * no @Tag("realSocket"): nothing here is concurrent or slow, so it runs in the pre-commit
+ * fastTest gate (docs/CODE_STYLE.md rule 4).
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 public class ActuatorHealthE2ETest extends AbstractAppE2ETest {

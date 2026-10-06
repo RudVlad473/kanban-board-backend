@@ -18,12 +18,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Serve the caller's own user-scoped preferences, kept off {@code AuthenticationController}, the
+ * Serve the caller's own user-scoped preferences, kept off AuthenticationController, the
  * one controller deliberately requiring no authentication.
  *
- * <p>Neither route takes a user id from the path or the body; identity always comes from the
- * session. This is the whole IDOR mitigation for this controller and it is structural: {@link
- * UserService} is the identity root with no ownership chain above it, so there is nothing to chain
+ * Neither route takes a user id from the path or the body; identity always comes from the
+ * session. This is the whole IDOR mitigation for this controller and it is structural:
+ * UserService is the identity root with no ownership chain above it, so there is nothing to chain
  * a check from and no place in the route for another user's id.
  */
 @RestController

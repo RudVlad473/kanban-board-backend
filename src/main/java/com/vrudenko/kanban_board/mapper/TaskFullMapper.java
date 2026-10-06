@@ -8,10 +8,10 @@ import org.mapstruct.MappingConstants;
 import org.mapstruct.ReportingPolicy;
 
 /**
- * Map a task with its subtasks, reusing {@link SubtaskMapper} via {@code uses}.
+ * Map a task with its subtasks, reusing SubtaskMapper via uses.
  *
- * <p>{@code TaskEntity.subtasks} is already plural, so unlike the levels above no explicit
- * {@code @Mapping} is needed, and a subtask has no children, so no {@code SubtaskFullResponseDTO}
+ * TaskEntity.subtasks is already plural, so unlike the levels above no
+ * explicit @Mapping is needed, and a subtask has no children, so no SubtaskFullResponseDTO
  * is needed either.
  */
 @Mapper(

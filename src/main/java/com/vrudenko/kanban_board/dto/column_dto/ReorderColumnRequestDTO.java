@@ -9,9 +9,9 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * Require {@code targetPosition}, unlike {@code MoveTaskRequestDTO}'s nullable one.
+ * Require targetPosition, unlike MoveTaskRequestDTO's nullable one.
  *
- * <p>A task move has a meaningful no-position meaning ("move column, keep default placement"),
+ * A task move has a meaningful no-position meaning ("move column, keep default placement"),
  * while a column reorder with no target position asks for nothing at all.
  */
 @Getter

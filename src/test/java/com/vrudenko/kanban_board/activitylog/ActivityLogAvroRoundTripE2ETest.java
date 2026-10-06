@@ -27,9 +27,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /**
- * The tracer's end-to-end proof: a real {@link TaskMovedEvent} travels as Avro binary with a
- * registry-resolved schema id, is deserialized by {@code ActivityEventAvroMapper}, and lands as an
- * {@code activity_log} row, with the downstream exhaustive switch unaware anything changed.
+ * The tracer's end-to-end proof: a real TaskMovedEvent travels as Avro binary with a
+ * registry-resolved schema id, is deserialized by ActivityEventAvroMapper, and lands as an
+ * activity_log row, with the downstream exhaustive switch unaware anything changed.
  */
 @SpringBootTest
 @Tag("kafka")
@@ -62,10 +62,10 @@ class ActivityLogAvroRoundTripE2ETest extends AbstractKafkaContainerTest {
     }
 
     /**
-     * Polls {@link KafkaTopics#ACTIVITY} with a plain byte-array consumer, bypassing the Avro
-     * deserializer, until a record keyed by {@code key} is seen, then returns its raw value bytes.
+     * Polls KafkaTopics.ACTIVITY with a plain byte-array consumer, bypassing the Avro
+     * deserializer, until a record keyed by key is seen, then returns its raw value bytes.
      *
-     * <p>The topic is shared across the package's test classes (the context is cached), so matching
+     * The topic is shared across the package's test classes (the context is cached), so matching
      * is scoped by key, not by assuming an empty topic.
      */
     private byte[] awaitRawValueForKey(String key) {

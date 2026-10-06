@@ -43,8 +43,8 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 
 /**
- * Real-broker, real-Postgres proof of {@link ResetService#resetAll()}. Extends {@link
- * AbstractKafkaContainerTest} directly, not {@code AbstractAppTest}, so each test creates its
+ * Real-broker, real-Postgres proof of ResetService.resetAll(). Extends
+ * AbstractKafkaContainerTest directly, not AbstractAppTest, so each test creates its
  * fixtures through the real services.
  */
 @SpringBootTest
@@ -155,14 +155,14 @@ class ResetServiceE2ETest extends AbstractKafkaContainerTest {
     }
 
     /**
-     * Awaits {@code activity_log} reaching exactly {@code expectedRowCount}.
+     * Awaits activity_log reaching exactly expectedRowCount.
      *
-     * <p>Why this is the way it is: {@code KafkaEventPublisher#onActivityEvent} is {@code @Async}
-     * on {@code AFTER_COMMIT}, so returning from {@link #createDomainFixture()} does not mean its
-     * events reached the broker. Without this wait {@code resetAll()} races a bug found live: a
+     * Why this is the way it is: KafkaEventPublisher#onActivityEvent is @Async
+     * on AFTER_COMMIT, so returning from createDomainFixture() does not mean its
+     * events reached the broker. Without this wait resetAll() races a bug found live: a
      * fixture event arriving after the topic-trim step survives it, is consumed by the listener
-     * {@code resetAll()} restarts in its {@code finally} block, and lands a stray row after the
-     * Postgres truncate, failing an {@code isZero} assertion.
+     * resetAll() restarts in its finally block, and lands a stray row after the
+     * Postgres truncate, failing an isZero assertion.
      */
     private void awaitActivityLogRowCount(long expectedRowCount) {
         Awaitility.await()
@@ -423,12 +423,12 @@ class ResetServiceE2ETest extends AbstractKafkaContainerTest {
     }
 
     /**
-     * Real-Postgres, real-Kafka proof of {@link ResetService#deleteUsers}: a targeted delete
+     * Real-Postgres, real-Kafka proof of ResetService.deleteUsers: a targeted delete
      * removes exactly the named user's rows and leaves a second user's unchanged.
      *
-     * <p>The {@code activity_log}/Kafka-offset assertions for the deleted user are bounded, not
-     * strictly zero, because of the accepted async race documented on {@link
-     * ResetService#deleteUsers}.
+     * The activity_log/Kafka-offset assertions for the deleted user are bounded, not
+     * strictly zero, because of the accepted async race documented on
+     * ResetService.deleteUsers.
      */
     @Nested
     class DeleteUsersTest {

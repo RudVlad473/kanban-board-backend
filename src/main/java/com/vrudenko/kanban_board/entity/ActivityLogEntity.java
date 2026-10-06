@@ -15,28 +15,28 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * A single insert-only row of the per-board activity feed, written once by {@code
- * ActivityLogConsumer}. It has no {@code @Version} field because it is never updated.
+ * A single insert-only row of the per-board activity feed, written once by
+ * ActivityLogConsumer. It has no @Version field because it is never updated.
  *
- * <p>Decisions:
+ * Decisions:
  *
- * <p>{@code boardId} and {@code userId} are plain columns, deliberately not {@code @ManyToOne}
- * relations to {@link BoardEntity}/{@link UserEntity}. A foreign key would fail persistence
+ * boardId and userId are plain columns, deliberately not @ManyToOne
+ * relations to BoardEntity/UserEntity. A foreign key would fail persistence
  * whenever the referenced board or user is already deleted, turning a routine race into a poison
  * message, and the consumer that builds this row runs on a listener thread with no security
  * context, so it cannot resolve those entities anyway.
  *
- * <p>{@code detail} holds raw structured identifiers only (a JSON object string): never a
+ * detail holds raw structured identifiers only (a JSON object string): never a
  * pre-rendered sentence and never user-authored text such as a task title or description, column
  * name or board name. Human-readable rendering is a frontend concern, done from data the frontend
  * already has loaded.
  *
- * <p>{@code eventId} is a business dedupe key, not the row's identity, which is the base36 {@code
- * id} inherited from {@link BaseEntity}. {@code unique = true} here mirrors the database constraint
- * {@code uk_activity_log_event_id} carried by {@code
- * V6__change_activity_log_event_id_to_varchar.sql}; the migration, not this annotation, is what
- * production enforces (the real profile sets no {@code ddl-auto}). {@code eventId} holds a Base36
- * Snowflake-style id from {@code EventIdGenerator}, not a random {@link java.util.UUID}; rows
+ * eventId is a business dedupe key, not the row's identity, which is the base36
+ * id inherited from BaseEntity. unique = true here mirrors the database constraint
+ * uk_activity_log_event_id carried by
+ * V6__change_activity_log_event_id_to_varchar.sql; the migration, not this annotation, is what
+ * production enforces (the real profile sets no ddl-auto). eventId holds a Base36
+ * Snowflake-style id from EventIdGenerator, not a random java.util.UUID; rows
  * written before that change keep their UUID string form, so the column mixes both shapes, compared
  * for equality only, never parsed.
  */

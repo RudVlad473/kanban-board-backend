@@ -29,12 +29,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /**
- * Real-broker proof that {@link ActivityLogConsumer#onActivityEvent} turns a published event into a
- * persisted, deduplicated {@link ActivityLogEntity} row.
+ * Real-broker proof that ActivityLogConsumer.onActivityEvent turns a published event into a
+ * persisted, deduplicated ActivityLogEntity row.
  *
- * <p>Every assertion waits on a real {@code apache/kafka-native} container started by {@link
- * AbstractKafkaContainerTest}; consumer-group formation and first delivery are asynchronous, so
- * assertions poll with {@link Awaitility} rather than sleeping.
+ * Every assertion waits on a real apache/kafka-native container started by
+ * AbstractKafkaContainerTest; consumer-group formation and first delivery are asynchronous, so
+ * assertions poll with Awaitility rather than sleeping.
  */
 @SpringBootTest
 @Tag("kafka")
@@ -408,9 +408,9 @@ class ActivityLogConsumerE2ETest extends AbstractKafkaContainerTest {
         }
 
         /**
-         * One representative new event type per domain (board, column, task) reaches a real {@code
-         * activity_log} row through the real broker and registry, complementing the tracer's {@code
-         * SubtaskCreatedEvent} coverage above.
+         * One representative new event type per domain (board, column, task) reaches a real
+         * activity_log row through the real broker and registry, complementing the tracer's
+         * SubtaskCreatedEvent coverage above.
          */
         @Test
         void shouldPersistBoardUpdated_withEmptyDetail() throws Exception {

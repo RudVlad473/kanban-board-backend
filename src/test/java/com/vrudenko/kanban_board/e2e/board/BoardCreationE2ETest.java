@@ -31,9 +31,9 @@ import org.springframework.http.HttpStatus;
 import static io.restassured.RestAssured.given;
 
 /**
- * Tracer for {@code POST} to the boards collection over a real socket: controller, DTO validation,
- * {@link com.vrudenko.kanban_board.service.UserService#addBoardByUserId}, and back out through
- * {@link com.vrudenko.kanban_board.handler.GlobalExceptionHandler}.
+ * Tracer for POST to the boards collection over a real socket: controller, DTO validation,
+ * com.vrudenko.kanban_board.service.UserService.addBoardByUserId, and back out through
+ * com.vrudenko.kanban_board.handler.GlobalExceptionHandler.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Tag("realSocket")
@@ -46,7 +46,7 @@ public class BoardCreationE2ETest extends AbstractAppE2ETest {
     }
 
     /**
-     * Signs in as an arbitrary user, not necessarily {@link #getOwningUser()}, for the cross-user
+     * Signs in as an arbitrary user, not necessarily getOwningUser(), for the cross-user
      * isolation case.
      */
     private Pair<String, String> signinAs(String email, String password) {

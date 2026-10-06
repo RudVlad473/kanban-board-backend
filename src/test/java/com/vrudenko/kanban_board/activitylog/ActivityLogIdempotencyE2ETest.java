@@ -34,14 +34,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /**
- * Real-broker proof that a redelivered {@code eventId} yields exactly one {@code activity_log} row
- * and never reaches {@link KafkaTopics#ACTIVITY_DLT}.
+ * Real-broker proof that a redelivered eventId yields exactly one activity_log row
+ * and never reaches KafkaTopics.ACTIVITY_DLT.
  *
- * <p>The unique {@code event_id} constraint, not the {@code existsByEventId} fast path, arbitrates
+ * The unique event_id constraint, not the existsByEventId fast path, arbitrates
  * a genuine concurrent race.
  *
- * <p>One partition and one consumer thread make broker delivery strictly sequential, so the
- * concurrency case bypasses the transport and drives {@link ActivityLogRecorder#record} from two
+ * One partition and one consumer thread make broker delivery strictly sequential, so the
+ * concurrency case bypasses the transport and drives ActivityLogRecorder.record from two
  * threads; every other case goes through the real broker.
  */
 @SpringBootTest
@@ -68,10 +68,10 @@ class ActivityLogIdempotencyE2ETest extends AbstractKafkaContainerTest {
     }
 
     /**
-     * Publishes {@code event} twice, waits for its row, then publishes a sentinel event and waits
+     * Publishes event twice, waits for its row, then publishes a sentinel event and waits
      * for the sentinel's row.
      *
-     * <p>The topic has one partition and one consumer, so the sentinel's arrival proves the
+     * The topic has one partition and one consumer, so the sentinel's arrival proves the
      * consumer drained past both copies: the settle signal that makes a negative assertion
      * ("exactly one row", "no dead-letter record") safe instead of a race against an unprocessed
      * duplicate.
@@ -113,11 +113,11 @@ class ActivityLogIdempotencyE2ETest extends AbstractKafkaContainerTest {
     }
 
     /**
-     * Polls {@link KafkaTopics#ACTIVITY_DLT} for {@code window} and returns every record value
+     * Polls KafkaTopics.ACTIVITY_DLT for window and returns every record value
      * seen.
      *
-     * <p>The topic is shared across the package's test classes (the context is cached), so callers
-     * must filter for their own {@code eventId}.
+     * The topic is shared across the package's test classes (the context is cached), so callers
+     * must filter for their own eventId.
      */
     private List<byte[]> pollDeadLetterValues(Duration window) {
         var values = new ArrayList<byte[]>();

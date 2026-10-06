@@ -28,15 +28,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 /**
- * Regression guard: the OpenAPI document declares the {@code ProblemDetail} envelope on every
+ * Regression guard: the OpenAPI document declares the ProblemDetail envelope on every
  * operation, and it matches what both envelope producers emit.
  *
- * <p>Why this is the way it is: extends {@link AbstractAppMockMvcTest}, not {@code
- * AbstractPostgresContainerTest}, because {@link ProblemDetailSchemaFidelity} needs {@code
- * signinCookie()} and an owned board to provoke real 404/400 responses. Splitting the class would
+ * Why this is the way it is: extends AbstractAppMockMvcTest, not
+ * AbstractPostgresContainerTest, because ProblemDetailSchemaFidelity needs
+ * signinCookie() and an owned board to provoke real 404/400 responses. Splitting the class would
  * break the cohesion of a contract that is meaningful only when "every operation declares the six
  * codes" and "the declared schema is what gets emitted" are read together. The document is read as
- * in {@link OpenApiDocsTest}; the {@code OpenAPI} bean is never autowired, because springdoc caches
+ * in OpenApiDocsTest; the OpenAPI bean is never autowired, because springdoc caches
  * it and a live instance would share mutable state with later assertions.
  */
 @SpringBootTest
@@ -249,8 +249,8 @@ class ProblemDetailOpenApiCustomizerTest extends AbstractAppMockMvcTest {
         }
 
         /**
-         * Asserts both ways that a sampled body agrees with the {@code ProblemDetail} schema: every
-         * emitted field is declared, and every {@code required} property is present.
+         * Asserts both ways that a sampled body agrees with the ProblemDetail schema: every
+         * emitted field is declared, and every required property is present.
          */
         private void assertResponseMatchesDeclaredSchema(JsonNode document, JsonNode responseBody) {
             var schema = document.path("components").path("schemas").path("ProblemDetail");

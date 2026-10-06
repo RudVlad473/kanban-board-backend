@@ -19,10 +19,10 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 /**
- * Plain JUnit coverage for {@link RandFlakeGenerator#generateRandflake()}, with no Spring context
+ * Plain JUnit coverage for RandFlakeGenerator.generateRandflake(), with no Spring context
  * or container because the class under test touches neither.
  *
- * <p>Proves the monotonic shared sequence closes the same-millisecond collision (13/200 trials of
+ * Proves the monotonic shared sequence closes the same-millisecond collision (13/200 trials of
  * 1000 rapid calls, ~6.5%, under the old random-low-bits design) across both threads and generator
  * instances, which a per-instance or per-thread counter would each fail separately.
  */

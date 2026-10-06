@@ -7,7 +7,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 /**
- * Enable {@code @Async} and provide the bounded pool {@link KafkaEventPublisher} dispatches onto,
+ * Enable @Async and provide the bounded pool KafkaEventPublisher dispatches onto,
  * so a Kafka publish never runs on the caller's thread whatever the broker's reachability.
  */
 @Configuration

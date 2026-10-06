@@ -4,9 +4,9 @@ import java.time.Instant;
 
 /**
  * Announce that a subtask was updated (title and/or completion state), carrying the post-mutation
- * {@code isCompleted} boolean.
+ * isCompleted boolean.
  *
- * <p>{@code isCompleted} is derived state read back from the managed entity after the mutation, not
+ * isCompleted is derived state read back from the managed entity after the mutation, not
  * user-authored text echoed from the request, so it is admissible.
  */
 public record SubtaskUpdatedEvent(

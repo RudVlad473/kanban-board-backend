@@ -23,7 +23,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  * Proves the test-profile BCrypt cost factor is in force and the production fallback stays at
  * Spring Security's default of 10.
  *
- * <p>Extends {@link AbstractPostgresContainerTest} directly: {@code AbstractAppTest}'s per-test
+ * Extends AbstractPostgresContainerTest directly: AbstractAppTest's per-test
  * fixture build is the cost the cheaper factor removes.
  */
 @SpringBootTest

@@ -29,22 +29,22 @@ import org.slf4j.LoggerFactory;
  * Register all 14 Avro schemas against a Confluent-API-compatible Schema Registry, setting BACKWARD
  * compatibility explicitly on each subject before its first version.
  *
- * <p>Deliberately carries no Spring stereotype: it is invoked from the {@code registerSchemas}
- * Gradle task (build/CI) and from {@link
- * com.vrudenko.kanban_board.activitylog.AbstractKafkaContainerTest}'s static initializer, never by
+ * Deliberately carries no Spring stereotype: it is invoked from the registerSchemas
+ * Gradle task (build/CI) and from
+ * com.vrudenko.kanban_board.activitylog.AbstractKafkaContainerTest's static initializer, never by
  * the running application, so component scan must not pick it up.
  *
- * <p>Decisions:
+ * Decisions:
  *
- * <p>This is the one place that writes schemas to a registry. The producer ({@code
- * auto.register.schemas=false} in {@code application.properties}) can only look schemas up, so a
+ * This is the one place that writes schemas to a registry. The producer (
+ * auto.register.schemas=false in application.properties) can only look schemas up, so a
  * producer with a drifted schema fails loudly instead of silently creating a new version.
  *
- * <p>Schemas come from the generated classes' {@code getClassSchema()}, never the {@code .avsc}
- * files: {@code src/main/avro/} is not a resource directory, so those files are not on the runtime
+ * Schemas come from the generated classes' getClassSchema(), never the .avsc
+ * files: src/main/avro/ is not a resource directory, so those files are not on the runtime
  * classpath, and registering the schema the generated code actually encodes with makes registering
- * one that differs from what the producer emits structurally impossible. Subjects come from {@code
- * schema.getFullName()}: under {@code RecordNameStrategy} the subject is the record's full name, so
+ * one that differs from what the producer emits structurally impossible. Subjects come from
+ * schema.getFullName(): under RecordNameStrategy the subject is the record's full name, so
  * a schema rename cannot silently orphan a subject.
  */
 public final class AvroSchemaRegistrar {
@@ -77,10 +77,10 @@ public final class AvroSchemaRegistrar {
     private AvroSchemaRegistrar() {}
 
     /**
-     * Register every schema against {@code schemaRegistryUrl}, setting BACKWARD compatibility on
+     * Register every schema against schemaRegistryUrl, setting BACKWARD compatibility on
      * each subject first.
      *
-     * <p>Idempotent: registering an unchanged schema returns its existing id and re-setting an
+     * Idempotent: registering an unchanged schema returns its existing id and re-setting an
      * unchanged compatibility level is a no-op write, which matters because the Gradle task and
      * every test class sharing the harness call this repeatedly.
      */
@@ -124,9 +124,9 @@ public final class AvroSchemaRegistrar {
     }
 
     /**
-     * Build/CI entry point (the {@code registerSchemas} Gradle task). Reads the registry URL from
-     * the first CLI argument, falling back to the {@code SCHEMA_REGISTRY_URL} environment variable,
-     * falling back to {@code http://localhost:8081}.
+     * Build/CI entry point (the registerSchemas Gradle task). Reads the registry URL from
+     * the first CLI argument, falling back to the SCHEMA_REGISTRY_URL environment variable,
+     * falling back to http://localhost:8081.
      */
     public static void main(String[] args) {
         String url =

@@ -24,20 +24,20 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * The exact inverse of {@code ActivityLogConsumer.deriveActionAndDetailIds}: turns a persisted
- * {@link ActivityLogEntity} row back into the {@link ActivityEvent} that produced it.
+ * The exact inverse of ActivityLogConsumer.deriveActionAndDetailIds: turns a persisted
+ * ActivityLogEntity row back into the ActivityEvent that produced it.
  *
- * <p>Test-only verification tooling, so it lives in the test source set, not {@code src/main}.
- * Field recovery is total by construction: {@code eventId}, {@code userId}, {@code boardId} and
- * {@code timestamp} (from the row's {@code createdAt}) come from columns; every type-specific
- * identifier comes from the row's {@code detail} JSON, read by the key names the consumer writes.
+ * Test-only verification tooling, so it lives in the test source set, not src/main.
+ * Field recovery is total by construction: eventId, userId, boardId and
+ * timestamp (from the row's createdAt) come from columns; every type-specific
+ * identifier comes from the row's detail JSON, read by the key names the consumer writes.
  *
- * <p>Decisions: it never substitutes a default for an absent {@code detail} key. A row whose detail
+ * Decisions: it never substitutes a default for an absent detail key. A row whose detail
  * cannot produce a complete event is the finding the rehearsal exists to surface, and defaulting it
- * away would hide that. {@link #reconstruct} throws instead, naming the row's {@code eventId}, its
- * action and the missing key. Dispatch is an exhaustive {@code switch} over {@link
- * com.vrudenko.kanban_board.entity.ActivityAction} with no {@code default} arm, mirroring {@code
- * ActivityLogConsumer.deriveActionAndDetailIds} and {@code ActivityEventAvroMapper.toAvro}, so
+ * away would hide that. reconstruct throws instead, naming the row's eventId, its
+ * action and the missing key. Dispatch is an exhaustive switch over
+ * com.vrudenko.kanban_board.entity.ActivityAction with no default arm, mirroring
+ * ActivityLogConsumer.deriveActionAndDetailIds and ActivityEventAvroMapper.toAvro, so
  * adding an action is a compile error here until the switch is updated.
  */
 public class HistoricalActivityEventReconstructor {
@@ -45,8 +45,8 @@ public class HistoricalActivityEventReconstructor {
     private final ObjectMapper objectMapper;
 
     /**
-     * Takes the same {@link ObjectMapper} bean {@code ActivityLogConsumer} parses {@code detail}
-     * with, so reconstruction reads {@code detail} exactly as the shipped consumer does.
+     * Takes the same ObjectMapper bean ActivityLogConsumer parses detail
+     * with, so reconstruction reads detail exactly as the shipped consumer does.
      */
     public HistoricalActivityEventReconstructor(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
@@ -175,8 +175,8 @@ public class HistoricalActivityEventReconstructor {
     }
 
     /**
-     * Throws naming the row's {@code eventId}, its action and the missing key, so a rehearsal
-     * failure is actionable, not a bare {@code NullPointerException}. Never substitutes a default
+     * Throws naming the row's eventId, its action and the missing key, so a rehearsal
+     * failure is actionable, not a bare NullPointerException. Never substitutes a default
      * (see the class Javadoc).
      */
     private String requireKey(ActivityLogEntity row, Map<String, String> detail, String key) {

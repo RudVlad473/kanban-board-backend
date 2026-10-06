@@ -121,51 +121,51 @@ public class SecurityConfiguration {
      * Enforce the concurrent-session ceiling and session-id rotation on the real signin/signup
      * path.
      *
-     * <p>These are the two controls declared in {@code securityFilterChain}'s {@code
-     * sessionManagement} block. {@link AuthenticationController#authenticate} invokes {@code
-     * onAuthentication(...)} on this strategy directly, before the {@code SecurityContext} is
+     * These are the two controls declared in securityFilterChain's
+     * sessionManagement block. AuthenticationController.authenticate invokes
+     * onAuthentication(...) on this strategy directly, before the SecurityContext is
      * saved.
      *
-     * <p>Decisions:
+     * Decisions:
      *
-     * <p><b>Two independent ceiling enforcers coexist.</b> {@code SessionManagementConfigurer}
-     * installs a {@code SessionManagementFilter} from the same DSL block (measured, not assumed):
-     * it holds a separate, DSL-composed {@code CompositeSessionAuthenticationStrategy} backed by an
-     * in-memory {@code SessionRegistryImpl}, and fires only when a request reaches the chain
+     * Two independent ceiling enforcers coexist. SessionManagementConfigurer
+     * installs a SessionManagementFilter from the same DSL block (measured, not assumed):
+     * it holds a separate, DSL-composed CompositeSessionAuthenticationStrategy backed by an
+     * in-memory SessionRegistryImpl, and fires only when a request reaches the chain
      * already authenticated without a stored context. Signin and signup never produce that shape;
-     * MockMvc's {@code .with(user(...))} test shortcut does (see {@code InjectionAttemptTest}).
-     * This bean's {@code SpringSessionBackedSessionRegistry} reads the live, JDBC-persisted session
+     * MockMvc's .with(user(...)) test shortcut does (see InjectionAttemptTest).
+     * This bean's SpringSessionBackedSessionRegistry reads the live, JDBC-persisted session
      * count, so its ceiling is consistent across instances; the filter-held registry's is not.
      *
-     * <p><b>Known, accepted TOCTOU window (finding F6, 2026-08-10 {@code /claude-security}
-     * scan).</b> {@code ConcurrentSessionControlAuthenticationStrategy} reads the caller's live
-     * {@code SPRING_SESSION} count and then lets the signin register a new session, a
+     * Known, accepted TOCTOU window (finding F6, 2026-08-10 /claude-security
+     * scan). ConcurrentSessionControlAuthenticationStrategy reads the caller's live
+     * SPRING_SESSION count and then lets the signin register a new session, a
      * check-then-act sequence. Two genuinely simultaneous signins for one principal can both read
      * the same under-threshold count before either commits its session row, so both proceed. This
-     * is a <b>knowingly accepted, bounded</b> trade-off, the same disposition as {@link
-     * com.vrudenko.kanban_board.entity.UserEntity}'s deliberately-unversioned last-write-wins theme
+     * is a knowingly accepted, bounded trade-off, the same disposition as
+     * com.vrudenko.kanban_board.entity.UserEntity's deliberately-unversioned last-write-wins theme
      * preference. The bound is a function of concurrency, not a constant: live sessions for one
-     * principal never exceed {@code MAX_CONCURRENT_SESSIONS} plus at most one extra per signin
+     * principal never exceed MAX_CONCURRENT_SESSIONS plus at most one extra per signin
      * genuinely in flight at that instant, never "at most 3" as a flat ceiling. The excess is
      * transient and self-correcting, because the next non-concurrent signin for that principal is
      * still refused.
      *
-     * <p><b>A transaction-scoped advisory lock (e.g. {@code pg_advisory_xact_lock}) around the
-     * count-then-register sequence does not close the window.</b> Measured 2026-08-11: a probe
-     * reading the live {@code SPRING_SESSION} count from a <i>second</i> database connection, taken
-     * the instant {@link AuthenticationController#authenticate}'s {@code mapTry} lambda finishes
-     * (right after {@code securityContextRepository.saveContext(...)} returns, the latest point any
-     * controller-scoped transaction could still be open), read <b>0</b> committed rows for the
+     * A transaction-scoped advisory lock (e.g. pg_advisory_xact_lock) around the
+     * count-then-register sequence does not close the window. Measured 2026-08-11: a probe
+     * reading the live SPRING_SESSION count from a second database connection, taken
+     * the instant AuthenticationController.authenticate's mapTry lambda finishes
+     * (right after securityContextRepository.saveContext(...) returns, the latest point any
+     * controller-scoped transaction could still be open), read 0 committed rows for the
      * just-authenticated principal; a client-side probe taken after the HTTP response was fully
-     * received read <b>1</b>. The new session row is not committed, so not visible to another
+     * received read 1. The new session row is not committed, so not visible to another
      * connection, until Spring Session's request-scoped filter commits it as the response is
      * flushed, strictly after this method has returned. A lock held across this call would release
      * before the row it was meant to serialize against exists, closing nothing while adding a
-     * blocking database round trip to every signin. {@code ConcurrentSigninCeilingE2ETest} is the
+     * blocking database round trip to every signin. ConcurrentSigninCeilingE2ETest is the
      * empirical proof of the accepted bound.
      *
-     * <p><b>The ceiling rejection stays a {@code 401}, byte-identical to a wrong-password
-     * response.</b> Do not give it its own status code or otherwise make it distinguishable: that
+     * The ceiling rejection stays a 401, byte-identical to a wrong-password
+     * response. Do not give it its own status code or otherwise make it distinguishable: that
      * would hand an attacker a validity oracle for "these credentials are valid, this account just
      * has sessions open."
      */

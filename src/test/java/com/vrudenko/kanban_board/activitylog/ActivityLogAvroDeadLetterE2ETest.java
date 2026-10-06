@@ -33,17 +33,17 @@ import org.springframework.boot.test.context.SpringBootTest;
 
 /**
  * Re-verifies the dead-letter path's byte-fidelity and non-blocking guarantees under Avro; a
- * sibling of {@link ActivityLogDeadLetterE2ETest}, not a replacement.
+ * sibling of ActivityLogDeadLetterE2ETest, not a replacement.
  *
- * <p>Two poison shapes are asserted to reach {@code kanban.activity.dlt} byte-for-byte: a payload
+ * Two poison shapes are asserted to reach kanban.activity.dlt byte-for-byte: a payload
  * with no valid Confluent magic byte (fails at framing, before the registry is consulted), and
  * valid Confluent framing carrying a schema id the registry never issued (a case JSON could not
  * produce).
  *
- * <p>Decisions: production {@code KafkaConsumerConfig} is deliberately left untouched. The
- * dead-letter path's {@code DelegatingByTypeSerializer} is generic over any deserialization-failure
- * payload shape, Avro included, because it dispatches on the record value's runtime class ({@code
- * byte[]}) and never inspects the bytes. An Avro-aware branch would be harmful: it would try to
+ * Decisions: production KafkaConsumerConfig is deliberately left untouched. The
+ * dead-letter path's DelegatingByTypeSerializer is generic over any deserialization-failure
+ * payload shape, Avro included, because it dispatches on the record value's runtime class (
+ * byte[]) and never inspects the bytes. An Avro-aware branch would be harmful: it would try to
  * re-encode a payload that just failed to decode, throwing inside the recovery path and destroying
  * the audit trail an operator needs most for exactly these messages.
  */
@@ -55,8 +55,8 @@ class ActivityLogAvroDeadLetterE2ETest extends AbstractKafkaContainerTest {
     private static final byte CONFLUENT_MAGIC_BYTE = 0x0;
 
     /**
-     * A schema id far outside the few ids {@link
-     * com.vrudenko.kanban_board.config.AvroSchemaRegistrar} registers (5 subjects, small sequential
+     * A schema id far outside the few ids
+     * com.vrudenko.kanban_board.config.AvroSchemaRegistrar registers (5 subjects, small sequential
      * ids), so the deserializer fails at schema resolution, not framing.
      */
     private static final int UNREGISTERED_SCHEMA_ID = 999_999_999;
@@ -98,9 +98,9 @@ class ActivityLogAvroDeadLetterE2ETest extends AbstractKafkaContainerTest {
      * Builds a valid Confluent wire-format payload: the magic byte, a 4-byte big-endian schema id
      * the registry never issued, then a random trailing discriminator.
      *
-     * <p>The discriminator keeps every call's payload byte-unique: {@code kanban.activity.dlt} is
+     * The discriminator keeps every call's payload byte-unique: kanban.activity.dlt is
      * shared across the package's tests (the Spring context is cached), so byte-identical poison
-     * payloads would both match {@link #awaitDeadLetterRecordMatching}'s exact-payload filter and
+     * payloads would both match awaitDeadLetterRecordMatching's exact-payload filter and
      * break its single-match assertion. The trailing bytes are never decoded: resolution fails on
      * the id lookup first.
      */
@@ -114,12 +114,12 @@ class ActivityLogAvroDeadLetterE2ETest extends AbstractKafkaContainerTest {
     }
 
     /**
-     * Polls {@link KafkaTopics#ACTIVITY_DLT} until exactly one record whose value byte-equals
-     * {@code expectedValue} has been seen, then returns it.
+     * Polls KafkaTopics.ACTIVITY_DLT until exactly one record whose value byte-equals
+     * expectedValue has been seen, then returns it.
      *
-     * <p>Raw arrays are compared, never a decoded string: decoding first would mask the re-encoding
+     * Raw arrays are compared, never a decoded string: decoding first would mask the re-encoding
      * bug this class exists to catch. Routing takes a few seconds (three attempts at a ~1s fixed
-     * interval, see {@code KafkaConsumerConfig}); the 30s ceiling comfortably exceeds that.
+     * interval, see KafkaConsumerConfig); the 30s ceiling comfortably exceeds that.
      */
     private byte[] awaitDeadLetterRecordMatching(byte[] expectedValue) {
         var matches = new ArrayList<byte[]>();

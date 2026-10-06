@@ -13,10 +13,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * Executable form of the schema-provenance criterion: Testcontainers, Flyway V1-V4, Hibernate
- * {@code ddl-auto=validate} and Spring Session JDBC's initializer coexist in one context.
+ * ddl-auto=validate and Spring Session JDBC's initializer coexist in one context.
  *
- * <p>Queries the live catalog directly, so a regression in any one mechanism fails a named
- * assertion. Does not extend {@code AbstractAppTest}: it needs no fixtures.
+ * Queries the live catalog directly, so a regression in any one mechanism fails a named
+ * assertion. Does not extend AbstractAppTest: it needs no fixtures.
  */
 @SpringBootTest
 // No @TestPropertySource: application-test.properties already enables Flyway and sets
@@ -84,9 +84,9 @@ class FlywaySchemaProvenanceTest extends AbstractPostgresContainerTest {
 
     /**
      * Artifacts that exist only because a Flyway migration named them explicitly: Hibernate emits
-     * {@code fk}/{@code uk} plus a hash name, no column defaults and no non-annotated indexes.
+     * fk/uk plus a hash name, no column defaults and no non-annotated indexes.
      *
-     * <p>The final test is the negative half: no constraint in the schema matches Hibernate's
+     * The final test is the negative half: no constraint in the schema matches Hibernate's
      * generated-name form.
      */
     @Nested

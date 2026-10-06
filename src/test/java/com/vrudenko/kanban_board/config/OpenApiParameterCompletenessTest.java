@@ -27,16 +27,16 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * Regression guard: the generated OpenAPI document declares every path-template variable and never
  * publishes the session-derived user id as a client parameter.
  *
- * <p>Why this is the way it is: spike 003 pointed Schemathesis at the live document and it could
+ * Why this is the way it is: spike 003 pointed Schemathesis at the live document and it could
  * not generate a single request for 11 of the 24 operations (the nested task, subtask and reorder
- * routes), because springdoc only declares a path parameter for a handler argument carrying
- * {@code @PathVariable}, so an ancestor id that appears only in the class-level route template was
- * never declared. The same run showed 22 operations advertising a required {@code userId} query
+ * routes), because springdoc only declares a path parameter for a handler argument
+ * carrying @PathVariable, so an ancestor id that appears only in the class-level route template was
+ * never declared. The same run showed 22 operations advertising a required userId query
  * parameter that the server never reads. This test sweeps every operation in the document instead
  * of listing operations, so a future nested controller is covered without anyone remembering to add
- * it. It extends {@link AbstractPostgresContainerTest}, not a fixture base, because it needs no
- * fixtures (docs/CODE_STYLE.md rule 4), and the document is read as in {@link
- * ProblemDetailOpenApiCustomizerTest}: the {@code OpenAPI} bean is never autowired, because
+ * it. It extends AbstractPostgresContainerTest, not a fixture base, because it needs no
+ * fixtures (docs/CODE_STYLE.md rule 4), and the document is read as in
+ * ProblemDetailOpenApiCustomizerTest: the OpenAPI bean is never autowired, because
  * springdoc caches it and a live instance would share mutable state with later assertions.
  */
 @SpringBootTest

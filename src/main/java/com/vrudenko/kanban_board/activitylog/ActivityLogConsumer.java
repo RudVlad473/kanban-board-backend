@@ -29,16 +29,16 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 /**
- * Turn each {@link ActivityEvent} published to {@link KafkaTopics#ACTIVITY} into a durable,
- * deduplicated {@link ActivityLogEntity} row via {@link ActivityLogRecorder}.
+ * Turn each ActivityEvent published to KafkaTopics.ACTIVITY into a durable,
+ * deduplicated ActivityLogEntity row via ActivityLogRecorder.
  *
- * <p>The listener thread has no security context and never re-verifies the mutation's
+ * The listener thread has no security context and never re-verifies the mutation's
  * authorization, which was checked at publish time. This class therefore depends only on the event
- * package, {@link ActivityLogRecorder} and a plain {@link ObjectMapper}, and reads only the
+ * package, ActivityLogRecorder and a plain ObjectMapper, and reads only the
  * server-derived identifiers each event carries.
  *
- * <p>Events arrive Avro-encoded and are mapped back to the domain event via {@link
- * ActivityEventAvroMapper} before the exhaustive switch runs.
+ * Events arrive Avro-encoded and are mapped back to the domain event via
+ * ActivityEventAvroMapper before the exhaustive switch runs.
  */
 @Component
 public class ActivityLogConsumer {
@@ -77,8 +77,8 @@ public class ActivityLogConsumer {
     }
 
     /**
-     * Exhaustive switch over the sealed {@link ActivityEvent}, deliberately without a {@code
-     * default} arm: a new event record becomes a compile error until the switch is updated, not a
+     * Exhaustive switch over the sealed ActivityEvent, deliberately without a
+     * default arm: a new event record becomes a compile error until the switch is updated, not a
      * silently absorbed message.
      */
     private ActionAndDetailIds deriveActionAndDetailIds(ActivityEvent event) {
@@ -161,11 +161,11 @@ public class ActivityLogConsumer {
     }
 
     /**
-     * Insertion-ordered on purpose: {@link LinkedHashMap}, so serialisation is byte-stable for a
+     * Insertion-ordered on purpose: LinkedHashMap, so serialisation is byte-stable for a
      * given event type.
      *
-     * <p>An immutable-set-backed factory map does not guarantee iteration order, which would make
-     * the stored {@code detail} string vary run to run for identical input.
+     * An immutable-set-backed factory map does not guarantee iteration order, which would make
+     * the stored detail string vary run to run for identical input.
      */
     private record ActionAndDetailIds(
             ActivityAction action, LinkedHashMap<String, String> detailIds) {}

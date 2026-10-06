@@ -331,7 +331,7 @@ public class ColumnServiceTest extends AbstractAppTest {
         }
 
         /**
-         * Proves the cascade ({@code TaskService#deleteAllByColumn}) is a fixed number of bulk
+         * Proves the cascade (TaskService#deleteAllByColumn) is a fixed number of bulk
          * statements regardless of how many tasks the deleted column holds.
          */
         @Test
@@ -397,10 +397,10 @@ public class ColumnServiceTest extends AbstractAppTest {
         }
 
         /**
-         * Proves a column delete removes its tasks, using {@code fk_tasks_column} ({@code
-         * V1__init.sql}, no {@code ON DELETE CASCADE}) as the mechanism.
+         * Proves a column delete removes its tasks, using fk_tasks_column (
+         * V1__init.sql, no ON DELETE CASCADE) as the mechanism.
          *
-         * <p>If {@link ColumnService#deleteById} left the tasks behind, deleting the column row
+         * If ColumnService.deleteById left the tasks behind, deleting the column row
          * would violate that foreign key and this method would throw, so a clean return is itself
          * the assertion, besides the explicit before/after count below.
          */

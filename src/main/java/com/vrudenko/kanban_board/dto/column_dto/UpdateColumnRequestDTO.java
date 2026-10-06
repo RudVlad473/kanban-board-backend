@@ -13,19 +13,19 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * Update a column's {@code name}, which is deliberately mandatory, unlike every other single-field
- * {@code Update*RequestDTO}.
+ * Update a column's name, which is deliberately mandatory, unlike every other single-field
+ * Update*RequestDTO.
  *
- * <p>Decisions:
+ * Decisions:
  *
- * <p>{@code name} is the DTO's only mutable property, so a version-only column update has no use
+ * name is the DTO's only mutable property, so a version-only column update has no use
  * case: nothing else a caller could be changing would justify omitting it. The investigation behind
- * this found no test in {@code BoardServiceTest} / {@code BoardControllerTest} exercising a
+ * this found no test in BoardServiceTest / BoardControllerTest exercising a
  * version-only column update, and no mockup evidence of a "touch the resource without renaming it"
- * flow. {@code @NotBlank} here does the job {@code @OptionalNotBlank} (see {@code
- * docs/CODE_STYLE.md} rule 12) does on the other optional name/title fields, plus the null
- * rejection those fields deliberately keep, so an audit comparing this DTO to {@code
- * UpdateBoardRequestDTO}, {@code UpdateTaskRequestDTO} and {@code UpdateSubtaskRequestDTO} sees a
+ * flow. @NotBlank here does the job @OptionalNotBlank (see
+ * docs/CODE_STYLE.md rule 12) does on the other optional name/title fields, plus the null
+ * rejection those fields deliberately keep, so an audit comparing this DTO to
+ * UpdateBoardRequestDTO, UpdateTaskRequestDTO and UpdateSubtaskRequestDTO sees a
  * documented answer instead of an inconsistency.
  */
 @Getter

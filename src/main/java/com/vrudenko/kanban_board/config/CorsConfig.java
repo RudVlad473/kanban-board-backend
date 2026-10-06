@@ -10,14 +10,14 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 /**
- * Supply the {@link CorsConfigurationSource} bean that {@code SecurityConfiguration}'s {@code
- * http.cors(Customizer.withDefaults())} call auto-detects.
+ * Supply the CorsConfigurationSource bean that SecurityConfiguration's
+ * http.cors(Customizer.withDefaults()) call auto-detects.
  *
- * <p>That call must not be edited: Spring Security enables CORS automatically only when a {@link
- * UrlBasedCorsConfigurationSource} bean is present. {@code allowCredentials(true)} is required for
+ * That call must not be edited: Spring Security enables CORS automatically only when a
+ * UrlBasedCorsConfigurationSource bean is present. allowCredentials(true) is required for
  * cookie-based session auth and forces an explicit, non-wildcard origin allow-list, since the CORS
- * spec disallows {@code *} once credentials are allowed. The origin list is externalized to {@code
- * app.cors.allowed-origins} so a deployment can widen it without a code change.
+ * spec disallows * once credentials are allowed. The origin list is externalized to
+ * app.cors.allowed-origins so a deployment can widen it without a code change.
  */
 @Configuration
 public class CorsConfig {

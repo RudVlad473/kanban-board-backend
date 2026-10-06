@@ -11,19 +11,19 @@ import jakarta.validation.ReportAsSingleViolation;
 import jakarta.validation.constraints.Pattern;
 
 /**
- * Validate an optional caller-supplied board id: lowercase base36, at most {@link
- * ValidationConstants#MAX_BOARD_ID_LENGTH} characters, the format {@code RandFlakeGenerator} emits.
+ * Validate an optional caller-supplied board id: lowercase base36, at most
+ * ValidationConstants.MAX_BOARD_ID_LENGTH characters, the format RandFlakeGenerator emits.
  *
- * <p>Decisions:
+ * Decisions:
  *
- * <p>A {@code null} value is permitted and means the server generates the id. That comes from
- * Jakarta's {@link Pattern} skipping {@code null} by default, not from anything declared here, and
+ * A null value is permitted and means the server generates the id. That comes from
+ * Jakarta's Pattern skipping null by default, not from anything declared here, and
  * is otherwise invisible at the field.
  *
- * <p>{@link OptionalNotBlank} is deliberately NOT stacked alongside this annotation: {@link
- * ValidationConstants#BOARD_ID_PATTERN}'s closed charset already rejects a blank or whitespace-only
+ * OptionalNotBlank is deliberately NOT stacked alongside this annotation:
+ * ValidationConstants.BOARD_ID_PATTERN's closed charset already rejects a blank or whitespace-only
  * value, so stacking would produce two violations for one bad input, breaking the
- * one-violation-per-invalid-input convention {@code docs/CODE_STYLE.md} rule 4 depends on.
+ * one-violation-per-invalid-input convention docs/CODE_STYLE.md rule 4 depends on.
  */
 @Documented
 @Target({ElementType.FIELD})

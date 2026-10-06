@@ -28,11 +28,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Proves Board shares the explicit-version-compare concurrency model of Column, Task and Subtask,
  * end to end.
  *
- * <p>{@code ProblemDetail} fields are asserted at their flattened top-level paths (as {@code
- * GlobalExceptionHandlerTest} does), not deserialized into a {@link BoardResponseDTO}, since the
- * 409/400 cases are error responses. Named without the {@code E2ETest} suffix, which is being
- * dropped from in-process MockMvc-tier classes, and carrying no {@code @Tag}, so it runs in the
- * pre-commit {@code fastTest} gate.
+ * ProblemDetail fields are asserted at their flattened top-level paths (as
+ * GlobalExceptionHandlerTest does), not deserialized into a BoardResponseDTO, since the
+ * 409/400 cases are error responses. Named without the E2ETest suffix, which is being
+ * dropped from in-process MockMvc-tier classes, and carrying no @Tag, so it runs in the
+ * pre-commit fastTest gate.
  */
 @SpringBootTest
 @AutoConfigureMockMvc

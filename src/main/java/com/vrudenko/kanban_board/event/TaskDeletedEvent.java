@@ -5,8 +5,8 @@ import java.time.Instant;
 /**
  * Announce that a task was deleted.
  *
- * <p>Every identifier is captured from the loaded {@code TaskEntity} before the delete runs:
- * afterwards nothing is left to derive {@code boardId} from.
+ * Every identifier is captured from the loaded TaskEntity before the delete runs:
+ * afterwards nothing is left to derive boardId from.
  */
 public record TaskDeletedEvent(
         String eventId,

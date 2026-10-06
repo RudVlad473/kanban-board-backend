@@ -9,21 +9,21 @@ import org.mapstruct.MappingConstants;
 import org.mapstruct.ReportingPolicy;
 
 /**
- * Map a fetch-joined {@link BoardEntity} graph into one nested {@link BoardFullResponseDTO},
- * composing {@link ColumnFullMapper} and {@link TaskFullMapper} via MapStruct's {@code uses}.
+ * Map a fetch-joined BoardEntity graph into one nested BoardFullResponseDTO,
+ * composing ColumnFullMapper and TaskFullMapper via MapStruct's uses.
  *
- * <p>The graph is fetched by a chained {@code LEFT JOIN FETCH} query (see {@link
- * com.vrudenko.kanban_board.repository.BoardRepository}) and mapped entirely inside the
- * {@code @Transactional} service method, so no unfetched association is touched outside a
+ * The graph is fetched by a chained LEFT JOIN FETCH query (see
+ * com.vrudenko.kanban_board.repository.BoardRepository) and mapped entirely inside
+ * the @Transactional service method, so no unfetched association is touched outside a
  * transaction.
  *
- * <p>Decisions:
+ * Decisions:
  *
- * <p>{@code BoardEntity.column} is a singular name on a {@code Set}-typed field, an existing
- * inconsistency deliberately not renamed here (a JPA field rename with an existing {@code mappedBy}
- * reference is out of scope). The explicit {@code @Mapping} below is required: MapStruct matches by
- * name and would otherwise silently leave {@code columns} null under {@code
- * ReportingPolicy.IGNORE}.
+ * BoardEntity.column is a singular name on a Set-typed field, an existing
+ * inconsistency deliberately not renamed here (a JPA field rename with an existing mappedBy
+ * reference is out of scope). The explicit @Mapping below is required: MapStruct matches by
+ * name and would otherwise silently leave columns null under
+ * ReportingPolicy.IGNORE.
  */
 @Mapper(
         componentModel = MappingConstants.ComponentModel.SPRING,

@@ -31,14 +31,14 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 /**
  * Enforces four controller/service conventions as build-failing ArchUnit rules.
  *
- * <p>All four share one {@code @AnalyzeClasses} so they share one cached import of the class graph,
- * the expensive part of an ArchUnit test. {@link ImportOption.DoNotIncludeTests} keeps the test
+ * All four share one @AnalyzeClasses so they share one cached import of the class graph,
+ * the expensive part of an ArchUnit test. ImportOption.DoNotIncludeTests keeps the test
  * source set out of that graph.
  *
- * <p>Known holes: a floor, not a ceiling. The {@code findById} rule (docs/CODE_STYLE.md rule 2)
- * catches a direct {@code repository.findById} call from a domain service. It does not catch
+ * Known holes: a floor, not a ceiling. The findById rule (docs/CODE_STYLE.md rule 2)
+ * catches a direct repository.findById call from a domain service. It does not catch
  * deriving a downstream repository call's id from the raw path variable instead of the verified
- * entity, nor a hand-written {@code repository.findByX} query. Code review carries those.
+ * entity, nor a hand-written repository.findByX query. Code review carries those.
  */
 @AnalyzeClasses(
         packages = "com.vrudenko.kanban_board",
@@ -46,8 +46,8 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 public class LayeringArchTest {
 
     /**
-     * A {@code findById} call whose owner is in {@code com.vrudenko.kanban_board.repository..}; the
-     * looser {@code ..repository..} glob would also match Spring Data's own types.
+     * A findById call whose owner is in com.vrudenko.kanban_board.repository..; the
+     * looser ..repository.. glob would also match Spring Data's own types.
      */
     private static final DescribedPredicate<JavaCall<?>> CALLS_PROJECT_REPOSITORY_FIND_BY_ID =
             target(name("findById"))
@@ -124,9 +124,9 @@ public class LayeringArchTest {
                                     + " above.");
 
     /**
-     * A mutating-mapping ({@code @PostMapping}, {@code @PutMapping}, {@code @PatchMapping}) method
-     * on any {@code @RestController}, which brings {@code AuthenticationController} (in {@code
-     * security}) in scope.
+     * A mutating-mapping (@PostMapping, @PutMapping, @PatchMapping) method
+     * on any @RestController, which brings AuthenticationController (in
+     * security) in scope.
      */
     private static final DescribedPredicate<JavaMethod> ARE_MUTATING_REST_HANDLERS =
             DescribedPredicate.describe(
@@ -139,12 +139,12 @@ public class LayeringArchTest {
                                     && method.getOwner().isAnnotatedWith(RestController.class));
 
     /**
-     * Requires {@code @RequestBody} and {@code @Valid} on every parameter whose type name ends with
-     * {@code RequestDTO}.
+     * Requires @RequestBody and @Valid on every parameter whose type name ends with
+     * RequestDTO.
      *
-     * <p>Without {@code @RequestBody} the DTO binds silently from query/form params instead of the
-     * JSON body (found on {@code TaskController.addSubtaskByTaskId}). Checked per parameter, so a
-     * handler's {@code @PathVariable} or {@code @CurrentUserId} parameters are not flagged.
+     * Without @RequestBody the DTO binds silently from query/form params instead of the
+     * JSON body (found on TaskController.addSubtaskByTaskId). Checked per parameter, so a
+     * handler's @PathVariable or @CurrentUserId parameters are not flagged.
      */
     private static final ArchCondition<JavaMethod> BIND_REQUEST_DTO_PARAMETERS_FROM_THE_BODY =
             new ArchCondition<>(

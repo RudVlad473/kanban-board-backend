@@ -23,12 +23,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Pins one error envelope across the {@code controller/} classes, whichever controller handles the
+ * Pins one error envelope across the controller/ classes, whichever controller handles the
  * request.
  *
- * <p>A {@code @Valid @RequestBody} field violation is always {@code VALIDATION_FAILED} with a
- * per-field {@code errors} map; a {@code @PathVariable @NotBlank} violation is always {@code
- * CONSTRAINT_VIOLATION}, never a 5xx.
+ * A @Valid @RequestBody field violation is always VALIDATION_FAILED with a
+ * per-field errors map; a @PathVariable @NotBlank violation is always
+ * CONSTRAINT_VIOLATION, never a 5xx.
  */
 @SpringBootTest
 @AutoConfigureMockMvc

@@ -25,38 +25,38 @@ import org.springdoc.core.customizers.PropertyCustomizer;
 import org.springframework.stereotype.Component;
 
 /**
- * Publish the {@code pattern}/{@code minLength}/{@code maxLength}/{@code format} constraints that
+ * Publish the pattern/minLength/maxLength/format constraints that
  * composed validation annotations carry onto the generated OpenAPI document.
  *
- * <p>Decisions:
+ * Decisions:
  *
- * <p><b>Observation 1 -- why this bean exists.</b> {@code
- * ModelResolver.applyBeanValidatorAnnotations} (swagger-core-jakarta 2.2.30, pulled in by
+ * Observation 1 -- why this bean exists.
+ * ModelResolver.applyBeanValidatorAnnotations (swagger-core-jakarta 2.2.30, pulled in by
  * springdoc-openapi-starter-webmvc-ui 2.8.8 under Spring Boot 3.5.16) builds its annotation map
- * from a field's <em>directly declared</em> annotations only ({@code ModelResolver.java:1696-1699})
+ * from a field's directly declared annotations only (ModelResolver.java:1696-1699)
  * and never opens a composed annotation's meta-annotations. Verified live on 2026-09-04: the
  * production document (https://kanban-board-rud-vlad-473.duckdns.org/api/docs) contained zero
- * {@code pattern} and zero {@code example} keys in {@code components.schemas}.
+ * pattern and zero example keys in components.schemas.
  *
- * <p><b>Observation 2 -- why this bean is BOTH a {@link PropertyCustomizer} and a {@link
- * GlobalOpenApiCustomizer}.</b> For a field with a <em>direct</em> {@code @NotBlank}/{@code @Size}
- * next to a composed annotation (e.g. {@code SaveSubtaskRequestDTO.title}), {@code
- * ModelResolver.resolveProperties} calls {@code applyBeanValidatorAnnotations} a <em>second</em>
- * time after {@link #customize(Schema, AnnotatedType)} has returned ({@code
- * ModelResolver.java:899-905}; {@code ctxProperty} is the same object as the customized {@code
- * property} on the non-{@code allOf} path this application uses). That call unconditionally re-runs
- * {@code property.setMinLength(1)} with no "already higher" guard. Confirmed 2026-09-04 by
- * instrumenting this bean in a live {@code bootRun}: {@code customize} set {@code minLength=3} for
- * {@code SaveSubtaskRequestDTO.title}, yet {@code GET /api/docs} served {@code minLength=1}. Only a
- * {@link GlobalOpenApiCustomizer}, springdoc's last whole-document phase, runs after that second
- * call, so {@code customize} applies its values immediately AND records them in {@link
- * #computedBySchema} (keyed by {@code AnnotatedType.getParent().getName()}); {@link
- * #customise(OpenAPI)} re-applies them last, tightening only (see {@link
- * Accumulator#reassertOn(Schema)}). False if a swagger-core release removes the second call or
+ * Observation 2 -- why this bean is BOTH a PropertyCustomizer and a
+ * GlobalOpenApiCustomizer. For a field with a direct @NotBlank/@Size
+ * next to a composed annotation (e.g. SaveSubtaskRequestDTO.title),
+ * ModelResolver.resolveProperties calls applyBeanValidatorAnnotations a second
+ * time after customize(Schema, AnnotatedType) has returned (
+ * ModelResolver.java:899-905; ctxProperty is the same object as the customized
+ * property on the non-allOf path this application uses). That call unconditionally re-runs
+ * property.setMinLength(1) with no "already higher" guard. Confirmed 2026-09-04 by
+ * instrumenting this bean in a live bootRun: customize set minLength=3 for
+ * SaveSubtaskRequestDTO.title, yet GET /api/docs served minLength=1. Only a
+ * GlobalOpenApiCustomizer, springdoc's last whole-document phase, runs after that second
+ * call, so customize applies its values immediately AND records them in
+ * computedBySchema (keyed by AnnotatedType.getParent().getName());
+ * customise(OpenAPI) re-applies them last, tightening only (see
+ * Accumulator.reassertOn(Schema)). False if a swagger-core release removes the second call or
  * guards it against lowering a raised bound: the reassertion then becomes a harmless no-op.
  *
- * <p>{@link ComposedConstraintPropertyCustomizerTest} proves the values are published and agree
- * with the real {@code Validator}.
+ * ComposedConstraintPropertyCustomizerTest proves the values are published and agree
+ * with the real Validator.
  */
 @Component
 public class ComposedConstraintPropertyCustomizer
@@ -213,29 +213,29 @@ public class ComposedConstraintPropertyCustomizer
     }
 
     /**
-     * Translate a Java {@code Pattern} into the ECMA-262 dialect JSON Schema {@code pattern} uses,
+     * Translate a Java Pattern into the ECMA-262 dialect JSON Schema pattern uses,
      * or return empty when equivalence cannot be PROVEN.
      *
-     * <p>Rewrites an unescaped, not-inside-a-class {@code .} to {@code [\s\S]} under {@code
-     * DOTALL}, and {@code \s}/{@code \S} to explicit ASCII classes (Java's are ASCII-only, ECMA's
+     * Rewrites an unescaped, not-inside-a-class . to [\s\S] under
+     * DOTALL, and \s/\S to explicit ASCII classes (Java's are ASCII-only, ECMA's
      * match U+00A0).
      *
-     * <p>Decisions:
+     * Decisions:
      *
-     * <p>Publishing nothing beats publishing a WRONG pattern. Before this method, {@link
-     * #contribute(Annotation, Accumulator)} republished {@code regexp()} verbatim and dropped
-     * {@code flags()}, so {@link com.vrudenko.kanban_board.dto.annotation.OptionalNotBlank}'s
-     * {@code DOTALL} was lost and its {@code \S} was read as ECMA's Unicode-aware version. Proven
-     * live (node v24.19.0, 2026-09-05) to make the published pattern REJECT values the real {@code
-     * jakarta.validation.Validator} ACCEPTS: a multi-line title ({@code "a\nb"}) and a value made
-     * solely of {@code U+00A0} -- the document-stricter-than-enforcer direction this bean exists to
+     * Publishing nothing beats publishing a WRONG pattern. Before this method,
+     * contribute(Annotation, Accumulator) republished regexp() verbatim and dropped
+     * flags(), so com.vrudenko.kanban_board.dto.annotation.OptionalNotBlank's
+     * DOTALL was lost and its \S was read as ECMA's Unicode-aware version. Proven
+     * live (node v24.19.0, 2026-09-05) to make the published pattern REJECT values the real
+     * jakarta.validation.Validator ACCEPTS: a multi-line title ("a\nb") and a value made
+     * solely of U+00A0 -- the document-stricter-than-enforcer direction this bean exists to
      * avoid.
      *
-     * <p>Any OTHER {@code flags()} value ({@code CASE_INSENSITIVE} chief among them), an unescaped
-     * capturing group, or an unrecognised {@code (?...} construct returns empty: inline flags like
-     * {@code (?i)} are a hard {@code SyntaxError} in ECMA-262, and a capturing group would shift
-     * every later group's number once concatenated into the conjunction {@link
-     * Accumulator#applyPattern(Schema)} builds (latent today: no regex here uses one).
+     * Any OTHER flags() value (CASE_INSENSITIVE chief among them), an unescaped
+     * capturing group, or an unrecognised (?... construct returns empty: inline flags like
+     * (?i) are a hard SyntaxError in ECMA-262, and a capturing group would shift
+     * every later group's number once concatenated into the conjunction
+     * Accumulator.applyPattern(Schema) builds (latent today: no regex here uses one).
      */
     // Package-private: the test derives expected patterns from an annotation's own
     // regexp()/flags(), never a hand-copied literal.
@@ -367,12 +367,12 @@ public class ComposedConstraintPropertyCustomizer
     }
 
     /**
-     * Converts a {@code @Size(min)} expressed in UTF-16 code units into the largest JSON Schema
-     * {@code minLength}, counted in code points, that no server-accepted value can fail.
+     * Converts a @Size(min) expressed in UTF-16 code units into the largest JSON Schema
+     * minLength, counted in code points, that no server-accepted value can fail.
      *
-     * <p>{@code units(v) >= n} implies {@code codePoints(v) >= units(v) / 2 >= n / 2}, so {@code
-     * ceil(n / 2)} is safe and any larger bound is not: for odd {@code n} an all-astral value of
-     * exactly {@code n + 1} units has {@code (n + 1) / 2} code points, which is {@code ceil(n / 2)}
+     * units(v) >= n implies codePoints(v) >= units(v) / 2 >= n / 2, so
+     * ceil(n / 2) is safe and any larger bound is not: for odd n an all-astral value of
+     * exactly n + 1 units has (n + 1) / 2 code points, which is ceil(n / 2)
      * exactly.
      */
     private static int codePointSafeMinLength(int unitsMin) {
@@ -410,12 +410,12 @@ public class ComposedConstraintPropertyCustomizer
         private String description;
 
         /**
-         * Apply every computed value unconditionally; phase 1 ({@link PropertyCustomizer}) only.
+         * Apply every computed value unconditionally; phase 1 (PropertyCustomizer) only.
          *
-         * <p>Safe only because {@link ComposedConstraintPropertyCustomizer#seedFrom(Schema)} filled
-         * this accumulator from this exact {@code property} before folding in any composed value,
+         * Safe only because ComposedConstraintPropertyCustomizer.seedFrom(Schema) filled
+         * this accumulator from this exact property before folding in any composed value,
          * so nothing on it can be loosened. That fails the second time the schema is touched
-         * (Observation 2 on the enclosing class); {@link #reassertOn(Schema)} is the tighten-only
+         * (Observation 2 on the enclosing class); reassertOn(Schema) is the tighten-only
          * counterpart.
          */
         void applyTo(Schema<?> property) {
@@ -426,26 +426,26 @@ public class ComposedConstraintPropertyCustomizer
         }
 
         /**
-         * Re-apply the recorded values in phase 2 ({@link GlobalOpenApiCustomizer}, the document's
+         * Re-apply the recorded values in phase 2 (GlobalOpenApiCustomizer, the document's
          * last word), tightening only.
          *
-         * <p>Raises {@code minLength} past what the schema carries, lowers {@code maxLength} only
-         * below it, sets {@code pattern} only when it has none, and lowers a {@code minLength} it
-         * can identify as swagger-core's own unconverted code-unit bound (see {@link
-         * #isUnconvertedUnitBound(Integer)}).
+         * Raises minLength past what the schema carries, lowers maxLength only
+         * below it, sets pattern only when it has none, and lowers a minLength it
+         * can identify as swagger-core's own unconverted code-unit bound (see
+         * isUnconvertedUnitBound(Integer)).
          *
-         * <p>Decisions:
+         * Decisions:
          *
-         * <p>The second phase must not call {@link #applyTo(Schema)}: replaying a phase-1 snapshot
+         * The second phase must not call applyTo(Schema): replaying a phase-1 snapshot
          * could OVERWRITE a value something else set on the same schema object in between with an
-         * older, looser one. Confirmed 2026-09-04 by triple-boot: a field-level
-         * {@code @Schema(minLength = 10, maxLength = 20, pattern = "^Sprint .*$")} on {@code
-         * SaveBoardRequestDTO.name} was published intact with this bean disabled and REPLACED by
-         * the looser {@code 1 / 64 / ^[a-zA-Z0-9 ]*$} with it enabled; neutering only phase 2
-         * restored the field-level values. Latent today (no DTO field carries its own
-         * {@code @Schema} constraint), but {@code @Schema} is now in this codebase's vocabulary
-         * ({@link com.vrudenko.kanban_board.dto.annotation.Password}, {@link
-         * com.vrudenko.kanban_board.dto.annotation.BoardName}), and phase 2 only ever restates its
+         * older, looser one. Confirmed 2026-09-04 by triple-boot: a
+         * field-level @Schema(minLength = 10, maxLength = 20, pattern = "^Sprint .*$") on
+         * SaveBoardRequestDTO.name was published intact with this bean disabled and REPLACED by
+         * the looser 1 / 64 / ^[a-zA-Z0-9 ]*$ with it enabled; neutering only phase 2
+         * restored the field-level values. Latent today (no DTO field carries its
+         * own @Schema constraint), but @Schema is now in this codebase's vocabulary
+         * (com.vrudenko.kanban_board.dto.annotation.Password,
+         * com.vrudenko.kanban_board.dto.annotation.BoardName), and phase 2 only ever restates its
          * own recorded values, not whatever else is on the schema by then.
          */
         void reassertOn(Schema<?> property) {
@@ -474,16 +474,16 @@ public class ComposedConstraintPropertyCustomizer
         }
 
         /**
-         * Report whether {@code current} is swagger-core's unconverted UTF-16 unit bound rather
+         * Report whether current is swagger-core's unconverted UTF-16 unit bound rather
          * than a deliberate choice by someone else, so it may be lowered to the converted value.
          *
-         * <p>Decisions:
+         * Decisions:
          *
-         * <p>The second phase otherwise only tightens, because a value on the schema by then may
-         * have been set by something with more authority than this bean (a field-level
-         * {@code @Schema}), and replaying a phase-1 snapshot over it would loosen it.
-         * swagger-core's own second pass is the exception: it re-derives {@code minLength} from
-         * {@code @Size} in code units, which is wrong for the document rather than merely stricter.
+         * The second phase otherwise only tightens, because a value on the schema by then may
+         * have been set by something with more authority than this bean (a
+         * field-level @Schema), and replaying a phase-1 snapshot over it would loosen it.
+         * swagger-core's own second pass is the exception: it re-derives minLength
+         * from @Size in code units, which is wrong for the document rather than merely stricter.
          * It is recognisable because it equals the unit bound this accumulator already holds.
          */
         private boolean isUnconvertedUnitBound(Integer current) {

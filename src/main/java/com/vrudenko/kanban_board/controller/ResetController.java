@@ -22,29 +22,29 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Reset nonprod's Postgres and Kafka activity-log state to zero rows via {@link ResetService},
+ * Reset nonprod's Postgres and Kafka activity-log state to zero rows via ResetService,
  * behind a nonprod-only, shared-secret-authenticated endpoint.
  *
- * <p>{@code ?fullReset=true} selects the unconditional full reset ({@link #reset}). Absent, or any
- * other value, selects the targeted delete ({@link #deleteUsers}), which then requires a {@code
- * userIds} body. Both routes call {@link #verifyResetToken} first, so neither route's security
+ * ?fullReset=true selects the unconditional full reset (reset). Absent, or any
+ * other value, selects the targeted delete (deleteUsers), which then requires a
+ * userIds body. Both routes call verifyResetToken first, so neither route's security
  * check can drift from the other's.
  *
- * <p>Decisions:
+ * Decisions:
  *
- * <p><b>Two independent controls, not one.</b> {@code @Profile("nonprod")} means this bean does not
- * exist at all in a context where the {@code nonprod} profile is inactive -- regardless of the
+ * Two independent controls, not one. @Profile("nonprod") means this bean does not
+ * exist at all in a context where the nonprod profile is inactive -- regardless of the
  * token check below. The shared-secret header is a second, independent control: even if a deploy
- * script ever set {@code SPRING_PROFILES_ACTIVE} to include {@code nonprod} in production by
+ * script ever set SPRING_PROFILES_ACTIVE to include nonprod in production by
  * mistake (a real copy-paste failure mode, not a hypothetical), a caller would still need the
  * correct token. Neither control is treated as sufficient alone.
  *
- * <p><b>Constant-time comparison.</b> The supplied and configured tokens are compared via {@link
- * MessageDigest#isEqual}, never {@code String.equals} -- a variable-time comparison on a shared
+ * Constant-time comparison. The supplied and configured tokens are compared via
+ * MessageDigest.isEqual, never String.equals -- a variable-time comparison on a shared
  * secret leaks the matching prefix length across repeated requests (ASVS V6).
  *
- * <p><b>No oracle on header presence.</b> {@code suppliedToken} is bound with {@code required =
- * false}: a request carrying no header at all reaches the same mismatch path (and therefore the
+ * No oracle on header presence. suppliedToken is bound with required =
+ * false: a request carrying no header at all reaches the same mismatch path (and therefore the
  * same 403 response) as a request carrying a wrong value. Binding it as required would instead make
  * Spring answer 400 for an absent header and 403 for a wrong one, handing a probe a free
  * distinguisher.
@@ -67,9 +67,9 @@ public class ResetController {
     private String configuredToken;
 
     /**
-     * Reject a configured token that is null, blank, or shorter than {@link #MIN_TOKEN_LENGTH}:
+     * Reject a configured token that is null, blank, or shorter than MIN_TOKEN_LENGTH:
      * without this guard an effectively-empty secret could compare equal to a blank supplied token
-     * via {@link MessageDigest#isEqual}.
+     * via MessageDigest.isEqual.
      */
     @PostConstruct
     void validateConfiguredToken() {

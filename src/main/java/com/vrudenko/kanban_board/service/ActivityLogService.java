@@ -23,14 +23,14 @@ public class ActivityLogService {
     /**
      * Return a board's activity feed, newest first.
      *
-     * <p>Decisions:
+     * Decisions:
      *
-     * <p>The caller's {@code pageable} sort is deliberately discarded: the service always sorts by
-     * {@code createdAt} descending, then {@code id} descending. The second key makes it a
-     * <i>total</i> order; without it, rows sharing a {@code createdAt} instant have no defined
+     * The caller's pageable sort is deliberately discarded: the service always sorts by
+     * createdAt descending, then id descending. The second key makes it a
+     * total order; without it, rows sharing a createdAt instant have no defined
      * relative position, so between two page requests a row can appear on two pages or on none.
      *
-     * <p>Offset pagination still cannot give a stable snapshot across concurrent writes: a row
+     * Offset pagination still cannot give a stable snapshot across concurrent writes: a row
      * inserted while a client pages can shift later pages by one, so an item may be seen twice or
      * missed. That is inherent to offset pagination; keyset pagination is the fix and is not
      * shipped here.

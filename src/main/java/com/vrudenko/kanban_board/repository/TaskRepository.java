@@ -22,21 +22,21 @@ public interface TaskRepository extends JpaRepository<TaskEntity, String> {
     long countByColumnId(String columnId);
 
     /**
-     * Shift every task's {@code position} within one column by {@code delta}, for positions in the
+     * Shift every task's position within one column by delta, for positions in the
      * inclusive [fromPosition, toPosition] range, as a single bulk statement.
      *
-     * <p>Decisions:
+     * Decisions:
      *
-     * <p>One statement instead of a per-row loop keeps the statement count constant regardless of
+     * One statement instead of a per-row loop keeps the statement count constant regardless of
      * sibling count and narrows the concurrency race window to one statement.
      *
-     * <p>The {@code t.column.id} predicate is mandatory: without it the statement renumbers the
-     * entire {@code tasks} table across every user's boards.
+     * The t.column.id predicate is mandatory: without it the statement renumbers the
+     * entire tasks table across every user's boards.
      *
-     * <p>Bulk JPQL bypasses the persistence context, so Hibernate does not know a row updated this
+     * Bulk JPQL bypasses the persistence context, so Hibernate does not know a row updated this
      * way is stale in an already-managed entity. Callers must scope the range to exclude the
-     * position of any entity they still hold managed in the same transaction ({@link
-     * com.vrudenko.kanban_board.service.TaskService#moveToColumn} always excludes the moved task's
+     * position of any entity they still hold managed in the same transaction (
+     * com.vrudenko.kanban_board.service.TaskService.moveToColumn always excludes the moved task's
      * own pre-shift position).
      */
     @Modifying

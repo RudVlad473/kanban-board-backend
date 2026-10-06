@@ -30,9 +30,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 /**
- * Tracer for {@code GET /boards/{boardId}/full}: one authenticated request returns board, columns,
- * tasks and subtasks four levels deep through {@code BoardService#findFullById} and the {@code
- * BoardFullMapper} chain.
+ * Tracer for GET /boards/{boardId}/full: one authenticated request returns board, columns,
+ * tasks and subtasks four levels deep through BoardService#findFullById and the
+ * BoardFullMapper chain.
  */
 @SpringBootTest
 @AutoConfigureMockMvc

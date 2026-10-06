@@ -11,8 +11,8 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * The column level of the nested board read: {@code version} and {@code position}, as in the flat
- * {@link ColumnResponseDTO}, plus its tasks, so the nested response is never less informative than
+ * The column level of the nested board read: version and position, as in the flat
+ * ColumnResponseDTO, plus its tasks, so the nested response is never less informative than
  * the flat fan-out it replaces.
  */
 @Getter

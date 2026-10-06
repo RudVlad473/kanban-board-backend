@@ -33,8 +33,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 /**
  * Real-broker proof of the dead-letter path's routing, payload fidelity and non-blocking behaviour.
  *
- * <p>The poison is genuinely unparseable JSON published as raw bytes through a standalone {@code
- * kafka-clients} producer, never a test-only failure hook, so a dead-lettered record proves the
+ * The poison is genuinely unparseable JSON published as raw bytes through a standalone
+ * kafka-clients producer, never a test-only failure hook, so a dead-lettered record proves the
  * pipeline isolates real bad data.
  */
 @SpringBootTest
@@ -75,14 +75,14 @@ class ActivityLogDeadLetterE2ETest extends AbstractKafkaContainerTest {
     }
 
     /**
-     * Polls {@link KafkaTopics#ACTIVITY_DLT} until exactly one record whose value byte-equals
-     * {@code expectedValue} has been seen, then returns it.
+     * Polls KafkaTopics.ACTIVITY_DLT until exactly one record whose value byte-equals
+     * expectedValue has been seen, then returns it.
      *
-     * <p>Raw arrays are compared, never a decoded string, which {@link DeadLetterFidelityTest}
+     * Raw arrays are compared, never a decoded string, which DeadLetterFidelityTest
      * depends on: decoding first would mask the re-encoding bug this class exists to catch. The
      * topic is shared across the package's test classes (the context is cached), so matching is
      * scoped to this exact payload. Routing takes a few seconds (three attempts at a ~1s fixed
-     * interval, see {@code KafkaConsumerConfig}); the 30s ceiling comfortably exceeds that.
+     * interval, see KafkaConsumerConfig); the 30s ceiling comfortably exceeds that.
      */
     private byte[] awaitDeadLetterRecordMatching(byte[] expectedValue) {
         var matches = new ArrayList<byte[]>();

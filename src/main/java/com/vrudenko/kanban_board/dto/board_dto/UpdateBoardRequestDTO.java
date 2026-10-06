@@ -8,7 +8,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 
-/** DTO for {@link com.vrudenko.kanban_board.entity.BoardEntity} */
+/** DTO for com.vrudenko.kanban_board.entity.BoardEntity */
 @Getter
 @Setter
 @Builder

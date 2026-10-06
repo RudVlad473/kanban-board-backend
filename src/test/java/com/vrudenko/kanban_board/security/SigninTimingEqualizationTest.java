@@ -27,19 +27,19 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 /**
  * Proves the cost half of signin's anti-enumeration guarantee: an unregistered email and a wrong
- * password each cost one {@link PasswordEncoder#matches} call.
+ * password each cost one PasswordEncoder.matches call.
  *
- * <p>The calls are counted through {@link AuthenticationController#signin}. {@link
- * AuthenticationTest.Signin.AntiEnumeration} proves the content half (byte-identical bodies);
+ * The calls are counted through AuthenticationController.signin.
+ * AuthenticationTest.Signin.AntiEnumeration proves the content half (byte-identical bodies);
  * neither supersedes the other, since a response can be byte-identical while leaking timing.
  *
- * <p>Why this is the way it is: {@link CountingPasswordEncoder} does not violate the no-mocks rule
- * ({@code docs/CODE_STYLE.md} rule 4). It forwards every call to the real {@code
- * BeanConfiguration#passwordEncoder()} bean, returns that bean's real answer, and only counts
- * {@code matches(...)} calls. It is wired through {@code @Primary}, so every production path under
- * test, including {@link UserAuthenticationProvider}'s injection point, runs unmodified. The class
- * is separate from {@link AuthenticationTest} because {@link CountingPasswordEncoderConfig} forks
- * its own Spring context cache key, and isolating it spares {@code AuthenticationTest}'s many
+ * Why this is the way it is: CountingPasswordEncoder does not violate the no-mocks rule
+ * (docs/CODE_STYLE.md rule 4). It forwards every call to the real
+ * BeanConfiguration#passwordEncoder() bean, returns that bean's real answer, and only counts
+ * matches(...) calls. It is wired through @Primary, so every production path under
+ * test, including UserAuthenticationProvider's injection point, runs unmodified. The class
+ * is separate from AuthenticationTest because CountingPasswordEncoderConfig forks
+ * its own Spring context cache key, and isolating it spares AuthenticationTest's many
  * groups that extra context startup. The invocation counter is per-context mutable state reset at
  * the start of each test, which is deterministic because JUnit runs this class sequentially.
  */
@@ -54,8 +54,8 @@ public class SigninTimingEqualizationTest extends AbstractAppMockMvcTest {
     @Autowired private CountingPasswordEncoder countingPasswordEncoder;
 
     /**
-     * Forwards every call to the application's own {@link PasswordEncoder} bean and returns its
-     * real answer, counting only {@link #matches(CharSequence, String)} calls. Not a mock, so every
+     * Forwards every call to the application's own PasswordEncoder bean and returns its
+     * real answer, counting only matches(CharSequence, String) calls. Not a mock, so every
      * comparison is a genuine BCrypt comparison.
      */
     private static final class CountingPasswordEncoder implements PasswordEncoder {
@@ -92,15 +92,15 @@ public class SigninTimingEqualizationTest extends AbstractAppMockMvcTest {
     }
 
     /**
-     * Publishes {@link CountingPasswordEncoder} as the {@code @Primary} {@link PasswordEncoder} for
+     * Publishes CountingPasswordEncoder as the @Primary PasswordEncoder for
      * this class's Spring context only.
      *
-     * <p>It is never a {@code @Component} in a scanned package, so it cannot leak into production
+     * It is never a @Component in a scanned package, so it cannot leak into production
      * wiring or another class's context.
      *
-     * <p>{@code @Qualifier("passwordEncoder")} on the delegate parameter names {@code
-     * BeanConfiguration#passwordEncoder()} directly, instead of leaning on Spring's self-reference
-     * exclusion to resolve an ambiguous {@link PasswordEncoder} parameter.
+     * The @Qualifier("passwordEncoder") annotation on the delegate parameter names
+     * BeanConfiguration#passwordEncoder() directly, instead of leaning on Spring's self-reference
+     * exclusion to resolve an ambiguous PasswordEncoder parameter.
      */
     @TestConfiguration
     static class CountingPasswordEncoderConfig {

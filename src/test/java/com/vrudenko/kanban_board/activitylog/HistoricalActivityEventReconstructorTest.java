@@ -28,12 +28,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /**
- * Proves {@link HistoricalActivityEventReconstructor} is the exact inverse of the real consumer
+ * Proves HistoricalActivityEventReconstructor is the exact inverse of the real consumer
  * pipeline, never of a reimplementation of its mapping.
  *
- * <p>Every positive case publishes a real event through the real broker, waits for the real {@link
- * ActivityLogConsumer} to persist its row, reconstructs it, and asserts equality with the original.
- * {@code deriveActionAndDetailIds} is private and could drift from a test that merely read its
+ * Every positive case publishes a real event through the real broker, waits for the real
+ * ActivityLogConsumer to persist its row, reconstructs it, and asserts equality with the original.
+ * deriveActionAndDetailIds is private and could drift from a test that merely read its
  * source; the round trip proves the reconstructor tracks what the consumer does.
  */
 @SpringBootTest
@@ -55,7 +55,7 @@ class HistoricalActivityEventReconstructorTest extends AbstractKafkaContainerTes
     }
 
     /**
-     * Polls until exactly one row carries {@code eventId}, scoped by {@code eventId} because the
+     * Polls until exactly one row carries eventId, scoped by eventId because the
      * topic and consumer group are shared across the package's cached Spring context.
      */
     private ActivityLogEntity awaitPersistedRow(String eventId) {
@@ -76,12 +76,12 @@ class HistoricalActivityEventReconstructorTest extends AbstractKafkaContainerTes
     }
 
     /**
-     * Compares every field except {@code timestamp} exactly, and {@code timestamp} with a
+     * Compares every field except timestamp exactly, and timestamp with a
      * 1-millisecond tolerance.
      *
-     * <p>Avro's {@code timestamp-millis} logical type truncates to millisecond precision by design
-     * (confirmed by inspecting the generated code, as for {@code ActivityLogConsumerE2ETest}), so
-     * an {@code Instant.now()} with nanosecond precision can lose just under a millisecond in the
+     * Avro's timestamp-millis logical type truncates to millisecond precision by design
+     * (confirmed by inspecting the generated code, as for ActivityLogConsumerE2ETest), so
+     * an Instant.now() with nanosecond precision can lose just under a millisecond in the
      * real pipeline. A property of the wire format, not a loosened assertion.
      */
     private void assertReconstructedMatchesOriginal(

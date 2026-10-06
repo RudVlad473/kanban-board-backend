@@ -14,20 +14,20 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * In-process counterpart to {@link AbstractAppE2ETest}: {@link #signinCookie()} and {@link
- * #signinCookie(String, String)} POST to the real {@code /signin} route through {@link MockMvc}.
+ * In-process counterpart to AbstractAppE2ETest: signinCookie() and
+ * signinCookie(String, String) POST to the real /signin route through MockMvc.
  *
- * <p>Why this is the way it is: they do not inject a principal via {@code .with(user(userId))},
- * which bypasses {@code AuthenticationController.authenticate} entirely; this base exists for the
+ * Why this is the way it is: they do not inject a principal via .with(user(userId)),
+ * which bypasses AuthenticationController.authenticate entirely; this base exists for the
  * classes that must keep exercising the real signin/session path under the cheaper in-process tier.
  * That shortcut also establishes a brand-new session on every call, so more than two requests as
- * one principal in a test method hit {@code MAX_CONCURRENT_SESSIONS = 2} and the third surfaces as
- * a 401 indistinguishable from a wrong password. For three or more authenticated calls, call {@link
- * #signinCookie()} once and replay the cookie; see docs/CODE_STYLE.md rule 4 and {@code
- * InjectionAttemptTest} for the reference call site. The class carries no {@code @SpringBootTest}
- * or {@code @AutoConfigureMockMvc}, leaving them to each subclass as {@link AbstractAppE2ETest}
- * does. {@link MockMvc} ignores {@code server.servlet.context-path}, so subclasses build URLs from
- * {@link ApiPaths} constants bare, unlike the real-socket tier.
+ * one principal in a test method hit MAX_CONCURRENT_SESSIONS = 2 and the third surfaces as
+ * a 401 indistinguishable from a wrong password. For three or more authenticated calls, call
+ * signinCookie() once and replay the cookie; see docs/CODE_STYLE.md rule 4 and
+ * InjectionAttemptTest for the reference call site. The class carries no @SpringBootTest
+ * or @AutoConfigureMockMvc, leaving them to each subclass as AbstractAppE2ETest
+ * does. MockMvc ignores server.servlet.context-path, so subclasses build URLs from
+ * ApiPaths constants bare, unlike the real-socket tier.
  */
 public abstract class AbstractAppMockMvcTest extends AbstractAppTest {
 
@@ -39,15 +39,15 @@ public abstract class AbstractAppMockMvcTest extends AbstractAppTest {
     private String cookieName;
 
     /**
-     * Signs in as this fixture's owning user ({@link #getOwningUser()}) through a real {@code POST
-     * /signin} and returns the session cookie.
+     * Signs in as this fixture's owning user (getOwningUser()) through a real POST
+     * /signin and returns the session cookie.
      */
     protected Cookie signinCookie() throws Exception {
         return signinCookie(getOwningUser().getEmail(), getOwningUserPassword());
     }
 
     /**
-     * Signs in as an arbitrary user through a real {@code POST /signin} and returns the session
+     * Signs in as an arbitrary user through a real POST /signin and returns the session
      * cookie, for tests that need a second user's session (e.g. cross-user isolation).
      */
     protected Cookie signinCookie(String email, String password) throws Exception {

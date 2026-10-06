@@ -20,21 +20,21 @@ import org.springframework.stereotype.Component;
 /**
  * Declare every path-template variable as a required string path parameter on each operation.
  *
- * <p>springdoc declares only the variables a handler binds with {@code @PathVariable}, so a nested
+ * springdoc declares only the variables a handler binds with @PathVariable, so a nested
  * route whose handler binds just the leaf id published no ancestor ids and a fuzzer could not build
  * a request for it (11 of 24 operations when found).
  *
- * <p>Decisions:
+ * Decisions:
  *
- * <p>One global customizer, not unused {@code @PathVariable} bindings or class-level
- * {@code @Parameters}: both are per-handler memory, and that memory had already lapsed on 11
+ * One global customizer, not unused @PathVariable bindings or
+ * class-level @Parameters: both are per-handler memory, and that memory had already lapsed on 11
  * operations. A new nested controller needs no change.
  *
- * <p>Known hole: an added ancestor id is routing-only. Ownership is verified along the leaf's chain
- * to the user and the ancestor ids are never compared, so a mismatched {@code boardId} still
+ * Known hole: an added ancestor id is routing-only. Ownership is verified along the leaf's chain
+ * to the user and the ancestor ids are never compared, so a mismatched boardId still
  * reaches the resource. Declaring an id as required does not make the server validate it.
  *
- * <p>Guarded by {@code OpenApiParameterCompletenessTest}.
+ * Guarded by OpenApiParameterCompletenessTest.
  */
 @Component
 public class PathTemplateParameterOpenApiCustomizer implements GlobalOpenApiCustomizer {

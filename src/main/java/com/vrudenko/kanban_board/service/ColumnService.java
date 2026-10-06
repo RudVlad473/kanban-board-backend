@@ -45,23 +45,23 @@ public class ColumnService {
     @Autowired private EventIdGenerator eventIdGenerator;
 
     /**
-     * Delete every column of {@code boardId} and, per column, all of its tasks and subtasks via
-     * {@link TaskService#deleteAllByColumn}.
+     * Delete every column of boardId and, per column, all of its tasks and subtasks via
+     * TaskService.deleteAllByColumn.
      *
-     * <p>Decisions:
+     * Decisions:
      *
-     * <p><b>Derived-delete vs. bulk-delete asymmetry:</b> {@code
-     * columnRepository.deleteAllByBoardId} is a Spring Data <i>derived</i> delete (not an explicit
-     * {@code @Modifying @Query}), implemented as fetch-then-{@code remove()} per entity. Loading
-     * each {@link ColumnEntity} as a managed entity sends it through Hibernate's versioned-delete
-     * check, so it DOES honor {@code @Version}, unlike the bulk-JPQL {@link
-     * TaskService#deleteAllByColumn} (see its Javadoc). A column modified between this method's
-     * {@code findAllByBoardId} fetch and the per-entity removal can therefore surface {@code
-     * OptimisticLockingFailureException} mid-batch, whereas the equivalent race on the task-delete
+     * Derived-delete vs. bulk-delete asymmetry:
+     * columnRepository.deleteAllByBoardId is a Spring Data derived delete (not an
+     * explicit @Modifying @Query), implemented as fetch-then-remove() per entity. Loading
+     * each ColumnEntity as a managed entity sends it through Hibernate's versioned-delete
+     * check, so it DOES honor @Version, unlike the bulk-JPQL
+     * TaskService.deleteAllByColumn (see its Javadoc). A column modified between this method's
+     * findAllByBoardId fetch and the per-entity removal can therefore surface
+     * OptimisticLockingFailureException mid-batch, whereas the equivalent race on the task-delete
      * path silently proceeds. Intentionally inconsistent: documented, not reconciled.
      *
-     * <p><b>No per-column {@code ColumnDeletedEvent} is published:</b> this cascade fires from
-     * {@link BoardService#deleteById}, whose own {@code BoardDeletedEvent} is the single event a
+     * No per-column ColumnDeletedEvent is published: this cascade fires from
+     * BoardService.deleteById, whose own BoardDeletedEvent is the single event a
      * board delete emits. Deliberate: one event per cascaded column (and transitively per task and
      * subtask) would mean loading every child purely to publish, reintroducing the N+1 the batch
      * delete avoids, and could emit hundreds of events from one request into a bounded publish
@@ -79,11 +79,11 @@ public class ColumnService {
     }
 
     /**
-     * Create the column at the end of its board and publish {@code ColumnCreatedEvent} after
+     * Create the column at the end of its board and publish ColumnCreatedEvent after
      * commit.
      *
-     * <p>{@code @Transactional} is declared here so the after-commit publish does not depend on the
-     * caller; see {@link TaskService#save}.
+     * The @Transactional annotation is declared here so the after-commit publish does not depend on the
+     * caller; see TaskService.save.
      */
     @Transactional
     public ColumnResponseDTO save(SaveColumnRequestDTO columnDTO, BoardEntity board) {
@@ -125,10 +125,10 @@ public class ColumnService {
     /**
      * Update the column if the caller's version matches, rejecting a stale write.
      *
-     * <p>The explicit version check is required in addition to {@code @Version}: this
+     * The explicit version check is required in addition to @Version: this
      * load-then-save flow runs inside one transaction, so Hibernate's dirty-check lock (which fires
      * on the UPDATE) cannot model "client read version N, another client wrote N+1, reject this
-     * write" across separate HTTP requests. Comparing {@code dto.getVersion()} to the just-loaded
+     * write" across separate HTTP requests. Comparing dto.getVersion() to the just-loaded
      * entity's version before any mutation turns that race into a rejected request instead of a
      * silent overwrite.
      */
@@ -167,14 +167,14 @@ public class ColumnService {
     }
 
     /**
-     * Move the column to {@code dto.getTargetPosition()} under {@link #updateById}'s version guard.
+     * Move the column to dto.getTargetPosition() under updateById's version guard.
      *
-     * <p><b>Renumbering contract:</b> {@code dto.getTargetPosition()} is mandatory (unlike {@link
-     * TaskService#moveToColumn}'s nullable one: a reorder with no target asks for nothing). The
+     * Renumbering contract: dto.getTargetPosition() is mandatory (unlike
+     * TaskService.moveToColumn's nullable one: a reorder with no target asks for nothing). The
      * version compare runs BEFORE any renumbering statement, so a rejected reorder leaves the
      * board's column sequence untouched. The bulk shift is a single signed range over the positions
-     * strictly between the current and target position; see {@link
-     * com.vrudenko.kanban_board.repository.TaskRepository#shiftPositions} for why this composes
+     * strictly between the current and target position; see
+     * com.vrudenko.kanban_board.repository.TaskRepository.shiftPositions for why this composes
      * instead of double-shifting.
      */
     @Transactional
@@ -236,18 +236,18 @@ public class ColumnService {
     }
 
     /**
-     * Delete one column and cascade to its tasks and subtasks via {@link
-     * TaskService#deleteAllByColumn}, the single-column case of {@link #deleteAllByBoardId}'s loop.
+     * Delete one column and cascade to its tasks and subtasks via
+     * TaskService.deleteAllByColumn, the single-column case of deleteAllByBoardId's loop.
      *
-     * <p>Decisions:
+     * Decisions:
      *
-     * <p>There is no non-empty-column guard: once ownership passes, the delete always cascades,
-     * matching {@link BoardService#deleteById}. A deliberate choice, not an oversight to "fix" with
+     * There is no non-empty-column guard: once ownership passes, the delete always cascades,
+     * matching BoardService.deleteById. A deliberate choice, not an oversight to "fix" with
      * a task-count check.
      *
-     * <p>The ids are captured into locals BEFORE the deletes run (see {@link
-     * TaskService#deleteById}): afterwards nothing is left to derive {@code boardId} from, and the
-     * Kafka consumer has no security context to look it up. {@code deletedPosition} is captured too
+     * The ids are captured into locals BEFORE the deletes run (see
+     * TaskService.deleteById): afterwards nothing is left to derive boardId from, and the
+     * Kafka consumer has no security context to look it up. deletedPosition is captured too
      * and closes the gap the deleted column leaves, so deleting a middle column keeps positions
      * contiguous from zero.
      */

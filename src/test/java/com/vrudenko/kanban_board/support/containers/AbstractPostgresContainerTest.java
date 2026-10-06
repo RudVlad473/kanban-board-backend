@@ -8,37 +8,35 @@ import org.testcontainers.utility.DockerImageName;
  * The one real PostgreSQL container for the whole JVM run, shared by every Spring test context in
  * the repository.
  *
- * <p>Why this is the way it is:
+ * Why this is the way it is:
  *
- * <ul>
- *   <li>A third shared ancestor: {@link com.vrudenko.kanban_board.support.fixtures.AbstractAppTest}
- *       and {@link com.vrudenko.kanban_board.support.containers.AbstractKafkaContainerTest} extend
- *       it, as do {@code KanbanBoardApplicationTests} and {@code ActivityEventAvroMapperTest}.
- *       {@code AbstractKafkaContainerTest} does not extend {@code AbstractAppTest} and never will,
- *       yet its 9 subclasses persist {@code ActivityLogEntity} and need a real datasource; a
- *       container reachable only from {@code AbstractAppTest} would strand them or force a second
- *       container. {@link com.vrudenko.kanban_board.config.FlywaySchemaProvenanceTest} is the
- *       standing proof of container/Flyway/Hibernate/Spring-Session coexistence: it asserts
- *       Flyway-only artifacts Hibernate's naming strategy would never emit, so a silent regression
- *       to Hibernate-generated DDL fails the build.
- *   <li>The container starts imperatively in a static initializer, as in {@code
- *       AbstractKafkaContainerTest}, never via the {@code @Testcontainers}/{@code @Container}
- *       extension, whose singleton-container pattern proved unreliable across sibling classes for
- *       the Kafka container: a second container started for a later class while Spring's cached
- *       context kept the first's stale port (see that class's Javadoc). A {@code static {
- *       postgres.start(); }} block runs exactly once per classloader, regardless of JUnit
- *       lifecycle.
- *   <li>The {@code api.version} pin lives here, not in {@code AbstractKafkaContainerTest}, because
- *       JVM class initialization runs a superclass's static initializers first, so the pin fires
- *       before either container type starts, whichever concrete class loads first.
- *   <li>{@code @ServiceConnection} on {@code postgres} supplies {@code spring.datasource.url},
- *       {@code username} and {@code password} (Spring Boot ships a {@code
- *       PostgresContainerConnectionDetailsFactory}), so no {@code @DynamicPropertySource} is
- *       needed; {@code AbstractKafkaContainerTest} needs one only because no ConnectionDetails type
- *       exists for a schema registry. A subclass-local {@code @DynamicPropertySource} overriding a
- *       superclass-registered key would lose, because Spring invokes subclass methods first;
- *       harmless today because this class registers none.
- * </ul>
+ * - A third shared ancestor: com.vrudenko.kanban_board.support.fixtures.AbstractAppTest
+ *   and com.vrudenko.kanban_board.support.containers.AbstractKafkaContainerTest extend
+ *   it, as do KanbanBoardApplicationTests and ActivityEventAvroMapperTest.
+ *   AbstractKafkaContainerTest does not extend AbstractAppTest and never will,
+ *   yet its 9 subclasses persist ActivityLogEntity and need a real datasource; a
+ *   container reachable only from AbstractAppTest would strand them or force a second
+ *   container. com.vrudenko.kanban_board.config.FlywaySchemaProvenanceTest is the
+ *   standing proof of container/Flyway/Hibernate/Spring-Session coexistence: it asserts
+ *   Flyway-only artifacts Hibernate's naming strategy would never emit, so a silent regression
+ *   to Hibernate-generated DDL fails the build.
+ * - The container starts imperatively in a static initializer, as in
+ *   AbstractKafkaContainerTest, never via the @Testcontainers/@Container
+ *   extension, whose singleton-container pattern proved unreliable across sibling classes for
+ *   the Kafka container: a second container started for a later class while Spring's cached
+ *   context kept the first's stale port (see that class's Javadoc). A static {
+ *   postgres.start(); } block runs exactly once per classloader, regardless of JUnit
+ *   lifecycle.
+ * - The api.version pin lives here, not in AbstractKafkaContainerTest, because
+ *   JVM class initialization runs a superclass's static initializers first, so the pin fires
+ *   before either container type starts, whichever concrete class loads first.
+ * - @ServiceConnection on postgres supplies spring.datasource.url,
+ *   username and password (Spring Boot ships a
+ *   PostgresContainerConnectionDetailsFactory), so no @DynamicPropertySource is
+ *   needed; AbstractKafkaContainerTest needs one only because no ConnectionDetails type
+ *   exists for a schema registry. A subclass-local @DynamicPropertySource overriding a
+ *   superclass-registered key would lose, because Spring invokes subclass methods first;
+ *   harmless today because this class registers none.
  */
 public abstract class AbstractPostgresContainerTest {
     /*

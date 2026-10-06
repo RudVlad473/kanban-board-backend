@@ -15,37 +15,35 @@ public interface BoardRepository extends JpaRepository<BoardEntity, String> {
     boolean existsByUserIdAndName(String userId, String name);
 
     /**
-     * Fetch-join the full board graph (columns, tasks, subtasks) in a single round trip, for {@code
-     * GET /boards/{boardId}/full}.
+     * Fetch-join the full board graph (columns, tasks, subtasks) in a single round trip, for
+     * GET /boards/{boardId}/full.
      *
-     * <p>{@code DISTINCT} de-duplicates the root {@link BoardEntity} row Hibernate would otherwise
-     * return once per underlying SQL row (a multi-level {@code JOIN FETCH} multiplies rows once per
+     * DISTINCT de-duplicates the root BoardEntity row Hibernate would otherwise
+     * return once per underlying SQL row (a multi-level JOIN FETCH multiplies rows once per
      * column/task/subtask combination). It collapses only the query's ROOT result, not nested
-     * collections, which is why every collection in the chain is a {@code Set}, not a {@code List}.
+     * collections, which is why every collection in the chain is a Set, not a List.
      *
-     * <p>Decisions:
+     * Decisions:
      *
-     * <p>Verified against a real Hibernate 6 build in this codebase, not assumed:
+     * Verified against a real Hibernate 6 build in this codebase, not assumed:
      *
-     * <ol>
-     *   <li>{@code MultipleBagFetchException} fires on two-or-more {@code List} (bag) collections
-     *       fetch-joined <i>anywhere in one query</i>, not only on siblings under the same parent:
-     *       {@code board.column} and {@code column.task}, at different depths, already trip it.
-     *   <li>Even a single surviving {@code List} in a multi-level fetch chain accumulates
-     *       duplicates: the root dedup {@code DISTINCT} provides does NOT extend to nested
-     *       collections. With {@code board.column} still a {@code List}, a column referenced by 14
-     *       underlying rows (7 sibling tasks with no subtasks, 1 task with 7 subtasks) appeared 14
-     *       times in {@code board.getColumn()}, observed directly via the ordering-equivalence test
-     *       before the fix.
-     * </ol>
+     * 1. MultipleBagFetchException fires on two-or-more List (bag) collections
+     *    fetch-joined anywhere in one query, not only on siblings under the same parent:
+     *    board.column and column.task, at different depths, already trip it.
+     * 2. Even a single surviving List in a multi-level fetch chain accumulates
+     *    duplicates: the root dedup DISTINCT provides does NOT extend to nested
+     *    collections. With board.column still a List, a column referenced by 14
+     *    underlying rows (7 sibling tasks with no subtasks, 1 task with 7 subtasks) appeared 14
+     *    times in board.getColumn(), observed directly via the ordering-equivalence test
+     *    before the fix.
      *
-     * <p>The fix: every collection in the board-&gt;column-&gt;task-&gt;subtasks chain ({@link
-     * BoardEntity#getColumn()}, {@link com.vrudenko.kanban_board.entity.ColumnEntity#getTask()},
-     * {@link com.vrudenko.kanban_board.entity.TaskEntity#getSubtasks()}) is a {@code Set}: zero
-     * bags, so no {@code MultipleBagFetchException}, and {@code Set}'s identity-based deduplication
+     * The fix: every collection in the board->column->task->subtasks chain (
+     * BoardEntity.getColumn(), com.vrudenko.kanban_board.entity.ColumnEntity.getTask(),
+     * com.vrudenko.kanban_board.entity.TaskEntity.getSubtasks()) is a Set: zero
+     * bags, so no MultipleBagFetchException, and Set's identity-based deduplication
      * (safe because hashing an element during population never recurses; see each field's comment)
-     * collapses the row-multiplication duplicates a {@code List} would keep. If a fourth {@code
-     * List}-typed association is ever added anywhere in this fetch chain, both problems return.
+     * collapses the row-multiplication duplicates a List would keep. If a fourth
+     * List-typed association is ever added anywhere in this fetch chain, both problems return.
      */
     @Query(
             "SELECT DISTINCT b FROM BoardEntity b "

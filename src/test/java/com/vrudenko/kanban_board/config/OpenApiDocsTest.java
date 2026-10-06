@@ -18,15 +18,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Regression guard for the OpenAPI endpoint at {@code springdoc.api-docs.path}.
+ * Regression guard for the OpenAPI endpoint at springdoc.api-docs.path.
  *
- * <p>Why this is the way it is: {@code io.confluent:kafka-avro-serializer} transitively pulled in a
- * pre-jakarta {@code swagger-annotations} artifact that shadowed the jakarta one SpringDoc 2.8.8
- * needs, so every {@code GET /api/docs} returned 500 with {@code NoSuchMethodError:
- * Parameter.validationGroups()}. Extends {@link AbstractPostgresContainerTest}, not {@code
- * AbstractAppTest}, because it needs no fixtures (docs/CODE_STYLE.md rule 4). {@code MockMvc}
- * ignores {@code server.servlet.context-path}, so this class requests the bare path while a
- * deployment serves it under {@code /api}; that is a tier limit, not an oversight.
+ * Why this is the way it is: io.confluent:kafka-avro-serializer transitively pulled in a
+ * pre-jakarta swagger-annotations artifact that shadowed the jakarta one SpringDoc 2.8.8
+ * needs, so every GET /api/docs returned 500 with NoSuchMethodError:
+ * Parameter.validationGroups(). Extends AbstractPostgresContainerTest, not
+ * AbstractAppTest, because it needs no fixtures (docs/CODE_STYLE.md rule 4). MockMvc
+ * ignores server.servlet.context-path, so this class requests the bare path while a
+ * deployment serves it under /api; that is a tier limit, not an oversight.
  */
 @SpringBootTest
 @AutoConfigureMockMvc

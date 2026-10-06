@@ -10,8 +10,8 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 /**
- * Validator-tier boundary matrix for {@link com.vrudenko.kanban_board.dto.annotation.ColumnColor}:
- * null and valid {@code #RRGGBB} pass, every malformed shape yields one violation on {@code color}.
+ * Validator-tier boundary matrix for com.vrudenko.kanban_board.dto.annotation.ColumnColor:
+ * null and valid #RRGGBB pass, every malformed shape yields one violation on color.
  */
 public class ColumnColorTest {
     private Validator validator;

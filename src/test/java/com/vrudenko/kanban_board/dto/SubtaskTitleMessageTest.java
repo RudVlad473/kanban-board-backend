@@ -14,15 +14,15 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 /**
- * Pins {@link com.vrudenko.kanban_board.dto.annotation.SubtaskTitle}'s length-constraint message
- * and {@link SaveSubtaskRequestDTO#getTitle()}'s null/whitespace/empty boundary matrix.
+ * Pins com.vrudenko.kanban_board.dto.annotation.SubtaskTitle's length-constraint message
+ * and SaveSubtaskRequestDTO.getTitle()'s null/whitespace/empty boundary matrix.
  *
- * <p>Why this is the way it is: {@code @ReportAsSingleViolation} on {@code SubtaskTitle} collapses
- * any failure of its composing {@code @Size} onto the composed annotation's own {@code message()},
- * {@code "Subtask title cannot be empty"}, so the inner {@code @Size} message is never rendered to
- * a caller. This test pins that so correcting the inner message to {@code
- * SUBTASK_TITLE_LENGTH_VALIDATION_MESSAGE} is not mistaken for a behavior change. Falsifier: if
- * {@code @ReportAsSingleViolation} is removed, the inner message becomes client-visible and this
+ * Why this is the way it is: @ReportAsSingleViolation on SubtaskTitle collapses
+ * any failure of its composing @Size onto the composed annotation's own message(),
+ * "Subtask title cannot be empty", so the inner @Size message is never rendered to
+ * a caller. This test pins that so correcting the inner message to
+ * SUBTASK_TITLE_LENGTH_VALIDATION_MESSAGE is not mistaken for a behavior change. Falsifier:
+ * if @ReportAsSingleViolation is removed, the inner message becomes client-visible and this
  * test goes red.
  */
 class SubtaskTitleMessageTest {

@@ -17,14 +17,14 @@ import org.springframework.security.web.session.HttpSessionEventPublisher;
 @RequiredArgsConstructor
 public class BeanConfiguration {
     /**
-     * Build the BCrypt encoder with an injectable strength, so the {@code test} profile can run
+     * Build the BCrypt encoder with an injectable strength, so the test profile can run
      * cheaper than production.
      *
-     * <p>The {@code :10} fallback IS the production value (Spring Security's own default), so a
-     * deployment that never activates the {@code test} profile is unchanged. Only {@code
-     * application-test.properties} overrides it, to 4; {@link BCryptPasswordEncoder} rejects
-     * anything below 4. {@link com.vrudenko.kanban_board.security.AuthenticationController}'s
-     * {@code @PostConstruct} equalizer hash derives from this bean, so it tracks the configured
+     * The :10 fallback IS the production value (Spring Security's own default), so a
+     * deployment that never activates the test profile is unchanged. Only
+     * application-test.properties overrides it, to 4; BCryptPasswordEncoder rejects
+     * anything below 4.
+     * com.vrudenko.kanban_board.security.AuthenticationController's @PostConstruct equalizer hash derives from this bean, so it tracks the configured
      * strength: cheaper to compute, not weakened.
      */
     @Bean

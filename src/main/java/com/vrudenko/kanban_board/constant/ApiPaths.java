@@ -1,7 +1,7 @@
 package com.vrudenko.kanban_board.constant;
 
 /**
- * Context-path-relative route constants: prepend {@code server.servlet.context-path} from
+ * Context-path-relative route constants: prepend server.servlet.context-path from
  * application.properties for the externally resolvable URL.
  */
 public final class ApiPaths {

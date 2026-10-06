@@ -25,42 +25,40 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import static io.restassured.RestAssured.given;
 
 /**
- * Concurrent sibling of {@link AuthenticationTest.ConcurrentSessionCeiling}: what happens when two
+ * Concurrent sibling of AuthenticationTest.ConcurrentSessionCeiling: what happens when two
  * signins for one principal reach the session ceiling at the same instant.
  *
- * <p>Decisions:
+ * Decisions:
  *
- * <ul>
- *   <li>Finding (2026-08-10 {@code /claude-security} scan): {@code
- *       SecurityConfiguration#sessionAuthenticationStrategy}'s {@code
- *       ConcurrentSessionControlAuthenticationStrategy} enforces {@code MAX_CONCURRENT_SESSIONS =
- *       2} by reading the live {@code SPRING_SESSION} count and then letting the signin register a
- *       session, a check-then-act sequence. Two concurrent signins for one principal can both read
- *       the same under-threshold count before either persists its row, so both proceed and briefly
- *       exceed the ceiling.
- *   <li>Disposition: accepted as a bounded, self-healing overshoot rather than closed with a
- *       transaction-scoped lock; see {@code SecurityConfiguration}'s Javadoc for why a {@code
- *       pg_advisory_xact_lock} around the count-then-register sequence would not have closed the
- *       race (measured, not assumed).
- *   <li>Real-socket tier: only a genuine multi-threaded HTTP race exercises the window; a MockMvc
- *       approximation would prove a race in the in-process dispatch path, not the deployed one.
- *       {@code @Tag("realSocket")} keeps the class out of the pre-commit {@code fastTest} gate (a
- *       two-thread HTTP race in the commit hook would be a flake generator), so it guards only
- *       {@code ./gradlew test} and CI (docs/CODE_STYLE.md rule 4).
- *   <li>The assertions are an invariant plus a range, not an exact count: asserting that the
- *       overshoot occurs would be flaky by construction, since the window is microseconds wide and
- *       hitting it depends on OS thread scheduling. They hold under both outcomes: {@code
- *       liveSessionCount() == 1 + successCount} always, and {@code successCount} is {@code 1} (the
- *       racers serialized) or {@code 2} (the accepted overshoot).
- *   <li>Measured 2026-08-11 with a temporary {@code @RepeatedTest(10)}: 10 of 10 repetitions
- *       produced {@code successCount == 2} on this machine, so the window opened every attempt.
- *       That does not change the disposition (one extra session, self-healing per assert 3, no
- *       capability beyond what two sessions already grant), but the trade-off reads as "the ceiling
- *       reliably allows one extra concurrent signin", not a rare edge case. Falsifier: a run where
- *       {@code successCount} is not in {@code [1, 2]}.
- *   <li>A ceiling rejection is a 401 byte-identical to a wrong-password response. Never "improve"
- *       this class to distinguish the two: that would hand an attacker a validity oracle.
- * </ul>
+ * - Finding (2026-08-10 /claude-security scan):
+ *   SecurityConfiguration#sessionAuthenticationStrategy's
+ *   ConcurrentSessionControlAuthenticationStrategy enforces MAX_CONCURRENT_SESSIONS =
+ *   2 by reading the live SPRING_SESSION count and then letting the signin register a
+ *   session, a check-then-act sequence. Two concurrent signins for one principal can both read
+ *   the same under-threshold count before either persists its row, so both proceed and briefly
+ *   exceed the ceiling.
+ * - Disposition: accepted as a bounded, self-healing overshoot rather than closed with a
+ *   transaction-scoped lock; see SecurityConfiguration's Javadoc for why a
+ *   pg_advisory_xact_lock around the count-then-register sequence would not have closed the
+ *   race (measured, not assumed).
+ * - Real-socket tier: only a genuine multi-threaded HTTP race exercises the window; a MockMvc
+ *   approximation would prove a race in the in-process dispatch path, not the deployed
+ *   one. @Tag("realSocket") keeps the class out of the pre-commit fastTest gate (a
+ *   two-thread HTTP race in the commit hook would be a flake generator), so it guards only
+ *   ./gradlew test and CI (docs/CODE_STYLE.md rule 4).
+ * - The assertions are an invariant plus a range, not an exact count: asserting that the
+ *   overshoot occurs would be flaky by construction, since the window is microseconds wide and
+ *   hitting it depends on OS thread scheduling. They hold under both outcomes:
+ *   liveSessionCount() == 1 + successCount always, and successCount is 1 (the
+ *   racers serialized) or 2 (the accepted overshoot).
+ * - Measured 2026-08-11 with a temporary @RepeatedTest(10): 10 of 10 repetitions
+ *   produced successCount == 2 on this machine, so the window opened every attempt.
+ *   That does not change the disposition (one extra session, self-healing per assert 3, no
+ *   capability beyond what two sessions already grant), but the trade-off reads as "the ceiling
+ *   reliably allows one extra concurrent signin", not a rare edge case. Falsifier: a run where
+ *   successCount is not in [1, 2].
+ * - A ceiling rejection is a 401 byte-identical to a wrong-password response. Never "improve"
+ *   this class to distinguish the two: that would hand an attacker a validity oracle.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Tag("realSocket")
@@ -69,11 +67,11 @@ public class ConcurrentSigninCeilingE2ETest extends AbstractAppE2ETest {
     @Autowired private JdbcTemplate jdbcTemplate;
 
     /**
-     * Counts live sessions scoped by {@code PRINCIPAL_NAME}, not the absolute table.
+     * Counts live sessions scoped by PRINCIPAL_NAME, not the absolute table.
      *
-     * <p>The principal name is the userId, per {@link UserAuthenticationProvider}. {@code
-     * SPRING_SESSION} rows have no foreign key to {@code users}, survive {@code AbstractAppTest}'s
-     * {@code @AfterEach}, and accumulate across the JVM run.
+     * The principal name is the userId, per UserAuthenticationProvider.
+     * SPRING_SESSION rows have no foreign key to users, survive
+     * AbstractAppTest's @AfterEach, and accumulate across the JVM run.
      */
     private int liveSessionCount() {
         return jdbcTemplate.queryForObject(

@@ -21,22 +21,22 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 
 /**
- * Declare the {@code ProblemDetail} error envelope on every operation of the generated OpenAPI
- * document; springdoc's return-type reflection cannot see a {@code @ControllerAdvice}.
+ * Declare the ProblemDetail error envelope on every operation of the generated OpenAPI
+ * document; springdoc's return-type reflection cannot see a @ControllerAdvice.
  *
- * <p>Describes two producers: {@link com.vrudenko.kanban_board.handler.GlobalExceptionHandler} and
- * {@link com.vrudenko.kanban_board.security.ProblemDetailAuthenticationEntryPoint}, the one
+ * Describes two producers: com.vrudenko.kanban_board.handler.GlobalExceptionHandler and
+ * com.vrudenko.kanban_board.security.ProblemDetailAuthenticationEntryPoint, the one
  * rejection path the handler structurally cannot reach (a genuinely unauthenticated request).
  *
- * <p>Decisions:
+ * Decisions:
  *
- * <p>One global customizer bean, not per-endpoint annotations: those must be remembered on every
- * future controller method, the failure mode this bean exists to remove. {@link
- * #customise(OpenAPI)} walks every operation in the live document, so a new controller needs no
+ * One global customizer bean, not per-endpoint annotations: those must be remembered on every
+ * future controller method, the failure mode this bean exists to remove.
+ * customise(OpenAPI) walks every operation in the live document, so a new controller needs no
  * change.
  *
- * <p>The {@code code} enum is derived from {@link ErrorCode#values()} at document-build time, never
- * hand-listed, so spec and enum cannot drift. {@link ProblemDetailOpenApiCustomizerTest} guards
+ * The code enum is derived from ErrorCode.values() at document-build time, never
+ * hand-listed, so spec and enum cannot drift. ProblemDetailOpenApiCustomizerTest guards
  * per-operation coverage and agreement with what the two producers actually emit.
  */
 @Component
@@ -112,9 +112,9 @@ public class ProblemDetailOpenApiCustomizer implements GlobalOpenApiCustomizer {
     }
 
     /**
-     * Return a fresh {@link ApiResponse} on every call.
+     * Return a fresh ApiResponse on every call.
      *
-     * <p>Sharing six instances across ~24 operations would make the document a graph with shared
+     * Sharing six instances across ~24 operations would make the document a graph with shared
      * mutable nodes: a customizer that set a description on one operation's 404 would silently
      * mutate every 404. That costs ~140 short-lived allocations per document generation; the
      * serialized output is identical because the schema is a $ref either way.
@@ -130,13 +130,13 @@ public class ProblemDetailOpenApiCustomizer implements GlobalOpenApiCustomizer {
     }
 
     /**
-     * Build the {@code ProblemDetail} component schema by hand, never by reflecting over the class.
+     * Build the ProblemDetail component schema by hand, never by reflecting over the class.
      *
-     * <p>{@code ProblemDetailJacksonMixin} flattens {@code ProblemDetail.getProperties()} onto the
-     * root via {@code @JsonAnyGetter} (pinned by {@code GlobalExceptionHandlerTest}'s {@code
-     * jsonPath("$.properties").doesNotExist()}), so a reflected schema would document a nested
-     * {@code properties} object that never appears on the wire and omit {@code code}/{@code
-     * errors}: a confidently wrong contract, worse than an absent one.
+     * ProblemDetailJacksonMixin flattens ProblemDetail.getProperties() onto the
+     * root via @JsonAnyGetter (pinned by GlobalExceptionHandlerTest's
+     * jsonPath("$.properties").doesNotExist()), so a reflected schema would document a nested
+     * properties object that never appears on the wire and omit code/
+     * errors: a confidently wrong contract, worse than an absent one.
      */
     private Schema<?> problemDetailSchema() {
         var schema =

@@ -4,7 +4,6 @@ import java.time.Duration;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicReference;
 
-import com.vrudenko.kanban_board.config.KafkaEventPublisher;
 import com.vrudenko.kanban_board.constant.ValidationConstants;
 import com.vrudenko.kanban_board.dto.board_dto.BoardResponseDTO;
 import com.vrudenko.kanban_board.dto.board_dto.SaveBoardRequestDTO;
@@ -37,48 +36,46 @@ import org.springframework.test.context.DynamicPropertySource;
  * Proves a real, transactional mutation completes and persists while the schema registry is
  * unreachable and the broker is reachable throughout.
  *
- * <p>That asymmetry is the test's whole design: a pass with both down would prove only the
+ * That asymmetry is the test's whole design: a pass with both down would prove only the
  * broker-down behaviour already established, not the registry-specific case.
  *
- * <p>Why this is the way it is:
+ * Why this is the way it is:
  *
- * <ul>
- *   <li>Only the producer-side {@code schema.registry.url} is made unreachable, through {@link
- *       AbstractKafkaContainerTest#producerSchemaRegistryUrlOverride}, not a {@code
- *       TestPropertySource} or a second {@code DynamicPropertySource} registration of the same key.
- *       A {@code TestPropertySource} override is silently ineffective because {@code
- *       DynamicPropertySource} sources always take precedence regardless of declaration order. A
- *       subclass-local {@code DynamicPropertySource} registering the same key was confirmed
- *       empirically to lose too: Spring invokes subclass-local methods before superclass ones (the
- *       opposite of {@code BeforeAll}), so {@link
- *       AbstractKafkaContainerTest#registerSchemaRegistryProperties} runs last and overwrites it.
- *       See that field's Javadoc for the mechanism and the safety argument for shared mutable
- *       state. The consumer-side property is left pointed at the real registry: no message is
- *       expected to reach the consumer.
- *   <li>Declaring {@link #makeProducerRegistryUnreachable}, whatever it does with its {@code
- *       DynamicPropertyRegistry} parameter, gives this class its own uncached Spring context: the
- *       context cache keys partly on the discovered set of {@code DynamicPropertySource} methods,
- *       and this class's set (superclass method plus this one) differs from every sibling's, so
- *       sibling classes keep the shared cached context.
- *   <li>The mutation is driven at the service layer, not over HTTP: the publish is dispatched by
- *       {@code TransactionalEventListener(AFTER_COMMIT)} onto the {@code kafkaPublishExecutor} pool
- *       ({@link KafkaEventPublisher}), so the calling thread is released before the registry is
- *       contacted. An HTTP hop would add the servlet stack, which is not the subject.
- *   <li>Finding this test surfaced, not patched over with production code: {@link
- *       KafkaEventPublisher}'s Javadoc claims a registry failure "becomes a failed future rather
- *       than a synchronous throw" caught by its {@code whenComplete} callback. That holds only for
- *       a failure during the asynchronous network send (for example a broker that accepts the
- *       connection but never acknowledges). A registry lookup failure occurs earlier, inside Avro
- *       <em>serialization</em>, which {@code KafkaProducer.doSend} performs synchronously before a
- *       delivery future exists, so {@code KafkaTemplate.send()} throws {@code
- *       SerializationException} synchronously and {@code whenComplete} is never reached. Because
- *       the method is {@code Async}, Spring's default {@code SimpleAsyncUncaughtExceptionHandler}
- *       catches the throw at the async boundary and logs it at {@code ERROR} naming {@code
- *       onActivityEvent}, but without the event's {@code eventId}/{@code boardId}. The user-facing
- *       guarantee holds (the mutation persists, the caller is never blocked, the failure is
- *       logged), but "one resilience policy for the whole publish path" is in this sense two
- *       failure-propagation mechanisms, only one of which names the event.
- * </ul>
+ * - Only the producer-side schema.registry.url is made unreachable, through
+ *   AbstractKafkaContainerTest.producerSchemaRegistryUrlOverride, not a
+ *   TestPropertySource or a second DynamicPropertySource registration of the same key.
+ *   A TestPropertySource override is silently ineffective because
+ *   DynamicPropertySource sources always take precedence regardless of declaration order. A
+ *   subclass-local DynamicPropertySource registering the same key was confirmed
+ *   empirically to lose too: Spring invokes subclass-local methods before superclass ones (the
+ *   opposite of BeforeAll), so
+ *   AbstractKafkaContainerTest.registerSchemaRegistryProperties runs last and overwrites it.
+ *   See that field's Javadoc for the mechanism and the safety argument for shared mutable
+ *   state. The consumer-side property is left pointed at the real registry: no message is
+ *   expected to reach the consumer.
+ * - Declaring makeProducerRegistryUnreachable, whatever it does with its
+ *   DynamicPropertyRegistry parameter, gives this class its own uncached Spring context: the
+ *   context cache keys partly on the discovered set of DynamicPropertySource methods,
+ *   and this class's set (superclass method plus this one) differs from every sibling's, so
+ *   sibling classes keep the shared cached context.
+ * - The mutation is driven at the service layer, not over HTTP: the publish is dispatched by
+ *   TransactionalEventListener(AFTER_COMMIT) onto the kafkaPublishExecutor pool
+ *   (KafkaEventPublisher), so the calling thread is released before the registry is
+ *   contacted. An HTTP hop would add the servlet stack, which is not the subject.
+ * - Finding this test surfaced, not patched over with production code:
+ *   KafkaEventPublisher's Javadoc claims a registry failure "becomes a failed future rather
+ *   than a synchronous throw" caught by its whenComplete callback. That holds only for
+ *   a failure during the asynchronous network send (for example a broker that accepts the
+ *   connection but never acknowledges). A registry lookup failure occurs earlier, inside Avro
+ *   serialization, which KafkaProducer.doSend performs synchronously before a
+ *   delivery future exists, so KafkaTemplate.send() throws
+ *   SerializationException synchronously and whenComplete is never reached. Because
+ *   the method is Async, Spring's default SimpleAsyncUncaughtExceptionHandler
+ *   catches the throw at the async boundary and logs it at ERROR naming
+ *   onActivityEvent, but without the event's eventId/boardId. The user-facing
+ *   guarantee holds (the mutation persists, the caller is never blocked, the failure is
+ *   logged), but "one resilience policy for the whole publish path" is in this sense two
+ *   failure-propagation mechanisms, only one of which names the event.
  */
 @SpringBootTest
 @Tag("kafka")
@@ -95,9 +92,9 @@ class SchemaRegistryOutageE2ETest extends AbstractKafkaContainerTest {
     private static final Duration PUBLISH_ATTEMPT_WINDOW = Duration.ofSeconds(10);
 
     /**
-     * Makes the producer's registry URL unreachable; the {@code registry} parameter is unused.
+     * Makes the producer's registry URL unreachable; the registry parameter is unused.
      *
-     * <p>A direct {@code registry.add(...)} override would be overwritten by the superclass
+     * A direct registry.add(...) override would be overwritten by the superclass
      * registration, and declaring this method still gives this class its own uncached Spring
      * context (see the class Javadoc).
      */

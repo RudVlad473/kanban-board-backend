@@ -29,8 +29,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 
 /**
  * Tracer for the subtask update route: controller, DTO validation, ownership chain, the service's
- * version-compare-then-409-then-flush guard, and back out through {@link
- * com.vrudenko.kanban_board.handler.GlobalExceptionHandler}.
+ * version-compare-then-409-then-flush guard, and back out through
+ * com.vrudenko.kanban_board.handler.GlobalExceptionHandler.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -62,7 +62,7 @@ public class SubtaskLockingTest extends AbstractAppMockMvcTest {
     /**
      * Creates a board/column/task/subtask owned by an arbitrary user for the cross-user rejection
      * case. There is no REST endpoint for creating a board, so it goes through the service layer,
-     * like {@link AbstractAppTest#createColumnForUser}.
+     * like AbstractAppTest.createColumnForUser.
      */
     private SubtaskResponseDTO createSubtaskForUser(String userId) {
         var column =

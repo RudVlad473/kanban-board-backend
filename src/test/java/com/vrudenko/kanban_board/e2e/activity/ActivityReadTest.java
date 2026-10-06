@@ -35,12 +35,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 /**
- * Proof of {@code GET /boards/{boardId}/activity}, seeding rows through {@link
- * ActivityLogRepository} instead of Kafka.
+ * Proof of GET /boards/{boardId}/activity, seeding rows through
+ * ActivityLogRepository instead of Kafka.
  *
- * <p>Why this is the way it is: the suite needs no broker, and direct seeding is the only way to
- * place two rows at an identical {@code createdAt} instant, which the page-boundary case requires.
- * The Kafka path is proven end to end in the {@code activitylog} package.
+ * Why this is the way it is: the suite needs no broker, and direct seeding is the only way to
+ * place two rows at an identical createdAt instant, which the page-boundary case requires.
+ * The Kafka path is proven end to end in the activitylog package.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -294,7 +294,7 @@ public class ActivityReadTest extends AbstractAppMockMvcTest {
         }
 
         /**
-         * One row per {@link ActivityAction} value beyond the original six, proving the endpoint
+         * One row per ActivityAction value beyond the original six, proving the endpoint
          * exposes each action string, not only the write/consumer tier.
          */
         @Test

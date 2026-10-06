@@ -52,14 +52,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * One sweep proving every protected route rejects an unauthenticated request (401) and a cross-user
  * request against another user's resource (403).
  *
- * <p>{@link #routeTable()} is the single source of truth: one row per protected route, derived from
- * the seven {@code controller/} classes (22 routes: Board 6, Column 5, Task 4, Subtask 3, User 2,
+ * routeTable() is the single source of truth: one row per protected route, derived from
+ * the seven controller/ classes (22 routes: Board 6, Column 5, Task 4, Subtask 3, User 2,
  * TaskMove 1, Activity 1).
  *
- * <p>Why this is the way it is: request bodies are static constants, never built from fixture
- * state. Every service resolves its target through the ownership-verified loader ({@code
- * docs/CODE_STYLE.md} rule 2) before touching any other body field, so an arbitrary valid body
- * (e.g. {@code version = 0}) still exercises the 401/403 path; field values matter only past the
+ * Why this is the way it is: request bodies are static constants, never built from fixture
+ * state. Every service resolves its target through the ownership-verified loader (
+ * docs/CODE_STYLE.md rule 2) before touching any other body field, so an arbitrary valid body
+ * (e.g. version = 0) still exercises the 401/403 path; field values matter only past the
  * ownership gate, which the rejected requests never reach.
  */
 @SpringBootTest
@@ -125,9 +125,9 @@ public class AuthorizationGatingTest extends AbstractAppMockMvcTest {
     /**
      * One row per protected route.
      *
-     * <p>{@code crossUserApplicable = false} marks the four routes that address no other user's
-     * resource by construction ({@code GET/POST /boards}, {@code GET/PUT /users/me/theme}); they
-     * get a scoped-to-caller assertion in {@link ScopedToCaller} instead of being skipped.
+     * crossUserApplicable = false marks the four routes that address no other user's
+     * resource by construction (GET/POST /boards, GET/PUT /users/me/theme); they
+     * get a scoped-to-caller assertion in ScopedToCaller instead of being skipped.
      */
     private record RouteCase(
             String displayName,
@@ -142,7 +142,7 @@ public class AuthorizationGatingTest extends AbstractAppMockMvcTest {
         }
     }
 
-    /** The four owning-user resource ids a {@link PathShape} may need, resolved at call time. */
+    /** The four owning-user resource ids a PathShape may need, resolved at call time. */
     private record FixtureIds(String boardId, String columnId, String taskId, String subtaskId) {}
 
     private static final FixtureIds DUMMY_FIXTURE_IDS =
@@ -338,8 +338,8 @@ public class AuthorizationGatingTest extends AbstractAppMockMvcTest {
     @Nested
     class NoSessionSweep {
         /**
-         * Every protected route, requested with no session cookie, is rejected at {@link
-         * ProblemDetailAuthenticationEntryPoint} before reaching a controller.
+         * Every protected route, requested with no session cookie, is rejected at
+         * ProblemDetailAuthenticationEntryPoint before reaching a controller.
          */
         @ParameterizedTest(name = "{0}")
         @MethodSource("com.vrudenko.kanban_board.security.AuthorizationGatingTest#routeTable")
@@ -354,12 +354,12 @@ public class AuthorizationGatingTest extends AbstractAppMockMvcTest {
     @Nested
     class CrossUserSweep {
         /**
-         * Every route addressing a specific resource, requested by {@link #getForeignUser()}
-         * against {@link #getOwningUser()}'s resources, returns 403.
+         * Every route addressing a specific resource, requested by getForeignUser()
+         * against getOwningUser()'s resources, returns 403.
          *
-         * <p>The foreign user owns its own board and column, so a 403 proves ownership is enforced,
-         * not merely an empty result set. Authenticated via {@code .with(user(foreignUserId))}, as
-         * the {@code controller/*ControllerTest} classes do.
+         * The foreign user owns its own board and column, so a 403 proves ownership is enforced,
+         * not merely an empty result set. Authenticated via .with(user(foreignUserId)), as
+         * the controller/*ControllerTest classes do.
          */
         @ParameterizedTest(name = "{0}")
         @MethodSource(

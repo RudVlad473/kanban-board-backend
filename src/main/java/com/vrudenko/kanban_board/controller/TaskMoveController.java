@@ -19,10 +19,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Flat {@code /tasks/{taskId}/move} route.
+ * Flat /tasks/{taskId}/move route.
  *
- * <p>It cannot live on {@link TaskController}: that class-level mapping is board/column-nested, and
- * Spring composes class- and method-level {@code @RequestMapping} paths additively, so a flat route
+ * It cannot live on TaskController: that class-level mapping is board/column-nested, and
+ * Spring composes class- and method-level @RequestMapping paths additively, so a flat route
  * structurally cannot be added there.
  */
 @RestController
