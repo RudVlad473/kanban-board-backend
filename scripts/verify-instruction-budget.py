@@ -22,6 +22,8 @@ Decisions:
   * Ceiling history, newest last:
       2026-10-06  37,300  the 36,844-byte file measured that day plus a 400-byte margin, rounded
                           up to the next 100; it holds the pre-trim size until the trim lands.
+      2026-10-06   5,100  lowered from 37,300 after the trim: the file measured 4,605 bytes, plus
+                          the 400-byte margin, rounded up to the next 100.
 
 Known holes:
   * Always-loaded context that is not an instruction file is not counted: SessionStart hook
@@ -45,7 +47,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-CEILING_BYTES = 37300
+CEILING_BYTES = 5100
 MARGIN_BYTES = 400
 RATCHET_ADVISORY_BYTES = 1000
 MAX_HOPS = 5
