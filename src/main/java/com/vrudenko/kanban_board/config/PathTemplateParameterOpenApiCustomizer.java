@@ -2,8 +2,11 @@ package com.vrudenko.kanban_board.config;
 
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
@@ -17,27 +20,21 @@ import org.springframework.stereotype.Component;
 /**
  * Declare every path-template variable as a required string path parameter on each operation.
  *
- * <p>springdoc declares only the variables a handler binds with {@code @PathVariable}.
+ * <p>springdoc declares only the variables a handler binds with {@code @PathVariable}, so a nested
+ * route whose handler binds just the leaf id published no ancestor ids and a fuzzer could not build
+ * a request for it (11 of 24 operations when found).
  *
  * <p>Decisions:
  *
- * <p>One global customizer bean, not unused {@code @PathVariable} bindings or class-level
- * {@code @Parameters}: both are per-handler memory, and that memory had already lapsed on 11 of 24
- * operations, which left a fuzzer unable to build a request for the nested task and subtask routes.
- * {@link #customise(OpenAPI)} walks every path in the live document, so a new nested controller
- * needs no change. Existing parameters are never modified or removed, so a handler that binds an id
- * keeps springdoc's own declaration.
+ * <p>One global customizer, not unused {@code @PathVariable} bindings or class-level
+ * {@code @Parameters}: both are per-handler memory, and that memory had already lapsed on 11
+ * operations. A new nested controller needs no change.
  *
- * <p>Every id in this API is a string, so the added parameter is a string with {@code minLength} 1,
- * which is what springdoc publishes for the {@code @NotBlank}-bound ids. Each inserted parameter
- * and schema is a fresh instance, so the document never shares a mutable node between operations.
+ * <p>Known hole: an added ancestor id is routing-only. Ownership is verified along the leaf's chain
+ * to the user and the ancestor ids are never compared, so a mismatched {@code boardId} still
+ * reaches the resource. Declaring an id as required does not make the server validate it.
  *
- * <p>Known holes: an added ancestor id is routing-only. For example, {@code
- * ColumnController.updateById} binds only {@code columnId}, and ownership is verified along the
- * leaf's chain to the user, so a mismatched {@code boardId} still reaches the column with no
- * authorization impact. Declaring the id as required does not make the server validate it.
- *
- * <p>{@link OpenApiParameterCompletenessTest} guards the result.
+ * <p>Guarded by {@code OpenApiParameterCompletenessTest}.
  */
 @Component
 public class PathTemplateParameterOpenApiCustomizer implements GlobalOpenApiCustomizer {
@@ -48,26 +45,21 @@ public class PathTemplateParameterOpenApiCustomizer implements GlobalOpenApiCust
 
     @Override
     public void customise(OpenAPI openApi) {
-        if (openApi.getPaths() == null) {
-            return;
-        }
+        Optional.ofNullable(openApi.getPaths())
+                .ifPresent(
+                        paths ->
+                                paths.forEach(
+                                        PathTemplateParameterOpenApiCustomizer::declareMissing));
+    }
 
-        openApi.getPaths()
-                .forEach(
-                        (pathName, pathItem) -> {
-                            var templateVariables = templateVariables(pathName);
-                            if (templateVariables.isEmpty()) {
-                                return;
-                            }
-                            for (var operation : pathItem.readOperations()) {
-                                var declared = declaredPathParameterNames(pathItem, operation);
-                                for (var variable : templateVariables) {
-                                    if (!declared.contains(variable)) {
-                                        operation.addParametersItem(pathParameter(variable));
-                                    }
-                                }
-                            }
-                        });
+    private static void declareMissing(String pathName, PathItem pathItem) {
+        var templateVariables = templateVariables(pathName);
+        for (var operation : pathItem.readOperations()) {
+            var declared = declaredPathParameterNames(pathItem, operation);
+            templateVariables.stream()
+                    .filter(variable -> !declared.contains(variable))
+                    .forEach(variable -> operation.addParametersItem(pathParameter(variable)));
+        }
     }
 
     private static Set<String> templateVariables(String pathName) {
@@ -80,21 +72,13 @@ public class PathTemplateParameterOpenApiCustomizer implements GlobalOpenApiCust
     }
 
     private static Set<String> declaredPathParameterNames(PathItem pathItem, Operation operation) {
-        var names = new LinkedHashSet<String>();
-        collectPathParameterNames(pathItem.getParameters(), names);
-        collectPathParameterNames(operation.getParameters(), names);
-        return names;
-    }
-
-    private static void collectPathParameterNames(List<Parameter> parameters, Set<String> names) {
-        if (parameters == null) {
-            return;
-        }
-        for (var parameter : parameters) {
-            if (PATH_LOCATION.equals(parameter.getIn())) {
-                names.add(parameter.getName());
-            }
-        }
+        return Stream.of(pathItem.getParameters(), operation.getParameters())
+                .flatMap(
+                        parameters ->
+                                Optional.ofNullable(parameters).stream().flatMap(List::stream))
+                .filter(parameter -> PATH_LOCATION.equals(parameter.getIn()))
+                .map(Parameter::getName)
+                .collect(Collectors.toSet());
     }
 
     private static PathParameter pathParameter(String name) {
