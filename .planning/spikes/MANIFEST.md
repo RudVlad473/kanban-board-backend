@@ -19,9 +19,20 @@ where the generic bucket is too vague to be useful.
   bucket, never a replacement — the customizer's own conditional insert
   (`if (!responses.containsKey(statusCode))`) already supports this.
 
+### web-fuzzing
+Feasibility of adding OpenAPI-driven web fuzzing (Schemathesis) to this project: how much setup it
+needs, what it finds against the live app, and what blocks it from being a trustworthy gate.
+
+**Requirements:**
+- Fuzzing writes data and publishes Kafka events: never point it at production or the shared nonprod
+  broker; run only against a throwaway local/CI stack.
+- No new framework in the Java build (project constraint); an external tool driven from the
+  published OpenAPI document is in scope.
+
 ## Spikes
 
 | # | Idea | Name | Type | Validates | Verdict | Tags |
 |---|------|------|------|-----------|---------|------|
 | 001 | openapi-error-coverage | board-duplicate-name-409-override | standard | Per-operation `@ApiResponse` override layers on top of the global customizer's generic bucket without replacing it | VALIDATED (mechanism + non-regression proven; JSON capture pending a gradle-collision rerun) | openapi, springdoc, error-documentation |
 | 002 | openapi-error-coverage | error-code-coverage-survey | standard | Every `ErrorCode` is named in the generic buckets; 3 operations found where the generic bucket is materially insufficient | PARTIAL (survey complete; live JSON confirmation pending the same rerun) | openapi, error-documentation, audit |
+| 003 | web-fuzzing | web-fuzzing-schemathesis | standard | Schemathesis runs end to end against the live app via /api/docs + session cookie (24 ops, 51s) | PARTIAL (works; spec omits path params on 11 nested ops so they are unfuzzed; run-1 500 unconfirmed) | fuzzing, schemathesis, openapi |
