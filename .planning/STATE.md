@@ -3,10 +3,10 @@ gsd_state_version: "1.0"
 milestone: v1.3
 status: Awaiting next milestone
 stopped_at: Phase 13 complete â€” all phases complete
-last_updated: "2026-10-06T11:00:23.063Z"
+last_updated: "2026-10-06T12:00:38.317Z"
 last_activity: 2026-09-30
 last_activity_desc: Milestone v1.4 completed and archived
-state_head: 38881c99ad3d1a93016f2c24607d02e5be76009c
+state_head: c5079e81cde52e0d000e186eccc1d3ed2aa1b618
 progress:
   total_phases: 3
   completed_phases: 2
@@ -169,6 +169,7 @@ confusion risk, `NVD_API_KEY` resolution failure) were resolved during Phases 8â
 | 261006-dpq | Make the OpenAPI doc Schemathesis-fuzzable: declare all path-template params, hide @CurrentUserId, add completeness test | 2026-10-06 | bf7323e | [261006-dpq-fix-openapi-doc-so-it-is-schemathesis-fu](./quick/261006-dpq-fix-openapi-doc-so-it-is-schemathesis-fu/) |
 | 261006-fby | Ban Javadoc HTML tags and {@ inline tags in Java comments: lint rule, formatJavadoc(false), comment-only sweep | 2026-10-06 | 629a0d6 | [261006-fby-ban-javadoc-html-tags-and-inline-tags-in](./quick/261006-fby-ban-javadoc-html-tags-and-inline-tags-in/) |
 | 261006-guz | Fix 500 on PUT /boards/{boardId} with a version-only body: null name means no rename | 2026-10-06 | 38881c9 | [261006-guz-fix-500-on-put-boards-boardid-with-a-ver](./quick/261006-guz-fix-500-on-put-boards-boardid-with-a-ver/) |
+| 261006-i3k | Add a report-only Schemathesis fuzz script and weekly/dispatch workflow with a measured baseline | 2026-10-06 | c5079e8 | [261006-i3k-add-a-report-only-schemathesis-fuzzing-s](./quick/261006-i3k-add-a-report-only-schemathesis-fuzzing-s/) |
 
 ## Deferred Items
 
