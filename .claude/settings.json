@@ -5,8 +5,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\" && ./gradlew --stop >/dev/null 2>&1 || true",
-            "statusMessage": "Releasing Gradle daemon",
+            "command": "cd \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\" && { ./gradlew --status 2>/dev/null | grep -q \" BUSY \" || ./gradlew --stop >/dev/null 2>&1; } || true",
+            "statusMessage": "Releasing idle Gradle daemons",
             "timeout": 30
           },
           {
