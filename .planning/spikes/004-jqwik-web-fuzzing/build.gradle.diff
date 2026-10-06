@@ -1,0 +1,13 @@
+diff --git a/build.gradle b/build.gradle
+index 1963545..25a0e26 100644
+--- a/build.gradle
++++ b/build.gradle
+@@ -247,6 +247,8 @@ dependencies {
+ 
+     // https://mvnrepository.com/artifact/com.tngtech.archunit/archunit-junit5
+     testImplementation 'com.tngtech.archunit:archunit-junit5:1.4.2'
++    testImplementation 'net.jqwik:jqwik:1.10.1'
++    testImplementation 'net.jqwik:jqwik-spring:0.12.0'
+ 
+     errorprone 'com.google.errorprone:error_prone_core:2.50.0'
+ }
