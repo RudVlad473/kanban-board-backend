@@ -3,10 +3,10 @@ gsd_state_version: "1.0"
 milestone: v1.3
 status: Awaiting next milestone
 stopped_at: Phase 13 complete — all phases complete
-last_updated: "2026-10-06T06:25:05.400Z"
+last_updated: "2026-10-06T08:36:44.638Z"
 last_activity: 2026-09-30
 last_activity_desc: Milestone v1.4 completed and archived
-state_head: 2f460ed99e66dbefeb4fd8bc806e212eb93bdfae
+state_head: bf7323e686e5b0794df5c0fa79b0b399fb14f034
 progress:
   total_phases: 3
   completed_phases: 2
@@ -166,6 +166,7 @@ confusion risk, `NVD_API_KEY` resolution failure) were resolved during Phases 8�
 | 260911-gkz | Root-caused all 7 dead "Postgres Internals" dashboard tiles via a live 4-layer probe (SSH to netcup-prod + Grafana's /api/ds/query with a viewer credential, substituting for an unavailable browser MCP tool): 2 tiles had disabled exporter collectors, 2 hit an already-documented Grafana 13.2.1 singlestat rendering bug, 2 (really 9 panels) hit a collapsed-row exact-match datname matcher. User approved all 4 fixes at the plan's checkpoint; landed as docker-compose.prod.yml + dashboard-JSON changes verified against disposable local containers only — the pg_stat_statements fix's production Postgres restart is explicitly deferred to a separate, later, gated deploy. A second, independent exporter-version/dashboard metric-name mismatch was found and fixed along the way | 2026-09-11 | 2ad3656 | [260911-gkz-debug-why-several-grafana-postgres-inter](./quick/260911-gkz-debug-why-several-grafana-postgres-inter/) |
 | 261005-o6t | Trim all comments to the code-comments rubric and add a comment lint | 2026-10-05 | 7f4d52d | [261005-o6t-trim-and-format-all-comments-per-fan-out](./quick/261005-o6t-trim-and-format-all-comments-per-fan-out/) |
 | 22 | 261005-sun | 2026-10-06 | 2f460ed | — |
+| 261006-dpq | Make the OpenAPI doc Schemathesis-fuzzable: declare all path-template params, hide @CurrentUserId, add completeness test | 2026-10-06 | bf7323e | [261006-dpq-fix-openapi-doc-so-it-is-schemathesis-fu](./quick/261006-dpq-fix-openapi-doc-so-it-is-schemathesis-fu/) |
 
 ## Deferred Items
 
