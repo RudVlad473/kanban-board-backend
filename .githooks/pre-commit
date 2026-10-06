@@ -139,6 +139,17 @@ else
   echo "WARNING: Python 3 is unavailable; skipping code-comment policy check. CI comment-lint remains required."
 fi
 
+if [ -n "$COMMENT_PYTHON" ]; then
+  echo "Checking always-loaded instruction-file budget..."
+  "$COMMENT_PYTHON" scripts/verify-instruction-budget.py < /dev/null
+  if [ $? -ne 0 ]; then
+    echo "Instruction-file budget check failed (scripts/verify-instruction-budget.py). Commit refused."
+    exit 1
+  fi
+else
+  echo "WARNING: Python 3 is unavailable; skipping instruction-file budget check. CI instruction-budget remains required."
+fi
+
 echo "Checking formatting..."
 ./gradlew spotlessCheck < /dev/null
 if [ $? -ne 0 ]; then

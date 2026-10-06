@@ -7,6 +7,9 @@
 # A per-PR blocking run is safe because every job reads committed files (and, for k8s-manifests-valid,
 # binaries pinned by sha256): an unchanged tree cannot newly fail days later the way security-scan.yml's
 # advisory-driven verdict can.
+# The trigger is an ordered `paths` list rather than `paths-ignore`: the files instruction-budget guards are
+# all *.md, which the old filter skipped, so a change touching only an instruction file would never have
+# run it. `.*/**` sits beside `**` because GitHub does not document whether `**` matches a dot-directory.
 # Jobs:
 #   public-dashboards: scripts/verify-public-dashboards.py -- no publicly-shared Grafana dashboard holds
 #     a construct the public renderer cannot resolve (a datasource by name or `${ds_*}` variable, a
@@ -20,23 +23,40 @@
 #     path. It replaced the Compose-era compose-published-ports, caddy-image-tag and deploy-scp-coverage
 #     jobs, removed together with their subject.
 #   comment-lint: scripts/verify-comments-selftest.py proves the comment-policy gate can fire before it checks the tree.
+#   instruction-budget: scripts/verify-instruction-budget.py -- the always-loaded agent instruction files
+#     and their @-imports stay under a byte ceiling, because every byte loads into every agent session. Its
+#     selftest runs first and proves the gate fires above the ceiling.
 name: Invariant Checks
 
 on:
   push:
     branches:
       - main
-    # Same inert path groups deploy.yml ignores: a docs-only or planning-only change cannot alter anything
-    # this workflow reads.
-    paths-ignore:
-      - "docs/**"
-      - "**/*.md"
-      - ".planning/**"
+    # Ordered list, later entries override earlier ones: everything, minus inert docs and planning files,
+    # with the always-loaded agent instruction files re-included because they are markdown too.
+    paths:
+      - "**"
+      - ".*/**"
+      - "!docs/**"
+      - "!**/*.md"
+      - "!.planning/**"
+      - ".claude/**"
+      - "**/CLAUDE.md"
+      - "**/CLAUDE.local.md"
+      - "**/AGENTS.md"
+      - "**/GEMINI.md"
   pull_request:
-    paths-ignore:
-      - "docs/**"
-      - "**/*.md"
-      - ".planning/**"
+    paths:
+      - "**"
+      - ".*/**"
+      - "!docs/**"
+      - "!**/*.md"
+      - "!.planning/**"
+      - ".claude/**"
+      - "**/CLAUDE.md"
+      - "**/CLAUDE.local.md"
+      - "**/AGENTS.md"
+      - "**/GEMINI.md"
 
 jobs:
   comment-lint:
@@ -54,6 +74,21 @@ jobs:
 
       - name: Verify code-comment policy
         run: python3 scripts/verify-comments.py check
+
+  instruction-budget:
+    name: Always-loaded agent instruction files stay under their byte ceiling
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      # Runs ahead of the gate: a gate edited into something that cannot fire must be reported as the
+      # failure here, not masked by a compliant tree.
+      - name: Verify the gate's invariants can fire
+        run: python3 scripts/verify-instruction-budget-selftest.py
+
+      - name: Verify instruction-file budget
+        run: python3 scripts/verify-instruction-budget.py
 
   public-dashboards:
     name: Public Grafana dashboards carry nothing the public renderer cannot resolve
