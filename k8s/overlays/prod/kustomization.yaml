@@ -20,4 +20,4 @@ images:
     newName: rudenkovladimir/kanban-board-backend
     # Flux's ImagePolicy flux-system/kanban-board-backend-prod rewrites this value in place on every
     # new image it selects. Prod and nonprod track `main` independently, with no promotion gate.
-    newTag: main-147-926db94 # {"$imagepolicy": "flux-system:kanban-board-backend-prod:tag"}
+    newTag: main-148-a27f80a # {"$imagepolicy": "flux-system:kanban-board-backend-prod:tag"}
