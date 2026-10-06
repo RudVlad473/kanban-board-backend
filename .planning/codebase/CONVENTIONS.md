@@ -106,8 +106,7 @@
 - Mapper interfaces documented to explain MapStruct configuration
 - DTO classes documented to explain relationships and constraints
 - All custom validation annotations include JavaDoc explaining requirements
-- Link references used: `{@link ClassName#methodName}` to cross-reference related methods
-- HTML tags used in JavaDoc: `<p>` for paragraphs, `{@code variableName}` for inline code
+- Comments are plain text, with no HTML tags and no `{@...}` inline tags (docs/CODE_STYLE.md rule 14, enforced by `scripts/verify-comments.py`); identifiers are written by bare name, a blank comment line separates paragraphs, and `- ` starts a list item
 
 ## Function Design
 

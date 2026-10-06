@@ -5,6 +5,7 @@ Subcommands: files, stats, report, check (stdlib-only, exit 1 on any violation) 
 equiv (compares each changed file's code representation against a base ref).
 Rules: planning-system ids are banned, a block of 4+ prose lines opens with a summary of at most
 2 lines, narration past 8 prose lines sits behind a decision-record marker, task markers link out.
+Java comments are plain text: no Javadoc HTML tags and no {@...} inline tags.
 Policy home: docs/CODE_STYLE.md rule 14.
 
 Decisions:
@@ -20,6 +21,9 @@ Decisions:
     tomllib, lazily. The stdlib YAML comment detector is cross-checked against yaml.scan by the
     selftest on every in-scope YAML file.
   * A scan that finds zero in-scope files fails: an empty scan and a clean scan look the same.
+  * The Javadoc HTML tag list is fixed and lowercase, because type parameters and placeholders
+    share the angle-bracket shape (<T>, <name>): on 2026-10-06 the Java comments held 7 such
+    non-HTML tokens and no uppercase HTML. False if an uppercase HTML tag appears in a comment.
 
 Known holes:
   * Splitting a long block with an empty source line evades the narration rule.
@@ -30,6 +34,9 @@ Known holes:
     parser; an unterminated quote or heredoc is reported as a failure rather than passed.
   * Judgement rules (should this comment exist, does it restate the code, imperative mood) are
     review-only; nothing here can check them.
+  * An uppercase or unlisted element name passes the markup rule, and HTML entities are not banned.
+  * A tag whose name is split from its bracket across lines is not seen.
+  * The markup rule covers Java only, even though Groovy comments use the same syntax.
 """
 
 import argparse
@@ -98,6 +105,15 @@ MARKER_RE = re.compile(
     r"^(?:<p>\s*)?(?:decisions|known holes|why this is the way it is)\b\s*(?::|[-─═—=]{2,})", re.I
 )
 TAG_RE = re.compile(r"^@\w+")
+_HTML_ELEMENTS = (
+    "a abbr b big blockquote br caption cite code dd del dfn div dl dt em h1 h2 h3 h4 h5 h6 hr i img ins "
+    "kbd li ol p pre q s samp small span strike strong sub sup table tbody td tfoot th thead tr tt u ul var"
+)
+# Case-sensitive on purpose: type parameters and placeholders (<T>, <name>) share the angle-bracket shape.
+JAVADOC_HTML_RE = re.compile(
+    r"</?(?:%s)(?:\s+[A-Za-z-]+(?:\s*=\s*(?:\"[^\"]*\"|'[^']*'|[^\s>]+))?)*\s*/?>" % "|".join(_HTML_ELEMENTS.split())
+)
+JAVADOC_INLINE_RE = re.compile(r"\{@[A-Za-z]+")
 NONPROSE_TAG_RE = re.compile(r"^@(?:param|return|throws)\b")
 RULE_LINE_RE = re.compile(r"^[\s\-─═=—_*~#+]+$")
 AAA_RE = re.compile(r"^(?:arrange|act|assert)\b")
@@ -757,6 +773,18 @@ def lint(path, text, view):
     for block in info.blocks:
         flags = []
         for ln, t in block.lines:
+            if scope.kind == "java":
+                markup = sorted({m.group(0) for rx in (JAVADOC_HTML_RE, JAVADOC_INLINE_RE) for m in rx.finditer(t)})
+                if markup:
+                    result.violations.append(
+                        Violation(
+                            "javadoc-markup",
+                            path,
+                            ln,
+                            "%s in a Java comment, write plain text" % ", ".join(repr(tok) for tok in markup),
+                        )
+                    )
+                    flags.append("javadoc-markup")
             hits, masked = gated_hits(t, view, path)
             for name, tok in hits:
                 result.violations.append(Violation("planning-id", path, ln, "%s %r in comment" % (name, tok)))

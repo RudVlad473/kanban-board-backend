@@ -658,12 +658,18 @@ comment:
 4. Keep one summary line, then a blank line before any detail.
 5. Put a long decision record behind `Decisions:`, `Known holes:`, or `Why this is the way it is:`.
 6. Name another identifier only when the name carries a contract or deliberate absence.
+7. Write comments as plain text: no HTML tags and no `{@...}` inline tags. A blank comment line is
+   the paragraph break, `- ` starts a list item, and an identifier is written by its bare name. Do
+   not start a comment line with `@` unless it is a block tag such as `@param`.
 
 **Why:** comments otherwise duplicate implementation and silently rot. `scripts/verify-comments.py`
 enforces the mechanically checkable parts of this rule; whether a comment is useful, at the right
 abstraction level, and imperative remains review-only judgement. It intentionally excludes FROZEN
 Flyway migrations and ROLLOUT_GATED Postgres init scripts, because comment bytes can affect their
-runtime behavior.
+runtime behavior. Javadoc is never rendered here, so markup only adds noise to the source, which is
+the one place anyone reads these comments. Spotless runs google-java-format with Javadoc formatting
+off, because the formatter would otherwise rewrite every blank-line paragraph break into the
+paragraph tag at format time.
 
 Discouraged:
 
@@ -674,16 +680,35 @@ Discouraged:
 private String value;
 ```
 
+```java
+/**
+ * Return the board for the caller.
+ *
+ * <p>Throws {@code AppAccessDeniedException} when {@link BoardEntity#getUser()} is not the caller.
+ */
+```
+
 Preferred:
+
+```java
+/**
+ * Return the board for the caller.
+ *
+ * Throws AppAccessDeniedException when BoardEntity.getUser() is not the caller.
+ */
+```
+
+Preferred, for a functional marker:
 
 ```properties
 # planner-discipline-allow: lombok.config
 lombok.addLombokGeneratedAnnotation = true
 ```
 
-The first comment gives neither a resolvable reason nor an actionable target. The second is a
-functional marker consumed by repository tooling; do not rewrite or remove such markers without
-updating that tooling.
+The first Discouraged comment gives neither a resolvable reason nor an actionable target. The
+second uses the paragraph and inline tags the linter rejects; the first Preferred block says the
+same thing in plain text. The functional marker is consumed by repository tooling; do not rewrite or
+remove such markers without updating that tooling.
 
 ## Adding a rule
 

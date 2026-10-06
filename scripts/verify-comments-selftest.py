@@ -277,7 +277,9 @@ def test_r3_narration_needs_a_marker_after_eight_prose_lines():
     for marker in ("Decisions:", "<p>Decisions:", "Known holes:", "Why this is the way it is:", "Decisions ───"):
         text = "/**\n * Summary.\n *\n" + "".join(" * line %d\n" % i for i in range(5)) + " * %s\n" % marker
         text += "".join(" * record %d\n" % i for i in range(20)) + " */\nclass A {}\n"
-        assert rules(JAVA, text) == [], marker
+        # The paragraph-tag marker still ends the narration count; the markup rule rejects the tag itself.
+        expected = ["javadoc-markup"] if marker.startswith("<p>") else []
+        assert rules(JAVA, text) == expected, marker
 
 
 def test_r3_param_return_throws_lines_are_not_prose():
@@ -300,6 +302,62 @@ def test_r4_todo_needs_a_resolvable_target():
 def test_r4_todo_can_continue_on_following_comment_lines():
     text = "// TODO: src/Real.java\n// - repair the wrapped comment\nclass A {}\n"
     assert rules(JAVA, text) == []
+
+
+def javadoc(*body):
+    """A short Javadoc block: one-line summary, blank line, then the given body lines."""
+    return "/**\n * Summary.\n *\n" + "".join(" * %s\n" % line for line in body) + " */\nclass A {}\n"
+
+
+def test_r5_javadoc_markup_fires_on_html_tags():
+    tags = [
+        "<p>", "</p>", "<ul>", "</ul>", "<ol>", "</ol>", "<li>", "</li>", "<pre>", "</pre>",
+        "<b>", "</b>", "<i>", "</i>", "<em>", "</em>", "<code>", "</code>", "<br/>", "<br>",
+        '<a href="x">', "</a>",
+    ]  # fmt: skip
+    for tag in tags:
+        assert rules(JAVA, javadoc("see %s here" % tag)) == ["javadoc-markup"], tag
+        assert rules(TEST_JAVA, javadoc("see %s here" % tag)) == ["javadoc-markup"], tag
+    assert rules(JAVA, "// a <b>bold</b> word\nclass A {}\n") == ["javadoc-markup"]
+    assert rules(JAVA, "/* a <p> break */\nclass A {}\n") == ["javadoc-markup"]
+
+
+def test_r5_javadoc_markup_fires_on_inline_tags():
+    inline = ["{@code x}", "{@link Foo#bar()}", "{@literal x}", "{@inheritDoc}", "{@linkplain Foo}", "{@value}"]
+    for tag in inline:
+        assert rules(JAVA, javadoc("see %s here" % tag)) == ["javadoc-markup"], tag
+    split = _gate.lint(JAVA, javadoc("see {@code", "x} here"), VIEW).violations
+    assert [(v.rule, v.line) for v in split] == [("javadoc-markup", 4)], split
+    crowded = _gate.lint(JAVA, javadoc("<b>x</b> and <p> and {@code y}"), VIEW).violations
+    assert [(v.rule, v.line) for v in crowded] == [("javadoc-markup", 4)], crowded
+
+
+def test_r5_javadoc_markup_ignores_lookalikes():
+    quiet = [
+        "a List<String> here",
+        "a Map<K, V> here",
+        "a <T> here",
+        "a Pair<A, B> here",
+        "a Builder<B> and a Box<I> here",
+        "a <name> placeholder",
+        "when a < b > c holds",
+        "when a<i && b>c holds",
+        "the route /boards/{boardId} here",
+        "flags() = {DOTALL}",
+        "mail user@example.com",
+    ]
+    for line in quiet:
+        assert rules(JAVA, javadoc(line)) == [], line
+    assert rules(JAVA, javadoc("@param x the value")) == []
+    assert rules(JAVA, 'class A { String s = "<p>{@code x}"; }\n') == []
+    text_block = 'class A {\n  String t = """\n    <b>x</b> {@code y}\n  """;\n}\n'
+    assert rules(JAVA, text_block) == []
+
+
+def test_r5_javadoc_markup_is_java_only():
+    assert rules("build.gradle", "// a <b>x</b> {@code y}\nplugins { id 'java' }\n") == []
+    assert rules("s.sh", "#!/bin/sh\n# a <b>x</b> {@code y}\necho a\n") == []
+    assert rules("m.py", '"""A <b>x</b> {@code y} doc."""\n') == []
 
 
 def test_suspects_are_reported_but_never_violations():
