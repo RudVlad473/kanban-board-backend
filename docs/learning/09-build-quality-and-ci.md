@@ -646,25 +646,9 @@ migrations and deploys both environments. It runs on push to `main` only and ign
 
 ### How it works
 
-```mermaid
-flowchart LR
-    setup --> rt[run-tests]
-    rt --> bpi[build-and-push-docker-image]
-    rt --> bpc[build-and-push-caddy-image]
-    rt --> fv[flyway-verify]
-    rt --> fvn[flyway-verify-nonprod]
-    bpi --> dn[deploy-to-netcup]
-    fv --> dn
-    bpc --> dn
-    dn --> rsp[register-schemas-production]
-    dn --> coi[cleanup-old-images]
-    dn -. failure .-> cui[cleanup-unused-image]
-    bpi --> dnp[deploy-to-nonprod]
-    fvn --> dnp
-    dnp --> hcn[health-check-nonprod]
-    hcn --> coin[cleanup-old-images-nonprod]
-    dnp -. failure .-> cuin[cleanup-unused-image-nonprod]
-```
+This section describes the Docker Compose deployment that the k3s cutover replaced on 2026-09-26.
+The current delivery path is drawn in [push to image](../diagrams/scenarios/push-to-image.png) (the CI
+half) and [image to rollout](../diagrams/scenarios/image-to-rollout.png) (the Flux half).
 
 The production path and the nonprod path share only `setup`, `run-tests` and
 `build-and-push-docker-image`. Neither path waits on the other.

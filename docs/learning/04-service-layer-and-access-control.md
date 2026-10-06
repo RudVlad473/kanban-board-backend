@@ -62,34 +62,22 @@ Repositories are Spring Data JPA interfaces. Every service is a `@Service` bean 
 ### How it works
 
 The service graph is a strict chain from the identity root down to the verifier. No service calls
-upward.
+upward. The edges come from every `@Autowired ... Service` field in `src/main/java`; the command
+`rg -n '@Autowired.*Service' src/main/java` lists all of them:
 
-```mermaid
-flowchart TD
-    AC[AuthenticationController] --> US[UserService]
-    UC[UserController] --> US
-    BC[BoardController] --> US
-    BC --> BS[BoardService]
-    CC[ColumnController] --> CS[ColumnService]
-    TC[TaskController / TaskMoveController] --> TS[TaskService]
-    SC[SubtaskController] --> SS[SubtaskService]
-    RC[ResetController nonprod] --> RS[ResetService]
-    US --> BS
-    BS --> CS
-    CS --> TS
-    TS --> SS
-    RS --> US
-    RS --> RTS[ResetTruncateService]
-    BS --> OV[OwnershipVerifierService]
-    CS --> OV
-    TS --> OV
-    SS --> OV
-    ALS[ActivityLogService] --> OV
-```
+- `UserService` calls `BoardService`, which calls `ColumnService`, which calls `TaskService`, which
+  calls `SubtaskService`.
+- `BoardService`, `ColumnService`, `TaskService`, `SubtaskService` and `ActivityLogService` each call
+  `OwnershipVerifierService`.
+- `ResetService` (nonprod only) calls `UserService` and `ResetTruncateService`.
+- Each controller calls the service of its own resource. `AuthenticationController`,
+  `UserController` and `BoardController` also call `UserService`.
 
-The edges above come from every `@Autowired ... Service` field in `src/main/java`. The command
-`rg -n '@Autowired.*Service' src/main/java` lists all of them. Controllers never touch a
-repository; [`LayeringArchTest`](#archunit-layering-rules) enforces that.
+Nothing enforces the "no service calls upward" part. [`LayeringArchTest`](#archunit-layering-rules)
+enforces four other rules: controllers never touch a repository, domain services never call
+`repository.findById` directly, every `@RestController` is class-level `@Validated`, and mutating
+handlers bind their DTO from the body. A cycle would still fail at startup, because Spring Boot
+rejects circular references by default.
 
 Two package-private methods show how the layers split work. `TaskService.deleteAllByColumn` and
 `SubtaskService.save` have no `public` modifier. Only a caller that already verified ownership can
@@ -169,7 +157,7 @@ Spring sets these fields by reflection after it calls the no-argument constructo
 "services use `@Autowired` field injection (not constructor) to sidestep circular bean
 dependencies between Board/Column/Task/Subtask/Ownership services."
 
-**The code does not support this reason.** The dependency graph above has no cycle. `UserService`
+**The code does not support this reason.** The service dependency list above has no cycle. `UserService`
 → `BoardService` → `ColumnService` → `TaskService` → `SubtaskService` → `OwnershipVerifierService`
 is a straight line. Also, Spring Boot 2.6 and later prohibit circular references by default
 (`spring.main.allow-circular-references=false`). That default applies to field injection too, and
@@ -243,23 +231,6 @@ It does four things in this order:
 3. It loads the board. A missing board gives `AppEntityNotFoundException("Board")` (404).
 4. It compares `board.getUser().getId()` with the user id. A mismatch gives
    `AppAccessDeniedException("Board")` (403, "You do not have access to that board").
-
-```mermaid
-sequenceDiagram
-    participant S as SubtaskService
-    participant OV as OwnershipVerifierService
-    participant DB as PostgreSQL
-    S->>OV: verifyOwnershipOfSubtask(userId, subtaskId)
-    OV->>DB: SELECT subtask JOIN task JOIN column JOIN board JOIN user (one statement)
-    OV->>OV: verifyOwnershipOfTask -> findById hits the L1 cache
-    OV->>OV: verifyOwnershipOfColumn -> findById hits the L1 cache
-    OV->>OV: verifyOwnershipOfBoard -> user and board from the L1 cache
-    alt board.user.id != userId
-        OV-->>S: AppAccessDeniedException (403)
-    else owner matches
-        OV-->>S: Pair(UserEntity, SubtaskEntity)
-    end
-```
 
 **What SQL runs.** All parent-side `@ManyToOne` associations use the JPA default, `EAGER`. The
 first `findById` makes Hibernate join the whole parent chain into one SQL statement. The later
@@ -687,21 +658,6 @@ The service does these steps in order:
      target (`[effective, MAX]` by +1).
 7. Set column and position, save, `flush()`, publish `TaskMovedEvent`, return the DTO.
 
-```mermaid
-flowchart LR
-    A[verify task owner] --> B[verify target column owner]
-    B --> C{same board?}
-    C -- no --> E400[400 ILLEGAL_ARGUMENT]
-    C -- yes --> D{version matches?}
-    D -- no --> E409[409 conflict]
-    D -- yes --> F[clamp position]
-    F --> G{same column?}
-    G -- yes --> H[one signed shift]
-    G -- no --> I[close source gap + open target slot]
-    H --> J[save + flush + TaskMovedEvent]
-    I --> J
-```
-
 ### Why we chose it
 
 - **SVC-10.** Phase 6 D-04: "Task move and task reorder are one endpoint, not two". This
@@ -888,20 +844,9 @@ So the services delete children before parents, by hand.
 
 ### How it works
 
-```mermaid
-flowchart TD
-    U[UserService.deleteById] --> B[BoardService.deleteAllByUserId]
-    B -->|for each board| BD[BoardService.deleteById]
-    BD --> CA[ColumnService.deleteAllByBoardId]
-    CA -->|for each column| TA[TaskService.deleteAllByColumn]
-    TA --> S1["SubtaskRepository.deleteAllByTaskIdIn (bulk JPQL)"]
-    TA --> T1["TaskRepository.deleteAllByIdInBatch"]
-    TA --> FC["flush() + clear()"]
-    CA --> C1["ColumnRepository.deleteAllByBoardId (derived)"]
-    BD --> B1[boardRepository.deleteById]
-    BD --> EV[BoardDeletedEvent]
-    U --> U1[userRepository.deleteById]
-```
+The order is the one chapter 02 ("Cascade delete order") describes: for each board of the user,
+`BoardService.deleteById` deletes each column's tasks and subtasks, then the columns, then the board
+row and publishes one `BoardDeletedEvent`; the user row goes last.
 
 Key points:
 

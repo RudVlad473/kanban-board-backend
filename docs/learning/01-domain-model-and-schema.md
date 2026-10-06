@@ -849,15 +849,12 @@ A mismatch gives a `SchemaManagementException` at startup.
 
 The history of these values:
 
-```mermaid
-timeline
-    2025-06 : main profile create-drop, then removed (prod default none)
-            : tests on H2 with create-drop
-    2026-08-05 (04.1) : Flyway added, prod validate
-                      : docker-compose update to validate
-    2026-08-06 (04.2) : H2 removed, tests on Testcontainers PostgreSQL
-                      : tests create-drop to validate
-```
+- 2025-06: the main profile used `create-drop` and was then removed (the production default became
+  `none`). Tests ran on H2 with `create-drop`.
+- 2026-08-05 (04.1): Flyway was added and production moved to `validate`. The local `docker-compose`
+  value changed from `update` to `validate`.
+- 2026-08-06 (04.2): H2 was removed and tests moved to Testcontainers PostgreSQL. The tests changed
+  from `create-drop` to `validate`.
 
 ### Why we chose it
 

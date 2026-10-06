@@ -953,14 +953,11 @@ swagger-core (the library under springdoc) reads constraint annotations only whe
 directly on the field. It never opens a composed annotation. A field with `@ColumnColor` therefore
 had no `pattern` in the document.
 
-```mermaid
-flowchart LR
-    A[swagger-core resolves a DTO property] --> B[Phase 1: PropertyCustomizer.customize]
-    B -->|walk @Constraint meta-annotations,<br/>compute pattern/minLength/maxLength/format/example| C[apply to property + record per schema]
-    C --> D[swagger-core second pass<br/>resets minLength=1 for direct @NotBlank]
-    D --> E[Phase 2: GlobalOpenApiCustomizer.customise]
-    E -->|reassert recorded values,<br/>tighten only| F[final /api/docs]
-```
+The customizer runs in two phases. Phase 1 computes `pattern`, `minLength`, `maxLength`, `format` and
+`example` from the composed annotations and applies them as swagger-core resolves each property.
+swagger-core then runs a second pass that resets `minLength` to 1 for a field with a direct
+`@NotBlank`. Phase 2 runs on the finished document, after that pass, and re-asserts the recorded
+values.
 
 1. **Phase 1.** [`customize(Schema, AnnotatedType)`](../../src/main/java/com/vrudenko/kanban_board/config/ComposedConstraintPropertyCustomizer.java#L92-L108)
    seeds an accumulator from the schema swagger-core built. It walks every annotation that carries

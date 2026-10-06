@@ -230,38 +230,8 @@ the session.
 
 ### How it works
 
-```mermaid
-sequenceDiagram
-    actor C as Client
-    participant AC as AuthenticationController
-    participant UAP as UserAuthenticationProvider
-    participant SAS as sessionAuthenticationStrategy
-    participant DB as Postgres
-
-    C->>AC: POST /api/signin {email, password}
-    AC->>DB: userService.findByEmail(email)
-    alt unknown email
-        AC->>AC: passwordEncoder.matches(password, equalizerHash)
-        AC-->>C: 401 BAD_CREDENTIALS
-    else known email
-        AC->>UAP: authenticationManager.authenticate(token(userId, password))
-        alt wrong password
-            UAP-->>AC: BadCredentialsException
-            AC-->>C: 401 BAD_CREDENTIALS
-        else password matches
-            AC->>SAS: onAuthentication(...)
-            alt already 2 live sessions
-                SAS-->>AC: SessionAuthenticationException
-                AC-->>C: 401 BAD_CREDENTIALS (same body)
-            else below ceiling
-                SAS->>SAS: change session id
-                AC->>AC: securityContextRepository.saveContext(...)
-                AC-->>C: 200 + Set-Cookie JSESSIONID + {id, email, displayName, theme}
-                Note over DB: Spring Session commits the row as the response flushes
-            end
-        end
-    end
-```
+The protocol-level sequence (status codes, cookie rotation, session-row commit timing) is the
+[signin scenario diagram](../diagrams/scenarios/signin.png); the class-level steps are listed below.
 
 The steps of [signin](../../src/main/java/com/vrudenko/kanban_board/security/AuthenticationController.java#L79-L118):
 
@@ -939,15 +909,9 @@ Over the limit, Caddy returns 429 with `Retry-After`. The nonprod site block has
 
 ### How it works
 
-```mermaid
-flowchart LR
-    C[Client] -->|TLS| K[Caddy edge]
-    K -->|auth zone: 20 / 5 min| A["/api/signin, /api/signup"]
-    K -->|general zone: 120 / 1 min| G[All other paths]
-    A --> S[Spring app :8080]
-    G --> S
-    K -. over limit .-> R[429 + Retry-After]
-```
+This section describes the Docker Compose deployment that the k3s cutover replaced on 2026-09-26.
+The current edge is Traefik; see the [inbound packet path](../diagrams/scenarios/inbound-packet-path.png)
+and its [cluster-side half](../diagrams/scenarios/ingress-to-pod.png).
 
 The two matchers are exact boolean complements, so each request spends from exactly one zone.
 

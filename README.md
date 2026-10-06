@@ -122,85 +122,12 @@ signin. Child resources are created by `POST`ing to their parent.
 
 ## Production deployment
 
-```mermaid
-%%{init: {"flowchart": {"subGraphTitleMargin": {"top": 15, "bottom": 15}, "curve": "linear"}}}%%
-flowchart TB
-    client["Browser / API client<br/>(external actor)"]
-
-    subgraph netcup_edge["[1] Netcup Cloud Firewall (external — not in this repo)"]
-        direction TB
-        netcup_fw["Netcup Cloud Firewall"]
-    end
-
-    subgraph netcup["Netcup VPS Lite 2 G12s — x86_64<br/>Vienna, Austria — [2] KANBAN-INGRESS mangle-table filter"]
-        direction TB
-
-        netcup_spacer[" "]
-        style netcup_spacer height:1px,fill:none,stroke:none
-
-        subgraph k3s_box["k3s v1.36.4+k3s1 — single-node cluster"]
-            direction TB
-
-            subgraph traefik_box["namespace kube-system"]
-                traefik["Traefik<br/>(k3s-packaged, ServiceLB<br/>LoadBalancer, ETP Local)<br/>[3] public edge — only Service<br/>with hostPort/NodePort"]
-            end
-            netcup_spacer ~~~ traefik_box
-
-            subgraph cm_box["namespace cert-manager"]
-                cert_manager["cert-manager<br/>(HTTP-01 ClusterIssuers,<br/>controller+webhook+cainjector)"]
-            end
-
-            subgraph prod_box["namespace kanban-prod"]
-                app_prod["app<br/>(Spring Boot, port 8080)"]
-                redpanda_prod["redpanda<br/>(Kafka broker + Schema Registry)"]
-            end
-
-            subgraph nonprod_box["namespace kanban-nonprod"]
-                app_nonprod["app<br/>(Spring Boot, port 8080)"]
-                redpanda_nonprod["redpanda<br/>(Kafka broker + Schema Registry)"]
-            end
-
-            subgraph data_box["namespace kanban-data — [4] NetworkPolicy-gated"]
-                postgres["postgres 16<br/>(shared instance, two databases,<br/>PVC-backed)"]
-            end
-
-            subgraph monitoring_box["namespace monitoring"]
-                direction TB
-                prometheus["Prometheus<br/>(kube-prometheus-stack)"]
-                grafana["Grafana<br/>(sole login gate,<br/>monitoring hostname)"]
-                loki["Loki<br/>(30-day log store)"]
-                alloy["Alloy<br/>(Kubernetes-API log tailing)"]
-            end
-
-            subgraph flux_box["namespace flux-system"]
-                flux["Flux (6 controllers)<br/>GitOps + image automation"]
-            end
-        end
-
-        traefik -- "HTTP :8080" --> app_prod
-        traefik -- "HTTP :8080" --> app_nonprod
-        traefik -- "HTTP, third route" --> grafana
-        app_prod -- "Kafka + Schema Registry" --> redpanda_prod
-        app_nonprod -- "Kafka + Schema Registry" --> redpanda_nonprod
-        app_prod -- "JDBC :5432, no TLS<br/>[4] cross-namespace, K8s DNS" --> postgres
-        app_nonprod -- "JDBC :5432, no TLS<br/>[4] cross-namespace, K8s DNS" --> postgres
-        prometheus -- "scrape" --> redpanda_prod
-        alloy -- "ship logs" --> loki
-        grafana -- "query" --> prometheus
-        grafana -- "query" --> loki
-        cert_manager -- "issues Certificates for<br/>Traefik's websecure entryPoint" --> traefik
-    end
-
-    client --> netcup_fw
-    netcup_fw -- "HTTPS :443 via duckdns.org<br/>hostnames (crosses VM boundary)" --> netcup
-    flux -- "reconcile Kustomizations,<br/>HelmReleases into k3s" --> k3s_box
-```
-
-<sub>Source: [docs/diagrams/physical/production-host.mmd](docs/diagrams/physical/production-host.mmd)
-— the Physical/Deployment view per [docs/DIAGRAM_CONVENTIONS.md](docs/DIAGRAM_CONVENTIONS.md). This
-is a simplified rendering of that file for README readability; the full diagram (Docker Hub, GitHub
-Actions, Flux's GitOps loop in full) lives at the source path, and if the two ever disagree, the
-`.mmd` source is canonical.</sub>
+<img src="docs/diagrams/physical/production-host.png" width="1098" alt="Flowchart: physical view of the production host, from the Netcup firewall and Traefik to the app, Redpanda and Postgres in each namespace">
+<sub>[diagram source](docs/diagrams/physical/production-host.mmd), the Physical/Deployment view per
+[docs/DIAGRAM_CONVENTIONS.md](docs/DIAGRAM_CONVENTIONS.md). The monitoring stack and the delivery
+path (GitHub Actions, Docker Hub, Flux) are drawn separately in
+[monitoring nodes](docs/diagrams/physical/monitoring-nodes.png) and
+[delivery nodes](docs/diagrams/physical/delivery-nodes.png).</sub>
 
 Production runs on a **k3s v1.36.4+k3s1** single-node cluster, on the same **Netcup VPS Lite 2
 G12s** (Vienna, x86_64) as before, behind the Netcup Cloud Firewall and a Docker-independent

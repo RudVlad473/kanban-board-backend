@@ -345,18 +345,11 @@ So the services delete the graph by hand, children first.
 
 ### How it works
 
-```mermaid
-flowchart TD
-    U["UserService.deleteById"] --> B["BoardService.deleteAllByUserId<br/>(loop: one call per board)"]
-    B --> BD["BoardService.deleteById"]
-    BD --> CA["ColumnService.deleteAllByBoardId<br/>(verify board once)"]
-    CA --> L["loop: one call per column"]
-    L --> TD["TaskService.deleteAllByColumn<br/>1. select task ids<br/>2. bulk DELETE subtasks<br/>3. bulk DELETE tasks<br/>4. flush + clear"]
-    CA --> CD["columnRepository.deleteAllByBoardId<br/>(derived: select, then remove per column)"]
-    BD --> BR["boardRepository.deleteById"]
-    BD --> EV["publish one BoardDeletedEvent"]
-    U --> UR["userRepository.deleteById"]
-```
+An account delete deletes each of the user's boards, then the user row. A board delete verifies
+the board once, deletes every column's tasks, removes the columns with a derived delete, removes the
+board row, and publishes one `BoardDeletedEvent`. For each column,
+`TaskService.deleteAllByColumn` runs four steps in this order: select the task ids, bulk-delete
+their subtasks, bulk-delete the tasks, then `flush()` and `clear()` the persistence context.
 
 Code:
 [`UserService.deleteById`](../../src/main/java/com/vrudenko/kanban_board/service/UserService.java#L84-L97),

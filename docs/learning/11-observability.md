@@ -51,44 +51,11 @@ VPS, Caddy, Compose projects and networks), [09 — Build quality and CI](09-bui
 
 ## Big picture
 
-```mermaid
-flowchart LR
-    subgraph internet["Internet"]
-        user["Browser"]
-        gha["GitHub Actions<br/>uptime-check (cron */15)"]
-    end
-    subgraph vps["Netcup VPS"]
-        caddy["caddy<br/>(80/443, 3 site blocks)"]
-        subgraph prodproj["Compose project: kanban-board-backend"]
-            grafana["grafana :3000"]
-            prom["prometheus :9090<br/>30d TSDB"]
-            loki["loki :3100<br/>30d chunks"]
-            promtail["promtail"]
-            nodeexp["node-exporter :9100"]
-            cadv["cadvisor :8080"]
-            pgexp["postgres-exporter :9187"]
-            rp["redpanda :9644"]
-            app["app :8080<br/>/api/actuator/health"]
-            pg["postgres"]
-        end
-        subgraph nonprodproj["Compose project: kanban-board-nonprod"]
-            rpn["redpanda-nonprod :9644"]
-            appn["app-nonprod"]
-        end
-        sock["/var/run/docker.sock"]
-    end
-    user -->|"monitoring hostname"| caddy --> grafana
-    gha -->|"GET /api/actuator/health"| caddy --> app
-    grafana --> prom
-    grafana --> loki
-    prom --> nodeexp & cadv & pgexp & rp
-    prom -->|"kanban-metrics network"| rpn
-    pgexp -->|"monitoring role"| pg
-    promtail -->|"docker_sd"| sock
-    promtail -->|"push"| loki
-```
+This section describes the Docker Compose deployment that the k3s cutover replaced on 2026-09-26.
+The current observability nodes are drawn in
+[monitoring nodes](../diagrams/physical/monitoring-nodes.png).
 
-The diagram shows one important fact: Prometheus does not scrape `app` or `app-nonprod`. The
+In the Compose deployment, Prometheus did not scrape `app` or `app-nonprod`. The
 application reports only a health status, and only an external probe and the Docker healthcheck
 read it (see OBS-02).
 

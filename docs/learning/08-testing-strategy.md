@@ -71,31 +71,10 @@ The suite has 65 Java files under `src/test`. On 2026-09-23 they held 483 `@Test
 Every tier with a Spring context runs against the same real PostgreSQL container. A "service
 test" in this project is therefore an integration test, not a unit test in the strict sense.
 
-```mermaid
-classDiagram
-    AbstractPostgresContainerTest <|-- AbstractAppTest
-    AbstractPostgresContainerTest <|-- AbstractKafkaContainerTest
-    AbstractPostgresContainerTest <|-- FlywaySchemaProvenanceTest
-    AbstractAppTest <|-- AbstractAppMockMvcTest
-    AbstractAppTest <|-- AbstractAppE2ETest
-    AbstractAppTest <|-- TaskServiceTest
-    AbstractAppMockMvcTest <|-- TaskMoveTest
-    AbstractAppE2ETest <|-- BoardCreationE2ETest
-    AbstractKafkaContainerTest <|-- ActivityLogIdempotencyE2ETest
-    class AbstractPostgresContainerTest {
-      static PostgreSQLContainer postgres
-      static start()
-    }
-    class AbstractKafkaContainerTest {
-      static RedpandaContainer kafka
-      sendAndAwaitAck()
-    }
-    class AbstractAppTest {
-      setup() fixtures
-      cleanup()
-      countQueries()
-    }
-```
+The base classes form a short chain. `AbstractPostgresContainerTest` starts the shared PostgreSQL
+container. `AbstractAppTest`, `AbstractKafkaContainerTest` and `FlywaySchemaProvenanceTest` extend it.
+`AbstractAppMockMvcTest` and `AbstractAppE2ETest` extend `AbstractAppTest`, which adds the fixtures,
+the cleanup and the query counter.
 
 ### How it works
 

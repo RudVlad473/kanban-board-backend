@@ -204,20 +204,8 @@ The VM has five Docker networks that matter here:
 An operator created each external network once with `docker network create`. They are the only
 things the two projects share.
 
-```mermaid
-flowchart LR
-    internet((Internet)) -->|TCP 80/443| caddy
-    subgraph prod["project kanban-board-backend"]
-        caddy --> app
-        app --> redpanda
-        app --> postgres
-    end
-    subgraph nonprod["project kanban-board-nonprod"]
-        app_np[app-nonprod] --> rp_np[redpanda-nonprod]
-    end
-    caddy -. kanban-edge .-> app_np
-    app_np -. kanban-db .-> postgres
-```
+This section describes the Docker Compose deployment that the k3s cutover replaced on 2026-09-26.
+The current topology is drawn in [production host](../diagrams/physical/production-host.png).
 
 ### How it works
 
@@ -787,22 +775,9 @@ happens on the VM. The VM has no source checkout and never builds an image.
 
 ### How it works
 
-```mermaid
-sequenceDiagram
-    participant CI as GitHub Actions runner
-    participant VM as VM (deploy user)
-    participant PG as postgres
-    participant App as app
-    CI->>VM: scp migration SQL to ci-flyway-verify/production/
-    CI->>VM: ssh: docker run --network kanban-db postgres:16 pg_isready
-    CI->>VM: ssh: docker run --network kanban-db flyway/flyway:11.7.2 migrate
-    VM->>PG: migrations apply to kanban_prod
-    CI->>VM: scp compose file, Caddyfile, init script, 4 monitoring configs
-    CI->>VM: ssh: export IMAGE_TAG; compose pull app caddy; compose up -d
-    VM->>App: recreate app (new tag)
-    App->>PG: Flyway at startup (no-op), Hibernate validate
-    CI->>VM: ssh: caddy reload, then admin API readback
-```
+This section describes the Docker Compose deployment that the k3s cutover replaced on 2026-09-26.
+The current delivery path is drawn in [push to image](../diagrams/scenarios/push-to-image.png) (the CI
+half) and [image to rollout](../diagrams/scenarios/image-to-rollout.png) (the Flux half).
 
 The production steps in order:
 
