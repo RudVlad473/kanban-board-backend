@@ -415,10 +415,9 @@ Two DTOs break rule 6 on purpose, and each records why in its Javadoc:
   has no use case (quick task
   [`260811-ufu`](../../.planning/quick/260811-ufu-resolve-whitespace-only-validation-gap-t/)).
   `UpdateBoardRequestDTO` keeps `name` optional, so validation accepts a version-only board
-  update. The service does not accept it. `BoardService.updateById` sets `name` from the DTO with
-  no null check, and the flush fails on the `NOT NULL` column. A `PUT /api/boards/{id}` with the
-  body `{"version":0}` returns `500 INTERNAL_ERROR`, and `detail` holds the SQL text. Confirmed by
-  running on 2026-09-23.
+  update. `BoardService.updateById` treats a null name as no rename, still checks the version,
+  skips the duplicate check and the name write, and returns the board unchanged (261006-guz);
+  before that fix the flush failed on the `NOT NULL` column and the `PUT` returned `500`.
 
 **API-20.** Plan 06 decision D-04 merged task move and task reorder into one request
 ([`06-CONTEXT.md`](../../.planning/milestones/v1.2-phases/06-mock-up-feature-gap-closure/06-CONTEXT.md)).
@@ -887,10 +886,11 @@ From [`07.1-01-PLAN.md`](../../.planning/milestones/v1.2-phases/07.1-address-har
   "No static resource logout.", a Hibernate message with the class name
   `com.vrudenko.kanban_board.entity.BoardEntity`, and SQL text.
   The SQL text came from a `NOT NULL` violation and from a unique violation.
-  Confirmed by running on 2026-09-23.
-- **Warning: some expected client errors return `500`, not `4xx`.** Five cases reach the catch-all.
-  They are an unknown route, a wrong method, a concurrent update, a rename race and a version-only
-  board `PUT`. A client cannot tell these from a real server fault by status alone.
+  Confirmed by running on 2026-09-23 (the `NOT NULL` example came from the version-only board
+  `PUT`, fixed by 261006-guz).
+- **Warning: some expected client errors return `500`, not `4xx`.** Four cases reach the catch-all.
+  They are an unknown route, a wrong method, a concurrent update and a rename race. A client
+  cannot tell these from a real server fault by status alone.
 - A `404` code does not say which resource was missing. The client must read `detail`.
 - One `409` status has three causes. The client separates them with `code`. The same race can
   also give `500` (see API-13 and API-14 above).
@@ -1334,7 +1334,6 @@ without breaking clients.
 | Unknown route and wrong method return `500 INTERNAL_ERROR`, not `404`/`405`. Confirmed by running on 2026-09-23 | [`GlobalExceptionHandler.handleGeneralException`](../../src/main/java/com/vrudenko/kanban_board/handler/GlobalExceptionHandler.java#L73-L80); no todo found |
 | A truly concurrent update returns `500`, not `409` (three parallel board `PUT`s gave `200 500 500`). Confirmed by running on 2026-09-23 | [`BoardService.updateById`](../../src/main/java/com/vrudenko/kanban_board/service/BoardService.java#L159-L168), chapter 03 |
 | A rename race loser can get `500` with raw SQL, not `409 DATA_INTEGRITY_VIOLATION`. Confirmed by running on 2026-09-23 | [`BoardService.updateById`](../../src/main/java/com/vrudenko/kanban_board/service/BoardService.java#L159-L168), chapter 01 |
-| A version-only board `PUT` (`{"version":0}`) returns `500` with a `NOT NULL` violation, although the DTO accepts it. Confirmed by running on 2026-09-23 | [`UpdateBoardRequestDTO`](../../src/main/java/com/vrudenko/kanban_board/dto/board_dto/UpdateBoardRequestDTO.java), chapter 03 |
 | Production sets no `APP_CORS_ALLOWED_ORIGINS`, so only the localhost defaults apply, and a preflight from another origin gets `403` | [`docker-compose.prod.yml`](../../docker-compose.prod.yml), chapter 06 |
 | Per-operation error overrides (move `400`, signup `409`, board `PUT` `409`) not implemented | [`PROJECT.md`](../../.planning/PROJECT.md), spikes 001 and 002 |
 | Epic 3 OpenAPI polish (`@Operation` summaries, `@OpenAPIDefinition`, a session security scheme) still open | [`03-flyway-openapi.md`](../plans/backend-modernization/03-flyway-openapi.md) |

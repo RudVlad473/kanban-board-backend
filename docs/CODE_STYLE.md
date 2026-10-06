@@ -559,6 +559,11 @@ Current application sites: `UpdateBoardRequestDTO.name`, `UpdateTaskRequestDTO.t
 the one documented exception in this codebase — see that class's Javadoc for why it keeps
 `@NotBlank` and stays mandatory instead of adopting this pattern.
 
+Validation alone does not make such a field safe: the service that consumes it must treat a null
+value as "leave this field unchanged", as `TaskService.updateById` and `SubtaskService.updateById`
+do with a presence guard. `BoardService.updateById` lacked that guard until quick task 261006-guz,
+and a version-only board `PUT` returned 500.
+
 **Why:** Bean Validation's built-in constraints (including the `@Pattern` `@OptionalNotBlank`
 composes) treat `null` as valid — only `@NotNull`/`@NotBlank`/`@NotEmpty` reject it — so
 `@OptionalNotBlank` gets "reject blank, ignore absent" without a hand-written

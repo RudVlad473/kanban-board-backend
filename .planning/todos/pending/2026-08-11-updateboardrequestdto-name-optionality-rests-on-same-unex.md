@@ -40,3 +40,15 @@ Decide, with the same rigor D-02 applied to the column DTO: either
 
 Either outcome should update `UpdateBoardRequestDTO`'s D-13 comment (already corrected by
 260811-ufu to stop claiming parity with `UpdateColumnRequestDTO`) with the final resolution.
+
+## Update 2026-10-06 (quick task 261006-guz)
+
+- The version-only path no longer fails: `PUT /api/boards/{id}` with `{"version":N}` now returns 200
+  with the name and version unchanged.
+- The version does not increment, unlike the "only version incremented" expectation in the Problem
+  section above. Hibernate issues no UPDATE when nothing is dirty (WR-02, the same mechanism as a
+  no-op rename).
+- A test now covers the path (`BoardControllerTest.UpdateById`), but no client use case has been
+  found, so this todo's decision stays open.
+- Option 2 (mandatory name) would now also be a 200-to-400 API change for any client that sends a
+  version-only body.

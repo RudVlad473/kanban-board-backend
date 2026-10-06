@@ -260,10 +260,11 @@ reachable/testable through the API rather than only defensively present".
   07.1-CONTEXT.md calls the Board field "one-way". Its words: "once boards ship with a required
   `version` field, removing it later breaks any frontend already built against it."
 - `UpdateColumnRequestDTO.name` is mandatory, but `UpdateBoardRequestDTO.name` is optional. A
-  pending todo records that no test or use case supports a version-only board update
+  version-only board update returns 200 and leaves the name and version unchanged (quick task
+  261006-guz), and `BoardControllerTest` pins it. The pending todo still asks whether any client
+  needs that flow
   ([todo](../../.planning/todos/pending/2026-08-11-updateboardrequestdto-name-optionality-rests-on-same-unex.md)).
-  A version-only board update fails with 500. See item 4 in
-  [Known gaps](#known-gaps-and-open-items).
+  See item 4 in [Known gaps](#known-gaps-and-open-items).
 
 ### How we test it
 
@@ -276,6 +277,12 @@ reachable/testable through the API rather than only defensively present".
   [BoardLockingTest](../../src/test/java/com/vrudenko/kanban_board/e2e/board/BoardLockingTest.java).
 - `TaskMoveTest.MoveToColumn.MissingVersion.shouldReturnBadRequest_whenVersionIsMissing` in
   [TaskMoveTest](../../src/test/java/com/vrudenko/kanban_board/e2e/task/TaskMoveTest.java#L741).
+- `BoardControllerTest.UpdateById` covers the version-only board update with four methods:
+  `testWithAuthenticatedUser_shouldReturnOkAndLeaveNameAndVersionUnchanged_whenBodyHasOnlyVersion`,
+  `testWithAuthenticatedUser_shouldReturnConflict_whenBodyHasOnlyStaleVersion`,
+  `testWithAuthenticatedUser_shouldReturnConflict_whenNameBelongsToAnotherBoard` and
+  `testWithAuthenticatedUser_shouldReturnOk_whenNameIsUnchanged`, in
+  [BoardControllerTest](../../src/test/java/com/vrudenko/kanban_board/controller/BoardControllerTest.java).
 
 ### Where this is recorded
 
@@ -848,17 +855,14 @@ The review then found that the fix put the password hash into the session table,
    open; no `OptimisticLockType` or `@DynamicUpdate` exists in `src/main`.
 3. **Null-unsafe version comparison** (WR-03). Still `entity.getVersion().equals(...)`, not
    `Objects.equals(...)`.
-4. **A version-only board update fails with 500.** `UpdateBoardRequestDTO.name` is optional with
-   no proven version-only use case
-   ([pending todo](../../.planning/todos/pending/2026-08-11-updateboardrequestdto-name-optionality-rests-on-same-unex.md)).
-   The comment on
-   [UpdateBoardRequestDTO.version](../../src/main/java/com/vrudenko/kanban_board/dto/board_dto/UpdateBoardRequestDTO.java#L24-L31)
-   says that "a version-only board update is accepted". The code does not do this.
-   [BoardService.updateById](../../src/main/java/com/vrudenko/kanban_board/service/BoardService.java#L159)
-   sets `name` from the DTO without a null check. `PUT /api/boards/{id}` with the body
-   `{"version":0}` returns 500 `INTERNAL_ERROR`. The body has a NOT NULL violation on
-   `boards.name` and the SQL text. No test covers this path.
-   Confirmed by running on 2026-09-23.
+4. **A version-only board update failed with 500. Resolved on 2026-10-06 by quick task
+   261006-guz.** Before the fix, `BoardService.updateById` wrote the null name and the flush hit
+   the NOT NULL column `boards.name`, so `PUT /api/boards/{id}` with the body `{"version":0}`
+   returned 500 `INTERNAL_ERROR` (confirmed by running on 2026-09-23). Now a null name skips the
+   duplicate-name check and the name write, and the version guard still runs first, so a stale
+   version-only body is still a 409. Whether any client needs a version-only update stays open in
+   the
+   [pending todo](../../.planning/todos/pending/2026-08-11-updateboardrequestdto-name-optionality-rests-on-same-unex.md).
 5. **Position race** on concurrent inserts is accepted (T-06-19, **LOCK-11**).
 6. **Bulk-delete asymmetry** is documented but not tested (**LOCK-09**).
 7. **Doc drift:** ARCHITECTURE.md says "real HTTP" for the locking tests (they use `MockMvc`).
