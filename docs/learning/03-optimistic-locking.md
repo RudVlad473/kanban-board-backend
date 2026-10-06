@@ -332,7 +332,7 @@ Two rules hold in all four methods:
 sequenceDiagram
     participant A as Client A
     participant B as Client B
-    participant S as TaskService
+    participant S as API (version check)
     participant DB as PostgreSQL
     A->>S: GET task (version 3)
     B->>S: GET task (version 3)
@@ -343,7 +343,7 @@ sequenceDiagram
     S-->>A: 200 {version: 4}
     B->>S: PUT {title, version: 3}
     S->>DB: SELECT task (version 4)
-    Note over S: 4 != 3, throw OptimisticLockingFailureException
+    Note over S: 4 != 3, reject before any change
     S-->>B: 409 OPTIMISTIC_LOCK_CONFLICT
 ```
 

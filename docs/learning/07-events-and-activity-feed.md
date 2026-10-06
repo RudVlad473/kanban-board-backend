@@ -74,28 +74,29 @@ numbers are the real configuration values.
 ```mermaid
 sequenceDiagram
     participant C as Client
-    participant S as Service (@Transactional)
+    participant S as Request thread<br/>(@Transactional service)
     participant DB as PostgreSQL
-    participant P as KafkaEventPublisher<br/>(@Async, AFTER_COMMIT)
+    participant P as Publish thread<br/>(kafka-publish-*, AFTER_COMMIT)
     participant R as Schema Registry<br/>(Redpanda)
     participant K as kanban.activity<br/>(1 partition)
-    participant L as ActivityLogConsumer
-    participant A as ActivityLogRecorder
+    participant L as Consumer thread<br/>(group activity-log)
 
     C->>S: PATCH /api/tasks/{id}/move
     S->>DB: UPDATE task, shift positions
-    S->>S: publishEvent(TaskMovedEvent)
+    S->>S: publish event (queued until commit)
     S->>DB: COMMIT
     S-->>C: 200 OK (response does not wait for Kafka)
-    Note over P: runs on kafka-publish-* thread
     P->>R: look up schema id (never register)
     P->>K: send(key=eventId, Avro bytes)<br/>max.block/request/delivery = 2000 ms
     K->>L: poll (group activity-log)
     L->>R: resolve schema id
-    L->>A: record(ActivityLogEntity)
-    A->>DB: existsByEventId? then INSERT
+    L->>DB: existsByEventId? then INSERT activity_log
     Note over L,K: on failure: 3 retries x 1 s, then kanban.activity.dlt
 ```
+
+The lifelines are threads and roles, not classes. The publish thread runs `KafkaEventPublisher`.
+The consumer thread runs `ActivityLogConsumer`, which hands each event to `ActivityLogRecorder`
+on the same thread.
 
 The project also keeps rendered process-view diagrams in
 [`docs/ARCHITECTURE.md` § Event-driven activity feed](../ARCHITECTURE.md#event-driven-activity-feed).

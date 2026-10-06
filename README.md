@@ -199,12 +199,13 @@ diagram at
 
 ## Quality & security gates
 
-**Pre-commit** (`.githooks/pre-commit`, auto-installed via `core.hooksPath`) runs three gates in
+**Pre-commit** (`.githooks/pre-commit`, auto-installed via `core.hooksPath`) runs four gates in
 order, cheapest-and-most-urgent first: a **gitleaks** scan of the staged diff (pinned digest,
 seconds, refuses the commit on a likely credential before four minutes of tests run for nothing),
-then `spotlessCheck`, then `fastTest` (the full suite minus classes tagged `@Tag("kafka")` or
+then the **code-comment policy** (`scripts/verify-comments.py check`, stdlib Python, seconds), then
+`spotlessCheck`, then `fastTest` (the full suite minus classes tagged `@Tag("kafka")` or
 `@Tag("realSocket")` — still exercises every unit/service/controller test and ArchUnit's layering
-rule). None of the three auto-fixes anything; each fails the commit with instructions instead of
+rule). None of the four auto-fixes anything; each fails the commit with instructions instead of
 silently rewriting staged files.
 
 **CI**, in [`.github/workflows/`](.github/workflows/), adds what a pre-commit hook can't or

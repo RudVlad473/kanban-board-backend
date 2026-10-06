@@ -63,10 +63,10 @@ stores the activity feed. It is outside the ownership tree (see DATA-22 and chap
 
 ```mermaid
 erDiagram
-    users ||--o{ boards : "user_id"
-    boards ||--o{ columns : "board_id"
-    columns ||--o{ tasks : "column_id"
-    tasks ||--o{ subtasks : "task_id"
+    users |o--o{ boards : "user_id"
+    boards |o--o{ columns : "board_id"
+    columns |o--o{ tasks : "column_id"
+    tasks |o--o{ subtasks : "task_id"
     users {
         varchar id PK
         varchar email UK

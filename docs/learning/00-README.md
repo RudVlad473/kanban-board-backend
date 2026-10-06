@@ -64,17 +64,18 @@ Say that the reason is not recorded, and then explain the trade-off that the cod
 ## The system in one diagram
 
 ```mermaid
-flowchart LR
-  client[Browser / API client] -->|HTTPS 443| caddy[Caddy<br/>TLS + rate limit]
-  caddy -->|HTTP 8080| app[Spring Boot app<br/>controllers → services → repositories]
+%%{init: {"flowchart": {"subGraphTitleMargin": {"top": 15, "bottom": 15}, "curve": "linear"}}}%%
+flowchart TB
+  client[Browser / API client] -->|HTTPS 443| traefik[Traefik<br/>TLS + rate limit]
+  traefik -->|HTTP 8080| app[Spring Boot app]
   app -->|JDBC| pg[(PostgreSQL 16<br/>domain tables + Spring Session)]
   app -->|domain events, Avro| rp[Redpanda<br/>Kafka protocol + schema registry]
   rp -->|consumer| app
   app -->|activity_log rows| pg
-  prom[Prometheus] -.->|scrape exporters| pg
-  prom -.-> rp
+  prom[Prometheus] -.->|scrape via postgres-exporter| pg
+  prom -.->|scrape /public_metrics| rp
   graf[Grafana] -.-> prom
-  graf -.-> loki[Loki ← Promtail]
+  graf -.-> loki[Loki ← Alloy]
 ```
 
 - Chapters 01–07 explain the application box and its data.

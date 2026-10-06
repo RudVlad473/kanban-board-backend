@@ -733,9 +733,9 @@ Two producers build the envelope.
 sequenceDiagram
     participant C as Client
     participant F as Security filter chain
-    participant EP as ProblemDetailAuthenticationEntryPoint
-    participant D as DispatcherServlet + controller + service
-    participant H as GlobalExceptionHandler
+    participant EP as 401 entry point (in the filter chain)
+    participant D as MVC dispatch (controller + service)
+    participant H as Exception handler (@ControllerAdvice)
     C->>F: request
     alt no valid session
         F->>EP: commence()

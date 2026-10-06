@@ -419,21 +419,24 @@ Both run in `fastTest`, so the pre-commit hook catches a violation before CI.
 
 ### What it is
 
-[`.githooks/pre-commit`](../../.githooks/pre-commit) is a POSIX shell script. It runs three gates in
+[`.githooks/pre-commit`](../../.githooks/pre-commit) is a POSIX shell script. It runs four gates in
 a fixed order and stops at the first failure. It never changes a staged file.
 
 ### How it works
 
 ```mermaid
-flowchart TD
+%%{init: {"flowchart": {"subGraphTitleMargin": {"top": 15, "bottom": 15}, "curve": "linear"}}}%%
+flowchart TB
     A[git commit] --> B{gitleaks on staged diff<br/>pinned Docker image}
-    B -- exit 0 --> C{./gradlew spotlessCheck}
+    B -- exit 0 --> P{python3 scripts/verify-comments.py check<br/>comment policy}
     B -- exit 2: finding --> R1[Refuse: remove or allowlist]
     B -- other exit --> R2[Refuse: scanner could not run]
-    C -- fail --> R3[Refuse: run spotlessApply]
+    P -- exit 0 --> C{./gradlew spotlessCheck}
+    P -- non-zero --> R5[Refuse: fix comments per rule 14]
     C -- pass --> D{./gradlew fastTest<br/>compile + untagged tests}
-    D -- fail --> R4[Refuse]
+    C -- fail --> R3[Refuse: run spotlessApply]
     D -- pass --> E[Commit created]
+    D -- fail --> R4[Refuse]
 ```
 
 1. **Install.** A block at the end of `build.gradle` runs at configuration time on any `./gradlew`
@@ -442,15 +445,19 @@ flowchart TD
    skips the step when `.git` does not exist, and it never fails the build.
 2. **Secret scan.** The hook runs gitleaks in the pinned image
    `ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0...` with `git --staged --redact --verbose
-   --exit-code 2` ([`.githooks/pre-commit`](../../.githooks/pre-commit#L63-L143)).
+   --exit-code 2` ([`.githooks/pre-commit`](../../.githooks/pre-commit#L40-L99)).
 3. **Three-way result.** Exit 0 means clean. Exit 2 means a finding. Any other code means "did not
    run", for example a stopped Docker daemon. Both non-zero outcomes refuse the commit
-   ([`.githooks/pre-commit`](../../.githooks/pre-commit#L145-L164)).
-4. **Format.** `./gradlew spotlessCheck < /dev/null`
-   ([`.githooks/pre-commit`](../../.githooks/pre-commit#L166-L171)).
-5. **Compile and test.** `./gradlew fastTest < /dev/null`. This compiles main and test sources
+   ([`.githooks/pre-commit`](../../.githooks/pre-commit#L101-L120)).
+4. **Comment policy.** `python3 scripts/verify-comments.py check` (`docs/CODE_STYLE.md` rule 14). A
+   non-zero exit refuses the commit. The hook skips this gate with a warning when no Python 3 is on
+   the path, because CI is the backstop
+   ([`.githooks/pre-commit`](../../.githooks/pre-commit#L122-L140)).
+5. **Format.** `./gradlew spotlessCheck < /dev/null`
+   ([`.githooks/pre-commit`](../../.githooks/pre-commit#L142-L147)).
+6. **Compile and test.** `./gradlew fastTest < /dev/null`. This compiles main and test sources
    (so Error Prone runs) and runs every test class without a `kafka` or `realSocket` tag
-   ([`.githooks/pre-commit`](../../.githooks/pre-commit#L173-L185)).
+   ([`.githooks/pre-commit`](../../.githooks/pre-commit#L149-L159)).
 
 **Worktree handling.** A git worktree's private git directory holds a relative `commondir` path.
 If the hook mounts only that directory into the container, gitleaks scans 0 commits and reports
