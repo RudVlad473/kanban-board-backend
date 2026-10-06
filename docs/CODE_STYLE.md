@@ -39,38 +39,16 @@ public ResponseEntity<String> handleAppEntityNotFound(AppEntityNotFoundException
 
 ### 2. Load entities through the ownership-verified loader, never `repository.findById` directly
 
-The four domain services (`BoardService`, `ColumnService`, `TaskService`, `SubtaskService`) must resolve every entity through their own `findById(userId, id)` method, which delegates to `ownershipVerifierService.verifyOwnershipOf...` — never through a direct call to `repository.findById(id)`. For example, `TaskService.findById(userId, taskId)` calls `ownershipVerifierService.verifyOwnershipOfTask(userId, taskId)` and returns `pair.getSecond()`; every other method that needs a task goes through it instead of touching `taskRepository.findById` itself. Once an entity has been verified this way, any downstream repository call made later in the same method must be built from the verified entity's own id (`pair.getSecond().getId()`), not from the raw path-variable parameter that was passed in. `OwnershipVerifierService` (the root of the ownership chain) and `UserService` (the identity root, with no owner above it) are the only two places a direct repository `findById` is sanctioned.
+A domain service resolves every entity through its own `findById(userId, id)`, which delegates to
+`ownershipVerifierService.verifyOwnershipOf...`, and builds any later repository call from the
+verified entity's id. Why: this is the entire access-control model of the application, and nothing
+in the type system enforces it.
 
-**Why:** this is the entire access-control model of the application, and nothing in the type system enforces it — a direct repository load compiles cleanly, passes a naive test, and silently removes the ownership check it was supposed to go through; re-deriving the downstream id from the verified entity, rather than reusing the raw parameter, also guarantees that the id which was actually authorised is the id that gets used.
-
-Discouraged:
-
-```java
-public TaskResponseDTO updateById(String userId, String taskId, String columnId, UpdateTaskRequestDTO dto) {
-    var task = taskRepository.findById(taskId).get();
-    task.setTitle(dto.getTitle());
-    taskRepository.save(task);
-
-    var siblingTasks = taskRepository.findAllByColumnId(columnId);
-    return taskMapper.toDto(task);
-}
-```
-
-Preferred:
-
-```java
-public TaskResponseDTO updateById(String userId, String taskId, String columnId, UpdateTaskRequestDTO dto) {
-    var task = findById(userId, taskId);
-    task.setTitle(dto.getTitle());
-    taskRepository.save(task);
-
-    var pair = ownershipVerifierService.verifyOwnershipOfColumn(userId, columnId);
-    var siblingTasks = taskRepository.findAllByColumnId(pair.getSecond().getId());
-    return taskMapper.toDto(task);
-}
-```
-
-`TaskService.findById` and `TaskService.findAllByColumnId` are the reference implementations of this pattern.
+- Enforced, as a floor, not a ceiling: `LayeringArchTest.domain_services_must_load_through_ownership_verified_findById`
+  fails on a direct `repository.findById` from any service except `OwnershipVerifierService` and
+  `UserService`.
+- Reviewed: rubric rule 2, for the downstream id and hand-written `findByX` loaders the ArchUnit rule
+  cannot see.
 
 ### 3. Use AssertJ fully qualified; capture exceptions with `catchException`
 
@@ -289,86 +267,18 @@ class FindAllByColumnIdTest {
 
 ### 6. `Update*RequestDTO` carries a fixed shape
 
-Every `Update*RequestDTO` carries `@JsonInclude(JsonInclude.Include.NON_NULL)` on the class, a `@NotNull private Long version` field, and — whenever the DTO has more than one independently optional field — a private `@AssertTrue`-annotated `atLeastOneFieldPopulated()` method. `Save*RequestDTO` and `*ResponseDTO` classes never carry `@JsonInclude`; its presence on a class is exactly what marks that class as a partial-update DTO.
-
-**Why:** omitting `@NotNull Long version` silently disables optimistic locking for that entity — the request still passes validation and the write still succeeds, it just stops being safe against concurrent edits; giving the cross-field check a different name on each DTO would make the same check unfindable when scanning across DTOs for this invariant.
-
-Discouraged:
-
-```java
-@Getter
-@Setter
-@Builder
-@EqualsAndHashCode
-public class UpdateWidgetRequestDTO implements BaseWidget {
-    private String name;
-    private Long version;
-}
-```
-
-Preferred:
-
-```java
-@Getter
-@Setter
-@Builder
-@EqualsAndHashCode
-@JsonInclude(JsonInclude.Include.NON_NULL)
-public class UpdateTaskRequestDTO implements BaseTask {
-    @TaskTitle private String title;
-    @Description private String description;
-    @NotNull private Long version;
-
-    @AssertTrue(message = "Either 'title' or 'description' (or both) must be provided.")
-    private boolean atLeastOneFieldPopulated() {
-        return Optional.ofNullable(getTitle()).isPresent()
-                || Optional.ofNullable(getDescription()).isPresent();
-    }
-}
-```
-
-`UpdateTaskRequestDTO` is the reference; single-field update DTOs such as `UpdateColumnRequestDTO` correctly omit `atLeastOneFieldPopulated()` since there is no second field to cross-check against.
+An `Update*RequestDTO` carries class-level `@JsonInclude(JsonInclude.Include.NON_NULL)`, a
+`@NotNull private Long version`, and, with two or more optional fields, a private `@AssertTrue`
+method named `atLeastOneFieldPopulated()`. `Save*RequestDTO` and `*ResponseDTO` classes carry no
+`@JsonInclude`. Why: omitting `@NotNull Long version`
+silently disables optimistic locking for that entity. Enforced: `MainCodeStyleArchTest`; its one
+exemption, `UpdateThemeRequestDTO`, is explained in that class's Javadoc.
 
 ### 7. Unwrap `Optional` with an `isEmpty()` guard, not `orElseThrow`
 
-An `Optional` returned by a repository is unwrapped with an explicit `isEmpty()` guard that throws the appropriate `App...Exception`, followed by a plain `.get()`. `orElseThrow` does not appear anywhere in `src/main` and should not be introduced. This is a deliberate consistency choice, not a claim that the guard form is technically better: `orElseThrow` is shorter and the more idiomatic modern Java, but every existing unwrap site in this codebase uses the guard form, and staying consistent across those sites is the entire point.
-
-**Why:** the guard is a statement, not an expression, so a second check — another entity load, an ownership comparison — slots in right beside it as a peer in the same flat sequence, instead of forcing the whole thing to be restructured the moment a second condition needs checking.
-
-Discouraged:
-
-```java
-public UserEntity findUser(String userId) {
-    return userRepository.findById(userId).orElseThrow(() -> new AppEntityNotFoundException("User"));
-}
-```
-
-Preferred:
-
-```java
-public Pair<UserEntity, BoardEntity> verifyOwnershipOfBoard(String userId, String boardId) {
-    var user = userRepository.findById(userId);
-    if (user.isEmpty()) {
-        throw new AppEntityNotFoundException("User");
-    }
-
-    var board = boardRepository.findById(boardId);
-    if (board.isEmpty()) {
-        throw new AppEntityNotFoundException("Board");
-    }
-
-    var userOwnsBoard = board.get().getUser().getId().equals(user.get().getId());
-    if (!userOwnsBoard) {
-        throw new AppAccessDeniedException("Board");
-    }
-
-    return Pair.of(user.get(), board.get());
-}
-```
-
-`OwnershipVerifierService.verifyOwnershipOfBoard` is the reference — it chains exactly this shape three times in one flat sequence (user, board, ownership) rather than nesting.
-
-This rule is mechanically enforced by `src/test/java/com/vrudenko/kanban_board/architecture/LayeringArchTest.java`, which fails `./gradlew test` if a domain service other than `OwnershipVerifierService` or `UserService` calls `repository.findById` directly. That check is a floor, not a ceiling — see the class Javadoc for what it does not catch.
+Unwrap a repository `Optional` with an `isEmpty()` guard that throws the matching `App...Exception`,
+then a plain `.get()`, as `OwnershipVerifierService.verifyOwnershipOfBoard` does. Enforced across
+`src/main` by `MainCodeStyleArchTest`, whose failure message gives the reason.
 
 ### 8. Test setup must be fully automated — never a manual step for the developer
 
@@ -547,52 +457,11 @@ public class ColumnController {
 
 ### 12. An optional String field that rejects blank carries `@OptionalNotBlank`, not `@NotBlank`
 
-When a `String` field is genuinely optional (it may be `null`/omitted, matching the
-`@JsonInclude(JsonInclude.Include.NON_NULL)` partial-update convention from rule 6) but must not
-accept a whitespace-only value when it *is* provided, stack `com.vrudenko.kanban_board.dto.annotation.OptionalNotBlank`
-alongside the field's existing composed annotation. `@NotBlank` is reserved for fields that are
-genuinely mandatory — it rejects `null` as well as blank, so adding it to an optional field
-silently makes that field required, breaking the partial-update contract.
-
-Current application sites: `UpdateBoardRequestDTO.name`, `UpdateTaskRequestDTO.title`,
-`UpdateSubtaskRequestDTO.title`, `SignupRequestDTO.displayName`. `UpdateColumnRequestDTO.name` is
-the one documented exception in this codebase — see that class's Javadoc for why it keeps
-`@NotBlank` and stays mandatory instead of adopting this pattern.
-
-Validation alone does not make such a field safe: the service that consumes it must treat a null
-value as "leave this field unchanged", as `TaskService.updateById` and `SubtaskService.updateById`
-do with a presence guard. `BoardService.updateById` lacked that guard until quick task 261006-guz,
-and a version-only board `PUT` returned 500.
-
-**Why:** Bean Validation's built-in constraints (including the `@Pattern` `@OptionalNotBlank`
-composes) treat `null` as valid — only `@NotNull`/`@NotBlank`/`@NotEmpty` reject it — so
-`@OptionalNotBlank` gets "reject blank, ignore absent" without a hand-written
-`ConstraintValidator`. Reaching for `@NotBlank` on a field that is supposed to stay optional is an
-easy mistake with no compiler signal to catch it; `@OptionalNotBlank`'s name makes the intended
-contract explicit at the field itself.
-
-Discouraged:
-
-```java
-@JsonInclude(JsonInclude.Include.NON_NULL)
-public class UpdateWidgetRequestDTO {
-    @NotBlank private String label; // also rejects null -- silently makes this field mandatory
-    @NotNull private Long version;
-}
-```
-
-Preferred:
-
-```java
-@JsonInclude(JsonInclude.Include.NON_NULL)
-public class UpdateWidgetRequestDTO {
-    @WidgetLabel @OptionalNotBlank private String label; // null passes, "   " does not
-    @NotNull private Long version;
-}
-```
-
-`OptionalNotBlank.java` is the reference implementation; `UpdateBoardRequestDTO.name` is the
-reference application site.
+Stack `@OptionalNotBlank` beside the field's composed annotation, and keep `@NotBlank` for mandatory
+fields: it also rejects `null`, so on an optional field it silently makes the field required.
+Enforced for `Update*RequestDTO` fields by `MainCodeStyleArchTest`, with `UpdateColumnRequestDTO.name`
+exempt as its Javadoc explains. Reviewed: rubric rule 12, for optional fields elsewhere and for the
+service side of a partial update.
 
 ### 13. A new test class belongs in a named subpackage of `com.vrudenko.kanban_board`, never directly in the root package
 
