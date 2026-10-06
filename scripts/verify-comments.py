@@ -28,7 +28,7 @@ Decisions:
 Known holes:
   * Splitting a long block with an empty source line evades the narration rule.
   * Block-scalar content outside .github/workflows/ is content, so it is not linted.
-  * docs/** changes match invariant-checks' paths-ignore, so CI skips them; pre-commit still runs.
+  * invariant-checks' path filter excludes docs/**, so CI skips docs-only changes; pre-commit still runs.
   * The lint reads the working tree, not the index, the same as spotlessCheck.
   * Shell equivalence strips comments with this file's own quote-aware lexer, not a real shell
     parser; an unterminated quote or heredoc is reported as a failure rather than passed.

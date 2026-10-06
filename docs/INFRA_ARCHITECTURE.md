@@ -272,8 +272,9 @@ This document now describes: `k8s/**` (every Kustomize root — `flux-system`, `
 (k3s config + pinned install wrapper), `infra/vm/k3s-host-firewall.*` (the `KANBAN-INGRESS`
 ruleset + systemd unit), and `infra/vm/sshd/` (the sshd hardening this VM already carried forward
 from Phase 5, unchanged by the k3s cutover but now cited here alongside its k3s-era siblings).
-Also tracked: `.github/workflows/invariant-checks.yml` (three jobs: `public-dashboards`,
-`k8s-manifests-valid`, `k8s-invariants`) and `.github/workflows/deploy.yml` — specifically the
+Also tracked: `.github/workflows/invariant-checks.yml` (five jobs: `comment-lint`,
+`instruction-budget`, `public-dashboards`, `k8s-manifests-valid`, `k8s-invariants`; its trigger is an
+ordered `paths` list, not `paths-ignore`, so instruction-file changes still run it) and `.github/workflows/deploy.yml` — specifically the
 `build-and-push-docker-image` job's `linux/amd64` platform target (the deploy target pivoted from
 Oracle A1 Flex/ARM64 to Netcup/x86_64 in Phase 5) and the 7 job names (reduced from 14 across
 Plans 13-05/13-06's removal of every SSH-based deploy/health-check/cleanup-unused-image job, and by
