@@ -1,0 +1,21 @@
+%%{init: {"flowchart": {"subGraphTitleMargin": {"top": 15, "bottom": 15}, "curve": "linear"}}}%%
+flowchart TB
+    svclb["svclb-traefik Pod<br/>hostPort 80, 443"]
+
+    subgraph traefik_box["Pod: traefik, namespace kube-system"]
+        traefik["Traefik<br/>client address preserved<br/>(ETP Local)"]
+    end
+    subgraph mw_box["Middleware: rateLimit"]
+        mw["auth-rate-limit,<br/>general-rate-limit,<br/>grafana-login-rate-limit"]
+    end
+    subgraph svc_box["Service: app / grafana"]
+        svc["ClusterIP Service"]
+    end
+    subgraph pod_box["Pod: app / grafana"]
+        pod["target Pod"]
+    end
+
+    svclb -- "proxy to Traefik's<br/>ClusterIP" --> traefik
+    traefik -- "IngressRoute match,<br/>attach Middleware" --> mw
+    mw -- "under budget: forward" --> svc
+    svc --> pod

@@ -1,0 +1,19 @@
+sequenceDiagram
+    actor Dev as Developer
+    participant GH as GitHub Actions<br/>(ubuntu-latest)
+    participant DH as Docker Hub
+    participant PG as Postgres<br/>(via SSH)
+
+    Dev->>GH: push to main
+    GH->>GH: setup, run-tests<br/>(gradlew test, spotlessCheck)
+    Note over GH: run-tests gates every job below
+
+    par build-and-push-docker-image
+        GH->>GH: derive tag main-N-sha7<br/>(sortable by N)
+        GH->>DH: build linux/amd64, push<br/>app and app-nonprod tags
+    and flyway-verify, flyway-verify-nonprod
+        GH->>PG: SSH forward,<br/>pinned host key
+        GH->>PG: Flyway migrate this commit<br/>on the real database
+    end
+
+    Note over GH,DH: ends at image push,<br/>deploys are pull-based (image-to-rollout)

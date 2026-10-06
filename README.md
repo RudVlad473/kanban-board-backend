@@ -268,7 +268,7 @@ Full delivery-path detail, including the exact mechanism for the image-tag bump 
 independent per-environment reconciliation (D-16), is in
 [docs/INFRA_ARCHITECTURE.md](docs/INFRA_ARCHITECTURE.md); the same path is drawn as a sequence
 diagram at
-[docs/diagrams/scenarios/push-to-deploy.mmd](docs/diagrams/scenarios/push-to-deploy.mmd).
+[docs/diagrams/scenarios/push-to-image.mmd](docs/diagrams/scenarios/push-to-image.mmd).
 
 ## Quality & security gates
 
@@ -310,12 +310,16 @@ or [docs/INFRA_ARCHITECTURE.md](docs/INFRA_ARCHITECTURE.md):
 | View     | Diagram                                                                         | Answers                                                                                             |
 | -------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | Physical | [`physical/production-host`](docs/diagrams/physical/production-host.mmd)        | What runs where, on what hardware (embedded above)                                                  |
+| Physical | [`physical/delivery-nodes`](docs/diagrams/physical/delivery-nodes.mmd) | Which nodes the delivery path touches |
+| Physical | [`physical/monitoring-nodes`](docs/diagrams/physical/monitoring-nodes.mmd) | What the monitoring namespace scrapes and queries |
 | Process  | [`process/activity-pipeline`](docs/diagrams/process/activity-pipeline.mmd)      | The path of a mutation through the activity-log pipeline, thread by thread                          |
 | Scenario | [`scenarios/signin`](docs/diagrams/scenarios/signin.mmd)                        | What happens between a `POST` of credentials and a session cookie landing in Postgres               |
 | Scenario | [`scenarios/signup`](docs/diagrams/scenarios/signup.mmd)                        | Signup, its auto-authentication and the rollback when that authentication fails                     |
 | Scenario | [`scenarios/error-status-split`](docs/diagrams/scenarios/error-status-split.mmd) | Which layer rejects a request for each of 401/403/400/409, and whether it ever reaches a controller |
-| Scenario | [`scenarios/push-to-deploy`](docs/diagrams/scenarios/push-to-deploy.mmd)        | How a push to `main` becomes a running deploy, job by job                                           |
+| Scenario | [`scenarios/push-to-image`](docs/diagrams/scenarios/push-to-image.mmd)        | How a push to `main` becomes a running deploy, job by job                                           |
 | Scenario | [`scenarios/inbound-packet-path`](docs/diagrams/scenarios/inbound-packet-path.mmd) | The path of one inbound packet through the VM's network layers                                   |
+| Scenario | [`scenarios/ingress-to-pod`](docs/diagrams/scenarios/ingress-to-pod.mmd) | From the hostPort pod through Traefik and rate limiting to the target pod |
+| Scenario | [`scenarios/image-to-rollout`](docs/diagrams/scenarios/image-to-rollout.mmd) | How an image tag bump becomes a rolled-out pod, Flux side |
 
 ## Project status
 

@@ -999,7 +999,7 @@ with [`scripts/render-diagrams.sh`](../../scripts/render-diagrams.sh).
 | View | Source | Rendered |
 |------|--------|----------|
 | Physical / Deployment | [physical/production-host.mmd](../diagrams/physical/production-host.mmd) | [PNG](../diagrams/physical/production-host.png) |
-| Scenario: delivery path | [scenarios/push-to-deploy.mmd](../diagrams/scenarios/push-to-deploy.mmd) | [PNG](../diagrams/scenarios/push-to-deploy.png) |
+| Scenario: delivery path | [scenarios/push-to-image.mmd](../diagrams/scenarios/push-to-image.mmd) | [PNG](../diagrams/scenarios/push-to-image.png) |
 | Scenario: inbound packet path | [scenarios/inbound-packet-path.mmd](../diagrams/scenarios/inbound-packet-path.mmd) | [PNG](../diagrams/scenarios/inbound-packet-path.png) |
 
 The physical diagram numbers its trust boundaries `[1]` to `[7]`. `[1]` is the Netcup Cloud
@@ -1035,7 +1035,7 @@ path.
       network", and the physical diagram labels the `app → postgres` edge `[5] kanban-db`. In
       `docker-compose.prod.yml` the production `app` has no `networks:` key, so it is only on the
       production default network. Only `app-nonprod` uses `kanban-db`.
-    - `INFRA_ARCHITECTURE.md` and `scenarios/push-to-deploy.mmd` say "push to `master`".
+    - `INFRA_ARCHITECTURE.md` and `scenarios/push-to-image.mmd` say "push to `master`".
       `deploy.yml` and `invariant-checks.yml` trigger on `main` (commit `cc77500` renamed the
       trigger). The delivery diagram also shows only two SCP files; the job copies seven.
     - The production `app` comment says the app "falls back to application.properties' own

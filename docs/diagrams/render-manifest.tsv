@@ -5,6 +5,10 @@ scenarios/error-status-split	2
 process/activity-pipeline	2
 scenarios/signin	2
 scenarios/signup	2
-scenarios/push-to-deploy	2
+scenarios/push-to-image	2
 scenarios/inbound-packet-path	2
 physical/production-host	2
+physical/delivery-nodes	2
+scenarios/image-to-rollout	2
+scenarios/ingress-to-pod	2
+physical/monitoring-nodes	2

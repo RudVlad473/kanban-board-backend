@@ -1,0 +1,27 @@
+%%{init: {"flowchart": {"subGraphTitleMargin": {"top": 15, "bottom": 15}, "curve": "linear"}}}%%
+flowchart TB
+    subgraph gh_repo["GitHub"]
+        gh_main["main branch<br/>k8s/ + image tags"]
+    end
+
+    subgraph gha["GitHub Actions runner — x86_64"]
+        gha_ci["deploy.yml"]
+    end
+
+    subgraph dh["Docker Hub"]
+        dh_repo["app, app-nonprod repos<br/>linux/amd64 images"]
+    end
+
+    subgraph netcup["Netcup VPS — x86_64"]
+        flux["Flux<br/>ns flux-system"]
+        app["app Pods<br/>prod + nonprod"]
+        postgres["postgres 16<br/>ns kanban-data"]
+    end
+
+    gh_main -- "push triggers" --> gha_ci
+    gha_ci -- "push image" --> dh_repo
+    gha_ci -- "[5] SSH :22, forward<br/>to ClusterIP :5432" --> postgres
+    dh_repo -- "tag scan" --> flux
+    dh_repo -- "image pull" --> app
+    gh_main <-- "poll 1m, bump commits" --> flux
+    flux -- "reconcile" --> app

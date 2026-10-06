@@ -1,0 +1,21 @@
+%%{init: {"flowchart": {"subGraphTitleMargin": {"top": 15, "bottom": 15}, "curve": "linear"}}}%%
+flowchart TB
+    subgraph monitoring_box["ns monitoring"]
+        direction TB
+        grafana["Grafana<br/>sole login gate"]
+        prometheus["Prometheus"]
+        loki["Loki<br/>30-day logs"]
+        alloy["Alloy<br/>DaemonSet"]
+        node_exp["node-exporter<br/>DaemonSet"]
+        pg_exp["postgres-exporter"]
+    end
+
+    targets["redpanda brokers,<br/>postgres"]
+
+    grafana -- "query" --> prometheus
+    grafana -- "query" --> loki
+    alloy -- "ship logs" --> loki
+    prometheus -- "scrape" --> node_exp
+    prometheus -- "scrape" --> pg_exp
+    prometheus -- "scrape" --> targets
+    pg_exp -- "monitoring role" --> targets

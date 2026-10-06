@@ -38,8 +38,15 @@ architecture — the discipline this project adopted specifically because a plai
 what" diagram would not have surfaced the CI pipeline building an x86_64-only image for an ARM64
 deploy target (see `DIAGRAM_CONVENTIONS.md`'s own note on this).
 
-![Flowchart: physical/deployment view of the production topology](diagrams/physical/production-host.png)
+<img src="diagrams/physical/production-host.png" width="1098" alt="Flowchart: physical view of the production host, edge to data">
+
+<img src="diagrams/physical/monitoring-nodes.png" width="635" alt="Flowchart: monitoring nodes and what they scrape">
+<sub>[diagram source](diagrams/physical/monitoring-nodes.mmd)</sub>
+
 <sub>[diagram source](diagrams/physical/production-host.mmd)</sub>
+
+<img src="diagrams/physical/delivery-nodes.png" width="808" alt="Flowchart: nodes of the delivery path">
+<sub>[diagram source](diagrams/physical/delivery-nodes.mmd)</sub>
 
 **Externally reachable vs. internal-only:** `svclb-traefik-*` is the ONLY Pod in the cluster
 carrying a `hostPort` (80, 443) — confirmed live via `k3s kubectl get pods -A -o json` filtered for
@@ -127,8 +134,11 @@ pull-based GitOps (D-14)** — this workflow ends at image push. There is no `de
 image-automation controllers and `kustomize-controller` own the rest of the path, entirely inside
 the cluster.
 
-![Sequence diagram: delivery path from push to main to a running deploy](diagrams/scenarios/push-to-deploy.png)
-<sub>[diagram source](diagrams/scenarios/push-to-deploy.mmd)</sub>
+<img src="diagrams/scenarios/push-to-image.png" width="932" alt="Sequence diagram: CI half of the delivery path, from push to main to image push and migration check">
+<sub>[diagram source](diagrams/scenarios/push-to-image.mmd)</sub>
+
+<img src="diagrams/scenarios/image-to-rollout.png" width="1074" alt="Sequence diagram: image tag bump to a rolled-out pod">
+<sub>[diagram source](diagrams/scenarios/image-to-rollout.mmd)</sub>
 
 **Externally reachable vs. internal-only (delivery path):** the GitHub Actions runner reaches
 Docker Hub over the public internet to push images, and nothing else in the delivery path touches
@@ -189,7 +199,11 @@ Compose-era `DOCKER-USER` chain this section used to describe governs nothing on
 all (k3s's NodePort/hostPort DNAT never traverses it); `KANBAN-INGRESS` (Plan 13-08) is its
 Docker-independent replacement.
 
-![Flowchart: inbound packet path through the VM's network layers](diagrams/scenarios/inbound-packet-path.png)
+<img src="diagrams/scenarios/inbound-packet-path.png" width="951" alt="Flowchart: inbound packet path through the VM's netfilter chains">
+
+<img src="diagrams/scenarios/ingress-to-pod.png" width="344" alt="Flowchart: from the hostPort pod through Traefik to the target pod">
+<sub>[diagram source](diagrams/scenarios/ingress-to-pod.mmd)</sub>
+
 <sub>[diagram source](diagrams/scenarios/inbound-packet-path.mmd)</sub>
 
 **Reproduce this yourself on the VM** with the command that proves the ruleset:

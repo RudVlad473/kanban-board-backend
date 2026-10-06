@@ -1,0 +1,15 @@
+sequenceDiagram
+    participant GH as GitHub<br/>(main)
+    participant FX as Flux<br/>(flux-system)
+    participant DH as Docker Hub
+    participant Pod as app Pod<br/>(prod, nonprod)
+
+    FX->>DH: list tags, every 5m
+    FX->>FX: ImagePolicy picks<br/>the highest N
+    FX->>GH: commit "chore(flux): bump images"<br/>by fluxcdbot, k8s/overlays/**
+    Note over FX,GH: k8s/** is path-ignored,<br/>so no CI run starts
+    FX->>GH: poll, SSH deploy key, 1m
+    FX->>Pod: apply the new tag,<br/>strategy Recreate
+    Pod->>DH: pull image
+    Pod->>Pod: initContainer register-schemas,<br/>then the app container
+    Note over FX,Pod: prod and nonprod reconcile<br/>independently

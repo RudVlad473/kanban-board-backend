@@ -69,7 +69,7 @@ Current inventory:
 | Scenarios | `scenarios/signin` | What happens between a `POST` of credentials and a session cookie landing in Postgres? | `ARCHITECTURE.md`, `AUTH_FLOWS.md` |
 | Scenarios | `scenarios/signup` | What do signup, its auto-authentication and its rollback look like to a client? | `AUTH_FLOWS.md` |
 | Scenarios | `scenarios/error-status-split` | Which layer answers each of 401/403/400/409, and does the request reach application code? | `ARCHITECTURE.md` |
-| Scenarios | `scenarios/push-to-deploy` | How does a push to `main` become a running deploy? | `INFRA_ARCHITECTURE.md` |
+| Scenarios | `scenarios/push-to-image` | How does a push to `main` become a running deploy? | `INFRA_ARCHITECTURE.md` |
 | Scenarios | `scenarios/inbound-packet-path` | Which network layers does one inbound packet cross on the VM? | `INFRA_ARCHITECTURE.md` |
 
 `README.md` lists the same seven in its Diagrams table, and embeds an inline copy of the physical
