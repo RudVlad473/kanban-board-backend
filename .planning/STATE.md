@@ -3,10 +3,10 @@ gsd_state_version: "1.0"
 milestone: v1.3
 status: Awaiting next milestone
 stopped_at: Phase 13 complete â€” all phases complete
-last_updated: "2026-10-06T12:00:38.317Z"
+last_updated: "2026-10-06T12:53:55.882Z"
 last_activity: 2026-09-30
 last_activity_desc: Milestone v1.4 completed and archived
-state_head: c5079e81cde52e0d000e186eccc1d3ed2aa1b618
+state_head: 7b23313e68b4661a1abadc11eaa300d9c143b587
 progress:
   total_phases: 3
   completed_phases: 2
@@ -170,6 +170,7 @@ confusion risk, `NVD_API_KEY` resolution failure) were resolved during Phases 8â
 | 261006-fby | Ban Javadoc HTML tags and {@ inline tags in Java comments: lint rule, formatJavadoc(false), comment-only sweep | 2026-10-06 | 629a0d6 | [261006-fby-ban-javadoc-html-tags-and-inline-tags-in](./quick/261006-fby-ban-javadoc-html-tags-and-inline-tags-in/) |
 | 261006-guz | Fix 500 on PUT /boards/{boardId} with a version-only body: null name means no rename | 2026-10-06 | 38881c9 | [261006-guz-fix-500-on-put-boards-boardid-with-a-ver](./quick/261006-guz-fix-500-on-put-boards-boardid-with-a-ver/) |
 | 261006-i3k | Add a report-only Schemathesis fuzz script and weekly/dispatch workflow with a measured baseline | 2026-10-06 | c5079e8 | [261006-i3k-add-a-report-only-schemathesis-fuzzing-s](./quick/261006-i3k-add-a-report-only-schemathesis-fuzzing-s/) |
+| 261006-jh9 | Trim .claude/CLAUDE.md from 36.8 KB to 4.6 KB and add a byte-ceiling gate on always-loaded instruction files | 2026-10-06 | 7b23313 | [261006-jh9-trim-claude-claude-md-and-add-a-size-cei](./quick/261006-jh9-trim-claude-claude-md-and-add-a-size-cei/) |
 
 ## Deferred Items
 
