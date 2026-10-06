@@ -171,6 +171,7 @@ confusion risk, `NVD_API_KEY` resolution failure) were resolved during Phases 8â
 | 261006-guz | Fix 500 on PUT /boards/{boardId} with a version-only body: null name means no rename | 2026-10-06 | 38881c9 | [261006-guz-fix-500-on-put-boards-boardid-with-a-ver](./quick/261006-guz-fix-500-on-put-boards-boardid-with-a-ver/) |
 | 261006-i3k | Add a report-only Schemathesis fuzz script and weekly/dispatch workflow with a measured baseline | 2026-10-06 | c5079e8 | [261006-i3k-add-a-report-only-schemathesis-fuzzing-s](./quick/261006-i3k-add-a-report-only-schemathesis-fuzzing-s/) |
 | 261006-jh9 | Trim .claude/CLAUDE.md from 36.8 KB to 4.6 KB and add a byte-ceiling gate on always-loaded instruction files | 2026-10-06 | 7b23313 | [261006-jh9-trim-claude-claude-md-and-add-a-size-cei](./quick/261006-jh9-trim-claude-claude-md-and-add-a-size-cei/) |
+| 261006-kpj | Split docs/CODE_STYLE.md (43,974 to 9,345 bytes) into a numbered index, docs/CODE_REVIEW_RUBRIC.md and an ARCHITECTURE test section; nine new ArchUnit rules (MainCodeStyleArchTest, TestCodeStyleArchTest) | 2026-10-06 | fc86152 | [261006-kpj-split-docs-code-style-md-enforce-rules-w](./quick/261006-kpj-split-docs-code-style-md-enforce-rules-w/) |
 
 ## Deferred Items
 
