@@ -57,3 +57,7 @@ before, so the PNG reflects the corrected source).
 Deliberately not done as part of quick task 260905-tw0: that task's scope was pinning the renderer
 and reporting drift, not re-rendering out-of-scope diagrams whose PNGs are the very evidence the
 drift measurement depends on.
+
+## Resolution
+
+2026-10-06: resolved by quick task 261005-sun. All seven diagrams were redrawn or dropped, and every surviving diagram (11 in `docs/diagrams/`) was re-rendered under the pinned image with `docs/diagrams/mermaid-config.json` at scale 2. `bash scripts/render-diagrams.sh --check --all` exits 0 with `width=OK height=OK(+0.00%)` for all 11.
