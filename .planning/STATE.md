@@ -3,10 +3,10 @@ gsd_state_version: "1.0"
 milestone: v1.3
 status: Awaiting next milestone
 stopped_at: Phase 13 complete — all phases complete
-last_updated: "2026-10-06T08:36:44.638Z"
+last_updated: "2026-10-06T09:52:52.330Z"
 last_activity: 2026-09-30
 last_activity_desc: Milestone v1.4 completed and archived
-state_head: bf7323e686e5b0794df5c0fa79b0b399fb14f034
+state_head: 629a0d60427507bdfef87ea8ed8080f232b9f0f5
 progress:
   total_phases: 3
   completed_phases: 2
@@ -167,6 +167,7 @@ confusion risk, `NVD_API_KEY` resolution failure) were resolved during Phases 8�
 | 261005-o6t | Trim all comments to the code-comments rubric and add a comment lint | 2026-10-05 | 7f4d52d | [261005-o6t-trim-and-format-all-comments-per-fan-out](./quick/261005-o6t-trim-and-format-all-comments-per-fan-out/) |
 | 22 | 261005-sun | 2026-10-06 | 2f460ed | — |
 | 261006-dpq | Make the OpenAPI doc Schemathesis-fuzzable: declare all path-template params, hide @CurrentUserId, add completeness test | 2026-10-06 | bf7323e | [261006-dpq-fix-openapi-doc-so-it-is-schemathesis-fu](./quick/261006-dpq-fix-openapi-doc-so-it-is-schemathesis-fu/) |
+| 261006-fby | Ban Javadoc HTML tags and {@ inline tags in Java comments: lint rule, formatJavadoc(false), comment-only sweep | 2026-10-06 | 629a0d6 | [261006-fby-ban-javadoc-html-tags-and-inline-tags-in](./quick/261006-fby-ban-javadoc-html-tags-and-inline-tags-in/) |
 
 ## Deferred Items
 
