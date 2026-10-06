@@ -68,7 +68,7 @@ spotless {
         target 'src/**/*.java'
         formatAnnotations()
 
-        // Explicit 5-group import order, blank-line separated: java.*, javax.*, com.vrudenko.* (first-party),
+        // Explicit 5-group import order, blank-line separated: java.*, javax.*, com.vrudenko.* (first-party, deliberately ahead of third-party),
         // everything else (the '' catch-all), then static imports last.
         //
         // The '' group covers jakarta.*, org.springframework.*, io.*, com.github.*, com.fasterxml.* and the rest.

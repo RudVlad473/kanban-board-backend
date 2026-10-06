@@ -298,7 +298,7 @@ whose schema is built by the same Flyway migrations production runs, so Docker i
 | Unit | Services, DTO validation | Where the logic and the constraints live |
 | Integration (REST Assured / MockMvc) | Controllers | Routing, validation, and auth need a real request to be proven |
 | E2E (Testcontainers + Redpanda) | Kafka pipeline, real-socket concurrency | Broker/registry behaviour and races can't be mocked honestly |
-| Architecture (ArchUnit) | The whole class graph | Turns two review-only conventions into build failures |
+| Architecture (ArchUnit) | The whole class graph | Turns review-only conventions into build failures |
 
 Two dedicated `security/` classes added in phase 07.1 close out the security/injection and
 auth-gating coverage the audit that phase addressed asked for: `InjectionAttemptTest` (SQL
@@ -314,6 +314,9 @@ Entities and repositories are deliberately untested — they carry no custom log
 repositories, and that domain services load entities only through the ownership-verified
 `findById`. It's scoped as a floor, not a ceiling, and says so in its own Javadoc.
 
+`MainCodeStyleArchTest`, `TestCodeStyleArchTest` and `TestPlacementArchTest` hold the other
+[CODE_STYLE.md](CODE_STYLE.md) rules a tool can check; that file names the enforcer of every rule.
+
 **Query-count regression tests** measure Hibernate's `Statistics.getPrepareStatementCount()` —
 not `getQueryExecutionCount()`, which only counts HQL/JPQL and silently misses `findById()`. That
 distinction is what made the N+1 work measurable rather than speculative:
@@ -327,10 +330,123 @@ distinction is what made the N+1 work measurable rather than speculative:
   changed; a regression guard test was added and two stale "TODO: optimize" comments were deleted
   because they no longer described a real problem.
 
+### Writing a new test: package, tier and base class
+
+Where a new test file goes. [CODE_STYLE.md](CODE_STYLE.md) rule 4 holds the no-mocks
+rule and points here.
+
+**Which package a new test belongs in (by purpose, decided before which base class to extend):**
+`service/*ServiceTest.java`, `controller/*ControllerTest.java` and the `*E2ETest`-suffixed classes
+(`e2e/`, `security/`, `activitylog/`) are three different
+questions about the same behavior, not three copies of the same test. `service/*ServiceTest.java`
+exercises the service layer directly (no HTTP, no MockMvc) for cheap, high-volume coverage of
+business-logic edge cases and input-combination branches — validation boundaries, ownership-chain
+edge cases, the kind of case-count that would bloat a flow test if it lived there instead. Worked
+example: `TaskServiceTest.UpdateByIdTest.shouldThrow_whenUserDoesntOwnTheTask()` proves the
+ownership-denial branch directly against the service, something no controller test in this
+codebase separately re-proves. `controller/*ControllerTest.java` proves one HTTP endpoint's
+contract — status codes, request/response JSON shape, auth/ownership wiring at the HTTP boundary —
+not every edge case its underlying service test already covers. Worked example:
+`TaskControllerTest.UpdateById.testWithAuthenticatedUser_shouldReturnConflict_whenVersionIsStale()`
+proves the controller maps a stale-version conflict to HTTP 409; it reuses the same triggering
+scenario `TaskServiceTest` uses for a different assertion (HTTP status vs. exception type), which is
+intentional layering, not redundancy. `*E2ETest`-suffixed classes are for flows that genuinely span
+multiple services or controllers, or that need real infrastructure this project's tier split
+(the base-class paragraph below) already scoped — Kafka/Schema Registry, or genuine multi-threaded concurrency. Worked
+examples: `BoardCreationE2ETest.ConcurrentCreate` (two real concurrent HTTP threads racing a
+database unique constraint) and `ActivityLogIdempotencyE2ETest` (a cross-service Kafka
+publish-then-consume-then-dedupe flow). This rule governs package/purpose selection and is
+independent of the base-class rule immediately below — both must be read together when starting a
+new test file.
+
+**Which tier a Bean Validation boundary case belongs at — `dto/*Test.java` vs. one representative
+controller test:** the `dto/` package holds validator-tier tests that exercise Bean Validation
+constraints directly against a DTO instance — a `jakarta.validation.Validator` obtained from
+`Validation.buildDefaultValidatorFactory()` in `@BeforeEach`, with no `@SpringBootTest`, no
+`support/fixtures/` base class, and no container, making it the cheapest tier in the suite and the
+reason an exhaustive matrix is affordable there. The split rule: one field-plus-annotation's full
+boundary matrix — null, blank, whitespace-only, below the minimum length, above the maximum length,
+and cases where two constraints collide — belongs at this tier; the controller tier keeps at most
+one or two representatives proving that a malformed body produces 400 with the right envelope, and
+does not re-enumerate the matrix behind an HTTP round trip. Worked example: quick task 260813-h2f
+added `@NotBlank` alongside the existing `@SubtaskTitle` on `SaveSubtaskRequestDTO.title` and proved
+it with four `TaskControllerTest.AddSubtaskByTaskId` tests; a suite-wide triage in 260813-i6r found
+this was the only controller-tier over-enumeration in the codebase, relocated three of those cases
+to `SubtaskTitleMessageTest.SaveSubtaskRequestDTOTest`, and kept
+`testWithAuthenticatedUser_shouldReturnBadRequest_whenJsonBodyIsEmpty` — the `{}` case — as the
+single controller-tier representative. This tier invites its own trap: `@SubtaskTitle` carries
+`@ReportAsSingleViolation`, so its rendered message is byte-identical to `@NotBlank`'s on the same
+field, and a DTO-tier test asserting only on message text cannot establish which constraint actually
+fired — an input that trips more than one constraint is asserted on the set of triggered constraint
+annotation types instead, while an input that trips exactly one may still assert message text, and
+only because an exact violation-count assertion pins that fact. Read together with the base-class
+paragraph immediately below, this is the one tier that answers it with "none."
+
+**Which base class to extend, within `support/fixtures/`:** every test class that needs a Spring
+context is a `@SpringBootTest` extending one of three bases under `support/fixtures/` —
+`AbstractAppTest` for tests that call
+services directly, `AbstractAppMockMvcTest` for HTTP tests that go through MockMvc without needing
+a real socket, or `AbstractAppE2ETest` (full real-socket HTTP round-trips) only when a genuinely
+concurrent multi-threaded request is required — exercising the real Spring context against a
+Testcontainers-managed PostgreSQL 16 instance shared across the whole JVM run, whose schema is
+built by the same Flyway migrations production runs. `AbstractPostgresContainerTest` (under
+`support/containers/`) is the shared container ancestor both `AbstractAppTest` and
+`AbstractKafkaContainerTest` extend — a bare `@SpringBootTest` extending none of these three will
+not get a datasource. `AbstractAppMockMvcTest` does not apply `server.servlet.context-path` the way
+a real embedded servlet container does, so tests extending it build routes from the bare `ApiPaths`
+constants, without the context-path prefix the `AbstractAppE2ETest` tier needs. Mockito, `@Mock`,
+`@MockBean`, and slice annotations such as `@WebMvcTest` or `@DataJpaTest` are not used anywhere in
+this repository and must not be introduced. Shared fixtures (mock users, boards, columns, tasks,
+subtasks) belong in `AbstractAppTest`'s single `@BeforeEach`, not re-created inline inside
+individual test classes. `AbstractAppTest.countQueries(Runnable)` is the only sanctioned way to
+assert on query counts; its Javadoc records why it reads `getPrepareStatementCount()` instead of
+`getQueryExecutionCount()` — the latter misses `repository.findById()` calls entirely.
+
+**`.with(user(userId))` may authenticate at most two requests for the same principal per test
+method — call `signinCookie()` for a third.** `SecurityMockMvcRequestPostProcessors.user(userId)`
+injects an already-authenticated principal directly into a MockMvc request's security context; because
+MockMvc gives every `perform(...)` call its own request whose security context is persisted at the
+end of that chain, each such call establishes a **brand-new** session for that principal instead of
+reusing one. `SecurityConfiguration`'s `MAX_CONCURRENT_SESSIONS = 2`, together with
+`maxSessionsPreventsLogin(true)`, therefore refuses the third such call for one principal within one
+test method — enforced here by `SessionManagementFilter`'s own DSL-composed
+`CompositeSessionAuthenticationStrategy`, backed by an in-memory `SessionRegistryImpl`. This is a
+**different instance** from the `sessionAuthenticationStrategy` `@Bean` (that bean enforces the
+ceiling only on the real signin/signup path — see [AUTH_FLOWS.md](AUTH_FLOWS.md) — and never runs on this
+MockMvc shortcut at all). The refusal itself is a bare servlet `sendError` — `Content-Type: null`,
+empty body — `SessionManagementFilter`'s own failure-handler fingerprint, not this application's RFC
+7807 `ProblemDetail` envelope (a real wrong-password refusal on the signin path *does* carry that
+envelope, with `code: BAD_CREDENTIALS`; the two are both HTTP 401 but not byte-comparable). Still
+true: nothing in the failure itself leaks a session-specific signal, so a ceiling hit is not a
+credential-validity oracle. Measured:
+four identical `.with(user(userId))` calls in one test method returned `200, 200, 401, 401`. The
+limit is per principal **per test method**, not per class or per JVM run, specifically because
+`AbstractAppTest`'s `@BeforeEach` mints a fresh owning user every test method, so the per-principal
+live-session count restarts at zero each time — a `@ParameterizedTest` making one authenticated call
+per invocation never trips it, however many invocations it has. For three or more authenticated
+requests as one principal within a single test method, call
+`AbstractAppMockMvcTest.signinCookie()` once and replay the returned cookie on every subsequent
+request instead — a real signin establishes exactly one session and each replay reuses it, so the
+count never climbs. Worked examples: `InjectionAttemptTest` is the reference for the cookie-replay
+pattern, adopted because several of its cases make three or more authenticated calls per method;
+`AuthorizationGatingTest` is the counterpart that correctly keeps the `.with(user())` shortcut, since
+no method there makes more than two authenticated calls for one principal — it is not a
+cookie-replay example, and calls `signinCookie()` zero times. This is unreachable in production:
+`AuthenticationController.authenticate` pre-establishes the session on the one real signin path
+before the security context is saved, so a real client never accumulates one session per request.
+
+**Pre-commit gate membership is by `@Tag`, not by class name.** `build.gradle`'s `fastTest` task
+(the pre-commit hook's gate) excludes tests by JUnit 5 `@Tag`, not by a name pattern: classes
+extending `AbstractKafkaContainerTest` carry `@Tag("kafka")`, and `AbstractAppE2ETest` subclasses
+carry `@Tag("realSocket")` only when the test genuinely needs a real socket (most
+`AbstractAppE2ETest`-tier concerns fit `AbstractAppMockMvcTest` instead). A class with no tag runs
+in `fastTest` by default — that is the safe default, and it is why a class's tier is decided by
+its base class and tag, never by whether its name happens to end in `E2ETest`.
+
 ## Build quality gates
 
-- **Spotless** — google-java-format (AOSP), enforced by `./gradlew spotlessCheck` in CI and applied
-  automatically by the pre-commit hook.
+- **Spotless** — google-java-format (AOSP), enforced by `./gradlew spotlessCheck` in CI and in the pre-commit hook;
+  `./gradlew spotlessApply` fixes a failure.
 - **ErrorProne** — compile-time bug detection (null derefs, ignored futures, locale-dependent
   string ops) running as a javac plugin, so it's on every build path including the Docker build.
   Generated sources (MapStruct, Avro) are excluded — nobody can act on a finding there. Test
@@ -354,7 +470,8 @@ distinction is what made the N+1 work measurable rather than speculative:
 
 ---
 
-Judgement-level rules a formatter can't check live in [CODE_STYLE.md](CODE_STYLE.md); operational
-lessons from past sessions in [SESSION_LESSONS.md](SESSION_LESSONS.md); the local runbook in
-[LOCAL_DEV.md](LOCAL_DEV.md). Remaining modernization epics are in
-[plans/backend-modernization/](plans/backend-modernization/).
+Code rules, each naming the test or linter that holds it, live in
+[CODE_STYLE.md](CODE_STYLE.md), and the judgement calls a reviewer applies in
+[CODE_REVIEW_RUBRIC.md](CODE_REVIEW_RUBRIC.md); operational lessons from past sessions in
+[SESSION_LESSONS.md](SESSION_LESSONS.md); the local runbook in [LOCAL_DEV.md](LOCAL_DEV.md).
+Remaining modernization epics are in [plans/backend-modernization/](plans/backend-modernization/).
